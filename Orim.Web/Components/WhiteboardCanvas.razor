@@ -2,35 +2,42 @@
 @inject IJSRuntime JS
 
 <div id="whiteboard-surface"
-     style="position: relative; width: 100%; height: 100%; overflow: hidden; background-color: #ffffff; background-image: linear-gradient(#eef2f7 1px, transparent 1px), linear-gradient(90deg, #eef2f7 1px, transparent 1px); background-size: 24px 24px; cursor: @GetCursor(); touch-action: none; user-select: none;"
+     style="@GetSurfaceStyle()"
      @onmousedown="OnSurfaceMouseDown"
      @onmousemove="OnSurfaceMouseMove"
      @onmouseup="OnSurfaceMouseUp"
      @onmouseleave="OnSurfaceMouseLeave"
-     @onmousedown:preventDefault="true">
+     @onwheel="OnSurfaceWheel"
+     @onmousedown:preventDefault="true"
+     @onwheel:preventDefault="true">
 
-    @if (Board is not null)
-    {
-        @foreach (var element in Board.Elements.OrderBy(e => e.ZIndex))
+    <div style="@GetWorldStyle()">
+        @if (Board is not null)
         {
-            @RenderElement(element)
+            @foreach (var element in Board.Elements.OrderBy(e => e.ZIndex))
+            {
+                @RenderElement(element)
+            }
         }
-    }
 
-    @if (_draftRectangle is not null)
-    {
-        <div style="position: absolute; left: @Px(_draftRectangle.X); top: @Px(_draftRectangle.Y); width: @Px(_draftRectangle.Width); height: @Px(_draftRectangle.Height); border: 2px dashed #2563eb; background: rgba(37, 99, 235, 0.12); border-radius: 10px; pointer-events: none;"></div>
-    }
+        @if (_draftRectangle is not null)
+        {
+            <div style="position: absolute; left: @Px(_draftRectangle.X); top: @Px(_draftRectangle.Y); width: @Px(_draftRectangle.Width); height: @Px(_draftRectangle.Height); border: 2px dashed #2563eb; background: rgba(37, 99, 235, 0.12); border-radius: 10px; pointer-events: none;"></div>
+        }
 
-    @if (SelectedElement is not null)
-    {
-        <div style="position: absolute; left: @Px(SelectedElement.X - 4); top: @Px(SelectedElement.Y - 4); width: @Px(SelectedElement.Width + 8); height: @Px(SelectedElement.Height + 8); border: 2px dashed #2563eb; border-radius: 12px; pointer-events: none;"></div>
-    }
+        @if (SelectedElement is not null)
+        {
+            <div style="position: absolute; left: @Px(SelectedElement.X - 4); top: @Px(SelectedElement.Y - 4); width: @Px(SelectedElement.Width + 8); height: @Px(SelectedElement.Height + 8); border: 2px dashed #2563eb; border-radius: 12px; pointer-events: none;"></div>
+        }
+    </div>
 </div>
 
 @code {
     private const string SurfaceId = "whiteboard-surface";
     private const double MinimumRectangleSize = 12;
+    private const double MinZoom = 0.2;
+    private const double MaxZoom = 3.5;
+    private const double ZoomStep = 1.1;
 
     [Parameter] public Board? Board { get; set; }
     [Parameter] public bool CanEdit { get; set; }
@@ -42,11 +49,15 @@
 
     private bool _isDraggingSelection;
     private bool _isDrawingRectangle;
+    private bool _isPanning;
     private bool _hasInteractionChanged;
     private Point _dragPointerOffset;
     private Point _drawStart;
+    private Point _panStartScreen;
+    private Point _cameraOffset = new(0, 0);
     private Size _surfaceSize;
     private ShapeElement? _draftRectangle;
+    private double _zoom = 1;
 
     private record struct Point(double X, double Y);
     private record struct Size(double Width, double Height);
@@ -58,32 +69,68 @@
         StateHasChanged();
     }
 
-    private async Task<Point> GetPointerAsync(MouseEventArgs e)
+    private async Task<Point> GetScreenPointerAsync(MouseEventArgs e)
     {
         var pointer = await JS.InvokeAsync<RelativePointer>("orimWhiteboard.clientToElement", SurfaceId, e.ClientX, e.ClientY);
         _surfaceSize = new Size(SanitizeCoordinate(pointer.Width), SanitizeCoordinate(pointer.Height));
         return ClampToSurface(new Point(SanitizeCoordinate(pointer.X), SanitizeCoordinate(pointer.Y)));
     }
 
+    private Point ScreenToWorld(Point point) => new(
+        (point.X - _cameraOffset.X) / _zoom,
+        (point.Y - _cameraOffset.Y) / _zoom);
+
+    private string GetSurfaceStyle()
+    {
+        var gridStep = 24 * _zoom;
+        var offsetX = GetWrappedGridOffset(_cameraOffset.X, gridStep);
+        var offsetY = GetWrappedGridOffset(_cameraOffset.Y, gridStep);
+
+        return $"position: relative; width: 100%; height: 100%; overflow: hidden; background-color: #ffffff; background-image: linear-gradient(#eef2f7 1px, transparent 1px), linear-gradient(90deg, #eef2f7 1px, transparent 1px); background-size: {CssNumber(gridStep)}px {CssNumber(gridStep)}px; background-position: {CssNumber(offsetX)}px {CssNumber(offsetY)}px; cursor: {GetCursor()}; touch-action: none; user-select: none;";
+    }
+
+    private string GetWorldStyle() =>
+        $"position: absolute; inset: 0; overflow: visible; transform-origin: 0 0; transform: translate({CssNumber(_cameraOffset.X)}px, {CssNumber(_cameraOffset.Y)}px) scale({CssNumber(_zoom)});";
+
+    private static double GetWrappedGridOffset(double offset, double step)
+    {
+        if (step <= 0)
+        {
+            return 0;
+        }
+
+        var wrapped = offset % step;
+        return wrapped < 0 ? wrapped + step : wrapped;
+    }
+
     private async Task OnSurfaceMouseDown(MouseEventArgs e)
     {
-        if (e.Button != 0)
+        if (e.Button != 0 && e.Button != 1)
         {
             return;
         }
 
-        var pointer = await GetPointerAsync(e);
+        var screenPoint = await GetScreenPointerAsync(e);
+
+        if (e.Button == 1)
+        {
+            _isPanning = true;
+            _panStartScreen = screenPoint;
+            return;
+        }
+
+        var worldPoint = ScreenToWorld(screenPoint);
 
         if (SelectedTool == BoardEditor.Tool.Rectangle && CanEdit)
         {
             SelectedElement = null;
             _isDrawingRectangle = true;
             _hasInteractionChanged = false;
-            _drawStart = pointer;
+            _drawStart = worldPoint;
             _draftRectangle = new ShapeElement
             {
-                X = SanitizeCoordinate(pointer.X),
-                Y = SanitizeCoordinate(pointer.Y),
+                X = SanitizeCoordinate(worldPoint.X),
+                Y = SanitizeCoordinate(worldPoint.Y),
                 Width = 0,
                 Height = 0,
                 ShapeType = ShapeType.Rectangle,
@@ -94,27 +141,45 @@
             return;
         }
 
-        var clicked = HitTest(pointer);
+        var clicked = HitTest(worldPoint);
         SelectedElement = clicked;
 
-        if (!CanEdit || SelectedTool != BoardEditor.Tool.Select || clicked is null)
+        if (!CanEdit || SelectedTool != BoardEditor.Tool.Select)
         {
+            return;
+        }
+
+        if (clicked is null)
+        {
+            _isPanning = true;
+            _panStartScreen = screenPoint;
             return;
         }
 
         _isDraggingSelection = true;
         _hasInteractionChanged = false;
-        _dragPointerOffset = new Point(pointer.X - clicked.X, pointer.Y - clicked.Y);
+        _dragPointerOffset = new Point(worldPoint.X - clicked.X, worldPoint.Y - clicked.Y);
     }
 
     private async Task OnSurfaceMouseMove(MouseEventArgs e)
     {
-        var pointer = await GetPointerAsync(e);
+        var screenPoint = await GetScreenPointerAsync(e);
+
+        if (_isPanning)
+        {
+            var dx = screenPoint.X - _panStartScreen.X;
+            var dy = screenPoint.Y - _panStartScreen.Y;
+            _cameraOffset = new Point(_cameraOffset.X + dx, _cameraOffset.Y + dy);
+            _panStartScreen = screenPoint;
+            return;
+        }
+
+        var worldPoint = ScreenToWorld(screenPoint);
 
         if (_isDraggingSelection && SelectedElement is not null)
         {
-            var nextX = Clamp(pointer.X - _dragPointerOffset.X, 0, Math.Max(0, _surfaceSize.Width - SelectedElement.Width));
-            var nextY = Clamp(pointer.Y - _dragPointerOffset.Y, 0, Math.Max(0, _surfaceSize.Height - SelectedElement.Height));
+            var nextX = worldPoint.X - _dragPointerOffset.X;
+            var nextY = worldPoint.Y - _dragPointerOffset.Y;
 
             if (Math.Abs(SelectedElement.X - nextX) > 0.1 || Math.Abs(SelectedElement.Y - nextY) > 0.1)
             {
@@ -128,14 +193,14 @@
 
         if (_isDrawingRectangle && _draftRectangle is not null)
         {
-            UpdateDraftRectangle(pointer);
+            UpdateDraftRectangle(worldPoint);
         }
     }
 
     private async Task OnSurfaceMouseUp(MouseEventArgs e)
     {
-        var pointer = await GetPointerAsync(e);
-        await FinalizeInteractionAsync(pointer);
+        var worldPoint = ScreenToWorld(await GetScreenPointerAsync(e));
+        await FinalizeInteractionAsync(worldPoint);
     }
 
     private async Task OnSurfaceMouseLeave(MouseEventArgs _)
@@ -143,8 +208,28 @@
         await FinalizeInteractionAsync(null);
     }
 
+    private async Task OnSurfaceWheel(WheelEventArgs e)
+    {
+        var screenPoint = await GetScreenPointerAsync(new MouseEventArgs { ClientX = e.ClientX, ClientY = e.ClientY });
+        var worldPoint = ScreenToWorld(screenPoint);
+        var factor = e.DeltaY < 0 ? ZoomStep : 1 / ZoomStep;
+        var nextZoom = Math.Clamp(_zoom * factor, MinZoom, MaxZoom);
+
+        if (Math.Abs(nextZoom - _zoom) < 0.0001)
+        {
+            return;
+        }
+
+        _zoom = nextZoom;
+        _cameraOffset = new Point(
+            screenPoint.X - worldPoint.X * _zoom,
+            screenPoint.Y - worldPoint.Y * _zoom);
+    }
+
     private async Task FinalizeInteractionAsync(Point? pointer)
     {
+        _isPanning = false;
+
         if (_isDraggingSelection)
         {
             _isDraggingSelection = false;
@@ -192,15 +277,15 @@
         }
     }
 
-    private void UpdateDraftRectangle(Point pointer)
+    private void UpdateDraftRectangle(Point point)
     {
         if (_draftRectangle is null)
         {
             return;
         }
 
-        var currentX = SanitizeCoordinate(pointer.X);
-        var currentY = SanitizeCoordinate(pointer.Y);
+        var currentX = SanitizeCoordinate(point.X);
+        var currentY = SanitizeCoordinate(point.Y);
         var startX = SanitizeCoordinate(_drawStart.X);
         var startY = SanitizeCoordinate(_drawStart.Y);
 
@@ -251,9 +336,10 @@
 
     private string GetCursor() => SelectedTool switch
     {
+        _ when _isPanning => "grabbing",
         BoardEditor.Tool.Rectangle => "crosshair",
         _ when _isDraggingSelection => "grabbing",
-        _ => "default"
+        _ => "grab"
     };
 
     private static string CssNumber(double value) =>
