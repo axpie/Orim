@@ -1,0 +1,54 @@
+@page "/shared/{Token}"
+@layout EmptyLayout
+@rendermode InteractiveServer
+@inject BoardService BoardService
+
+<MudThemeProvider />
+<MudPopoverProvider />
+
+@if (_board is null)
+{
+    <MudContainer Class="py-8">
+        @if (_notFound)
+        {
+            <MudAlert Severity="Severity.Error">Dieser Share-Link ist ungültig oder abgelaufen.</MudAlert>
+        }
+        else
+        {
+            <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+        }
+    </MudContainer>
+}
+else
+{
+    <div style="display: flex; flex-direction: column; height: 100vh;">
+        <MudPaper Elevation="1" Style="padding: 8px 16px; display: flex; align-items: center; gap: 8px; background: #0d1117; color: white;">
+            <MudText Typo="Typo.h6" Style="font-weight: 700; color: #6E40C9;">Orim</MudText>
+            <MudDivider Vertical="true" FlexItem="true" DividerType="DividerType.Middle" Style="border-color: #30363d;" />
+            <MudText Typo="Typo.subtitle1" Style="color: #c9d1d9;">@_board.Title (Nur-Lesen)</MudText>
+        </MudPaper>
+        <div style="flex: 1; overflow: hidden;">
+            <WhiteboardCanvas Board="@_board" CanEdit="false"
+                              CommandStack="@(new CommandStack())"
+                              SelectedTool="BoardEditor.Tool.Select" />
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string Token { get; set; } = "";
+    private Board? _board;
+    private bool _notFound;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (string.IsNullOrEmpty(Token))
+        {
+            _notFound = true;
+            return;
+        }
+        _board = await BoardService.GetBoardByShareTokenAsync(Token);
+        if (_board is null)
+            _notFound = true;
+    }
+}

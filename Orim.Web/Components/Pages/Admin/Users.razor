@@ -1,0 +1,150 @@
+@page "/admin/users"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@inject UserService UserService
+
+<PageTitle>Orim – Benutzerverwaltung</PageTitle>
+
+<MudContainer MaxWidth="MaxWidth.Large" Class="py-8">
+    <div class="d-flex justify-space-between align-center mb-6">
+        <MudText Typo="Typo.h4" Style="font-weight: 700;">Benutzerverwaltung</MudText>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="@OpenCreateDialog" Style="border-radius: 8px;">
+            Neuer Benutzer
+        </MudButton>
+    </div>
+
+    <MudTable Items="@_users" Hover="true" Elevation="2" Style="border-radius: 12px;" Loading="@(_users is null)">
+        <HeaderContent>
+            <MudTh>Benutzername</MudTh>
+            <MudTh>Rolle</MudTh>
+            <MudTh>Status</MudTh>
+            <MudTh>Erstellt</MudTh>
+            <MudTh>Aktionen</MudTh>
+        </HeaderContent>
+        <RowTemplate>
+            <MudTd DataLabel="Benutzername">@context.Username</MudTd>
+            <MudTd DataLabel="Rolle">
+                <MudChip T="string" Size="Size.Small"
+                         Color="@(context.Role == UserRole.Admin ? Color.Primary : Color.Default)">
+                    @context.Role
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Status">
+                <MudChip T="string" Size="Size.Small"
+                         Color="@(context.IsActive ? Color.Success : Color.Error)">
+                    @(context.IsActive ? "Aktiv" : "Deaktiviert")
+                </MudChip>
+            </MudTd>
+            <MudTd DataLabel="Erstellt">@context.CreatedAt.ToString("dd.MM.yyyy")</MudTd>
+            <MudTd>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="@(() => OpenEditDialog(context))" />
+                @if (context.IsActive)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Block" Size="Size.Small" Color="Color.Error"
+                                   OnClick="@(() => DeactivateUser(context))" />
+                }
+            </MudTd>
+        </RowTemplate>
+    </MudTable>
+</MudContainer>
+
+<MudDialog @bind-Visible="_dialogVisible">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_editingUser is null ? "Neuer Benutzer" : "Benutzer bearbeiten")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_formUsername" Label="Benutzername" Variant="Variant.Outlined"
+                      Required="true" Disabled="@(_editingUser is not null)" />
+        <MudTextField @bind-Value="_formPassword" Label="Passwort" Variant="Variant.Outlined"
+                      InputType="InputType.Password" Class="mt-4"
+                      HelperText="@(_editingUser is not null ? "Leer lassen um kein Passwort zu ändern" : "")"
+                      Required="@(_editingUser is null)" />
+        <MudSelect @bind-Value="_formRole" Label="Rolle" Variant="Variant.Outlined" Class="mt-4">
+            <MudSelectItem Value="UserRole.User">User</MudSelectItem>
+            <MudSelectItem Value="UserRole.Admin">Admin</MudSelectItem>
+        </MudSelect>
+        @if (!string.IsNullOrEmpty(_formError))
+        {
+            <MudAlert Severity="Severity.Error" Class="mt-4">@_formError</MudAlert>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@CloseDialog">Abbrechen</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SaveUser">Speichern</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<User>? _users;
+    private bool _dialogVisible;
+    private User? _editingUser;
+    private string _formUsername = "";
+    private string _formPassword = "";
+    private UserRole _formRole = UserRole.User;
+    private string? _formError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _users = await UserService.GetAllUsersAsync();
+    }
+
+    private void OpenCreateDialog()
+    {
+        _editingUser = null;
+        _formUsername = "";
+        _formPassword = "";
+        _formRole = UserRole.User;
+        _formError = null;
+        _dialogVisible = true;
+    }
+
+    private void OpenEditDialog(User user)
+    {
+        _editingUser = user;
+        _formUsername = user.Username;
+        _formPassword = "";
+        _formRole = user.Role;
+        _formError = null;
+        _dialogVisible = true;
+    }
+
+    private void CloseDialog() => _dialogVisible = false;
+
+    private async Task SaveUser()
+    {
+        _formError = null;
+        try
+        {
+            if (_editingUser is null)
+            {
+                if (string.IsNullOrWhiteSpace(_formUsername) || string.IsNullOrWhiteSpace(_formPassword))
+                {
+                    _formError = "Benutzername und Passwort sind erforderlich.";
+                    return;
+                }
+                await UserService.CreateUserAsync(_formUsername.Trim(), _formPassword, _formRole);
+            }
+            else
+            {
+                _editingUser.Role = _formRole;
+                await UserService.UpdateUserAsync(_editingUser);
+                if (!string.IsNullOrWhiteSpace(_formPassword))
+                    await UserService.SetPasswordAsync(_editingUser.Id, _formPassword);
+            }
+            _dialogVisible = false;
+            _users = await UserService.GetAllUsersAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _formError = ex.Message;
+        }
+    }
+
+    private async Task DeactivateUser(User user)
+    {
+        await UserService.DeactivateUserAsync(user.Id);
+        _users = await UserService.GetAllUsersAsync();
+    }
+}

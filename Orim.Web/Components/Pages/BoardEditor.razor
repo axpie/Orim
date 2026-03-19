@@ -1,0 +1,384 @@
+@page "/board/{BoardId:guid}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject BoardService BoardService
+@inject UserService UserService
+@inject NavigationManager Navigation
+@inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
+
+<PageTitle>Orim – @(_board?.Title ?? "Board")</PageTitle>
+
+@if (_board is null)
+{
+    <MudContainer Class="py-8">
+        <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+    </MudContainer>
+}
+else if (!_hasAccess)
+{
+    <MudContainer Class="py-8">
+        <MudAlert Severity="Severity.Error">Kein Zugriff auf dieses Board.</MudAlert>
+    </MudContainer>
+}
+else
+{
+    <div style="display: flex; flex-direction: column; height: calc(100vh - 64px);">
+        @* Toolbar *@
+        <MudPaper Elevation="1" Style="padding: 4px 16px; display: flex; align-items: center; gap: 8px; background: #fff; z-index: 10; border-bottom: 1px solid #e1e4e8;">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@GoBack" Size="Size.Small" />
+            <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">@_board.Title</MudText>
+            <MudSpacer />
+
+            @if (_canEdit)
+            {
+                <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" Style="border-radius: 8px;">
+                    <MudIconButton Icon="@Icons.Material.Filled.Rectangle" Title="Rechteck"
+                                   Color="@(_selectedTool == Tool.Rectangle ? Color.Primary : Color.Default)"
+                                   OnClick="@(() => SelectTool(Tool.Rectangle))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Circle" Title="Ellipse"
+                                   Color="@(_selectedTool == Tool.Ellipse ? Color.Primary : Color.Default)"
+                                   OnClick="@(() => SelectTool(Tool.Ellipse))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.ChangeHistory" Title="Dreieck"
+                                   Color="@(_selectedTool == Tool.Triangle ? Color.Primary : Color.Default)"
+                                   OnClick="@(() => SelectTool(Tool.Triangle))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.TextFields" Title="Text"
+                                   Color="@(_selectedTool == Tool.Text ? Color.Primary : Color.Default)"
+                                   OnClick="@(() => SelectTool(Tool.Text))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.TrendingFlat" Title="Pfeil"
+                                   Color="@(_selectedTool == Tool.Arrow ? Color.Primary : Color.Default)"
+                                   OnClick="@(() => SelectTool(Tool.Arrow))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.NearMe" Title="Auswahl"
+                                   Color="@(_selectedTool == Tool.Select ? Color.Primary : Color.Default)"
+                                   OnClick="@(() => SelectTool(Tool.Select))" />
+                </MudButtonGroup>
+
+                <MudDivider Vertical="true" FlexItem="true" />
+
+                <MudIconButton Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Disabled="@(!_commandStack.CanUndo)"
+                               OnClick="@Undo" Title="Rückgängig (Strg+Z)" />
+                <MudIconButton Icon="@Icons.Material.Filled.Redo" Size="Size.Small" Disabled="@(!_commandStack.CanRedo)"
+                               OnClick="@Redo" Title="Wiederherstellen (Strg+Y)" />
+
+                <MudDivider Vertical="true" FlexItem="true" />
+            }
+
+            <MudMenu Icon="@Icons.Material.Filled.FileDownload" Size="Size.Small" Title="Export">
+                <MudMenuItem OnClick="@ExportPng">Export als PNG</MudMenuItem>
+                <MudMenuItem OnClick="@ExportPdf">Export als PDF</MudMenuItem>
+                <MudMenuItem OnClick="@ExportJson">Export als JSON</MudMenuItem>
+            </MudMenu>
+
+            @if (_canEdit)
+            {
+                <MudFileUpload T="IBrowserFile" Accept=".json" FilesChanged="@ImportJson" Style="margin: 0;">
+                    <ActivatorContent>
+                        <MudIconButton Icon="@Icons.Material.Filled.FileUpload" Size="Size.Small" Title="Import JSON" />
+                    </ActivatorContent>
+                </MudFileUpload>
+            }
+
+            <MudIconButton Icon="@Icons.Material.Filled.Settings" Size="Size.Small"
+                           OnClick="@(() => _settingsOpen = true)" Title="Board-Einstellungen" />
+        </MudPaper>
+
+        @* Canvas *@
+        <div style="flex: 1; overflow: hidden; position: relative;" @onkeydown="HandleKeyDown" tabindex="0" @ref="_canvasContainer">
+            <WhiteboardCanvas @ref="_canvas" Board="@_board" CanEdit="@_canEdit"
+                              CommandStack="@_commandStack"
+                              OnBoardChanged="@SaveBoard" SelectedTool="@_selectedTool" />
+        </div>
+    </div>
+
+    @* Properties panel for selected element *@
+    @if (_canvas?.SelectedElement is not null && _canEdit)
+    {
+        <ElementPropertiesPanel Element="@_canvas.SelectedElement"
+                                OnChanged="@OnElementPropertyChanged" />
+    }
+
+    @* Board Settings Drawer *@
+    <MudDrawer @bind-Open="_settingsOpen" Anchor="Anchor.End" Elevation="4" Width="400px"
+               Style="background: #fff;">
+        <MudDrawerHeader>
+            <MudText Typo="Typo.h6">Board-Einstellungen</MudText>
+        </MudDrawerHeader>
+        <div class="pa-4">
+            @if (_isOwner)
+            {
+                <MudTextField @bind-Value="_board.Title" Label="Board-Name" Variant="Variant.Outlined" />
+                <MudSelect @bind-Value="_board.Visibility" Label="Sichtbarkeit" Variant="Variant.Outlined" Class="mt-4">
+                    <MudSelectItem Value="BoardVisibility.Private">Privat</MudSelectItem>
+                    <MudSelectItem Value="BoardVisibility.Public">Öffentlich</MudSelectItem>
+                    <MudSelectItem Value="BoardVisibility.Shared">Geteilt</MudSelectItem>
+                </MudSelect>
+
+                @if (_board.Visibility == BoardVisibility.Shared)
+                {
+                    <div class="mt-4">
+                        @if (!string.IsNullOrEmpty(_board.ShareLinkToken))
+                        {
+                            <MudTextField Value="@GetShareUrl()" Label="Share-Link" ReadOnly="true"
+                                          Variant="Variant.Outlined" Adornment="Adornment.End"
+                                          AdornmentIcon="@Icons.Material.Filled.ContentCopy"
+                                          OnAdornmentClick="@CopyShareLink" />
+                        }
+                        <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2"
+                                   OnClick="@GenerateShareLink" FullWidth="true">
+                            Neuen Share-Link generieren
+                        </MudButton>
+                    </div>
+                }
+
+                <MudDivider Class="my-4" />
+                <MudText Typo="Typo.subtitle1" Class="mb-2" Style="font-weight: 600;">Mitglieder</MudText>
+
+                <div class="d-flex gap-2 mb-4">
+                    <MudTextField @bind-Value="_inviteUsername" Label="Benutzername" Variant="Variant.Outlined"
+                                  Size="Size.Small" Style="flex: 1;" />
+                    <MudSelect @bind-Value="_inviteRole" Label="Rolle" Variant="Variant.Outlined" Size="Size.Small">
+                        <MudSelectItem Value="BoardRole.Editor">Editor</MudSelectItem>
+                        <MudSelectItem Value="BoardRole.Viewer">Viewer</MudSelectItem>
+                    </MudSelect>
+                    <MudIconButton Icon="@Icons.Material.Filled.PersonAdd" Color="Color.Primary"
+                                   OnClick="@InviteMember" />
+                </div>
+
+                @foreach (var member in _board.Members)
+                {
+                    <div class="d-flex align-center justify-space-between mb-2">
+                        <div>
+                            <MudText Typo="Typo.body1">@member.Username</MudText>
+                            <MudChip T="string" Size="Size.Small">@member.Role</MudChip>
+                        </div>
+                        @if (member.Role != BoardRole.Owner)
+                        {
+                            <MudIconButton Icon="@Icons.Material.Filled.Remove" Size="Size.Small"
+                                           Color="Color.Error"
+                                           OnClick="@(() => RemoveMember(member.UserId))" />
+                        }
+                    </div>
+                }
+
+                <MudDivider Class="my-4" />
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" FullWidth="true"
+                           OnClick="@SaveBoardSettings">
+                    Einstellungen speichern
+                </MudButton>
+
+                <MudButton Variant="Variant.Outlined" Color="Color.Error" FullWidth="true" Class="mt-2"
+                           OnClick="@DeleteBoard">
+                    Board löschen
+                </MudButton>
+            }
+            else
+            {
+                <MudText>Du hast keine Berechtigung, die Einstellungen zu ändern.</MudText>
+            }
+        </div>
+    </MudDrawer>
+}
+
+@code {
+    [Parameter] public Guid BoardId { get; set; }
+
+    private Board? _board;
+    private Guid _userId;
+    private bool _hasAccess;
+    private bool _canEdit;
+    private bool _isOwner;
+    private bool _settingsOpen;
+    private Tool _selectedTool = Tool.Select;
+    private readonly CommandStack _commandStack = new();
+    private WhiteboardCanvas? _canvas;
+    private ElementReference _canvasContainer;
+
+    private string _inviteUsername = "";
+    private BoardRole _inviteRole = BoardRole.Editor;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            _userId = Guid.Parse(user.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+        }
+
+        _board = await BoardService.GetBoardAsync(BoardId);
+        if (_board is null) return;
+
+        _hasAccess = BoardService.HasAccess(_board, _userId);
+        _canEdit = BoardService.HasAccess(_board, _userId, BoardRole.Editor);
+        _isOwner = _board.OwnerId == _userId;
+    }
+
+    private void SelectTool(Tool tool) => _selectedTool = tool;
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (_board is null || !_canEdit) return;
+
+        if (e.CtrlKey && e.Key == "z")
+        {
+            Undo();
+        }
+        else if (e.CtrlKey && e.Key == "y")
+        {
+            Redo();
+        }
+        else if (e.Key == "Delete" || e.Key == "Backspace")
+        {
+            if (_canvas?.SelectedElement is not null)
+            {
+                var cmd = new RemoveElementCommand(_canvas.SelectedElement.Id);
+                _commandStack.Execute(_board, cmd);
+                _canvas.ClearSelection();
+                await SaveBoard();
+            }
+        }
+    }
+
+    private async void Undo()
+    {
+        if (_board is null) return;
+        _commandStack.Undo(_board);
+        await SaveBoard();
+        StateHasChanged();
+    }
+
+    private async void Redo()
+    {
+        if (_board is null) return;
+        _commandStack.Redo(_board);
+        await SaveBoard();
+        StateHasChanged();
+    }
+
+    private async Task SaveBoard()
+    {
+        if (_board is null) return;
+        await BoardService.UpdateBoardAsync(_board);
+    }
+
+    private async Task SaveBoardSettings()
+    {
+        if (_board is null) return;
+        await BoardService.UpdateBoardAsync(_board);
+        _settingsOpen = false;
+    }
+
+    private async Task GenerateShareLink()
+    {
+        if (_board is null) return;
+        await BoardService.GenerateShareLinkAsync(_board.Id);
+        _board = await BoardService.GetBoardAsync(BoardId);
+    }
+
+    private string GetShareUrl()
+    {
+        var baseUrl = Navigation.BaseUri.TrimEnd('/');
+        return $"{baseUrl}/shared/{_board?.ShareLinkToken}";
+    }
+
+    private async Task CopyShareLink()
+    {
+        await JS.InvokeVoidAsync("navigator.clipboard.writeText", GetShareUrl());
+    }
+
+    private async Task InviteMember()
+    {
+        if (_board is null || string.IsNullOrWhiteSpace(_inviteUsername)) return;
+        var user = await UserService.GetByUsernameAsync(_inviteUsername.Trim());
+        if (user is null) return;
+        try
+        {
+            await BoardService.AddMemberAsync(_board.Id, user.Id, user.Username, _inviteRole);
+            _board = await BoardService.GetBoardAsync(BoardId);
+            _inviteUsername = "";
+        }
+        catch (InvalidOperationException) { }
+    }
+
+    private async Task RemoveMember(Guid userId)
+    {
+        if (_board is null) return;
+        await BoardService.RemoveMemberAsync(_board.Id, userId);
+        _board = await BoardService.GetBoardAsync(BoardId);
+    }
+
+    private async Task DeleteBoard()
+    {
+        if (_board is null) return;
+        await BoardService.DeleteBoardAsync(_board.Id);
+        Navigation.NavigateTo("/");
+    }
+
+    private void GoBack() => Navigation.NavigateTo("/");
+
+    private async Task ExportPng()
+    {
+        await JS.InvokeVoidAsync("orimWhiteboard.exportPng", "whiteboard-svg");
+    }
+
+    private async Task ExportPdf()
+    {
+        if (_board is null) return;
+        var svgContent = await JS.InvokeAsync<string>("orimWhiteboard.getSvgContent", "whiteboard-svg");
+        // For PDF export, we send the SVG to a server endpoint
+        Navigation.NavigateTo($"/api/export/pdf/{_board.Id}", forceLoad: true);
+    }
+
+    private async Task ExportJson()
+    {
+        if (_board is null) return;
+        var json = System.Text.Json.JsonSerializer.Serialize(_board, new System.Text.Json.JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+        });
+        var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+        var base64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("orimWhiteboard.downloadFile",
+            $"{_board.Title}.json", "application/json", base64);
+    }
+
+    private async Task ImportJson(IBrowserFile file)
+    {
+        if (_board is null || !_canEdit) return;
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            var imported = await System.Text.Json.JsonSerializer.DeserializeAsync<Board>(stream,
+                new System.Text.Json.JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                    Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+                });
+            if (imported?.Elements is not null)
+            {
+                _board.Elements = imported.Elements;
+                await SaveBoard();
+                StateHasChanged();
+            }
+        }
+        catch { }
+    }
+
+    private async Task OnElementPropertyChanged()
+    {
+        await SaveBoard();
+        StateHasChanged();
+    }
+
+    public enum Tool
+    {
+        Select,
+        Rectangle,
+        Ellipse,
+        Triangle,
+        Text,
+        Arrow
+    }
+}

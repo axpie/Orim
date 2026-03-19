@@ -1,0 +1,106 @@
+@using MudBlazor.Utilities
+@using Orim.Web.Components.Pages
+
+<MudPaper Elevation="4" Style="position: fixed; right: 16px; top: 80px; width: 280px; border-radius: 12px; padding: 16px; z-index: 100; background: white;">
+    <MudText Typo="Typo.subtitle2" Class="mb-3" Style="font-weight: 600;">Eigenschaften</MudText>
+
+    <MudGrid Spacing="2">
+        <MudItem xs="6">
+            <MudNumericField Value="Element.X" Label="X" Variant="Variant.Outlined" Size="Size.Small"
+                             Margin="Margin.Dense" T="double"
+                             ValueChanged="@(v => { Element.X = v; OnValueChanged(); })" />
+        </MudItem>
+        <MudItem xs="6">
+            <MudNumericField Value="Element.Y" Label="Y" Variant="Variant.Outlined" Size="Size.Small"
+                             Margin="Margin.Dense" T="double"
+                             ValueChanged="@(v => { Element.Y = v; OnValueChanged(); })" />
+        </MudItem>
+        <MudItem xs="6">
+            <MudNumericField Value="Element.Width" Label="Breite" Variant="Variant.Outlined" Size="Size.Small"
+                             Margin="Margin.Dense" T="double"
+                             ValueChanged="@(v => { Element.Width = v; OnValueChanged(); })" />
+        </MudItem>
+        <MudItem xs="6">
+            <MudNumericField Value="Element.Height" Label="Höhe" Variant="Variant.Outlined" Size="Size.Small"
+                             Margin="Margin.Dense" T="double"
+                             ValueChanged="@(v => { Element.Height = v; OnValueChanged(); })" />
+        </MudItem>
+    </MudGrid>
+
+    @if (Element is ShapeElement shape)
+    {
+        <MudDivider Class="my-3" />
+        <MudColorPicker Value="_fillColor" Label="Füllung" Variant="Variant.Outlined"
+                        DisableAlpha="true" Class="mb-2"
+                        ValueChanged="@(c => { _fillColor = c; shape.FillColor = c.ToString(MudColorOutputFormats.Hex); OnValueChanged(); })" />
+        <MudColorPicker Value="_strokeColor" Label="Rahmen" Variant="Variant.Outlined"
+                        DisableAlpha="true" Class="mb-2"
+                        ValueChanged="@(c => { _strokeColor = c; shape.StrokeColor = c.ToString(MudColorOutputFormats.Hex); OnValueChanged(); })" />
+        <MudNumericField Value="shape.StrokeWidth" Label="Rahmenbreite" Variant="Variant.Outlined"
+                         Size="Size.Small" Margin="Margin.Dense" T="double"
+                         ValueChanged="@(v => { shape.StrokeWidth = v; OnValueChanged(); })" />
+    }
+    else if (Element is TextElement text)
+    {
+        <MudDivider Class="my-3" />
+        <MudTextField Value="text.Text" Label="Text" Variant="Variant.Outlined"
+                      ValueChanged="@((string v) => { text.Text = v; OnValueChanged(); })" />
+        <MudNumericField Value="text.FontSize" Label="Schriftgröße" Variant="Variant.Outlined"
+                         Size="Size.Small" Margin="Margin.Dense" T="double"
+                         ValueChanged="@(v => { text.FontSize = v; OnValueChanged(); })" />
+        <MudColorPicker Value="_textColor" Label="Farbe" Variant="Variant.Outlined" DisableAlpha="true"
+                        ValueChanged="@(c => { _textColor = c; text.Color = c.ToString(MudColorOutputFormats.Hex); OnValueChanged(); })" />
+        <div class="d-flex gap-2 mt-2">
+            <MudCheckBox Value="text.IsBold" Label="Fett" Dense="true" T="bool"
+                         ValueChanged="@(v => { text.IsBold = v; OnValueChanged(); })" />
+            <MudCheckBox Value="text.IsItalic" Label="Kursiv" Dense="true" T="bool"
+                         ValueChanged="@(v => { text.IsItalic = v; OnValueChanged(); })" />
+        </div>
+    }
+    else if (Element is ArrowElement arrow)
+    {
+        <MudDivider Class="my-3" />
+        <MudColorPicker Value="_arrowColor" Label="Farbe" Variant="Variant.Outlined" DisableAlpha="true"
+                        ValueChanged="@(c => { _arrowColor = c; arrow.StrokeColor = c.ToString(MudColorOutputFormats.Hex); OnValueChanged(); })" />
+        <MudNumericField Value="arrow.StrokeWidth" Label="Linienbreite" Variant="Variant.Outlined"
+                         Size="Size.Small" Margin="Margin.Dense" T="double"
+                         ValueChanged="@(v => { arrow.StrokeWidth = v; OnValueChanged(); })" />
+    }
+
+    <MudDivider Class="my-3" />
+    <MudNumericField Value="Element.ZIndex" Label="Z-Index" Variant="Variant.Outlined"
+                     Size="Size.Small" Margin="Margin.Dense" T="int"
+                     ValueChanged="@(v => { Element.ZIndex = v; OnValueChanged(); })" />
+</MudPaper>
+
+@code {
+    [Parameter, EditorRequired] public BoardElement Element { get; set; } = default!;
+    [Parameter] public EventCallback OnChanged { get; set; }
+
+    private MudColor _fillColor = new("#FFFFFF");
+    private MudColor _strokeColor = new("#000000");
+    private MudColor _textColor = new("#000000");
+    private MudColor _arrowColor = new("#000000");
+
+    protected override void OnParametersSet()
+    {
+        if (Element is ShapeElement shape)
+        {
+            _fillColor = new MudColor(shape.FillColor);
+            _strokeColor = new MudColor(shape.StrokeColor);
+        }
+        else if (Element is TextElement text)
+        {
+            _textColor = new MudColor(text.Color);
+        }
+        else if (Element is ArrowElement arrow)
+        {
+            _arrowColor = new MudColor(arrow.StrokeColor);
+        }
+    }
+
+    private async void OnValueChanged()
+    {
+        await OnChanged.InvokeAsync();
+    }
+}

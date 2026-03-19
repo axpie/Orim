@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <data name="AppTitle" xml:space="preserve"><value>Orim – Collaborative Whiteboard</value></data>
+  <data name="Login" xml:space="preserve"><value>Login</value></data>
+  <data name="Logout" xml:space="preserve"><value>Logout</value></data>
+  <data name="Dashboard" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="MyBoards" xml:space="preserve"><value>My Boards</value></data>
+  <data name="NewBoard" xml:space="preserve"><value>New Board</value></data>
+  <data name="Users" xml:space="preserve"><value>Users</value></data>
+  <data name="Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="Username" xml:space="preserve"><value>Username</value></data>
+  <data name="Password" xml:space="preserve"><value>Password</value></data>
+  <data name="InvalidCredentials" xml:space="preserve"><value>Invalid username or password.</value></data>
+  <data name="Save" xml:space="preserve"><value>Save</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Cancel</value></data>
+  <data name="Delete" xml:space="preserve"><value>Delete</value></data>
+  <data name="Create" xml:space="preserve"><value>Create</value></data>
+  <data name="Edit" xml:space="preserve"><value>Edit</value></data>
+  <data name="BoardName" xml:space="preserve"><value>Board Name</value></data>
+  <data name="Visibility" xml:space="preserve"><value>Visibility</value></data>
+  <data name="Private" xml:space="preserve"><value>Private</value></data>
+  <data name="Public" xml:space="preserve"><value>Public</value></data>
+  <data name="Shared" xml:space="preserve"><value>Shared</value></data>
+  <data name="Members" xml:space="preserve"><value>Members</value></data>
+  <data name="Elements" xml:space="preserve"><value>Elements</value></data>
+  <data name="Export" xml:space="preserve"><value>Export</value></data>
+  <data name="Import" xml:space="preserve"><value>Import</value></data>
+  <data name="Undo" xml:space="preserve"><value>Undo</value></data>
+  <data name="Redo" xml:space="preserve"><value>Redo</value></data>
+  <data name="Rectangle" xml:space="preserve"><value>Rectangle</value></data>
+  <data name="Ellipse" xml:space="preserve"><value>Ellipse</value></data>
+  <data name="Triangle" xml:space="preserve"><value>Triangle</value></data>
+  <data name="Text" xml:space="preserve"><value>Text</value></data>
+  <data name="Arrow" xml:space="preserve"><value>Arrow</value></data>
+  <data name="Select" xml:space="preserve"><value>Select</value></data>
+  <data name="NoBoards" xml:space="preserve"><value>No boards yet. Create your first board!</value></data>
+  <data name="Role" xml:space="preserve"><value>Role</value></data>
+  <data name="Active" xml:space="preserve"><value>Active</value></data>
+  <data name="Deactivated" xml:space="preserve"><value>Deactivated</value></data>
+  <data name="NewUser" xml:space="preserve"><value>New User</value></data>
+  <data name="UserManagement" xml:space="preserve"><value>User Management</value></data>
+  <data name="BoardSettings" xml:space="preserve"><value>Board Settings</value></data>
+  <data name="ShareLink" xml:space="preserve"><value>Share Link</value></data>
+  <data name="GenerateShareLink" xml:space="preserve"><value>Generate New Share Link</value></data>
+  <data name="Properties" xml:space="preserve"><value>Properties</value></data>
+  <data name="Fill" xml:space="preserve"><value>Fill</value></data>
+  <data name="Stroke" xml:space="preserve"><value>Stroke</value></data>
+  <data name="FontSize" xml:space="preserve"><value>Font Size</value></data>
+  <data name="Bold" xml:space="preserve"><value>Bold</value></data>
+  <data name="Italic" xml:space="preserve"><value>Italic</value></data>
+  <data name="Width" xml:space="preserve"><value>Width</value></data>
+  <data name="Height" xml:space="preserve"><value>Height</value></data>
+</root>

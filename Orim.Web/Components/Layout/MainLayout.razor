@@ -1,0 +1,105 @@
+﻿@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="_theme" IsDarkMode="false" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<MudLayout>
+    <MudAppBar Elevation="1" Style="background-color: #0d1117; color: white;">
+        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                       OnClick="@ToggleDrawer" />
+        <MudText Typo="Typo.h6" Class="ml-2" Style="font-weight: 700; letter-spacing: -0.5px;">
+            Orim
+        </MudText>
+        <MudSpacer />
+        <AuthorizeView>
+            <Authorized>
+                <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit"
+                         AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    <MudMenuItem Disabled="true">
+                        @context.User.Identity?.Name
+                    </MudMenuItem>
+                    <MudDivider />
+                    <MudMenuItem OnClick="@ToggleLanguage">
+                        @(_currentLang == "de" ? "English" : "Deutsch")
+                    </MudMenuItem>
+                    <MudMenuItem Href="/api/auth/logout" ForceLoad="true">
+                        Logout
+                    </MudMenuItem>
+                </MudMenu>
+            </Authorized>
+        </AuthorizeView>
+    </MudAppBar>
+
+    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" Variant="DrawerVariant.Mini"
+               Style="background-color: #161b22; color: #c9d1d9;">
+        <MudNavMenu Color="Color.Primary">
+            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard"
+                        Style="color: #c9d1d9;">
+                Dashboard
+            </MudNavLink>
+            <AuthorizeView Roles="Admin">
+                <Authorized>
+                    <MudNavLink Href="/admin/users" Icon="@Icons.Material.Filled.People"
+                                Style="color: #c9d1d9;">
+                        Benutzer
+                    </MudNavLink>
+                </Authorized>
+            </AuthorizeView>
+        </MudNavMenu>
+    </MudDrawer>
+
+    <MudMainContent Class="pt-16" Style="min-height: 100vh; background-color: #f6f8fa;">
+        @Body
+    </MudMainContent>
+</MudLayout>
+
+@code {
+    private bool _drawerOpen = true;
+    private string _currentLang = "de";
+
+    [Inject] private NavigationManager Navigation { get; set; } = default!;
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private void ToggleLanguage()
+    {
+        _currentLang = _currentLang == "de" ? "en" : "de";
+        var uri = new Uri(Navigation.Uri);
+        Navigation.NavigateTo($"{uri.AbsolutePath}?culture={_currentLang}", forceLoad: true);
+    }
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#6E40C9",
+            Secondary = "#238636",
+            AppbarBackground = "#0d1117",
+            Background = "#f6f8fa",
+            Surface = "#ffffff",
+            DrawerBackground = "#161b22",
+            DrawerText = "#c9d1d9",
+            TextPrimary = "#24292f",
+            TextSecondary = "#57606a"
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography
+            {
+                FontFamily = ["Inter", "system-ui", "-apple-system", "sans-serif"]
+            }
+        },
+        LayoutProperties = new LayoutProperties
+        {
+            DefaultBorderRadius = "8px"
+        }
+    };
+}
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>

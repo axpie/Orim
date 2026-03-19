@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="Orim.Core/Orim.Core.csproj" />
+  <Project Path="Orim.Infrastructure/Orim.Infrastructure.csproj" />
+  <Project Path="Orim.Web/Orim.Web.csproj" />
+</Solution>

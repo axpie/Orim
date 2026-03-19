@@ -1,0 +1,74 @@
+@page "/login"
+@layout EmptyLayout
+
+<PageTitle>Orim – Login</PageTitle>
+
+<MudThemeProvider Theme="_theme" IsDarkMode="false" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #1a1040 100%);">
+    <MudCard Style="width: 400px; border-radius: 16px;" Elevation="8">
+        <MudCardHeader>
+            <CardHeaderContent>
+                <div style="text-align: center; width: 100%;">
+                    <MudText Typo="Typo.h4" Style="font-weight: 700; color: #6E40C9;">Orim</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">Kollaboratives Whiteboard</MudText>
+                </div>
+            </CardHeaderContent>
+        </MudCardHeader>
+        <MudCardContent>
+            @if (_error)
+            {
+                <MudAlert Severity="Severity.Error" Class="mb-4">
+                    Benutzername oder Passwort ungültig.
+                </MudAlert>
+            }
+            <form method="post" action="/api/auth/login">
+                <AntiforgeryToken />
+                <MudTextField T="string" Name="username" Label="Benutzername" Variant="Variant.Outlined"
+                              Required="true" Class="mb-4" Adornment="Adornment.Start"
+                              AdornmentIcon="@Icons.Material.Filled.Person" />
+                <MudTextField T="string" Name="password" Label="Passwort" Variant="Variant.Outlined"
+                              InputType="InputType.Password" Required="true" Class="mb-4"
+                              Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Lock" />
+                <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
+                           FullWidth="true" Size="Size.Large" Style="border-radius: 8px; font-weight: 600;">
+                    Anmelden
+                </MudButton>
+            </form>
+        </MudCardContent>
+    </MudCard>
+</div>
+
+@code {
+    private bool _error;
+
+    [SupplyParameterFromQuery(Name = "error")]
+    public string? Error { get; set; }
+
+    protected override void OnInitialized()
+    {
+        _error = Error == "1";
+    }
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#6E40C9",
+            Secondary = "#238636",
+            Background = "#0d1117",
+            Surface = "#ffffff",
+            TextPrimary = "#24292f"
+        },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography
+            {
+                FontFamily = ["Inter", "system-ui", "-apple-system", "sans-serif"]
+            }
+        }
+    };
+}

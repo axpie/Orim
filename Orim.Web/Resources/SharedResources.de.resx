@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <xsd:schema id="root" xmlns="" xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:msdata="urn:schemas-microsoft-com:xml-msdata">
+    <xsd:element name="root" msdata:IsDataSet="true">
+      <xsd:complexType>
+        <xsd:choice maxOccurs="unbounded">
+          <xsd:element name="data">
+            <xsd:complexType>
+              <xsd:sequence>
+                <xsd:element name="value" type="xsd:string" minOccurs="0" msdata:Ordinal="1" />
+              </xsd:sequence>
+              <xsd:attribute name="name" type="xsd:string" use="required" />
+            </xsd:complexType>
+          </xsd:element>
+        </xsd:choice>
+      </xsd:complexType>
+    </xsd:element>
+  </xsd:schema>
+  <data name="AppTitle" xml:space="preserve"><value>Orim – Kollaboratives Whiteboard</value></data>
+  <data name="Login" xml:space="preserve"><value>Anmelden</value></data>
+  <data name="Logout" xml:space="preserve"><value>Abmelden</value></data>
+  <data name="Dashboard" xml:space="preserve"><value>Dashboard</value></data>
+  <data name="MyBoards" xml:space="preserve"><value>Meine Boards</value></data>
+  <data name="NewBoard" xml:space="preserve"><value>Neues Board</value></data>
+  <data name="Users" xml:space="preserve"><value>Benutzer</value></data>
+  <data name="Settings" xml:space="preserve"><value>Einstellungen</value></data>
+  <data name="Username" xml:space="preserve"><value>Benutzername</value></data>
+  <data name="Password" xml:space="preserve"><value>Passwort</value></data>
+  <data name="InvalidCredentials" xml:space="preserve"><value>Benutzername oder Passwort ungültig.</value></data>
+  <data name="Save" xml:space="preserve"><value>Speichern</value></data>
+  <data name="Cancel" xml:space="preserve"><value>Abbrechen</value></data>
+  <data name="Delete" xml:space="preserve"><value>Löschen</value></data>
+  <data name="Create" xml:space="preserve"><value>Erstellen</value></data>
+  <data name="Edit" xml:space="preserve"><value>Bearbeiten</value></data>
+  <data name="BoardName" xml:space="preserve"><value>Board-Name</value></data>
+  <data name="Visibility" xml:space="preserve"><value>Sichtbarkeit</value></data>
+  <data name="Private" xml:space="preserve"><value>Privat</value></data>
+  <data name="Public" xml:space="preserve"><value>Öffentlich</value></data>
+  <data name="Shared" xml:space="preserve"><value>Geteilt</value></data>
+  <data name="Members" xml:space="preserve"><value>Mitglieder</value></data>
+  <data name="Elements" xml:space="preserve"><value>Elemente</value></data>
+  <data name="Export" xml:space="preserve"><value>Export</value></data>
+  <data name="Import" xml:space="preserve"><value>Import</value></data>
+  <data name="Undo" xml:space="preserve"><value>Rückgängig</value></data>
+  <data name="Redo" xml:space="preserve"><value>Wiederherstellen</value></data>
+  <data name="Rectangle" xml:space="preserve"><value>Rechteck</value></data>
+  <data name="Ellipse" xml:space="preserve"><value>Ellipse</value></data>
+  <data name="Triangle" xml:space="preserve"><value>Dreieck</value></data>
+  <data name="Text" xml:space="preserve"><value>Text</value></data>
+  <data name="Arrow" xml:space="preserve"><value>Pfeil</value></data>
+  <data name="Select" xml:space="preserve"><value>Auswahl</value></data>
+  <data name="NoBoards" xml:space="preserve"><value>Noch keine Boards vorhanden. Erstelle dein erstes Board!</value></data>
+  <data name="Role" xml:space="preserve"><value>Rolle</value></data>
+  <data name="Active" xml:space="preserve"><value>Aktiv</value></data>
+  <data name="Deactivated" xml:space="preserve"><value>Deaktiviert</value></data>
+  <data name="NewUser" xml:space="preserve"><value>Neuer Benutzer</value></data>
+  <data name="UserManagement" xml:space="preserve"><value>Benutzerverwaltung</value></data>
+  <data name="BoardSettings" xml:space="preserve"><value>Board-Einstellungen</value></data>
+  <data name="ShareLink" xml:space="preserve"><value>Share-Link</value></data>
+  <data name="GenerateShareLink" xml:space="preserve"><value>Neuen Share-Link generieren</value></data>
+  <data name="Properties" xml:space="preserve"><value>Eigenschaften</value></data>
+  <data name="Fill" xml:space="preserve"><value>Füllung</value></data>
+  <data name="Stroke" xml:space="preserve"><value>Rahmen</value></data>
+  <data name="FontSize" xml:space="preserve"><value>Schriftgröße</value></data>
+  <data name="Bold" xml:space="preserve"><value>Fett</value></data>
+  <data name="Italic" xml:space="preserve"><value>Kursiv</value></data>
+  <data name="Width" xml:space="preserve"><value>Breite</value></data>
+  <data name="Height" xml:space="preserve"><value>Höhe</value></data>
+</root>
