@@ -37,6 +37,45 @@ window.orimWhiteboard = {
         return new XMLSerializer().serializeToString(svg);
     },
 
+    clientToElement: function (elementId, clientX, clientY) {
+        const element = document.getElementById(elementId);
+        if (!element) {
+            return { x: 0, y: 0, width: 0, height: 0 };
+        }
+
+        const rect = element.getBoundingClientRect();
+        const x = Number.isFinite(clientX - rect.left) ? clientX - rect.left : 0;
+        const y = Number.isFinite(clientY - rect.top) ? clientY - rect.top : 0;
+        const width = Number.isFinite(rect.width) ? rect.width : 0;
+        const height = Number.isFinite(rect.height) ? rect.height : 0;
+
+        return {
+            x,
+            y,
+            width,
+            height
+        };
+    },
+
+    clientToSvg: function (clientX, clientY) {
+        const svg = document.getElementById('whiteboard-svg');
+        if (!svg) {
+            return { x: clientX, y: clientY };
+        }
+
+        const point = svg.createSVGPoint();
+        point.x = clientX;
+        point.y = clientY;
+
+        const ctm = svg.getScreenCTM();
+        if (!ctm) {
+            return { x: clientX, y: clientY };
+        }
+
+        const svgPoint = point.matrixTransform(ctm.inverse());
+        return { x: svgPoint.x, y: svgPoint.y };
+    },
+
     downloadFile: function (filename, contentType, base64) {
         const byteCharacters = atob(base64);
         const byteNumbers = new Array(byteCharacters.length);

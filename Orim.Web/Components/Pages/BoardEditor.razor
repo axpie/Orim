@@ -24,62 +24,46 @@ else if (!_hasAccess)
 else
 {
     <div style="display: flex; flex-direction: column; height: calc(100vh - 64px);">
-        @* Toolbar *@
         <MudPaper Elevation="1" Style="padding: 4px 16px; display: flex; align-items: center; gap: 8px; background: #fff; z-index: 10; border-bottom: 1px solid #e1e4e8;">
-            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@GoBack" Size="Size.Small" />
+            <MudTooltip Text="Zur Übersicht" Arrow="true">
+                <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@GoBack" Size="Size.Small" />
+            </MudTooltip>
             <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">@_board.Title</MudText>
             <MudSpacer />
 
             @if (_canEdit)
             {
                 <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" Style="border-radius: 8px;">
-                    <MudIconButton Icon="@Icons.Material.Filled.Rectangle" Title="Rechteck"
-                                   Color="@(_selectedTool == Tool.Rectangle ? Color.Primary : Color.Default)"
-                                   OnClick="@(() => SelectTool(Tool.Rectangle))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.Circle" Title="Ellipse"
-                                   Color="@(_selectedTool == Tool.Ellipse ? Color.Primary : Color.Default)"
-                                   OnClick="@(() => SelectTool(Tool.Ellipse))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.ChangeHistory" Title="Dreieck"
-                                   Color="@(_selectedTool == Tool.Triangle ? Color.Primary : Color.Default)"
-                                   OnClick="@(() => SelectTool(Tool.Triangle))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.TextFields" Title="Text"
-                                   Color="@(_selectedTool == Tool.Text ? Color.Primary : Color.Default)"
-                                   OnClick="@(() => SelectTool(Tool.Text))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.TrendingFlat" Title="Pfeil"
-                                   Color="@(_selectedTool == Tool.Arrow ? Color.Primary : Color.Default)"
-                                   OnClick="@(() => SelectTool(Tool.Arrow))" />
-                    <MudIconButton Icon="@Icons.Material.Filled.NearMe" Title="Auswahl"
-                                   Color="@(_selectedTool == Tool.Select ? Color.Primary : Color.Default)"
-                                   OnClick="@(() => SelectTool(Tool.Select))" />
+                    <MudTooltip Text="Auswahlwerkzeug" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.NearMe"
+                                       Color="@(_selectedTool == Tool.Select ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SelectTool(Tool.Select))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Rechteck zeichnen" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.Rectangle"
+                                       Color="@(_selectedTool == Tool.Rectangle ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SelectTool(Tool.Rectangle))" />
+                    </MudTooltip>
                 </MudButtonGroup>
 
                 <MudDivider Vertical="true" FlexItem="true" />
-
-                <MudIconButton Icon="@Icons.Material.Filled.Undo" Size="Size.Small" Disabled="@(!_commandStack.CanUndo)"
-                               OnClick="@Undo" Title="Rückgängig (Strg+Z)" />
-                <MudIconButton Icon="@Icons.Material.Filled.Redo" Size="Size.Small" Disabled="@(!_commandStack.CanRedo)"
-                               OnClick="@Redo" Title="Wiederherstellen (Strg+Y)" />
-
-                <MudDivider Vertical="true" FlexItem="true" />
             }
 
-            <MudMenu Icon="@Icons.Material.Filled.FileDownload" Size="Size.Small" Title="Export">
-                <MudMenuItem OnClick="@ExportPng">Export als PNG</MudMenuItem>
-                <MudMenuItem OnClick="@ExportPdf">Export als PDF</MudMenuItem>
-                <MudMenuItem OnClick="@ExportJson">Export als JSON</MudMenuItem>
+            <MudMenu Size="Size.Small">
+                <ActivatorContent>
+                    <MudTooltip Text="Board exportieren" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.FileDownload" Size="Size.Small" />
+                    </MudTooltip>
+                </ActivatorContent>
+                <ChildContent>
+                    <MudMenuItem OnClick="@ExportJson">Export als JSON</MudMenuItem>
+                </ChildContent>
             </MudMenu>
 
-            @if (_canEdit)
-            {
-                <MudFileUpload T="IBrowserFile" Accept=".json" FilesChanged="@ImportJson" Style="margin: 0;">
-                    <ActivatorContent>
-                        <MudIconButton Icon="@Icons.Material.Filled.FileUpload" Size="Size.Small" Title="Import JSON" />
-                    </ActivatorContent>
-                </MudFileUpload>
-            }
-
-            <MudIconButton Icon="@Icons.Material.Filled.Settings" Size="Size.Small"
-                           OnClick="@(() => _settingsOpen = true)" Title="Board-Einstellungen" />
+            <MudTooltip Text="Board-Einstellungen" Arrow="true">
+                <MudIconButton Icon="@Icons.Material.Filled.Settings" Size="Size.Small"
+                               OnClick="@(() => _settingsOpen = true)" />
+            </MudTooltip>
         </MudPaper>
 
         @* Canvas *@
@@ -219,15 +203,7 @@ else
     {
         if (_board is null || !_canEdit) return;
 
-        if (e.CtrlKey && e.Key == "z")
-        {
-            Undo();
-        }
-        else if (e.CtrlKey && e.Key == "y")
-        {
-            Redo();
-        }
-        else if (e.Key == "Delete" || e.Key == "Backspace")
+        if (e.Key == "Delete" || e.Key == "Backspace")
         {
             if (_canvas?.SelectedElement is not null)
             {
@@ -237,22 +213,6 @@ else
                 await SaveBoard();
             }
         }
-    }
-
-    private async void Undo()
-    {
-        if (_board is null) return;
-        _commandStack.Undo(_board);
-        await SaveBoard();
-        StateHasChanged();
-    }
-
-    private async void Redo()
-    {
-        if (_board is null) return;
-        _commandStack.Redo(_board);
-        await SaveBoard();
-        StateHasChanged();
     }
 
     private async Task SaveBoard()
@@ -375,10 +335,6 @@ else
     public enum Tool
     {
         Select,
-        Rectangle,
-        Ellipse,
-        Triangle,
-        Text,
-        Arrow
+        Rectangle
     }
 }

@@ -1,78 +1,37 @@
-@using System.Web
 @using Orim.Web.Components.Pages
 @inject IJSRuntime JS
 
-<div style="width: 100%; height: 100%; overflow: hidden; position: relative;"
-     @onmousedown="OnCanvasMouseDown"
-     @onmousemove="OnCanvasMouseMove"
-     @onmouseup="OnCanvasMouseUp"
-     @onwheel="OnWheel">
-    <svg id="whiteboard-svg"
-         width="100%" height="100%"
-         viewBox="@($"{_viewBox.X} {_viewBox.Y} {_viewBox.W} {_viewBox.H}")"
-         style="background: #ffffff; cursor: @GetCursor();"
-         xmlns="http://www.w3.org/2000/svg">
+<div id="whiteboard-surface"
+     style="position: relative; width: 100%; height: 100%; overflow: hidden; background-color: #ffffff; background-image: linear-gradient(#eef2f7 1px, transparent 1px), linear-gradient(90deg, #eef2f7 1px, transparent 1px); background-size: 24px 24px; cursor: @GetCursor(); touch-action: none; user-select: none;"
+     @onmousedown="OnSurfaceMouseDown"
+     @onmousemove="OnSurfaceMouseMove"
+     @onmouseup="OnSurfaceMouseUp"
+     @onmouseleave="OnSurfaceMouseLeave"
+     @onmousedown:preventDefault="true">
 
-        <defs>
-            <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
-                <polygon points="0 0, 10 3.5, 0 7" fill="#000" />
-            </marker>
-        </defs>
-
-        @* Grid pattern *@
-        <defs>
-            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse"
-                     x="@_viewBox.X" y="@_viewBox.Y">
-                <path d="M 20 0 L 0 0 0 20" fill="none" stroke="#e8ecf0" stroke-width="0.5"/>
-            </pattern>
-        </defs>
-        <rect x="@_viewBox.X" y="@_viewBox.Y" width="@_viewBox.W" height="@_viewBox.H" fill="url(#grid)" />
-
-        @* Render elements *@
-        @if (Board is not null)
+    @if (Board is not null)
+    {
+        @foreach (var element in Board.Elements.OrderBy(e => e.ZIndex))
         {
-            @foreach (var element in Board.Elements.OrderBy(e => e.ZIndex))
-            {
-                @RenderElement(element)
-            }
+            @RenderElement(element)
         }
+    }
 
-        @* Lasso selection rectangle *@
-        @if (_isLassoSelecting)
-        {
-            <rect x="@Math.Min(_lassoStart.X, _lassoEnd.X)" y="@Math.Min(_lassoStart.Y, _lassoEnd.Y)"
-                  width="@Math.Abs(_lassoEnd.X - _lassoStart.X)" height="@Math.Abs(_lassoEnd.Y - _lassoStart.Y)"
-                  fill="rgba(110, 64, 201, 0.1)" stroke="#6E40C9" stroke-width="1" stroke-dasharray="4" />
-        }
+    @if (_draftRectangle is not null)
+    {
+        <div style="position: absolute; left: @Px(_draftRectangle.X); top: @Px(_draftRectangle.Y); width: @Px(_draftRectangle.Width); height: @Px(_draftRectangle.Height); border: 2px dashed #2563eb; background: rgba(37, 99, 235, 0.12); border-radius: 10px; pointer-events: none;"></div>
+    }
 
-        @* Selection handles *@
-        @if (SelectedElement is not null && CanEdit)
-        {
-            @RenderSelectionHandles(SelectedElement)
-        }
-        @foreach (var el in _multiSelected)
-        {
-            @RenderSelectionHandles(el)
-        }
-
-        @* Dock points when creating arrows *@
-        @if (SelectedTool == BoardEditor.Tool.Arrow && _hoverElement is not null)
-        {
-            @RenderDockPoints(_hoverElement)
-        }
-
-        @* Arrow being drawn *@
-        @if (_isDrawingArrow && _arrowStart is not null)
-        {
-            <line x1="@_arrowStart.Value.X" y1="@_arrowStart.Value.Y"
-                  x2="@_currentMouse.X" y2="@_currentMouse.Y"
-                  stroke="#6E40C9" stroke-width="2" stroke-dasharray="4"
-                  marker-end="url(#arrowhead)" />
-        }
-    </svg>
+    @if (SelectedElement is not null)
+    {
+        <div style="position: absolute; left: @Px(SelectedElement.X - 4); top: @Px(SelectedElement.Y - 4); width: @Px(SelectedElement.Width + 8); height: @Px(SelectedElement.Height + 8); border: 2px dashed #2563eb; border-radius: 12px; pointer-events: none;"></div>
+    }
 </div>
 
 @code {
+    private const string SurfaceId = "whiteboard-surface";
+    private const double MinimumRectangleSize = 12;
+
     [Parameter] public Board? Board { get; set; }
     [Parameter] public bool CanEdit { get; set; }
     [Parameter] public CommandStack CommandStack { get; set; } = new();
@@ -80,623 +39,331 @@
     [Parameter] public BoardEditor.Tool SelectedTool { get; set; }
 
     public BoardElement? SelectedElement { get; private set; }
-    private List<BoardElement> _multiSelected = [];
 
-    private ViewBox _viewBox = new(0, 0, 1200, 800);
-    private double _zoom = 1.0;
+    private bool _isDraggingSelection;
+    private bool _isDrawingRectangle;
+    private bool _hasInteractionChanged;
+    private Point _dragPointerOffset;
+    private Point _drawStart;
+    private Size _surfaceSize;
+    private ShapeElement? _draftRectangle;
 
-    private bool _isDragging;
-    private bool _isPanning;
-    private bool _isResizing;
-    private bool _isLassoSelecting;
-    private bool _isDrawingArrow;
-    private int _resizeHandle = -1;
-    private Point _dragStart;
-    private Point _dragElementStart;
-    private double _dragElementW, _dragElementH;
-    private Point _lassoStart;
-    private Point _lassoEnd;
-    private Point _currentMouse;
-    private Point? _arrowStart;
-    private Guid? _arrowSourceId;
-    private DockPoint _arrowSourceDock;
-    private BoardElement? _hoverElement;
-
-    private record struct ViewBox(double X, double Y, double W, double H);
     private record struct Point(double X, double Y);
+    private record struct Size(double Width, double Height);
+    private record struct RelativePointer(double X, double Y, double Width, double Height);
 
     public void ClearSelection()
     {
         SelectedElement = null;
-        _multiSelected.Clear();
+        StateHasChanged();
     }
 
-    private Point ScreenToSvg(double clientX, double clientY)
+    private async Task<Point> GetPointerAsync(MouseEventArgs e)
     {
-        return new Point(
-            _viewBox.X + clientX / _zoom * (_viewBox.W / (1200 / _zoom)),
-            _viewBox.Y + clientY / _zoom * (_viewBox.H / (800 / _zoom))
-        );
+        var pointer = await JS.InvokeAsync<RelativePointer>("orimWhiteboard.clientToElement", SurfaceId, e.ClientX, e.ClientY);
+        _surfaceSize = new Size(SanitizeCoordinate(pointer.Width), SanitizeCoordinate(pointer.Height));
+        return ClampToSurface(new Point(SanitizeCoordinate(pointer.X), SanitizeCoordinate(pointer.Y)));
     }
 
-    private Point ScreenToSvgSimple(MouseEventArgs e)
+    private async Task OnSurfaceMouseDown(MouseEventArgs e)
     {
-        return new Point(
-            _viewBox.X + e.OffsetX * (_viewBox.W / 1200.0 * _zoom),
-            _viewBox.Y + e.OffsetY * (_viewBox.H / 800.0 * _zoom)
-        );
-    }
-
-    private void OnCanvasMouseDown(MouseEventArgs e)
-    {
-        var svgPoint = ScreenToSvgSimple(e);
-        _currentMouse = svgPoint;
-
-        // Space+drag = pan
-        if (e.Button == 1 || _isPanning)
+        if (e.Button != 0)
         {
-            _isPanning = true;
-            _dragStart = new Point(e.ClientX, e.ClientY);
             return;
         }
 
-        if (!CanEdit)
-        {
-            // In viewer mode, just select for inspection
-            var clicked = HitTest(svgPoint);
-            SelectedElement = clicked;
-            return;
-        }
+        var pointer = await GetPointerAsync(e);
 
-        if (SelectedTool == BoardEditor.Tool.Select)
+        if (SelectedTool == BoardEditor.Tool.Rectangle && CanEdit)
         {
-            var clicked = HitTest(svgPoint);
-            if (clicked is not null)
+            SelectedElement = null;
+            _isDrawingRectangle = true;
+            _hasInteractionChanged = false;
+            _drawStart = pointer;
+            _draftRectangle = new ShapeElement
             {
-                if (e.ShiftKey)
-                {
-                    if (!_multiSelected.Contains(clicked))
-                        _multiSelected.Add(clicked);
-                }
-                else
-                {
-                    SelectedElement = clicked;
-                    _multiSelected.Clear();
-                }
-
-                // Check if clicking on a resize handle
-                var handle = HitTestResizeHandle(clicked, svgPoint);
-                if (handle >= 0)
-                {
-                    _isResizing = true;
-                    _resizeHandle = handle;
-                    _dragStart = svgPoint;
-                    _dragElementStart = new Point(clicked.X, clicked.Y);
-                    _dragElementW = clicked.Width;
-                    _dragElementH = clicked.Height;
-                }
-                else
-                {
-                    _isDragging = true;
-                    _dragStart = svgPoint;
-                    _dragElementStart = new Point(clicked.X, clicked.Y);
-                }
-            }
-            else
-            {
-                SelectedElement = null;
-                _multiSelected.Clear();
-                // Start lasso selection
-                _isLassoSelecting = true;
-                _lassoStart = svgPoint;
-                _lassoEnd = svgPoint;
-            }
-        }
-        else if (SelectedTool == BoardEditor.Tool.Arrow)
-        {
-            var target = HitTest(svgPoint);
-            if (target is not null)
-            {
-                _isDrawingArrow = true;
-                _arrowSourceId = target.Id;
-                _arrowSourceDock = GetClosestDockPoint(target, svgPoint);
-                _arrowStart = GetDockPosition(target, _arrowSourceDock);
-            }
-        }
-        else
-        {
-            // Creating a new element
-            CreateElementAt(svgPoint);
-        }
-    }
-
-    private void OnCanvasMouseMove(MouseEventArgs e)
-    {
-        var svgPoint = ScreenToSvgSimple(e);
-        _currentMouse = svgPoint;
-
-        if (_isPanning)
-        {
-            var dx = (e.ClientX - _dragStart.X) * _zoom;
-            var dy = (e.ClientY - _dragStart.Y) * _zoom;
-            _viewBox = _viewBox with
-            {
-                X = _viewBox.X - dx,
-                Y = _viewBox.Y - dy
+                X = SanitizeCoordinate(pointer.X),
+                Y = SanitizeCoordinate(pointer.Y),
+                Width = 0,
+                Height = 0,
+                ShapeType = ShapeType.Rectangle,
+                FillColor = "#ffffff",
+                StrokeColor = "#0f172a",
+                StrokeWidth = 2
             };
-            _dragStart = new Point(e.ClientX, e.ClientY);
             return;
         }
 
-        if (_isDragging && SelectedElement is not null && CanEdit)
+        var clicked = HitTest(pointer);
+        SelectedElement = clicked;
+
+        if (!CanEdit || SelectedTool != BoardEditor.Tool.Select || clicked is null)
         {
-            var dx = svgPoint.X - _dragStart.X;
-            var dy = svgPoint.Y - _dragStart.Y;
-            SelectedElement.X = _dragElementStart.X + dx;
-            SelectedElement.Y = _dragElementStart.Y + dy;
+            return;
         }
 
-        if (_isResizing && SelectedElement is not null && CanEdit)
+        _isDraggingSelection = true;
+        _hasInteractionChanged = false;
+        _dragPointerOffset = new Point(pointer.X - clicked.X, pointer.Y - clicked.Y);
+    }
+
+    private async Task OnSurfaceMouseMove(MouseEventArgs e)
+    {
+        var pointer = await GetPointerAsync(e);
+
+        if (_isDraggingSelection && SelectedElement is not null)
         {
-            ApplyResize(SelectedElement, svgPoint);
+            var nextX = Clamp(pointer.X - _dragPointerOffset.X, 0, Math.Max(0, _surfaceSize.Width - SelectedElement.Width));
+            var nextY = Clamp(pointer.Y - _dragPointerOffset.Y, 0, Math.Max(0, _surfaceSize.Height - SelectedElement.Height));
+
+            if (Math.Abs(SelectedElement.X - nextX) > 0.1 || Math.Abs(SelectedElement.Y - nextY) > 0.1)
+            {
+                SelectedElement.X = nextX;
+                SelectedElement.Y = nextY;
+                _hasInteractionChanged = true;
+            }
+
+            return;
         }
 
-        if (_isLassoSelecting)
+        if (_isDrawingRectangle && _draftRectangle is not null)
         {
-            _lassoEnd = svgPoint;
-        }
-
-        if (SelectedTool == BoardEditor.Tool.Arrow && !_isDrawingArrow)
-        {
-            _hoverElement = HitTest(svgPoint);
+            UpdateDraftRectangle(pointer);
         }
     }
 
-    private async Task OnCanvasMouseUp(MouseEventArgs e)
+    private async Task OnSurfaceMouseUp(MouseEventArgs e)
     {
-        var svgPoint = ScreenToSvgSimple(e);
+        var pointer = await GetPointerAsync(e);
+        await FinalizeInteractionAsync(pointer);
+    }
 
-        if (_isPanning)
+    private async Task OnSurfaceMouseLeave(MouseEventArgs _)
+    {
+        await FinalizeInteractionAsync(null);
+    }
+
+    private async Task FinalizeInteractionAsync(Point? pointer)
+    {
+        if (_isDraggingSelection)
         {
-            _isPanning = false;
-            return;
-        }
-
-        if (_isDragging && SelectedElement is not null && Board is not null)
-        {
-            var cmd = new MoveElementCommand(SelectedElement.Id, SelectedElement.X, SelectedElement.Y);
-            // Already moved visually, just record
-            _isDragging = false;
-            await OnBoardChanged.InvokeAsync();
-        }
-
-        if (_isResizing && SelectedElement is not null && Board is not null)
-        {
-            _isResizing = false;
-            _resizeHandle = -1;
-            await OnBoardChanged.InvokeAsync();
-        }
-
-        if (_isLassoSelecting && Board is not null)
-        {
-            _isLassoSelecting = false;
-            var minX = Math.Min(_lassoStart.X, _lassoEnd.X);
-            var maxX = Math.Max(_lassoStart.X, _lassoEnd.X);
-            var minY = Math.Min(_lassoStart.Y, _lassoEnd.Y);
-            var maxY = Math.Max(_lassoStart.Y, _lassoEnd.Y);
-
-            _multiSelected = Board.Elements.Where(el =>
-                el.X >= minX && el.X + el.Width <= maxX &&
-                el.Y >= minY && el.Y + el.Height <= maxY
-            ).ToList();
-
-            if (_multiSelected.Count == 1)
+            _isDraggingSelection = false;
+            if (_hasInteractionChanged)
             {
-                SelectedElement = _multiSelected[0];
-                _multiSelected.Clear();
-            }
-        }
-
-        if (_isDrawingArrow && Board is not null)
-        {
-            _isDrawingArrow = false;
-            var target = HitTest(svgPoint);
-            if (target is not null && _arrowSourceId is not null && target.Id != _arrowSourceId)
-            {
-                var targetDock = GetClosestDockPoint(target, svgPoint);
-                var arrow = new ArrowElement
-                {
-                    SourceElementId = _arrowSourceId,
-                    TargetElementId = target.Id,
-                    SourceDock = _arrowSourceDock,
-                    TargetDock = targetDock,
-                    Width = 0,
-                    Height = 0
-                };
-                var cmd = new AddElementCommand(arrow);
-                CommandStack.Execute(Board, cmd);
+                _hasInteractionChanged = false;
                 await OnBoardChanged.InvokeAsync();
             }
-            _arrowStart = null;
-            _arrowSourceId = null;
         }
 
-        _isDragging = false;
-    }
-
-    private void OnWheel(WheelEventArgs e)
-    {
-        var factor = e.DeltaY > 0 ? 1.1 : 0.9;
-        _zoom *= factor;
-        _zoom = Math.Clamp(_zoom, 0.1, 10.0);
-
-        var centerX = _viewBox.X + _viewBox.W / 2;
-        var centerY = _viewBox.Y + _viewBox.H / 2;
-        var newW = 1200 * _zoom;
-        var newH = 800 * _zoom;
-        _viewBox = new ViewBox(centerX - newW / 2, centerY - newH / 2, newW, newH);
-    }
-
-    private async Task CreateElementAt(Point pos)
-    {
-        if (Board is null) return;
-
-        BoardElement element = SelectedTool switch
+        if (_isDrawingRectangle)
         {
-            BoardEditor.Tool.Rectangle => new ShapeElement
+            if (pointer is not null && _draftRectangle is not null)
             {
-                X = pos.X, Y = pos.Y, Width = 150, Height = 100,
-                ShapeType = ShapeType.Rectangle
-            },
-            BoardEditor.Tool.Ellipse => new ShapeElement
-            {
-                X = pos.X, Y = pos.Y, Width = 120, Height = 120,
-                ShapeType = ShapeType.Ellipse
-            },
-            BoardEditor.Tool.Triangle => new ShapeElement
-            {
-                X = pos.X, Y = pos.Y, Width = 120, Height = 120,
-                ShapeType = ShapeType.Triangle
-            },
-            BoardEditor.Tool.Text => new TextElement
-            {
-                X = pos.X, Y = pos.Y, Width = 200, Height = 40,
-                Text = "Text"
-            },
-            _ => null!
-        };
+                UpdateDraftRectangle(pointer.Value);
+            }
 
-        if (element is null) return;
+            _isDrawingRectangle = false;
 
-        element.ZIndex = Board.Elements.Count;
-        var cmd = new AddElementCommand(element);
-        CommandStack.Execute(Board, cmd);
-        SelectedElement = element;
-        await OnBoardChanged.InvokeAsync();
-    }
-
-    private BoardElement? HitTest(Point p)
-    {
-        if (Board is null) return null;
-
-        // Check in reverse z-order (top first)
-        foreach (var el in Board.Elements.OrderByDescending(e => e.ZIndex))
-        {
-            if (el is ArrowElement arrow)
+            if (_draftRectangle is not null &&
+                _draftRectangle.Width >= MinimumRectangleSize &&
+                _draftRectangle.Height >= MinimumRectangleSize &&
+                Board is not null)
             {
-                // For arrows, check proximity to the line
-                var source = Board.Elements.FirstOrDefault(e => e.Id == arrow.SourceElementId);
-                var target = Board.Elements.FirstOrDefault(e => e.Id == arrow.TargetElementId);
-                if (source is not null && target is not null)
+                var rectangle = new ShapeElement
                 {
-                    var sp = GetDockPosition(source, arrow.SourceDock);
-                    var tp = GetDockPosition(target, arrow.TargetDock);
-                    if (PointToLineDistance(p, sp, tp) < 8)
-                        return el;
+                    X = SanitizeCoordinate(_draftRectangle.X),
+                    Y = SanitizeCoordinate(_draftRectangle.Y),
+                    Width = SanitizeCoordinate(_draftRectangle.Width),
+                    Height = SanitizeCoordinate(_draftRectangle.Height),
+                    ShapeType = ShapeType.Rectangle,
+                    FillColor = "#ffffff",
+                    StrokeColor = "#0f172a",
+                    StrokeWidth = 2,
+                    ZIndex = Board.Elements.Count
+                };
+
+                Board.Elements.Add(rectangle);
+                SelectedElement = rectangle;
+                await OnBoardChanged.InvokeAsync();
+            }
+
+            _draftRectangle = null;
+            _hasInteractionChanged = false;
+        }
+    }
+
+    private void UpdateDraftRectangle(Point pointer)
+    {
+        if (_draftRectangle is null)
+        {
+            return;
+        }
+
+        var currentX = SanitizeCoordinate(pointer.X);
+        var currentY = SanitizeCoordinate(pointer.Y);
+        var startX = SanitizeCoordinate(_drawStart.X);
+        var startY = SanitizeCoordinate(_drawStart.Y);
+
+        _draftRectangle.X = Math.Min(startX, currentX);
+        _draftRectangle.Y = Math.Min(startY, currentY);
+        _draftRectangle.Width = Math.Abs(currentX - startX);
+        _draftRectangle.Height = Math.Abs(currentY - startY);
+        _hasInteractionChanged = _draftRectangle.Width >= MinimumRectangleSize || _draftRectangle.Height >= MinimumRectangleSize;
+    }
+
+    private BoardElement? HitTest(Point point)
+    {
+        if (Board is null)
+        {
+            return null;
+        }
+
+        foreach (var element in Board.Elements.OrderByDescending(e => e.ZIndex))
+        {
+            if (element is ArrowElement arrow)
+            {
+                var source = Board.Elements.FirstOrDefault(candidate => candidate.Id == arrow.SourceElementId);
+                var target = Board.Elements.FirstOrDefault(candidate => candidate.Id == arrow.TargetElementId);
+                if (source is null || target is null)
+                {
+                    continue;
                 }
+
+                var start = GetDockPosition(source, arrow.SourceDock);
+                var end = GetDockPosition(target, arrow.TargetDock);
+                if (PointToLineDistance(point, start, end) <= 8)
+                {
+                    return element;
+                }
+
                 continue;
             }
 
-            if (p.X >= el.X && p.X <= el.X + el.Width &&
-                p.Y >= el.Y && p.Y <= el.Y + el.Height)
-                return el;
+            if (point.X >= element.X && point.X <= element.X + element.Width &&
+                point.Y >= element.Y && point.Y <= element.Y + element.Height)
+            {
+                return element;
+            }
         }
+
         return null;
     }
 
-    private static double PointToLineDistance(Point p, Point a, Point b)
-    {
-        var dx = b.X - a.X;
-        var dy = b.Y - a.Y;
-        var len2 = dx * dx + dy * dy;
-        if (len2 == 0) return Math.Sqrt((p.X - a.X) * (p.X - a.X) + (p.Y - a.Y) * (p.Y - a.Y));
-        var t = Math.Clamp(((p.X - a.X) * dx + (p.Y - a.Y) * dy) / len2, 0, 1);
-        var projX = a.X + t * dx;
-        var projY = a.Y + t * dy;
-        return Math.Sqrt((p.X - projX) * (p.X - projX) + (p.Y - projY) * (p.Y - projY));
-    }
-
-    private int HitTestResizeHandle(BoardElement el, Point p)
-    {
-        var handles = GetResizeHandles(el);
-        for (int i = 0; i < handles.Length; i++)
-        {
-            var h = handles[i];
-            if (Math.Abs(p.X - h.X) < 6 && Math.Abs(p.Y - h.Y) < 6)
-                return i;
-        }
-        return -1;
-    }
-
-    private Point[] GetResizeHandles(BoardElement el)
-    {
-        var x = el.X; var y = el.Y; var w = el.Width; var h = el.Height;
-        return
-        [
-            new(x, y), new(x + w / 2, y), new(x + w, y),
-            new(x, y + h / 2), new(x + w, y + h / 2),
-            new(x, y + h), new(x + w / 2, y + h), new(x + w, y + h)
-        ];
-    }
-
-    private void ApplyResize(BoardElement el, Point current)
-    {
-        var dx = current.X - _dragStart.X;
-        var dy = current.Y - _dragStart.Y;
-
-        switch (_resizeHandle)
-        {
-            case 0: // Top-left
-                el.X = _dragElementStart.X + dx;
-                el.Y = _dragElementStart.Y + dy;
-                el.Width = Math.Max(20, _dragElementW - dx);
-                el.Height = Math.Max(20, _dragElementH - dy);
-                break;
-            case 1: // Top-center
-                el.Y = _dragElementStart.Y + dy;
-                el.Height = Math.Max(20, _dragElementH - dy);
-                break;
-            case 2: // Top-right
-                el.Y = _dragElementStart.Y + dy;
-                el.Width = Math.Max(20, _dragElementW + dx);
-                el.Height = Math.Max(20, _dragElementH - dy);
-                break;
-            case 3: // Middle-left
-                el.X = _dragElementStart.X + dx;
-                el.Width = Math.Max(20, _dragElementW - dx);
-                break;
-            case 4: // Middle-right
-                el.Width = Math.Max(20, _dragElementW + dx);
-                break;
-            case 5: // Bottom-left
-                el.X = _dragElementStart.X + dx;
-                el.Width = Math.Max(20, _dragElementW - dx);
-                el.Height = Math.Max(20, _dragElementH + dy);
-                break;
-            case 6: // Bottom-center
-                el.Height = Math.Max(20, _dragElementH + dy);
-                break;
-            case 7: // Bottom-right
-                el.Width = Math.Max(20, _dragElementW + dx);
-                el.Height = Math.Max(20, _dragElementH + dy);
-                break;
-        }
-    }
-
-    private DockPoint GetClosestDockPoint(BoardElement el, Point p)
-    {
-        var docks = new (DockPoint dp, Point pos)[]
-        {
-            (DockPoint.Top, new(el.X + el.Width / 2, el.Y)),
-            (DockPoint.Bottom, new(el.X + el.Width / 2, el.Y + el.Height)),
-            (DockPoint.Left, new(el.X, el.Y + el.Height / 2)),
-            (DockPoint.Right, new(el.X + el.Width, el.Y + el.Height / 2)),
-            (DockPoint.Center, new(el.X + el.Width / 2, el.Y + el.Height / 2))
-        };
-
-        return docks.MinBy(d => Math.Sqrt(
-            Math.Pow(d.pos.X - p.X, 2) + Math.Pow(d.pos.Y - p.Y, 2)
-        )).dp;
-    }
-
-    private Point GetDockPosition(BoardElement el, DockPoint dock) => dock switch
-    {
-        DockPoint.Top => new(el.X + el.Width / 2, el.Y),
-        DockPoint.Bottom => new(el.X + el.Width / 2, el.Y + el.Height),
-        DockPoint.Left => new(el.X, el.Y + el.Height / 2),
-        DockPoint.Right => new(el.X + el.Width, el.Y + el.Height / 2),
-        DockPoint.Center => new(el.X + el.Width / 2, el.Y + el.Height / 2),
-        _ => new(el.X, el.Y)
-    };
-
     private string GetCursor() => SelectedTool switch
     {
-        BoardEditor.Tool.Select => _isDragging ? "grabbing" : "default",
-        BoardEditor.Tool.Arrow => "crosshair",
-        _ => "crosshair"
+        BoardEditor.Tool.Rectangle => "crosshair",
+        _ when _isDraggingSelection => "grabbing",
+        _ => "default"
+    };
+
+    private static string CssNumber(double value) =>
+        Math.Round(value, 2, MidpointRounding.AwayFromZero)
+            .ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+
+    private string Px(double value) => $"{CssNumber(value)}px";
+
+    private Point ClampToSurface(Point point) => new(
+        Clamp(SanitizeCoordinate(point.X), 0, Math.Max(0, SanitizeCoordinate(_surfaceSize.Width))),
+        Clamp(SanitizeCoordinate(point.Y), 0, Math.Max(0, SanitizeCoordinate(_surfaceSize.Height))));
+
+    private static double SanitizeCoordinate(double value) =>
+        double.IsFinite(value) ? value : 0;
+
+    private static double Clamp(double value, double min, double max) => Math.Max(min, Math.Min(max, value));
+
+    private static double PointToLineDistance(Point point, Point start, Point end)
+    {
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var lengthSquared = dx * dx + dy * dy;
+        if (lengthSquared == 0)
+        {
+            return Math.Sqrt(Math.Pow(point.X - start.X, 2) + Math.Pow(point.Y - start.Y, 2));
+        }
+
+        var projection = Math.Clamp(((point.X - start.X) * dx + (point.Y - start.Y) * dy) / lengthSquared, 0, 1);
+        var projectionX = start.X + projection * dx;
+        var projectionY = start.Y + projection * dy;
+        return Math.Sqrt(Math.Pow(point.X - projectionX, 2) + Math.Pow(point.Y - projectionY, 2));
+    }
+
+    private static Point GetDockPosition(BoardElement element, DockPoint dockPoint) => dockPoint switch
+    {
+        DockPoint.Top => new Point(element.X + element.Width / 2, element.Y),
+        DockPoint.Bottom => new Point(element.X + element.Width / 2, element.Y + element.Height),
+        DockPoint.Left => new Point(element.X, element.Y + element.Height / 2),
+        DockPoint.Right => new Point(element.X + element.Width, element.Y + element.Height / 2),
+        _ => new Point(element.X + element.Width / 2, element.Y + element.Height / 2)
     };
 
     private RenderFragment RenderElement(BoardElement element) => element switch
     {
-        ArrowElement arrow => RenderArrow(arrow),
         ShapeElement shape => RenderShape(shape),
         TextElement text => RenderText(text),
-        StickyNoteElement sticky => RenderStickyNote(sticky),
+        StickyNoteElement sticky => RenderSticky(sticky),
+        ArrowElement arrow => RenderArrow(arrow),
         _ => builder => { }
     };
 
     private RenderFragment RenderShape(ShapeElement shape) => builder =>
     {
-        var isSelected = SelectedElement?.Id == shape.Id || _multiSelected.Any(e => e.Id == shape.Id);
-        builder.OpenElement(0, "g");
-        builder.AddAttribute(1, "class", "board-element");
+        var selected = SelectedElement?.Id == shape.Id;
+        var style = $"position: absolute; left: {Px(shape.X)}; top: {Px(shape.Y)}; width: {Px(shape.Width)}; height: {Px(shape.Height)}; background: {shape.FillColor}; border: {CssNumber(shape.StrokeWidth)}px solid {(selected ? "#2563eb" : shape.StrokeColor)}; box-sizing: border-box;";
 
-        switch (shape.ShapeType)
-        {
-            case ShapeType.Rectangle:
-                builder.OpenElement(2, "rect");
-                builder.AddAttribute(3, "x", shape.X);
-                builder.AddAttribute(4, "y", shape.Y);
-                builder.AddAttribute(5, "width", shape.Width);
-                builder.AddAttribute(6, "height", shape.Height);
-                builder.AddAttribute(7, "rx", 4);
-                builder.AddAttribute(8, "fill", shape.FillColor);
-                builder.AddAttribute(9, "stroke", isSelected ? "#6E40C9" : shape.StrokeColor);
-                builder.AddAttribute(10, "stroke-width", isSelected ? shape.StrokeWidth + 1 : shape.StrokeWidth);
-                builder.CloseElement();
-                break;
-
-            case ShapeType.Ellipse:
-                builder.OpenElement(2, "ellipse");
-                builder.AddAttribute(3, "cx", shape.X + shape.Width / 2);
-                builder.AddAttribute(4, "cy", shape.Y + shape.Height / 2);
-                builder.AddAttribute(5, "rx", shape.Width / 2);
-                builder.AddAttribute(6, "ry", shape.Height / 2);
-                builder.AddAttribute(7, "fill", shape.FillColor);
-                builder.AddAttribute(8, "stroke", isSelected ? "#6E40C9" : shape.StrokeColor);
-                builder.AddAttribute(9, "stroke-width", isSelected ? shape.StrokeWidth + 1 : shape.StrokeWidth);
-                builder.CloseElement();
-                break;
-
-            case ShapeType.Triangle:
-                var points = $"{shape.X + shape.Width / 2},{shape.Y} {shape.X},{shape.Y + shape.Height} {shape.X + shape.Width},{shape.Y + shape.Height}";
-                builder.OpenElement(2, "polygon");
-                builder.AddAttribute(3, "points", points);
-                builder.AddAttribute(4, "fill", shape.FillColor);
-                builder.AddAttribute(5, "stroke", isSelected ? "#6E40C9" : shape.StrokeColor);
-                builder.AddAttribute(6, "stroke-width", isSelected ? shape.StrokeWidth + 1 : shape.StrokeWidth);
-                builder.CloseElement();
-                break;
-        }
-
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "style", style + GetShapeSpecificStyle(shape.ShapeType));
         builder.CloseElement();
+    };
+
+    private string GetShapeSpecificStyle(ShapeType shapeType) => shapeType switch
+    {
+        ShapeType.Ellipse => " border-radius: 999px;",
+        ShapeType.Triangle => " clip-path: polygon(50% 0%, 0% 100%, 100% 100%);",
+        _ => " border-radius: 10px;"
     };
 
     private RenderFragment RenderText(TextElement text) => builder =>
     {
-        var isSelected = SelectedElement?.Id == text.Id || _multiSelected.Any(e => e.Id == text.Id);
-        builder.OpenElement(0, "g");
-        builder.AddAttribute(1, "class", "board-element");
-
-        // Background rect for text selection
-        if (isSelected)
-        {
-            builder.OpenElement(2, "rect");
-            builder.AddAttribute(3, "x", text.X - 2);
-            builder.AddAttribute(4, "y", text.Y - 2);
-            builder.AddAttribute(5, "width", text.Width + 4);
-            builder.AddAttribute(6, "height", text.Height + 4);
-            builder.AddAttribute(7, "fill", "none");
-            builder.AddAttribute(8, "stroke", "#6E40C9");
-            builder.AddAttribute(9, "stroke-width", 1);
-            builder.AddAttribute(10, "stroke-dasharray", "4");
-            builder.CloseElement();
-        }
-
-        builder.OpenElement(11, "text");
-        builder.AddAttribute(12, "x", text.X);
-        builder.AddAttribute(13, "y", text.Y + text.FontSize);
-        builder.AddAttribute(14, "font-size", text.FontSize);
-        builder.AddAttribute(15, "fill", text.Color);
-        builder.AddAttribute(16, "font-weight", text.IsBold ? "bold" : "normal");
-        builder.AddAttribute(17, "font-style", text.IsItalic ? "italic" : "normal");
-        builder.AddAttribute(18, "font-family", "Inter, system-ui, sans-serif");
-        // Escape text content for XSS prevention
-        builder.AddContent(19, text.Text);
+        var style = $"position: absolute; left: {Px(text.X)}; top: {Px(text.Y)}; width: {Px(text.Width)}; min-height: {Px(Math.Max(text.Height, text.FontSize + 8))}; color: {text.Color}; font-size: {Px(text.FontSize)}; font-weight: {(text.IsBold ? "700" : "400")}; font-style: {(text.IsItalic ? "italic" : "normal")}; white-space: pre-wrap;";
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "style", style);
+        builder.AddContent(2, text.Text);
         builder.CloseElement();
+    };
 
+    private RenderFragment RenderSticky(StickyNoteElement sticky) => builder =>
+    {
+        var style = $"position: absolute; left: {Px(sticky.X)}; top: {Px(sticky.Y)}; width: {Px(sticky.Width)}; min-height: {Px(sticky.Height)}; padding: 10px; box-sizing: border-box; background: {sticky.BackgroundColor}; border: {CssNumber(1.5)}px solid #d4b94f; border-radius: 12px; color: #1f2937; font-size: {Px(sticky.FontSize)};";
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "style", style);
+        builder.AddContent(2, sticky.Text);
         builder.CloseElement();
     };
 
     private RenderFragment RenderArrow(ArrowElement arrow) => builder =>
     {
-        if (Board is null) return;
-        var source = Board.Elements.FirstOrDefault(e => e.Id == arrow.SourceElementId);
-        var target = Board.Elements.FirstOrDefault(e => e.Id == arrow.TargetElementId);
-        if (source is null || target is null) return;
-
-        var sp = GetDockPosition(source, arrow.SourceDock);
-        var tp = GetDockPosition(target, arrow.TargetDock);
-        var isSelected = SelectedElement?.Id == arrow.Id;
-
-        builder.OpenElement(0, "line");
-        builder.AddAttribute(1, "x1", sp.X);
-        builder.AddAttribute(2, "y1", sp.Y);
-        builder.AddAttribute(3, "x2", tp.X);
-        builder.AddAttribute(4, "y2", tp.Y);
-        builder.AddAttribute(5, "stroke", isSelected ? "#6E40C9" : arrow.StrokeColor);
-        builder.AddAttribute(6, "stroke-width", arrow.StrokeWidth);
-        builder.AddAttribute(7, "marker-end", "url(#arrowhead)");
-        builder.CloseElement();
-    };
-
-    private RenderFragment RenderStickyNote(StickyNoteElement sticky) => builder =>
-    {
-        var isSelected = SelectedElement?.Id == sticky.Id;
-        builder.OpenElement(0, "g");
-        builder.OpenElement(1, "rect");
-        builder.AddAttribute(2, "x", sticky.X);
-        builder.AddAttribute(3, "y", sticky.Y);
-        builder.AddAttribute(4, "width", sticky.Width);
-        builder.AddAttribute(5, "height", sticky.Height);
-        builder.AddAttribute(6, "rx", 4);
-        builder.AddAttribute(7, "fill", sticky.BackgroundColor);
-        builder.AddAttribute(8, "stroke", isSelected ? "#6E40C9" : "#e0d68a");
-        builder.AddAttribute(9, "stroke-width", isSelected ? 2 : 1);
-        builder.AddAttribute(10, "filter", "drop-shadow(2px 2px 4px rgba(0,0,0,0.15))");
-        builder.CloseElement();
-
-        builder.OpenElement(11, "text");
-        builder.AddAttribute(12, "x", sticky.X + 8);
-        builder.AddAttribute(13, "y", sticky.Y + sticky.FontSize + 8);
-        builder.AddAttribute(14, "font-size", sticky.FontSize);
-        builder.AddAttribute(15, "fill", "#333");
-        builder.AddAttribute(16, "font-family", "Inter, system-ui, sans-serif");
-        builder.AddContent(17, sticky.Text);
-        builder.CloseElement();
-
-        builder.CloseElement();
-    };
-
-    private RenderFragment RenderSelectionHandles(BoardElement el) => builder =>
-    {
-        if (el is ArrowElement) return;
-        var handles = GetResizeHandles(el);
-        for (int i = 0; i < handles.Length; i++)
+        if (Board is null)
         {
-            builder.OpenElement(i * 10, "rect");
-            builder.AddAttribute(i * 10 + 1, "x", handles[i].X - 4);
-            builder.AddAttribute(i * 10 + 2, "y", handles[i].Y - 4);
-            builder.AddAttribute(i * 10 + 3, "width", 8);
-            builder.AddAttribute(i * 10 + 4, "height", 8);
-            builder.AddAttribute(i * 10 + 5, "fill", "#ffffff");
-            builder.AddAttribute(i * 10 + 6, "stroke", "#6E40C9");
-            builder.AddAttribute(i * 10 + 7, "stroke-width", 1.5);
-            builder.AddAttribute(i * 10 + 8, "rx", 2);
-            builder.CloseElement();
+            return;
         }
-    };
 
-    private RenderFragment RenderDockPoints(BoardElement el) => builder =>
-    {
-        var docks = new[]
+        var source = Board.Elements.FirstOrDefault(element => element.Id == arrow.SourceElementId);
+        var target = Board.Elements.FirstOrDefault(element => element.Id == arrow.TargetElementId);
+        if (source is null || target is null)
         {
-            GetDockPosition(el, DockPoint.Top),
-            GetDockPosition(el, DockPoint.Bottom),
-            GetDockPosition(el, DockPoint.Left),
-            GetDockPosition(el, DockPoint.Right),
-            GetDockPosition(el, DockPoint.Center)
-        };
-
-        for (int i = 0; i < docks.Length; i++)
-        {
-            builder.OpenElement(i * 5, "circle");
-            builder.AddAttribute(i * 5 + 1, "cx", docks[i].X);
-            builder.AddAttribute(i * 5 + 2, "cy", docks[i].Y);
-            builder.AddAttribute(i * 5 + 3, "r", 5);
-            builder.AddAttribute(i * 5 + 4, "fill", "#6E40C9");
-            builder.AddAttribute(i * 5 + 5, "opacity", 0.7);
-            builder.CloseElement();
+            return;
         }
+
+        var start = GetDockPosition(source, arrow.SourceDock);
+        var end = GetDockPosition(target, arrow.TargetDock);
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        var angle = Math.Atan2(dy, dx) * (180 / Math.PI);
+        var style = $"position: absolute; left: {Px(start.X)}; top: {Px(start.Y)}; width: {Px(length)}; height: {Px(Math.Max(arrow.StrokeWidth, 2))}; background: {arrow.StrokeColor}; transform-origin: 0 50%; transform: translateY(-50%) rotate({CssNumber(angle)}deg); border-radius: 999px;";
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "style", style);
+        builder.CloseElement();
     };
 }
