@@ -97,6 +97,12 @@ app.MapPost("/api/auth/logout", async (HttpContext context) =>
     context.Response.Redirect("/login");
 });
 
+app.MapGet("/api/auth/logout", async (HttpContext context) =>
+{
+    await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
+    context.Response.Redirect("/login");
+});
+
 app.MapGet("/api/export/pdf/{boardId:guid}", async (Guid boardId, BoardService boardService, HttpContext context) =>
 {
     var board = await boardService.GetBoardAsync(boardId);
