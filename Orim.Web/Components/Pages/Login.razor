@@ -4,18 +4,13 @@
 
 <PageTitle>@Localizer["AppTitle"] - @Localizer["Login"]</PageTitle>
 
-<MudThemeProvider Theme="_theme" IsDarkMode="false" />
-<MudPopoverProvider />
-<MudDialogProvider />
-<MudSnackbarProvider />
-
-<div style="display: flex; align-items: center; justify-content: center; min-height: 100vh; background: linear-gradient(135deg, #0d1117 0%, #161b22 50%, #1a1040 100%);">
-    <MudCard Style="width: 400px; border-radius: 16px;" Elevation="8">
+<div class="orim-login-shell">
+    <MudCard Class="orim-login-card" Elevation="8">
         <MudCardHeader>
             <CardHeaderContent>
                 <div style="text-align: center; width: 100%;">
-                    <MudText Typo="Typo.h4" Style="font-weight: 700; color: #6E40C9;">Orim</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">@Localizer["CollaborativeWhiteboard"]</MudText>
+                    <MudText Typo="Typo.h4" Class="orim-brand">Orim</MudText>
+                    <MudText Typo="Typo.body2" Class="orim-login-subtitle">@Localizer["CollaborativeWhiteboard"]</MudText>
                 </div>
             </CardHeaderContent>
         </MudCardHeader>
@@ -53,23 +48,4 @@
     {
         _error = Error == "1";
     }
-
-    private readonly MudTheme _theme = new()
-    {
-        PaletteLight = new PaletteLight
-        {
-            Primary = "#6E40C9",
-            Secondary = "#238636",
-            Background = "#0d1117",
-            Surface = "#ffffff",
-            TextPrimary = "#24292f"
-        },
-        Typography = new Typography
-        {
-            Default = new DefaultTypography
-            {
-                FontFamily = ["Inter", "system-ui", "-apple-system", "sans-serif"]
-            }
-        }
-    };
 }

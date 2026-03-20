@@ -7,6 +7,7 @@ using Orim.Core.Models;
 using Orim.Core.Services;
 using Orim.Infrastructure;
 using Orim.Web.Components;
+using Orim.Web.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -19,6 +20,7 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddMudServices();
 builder.Services.AddOrimInfrastructure(dataPath);
+builder.Services.AddScoped<ThemeManager>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>

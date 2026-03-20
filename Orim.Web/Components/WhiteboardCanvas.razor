@@ -1,6 +1,8 @@
 @using Microsoft.AspNetCore.Components.Rendering
 @using Orim.Web.Components.Pages
+@using Orim.Web.Services
 @inject IJSRuntime JS
+@inject ThemeManager ThemeManager
 
 <div id="whiteboard-surface"
      style="@GetSurfaceStyle()"
@@ -266,7 +268,7 @@
         var offsetX = GetWrappedGridOffset(_cameraOffset.X, gridStep);
         var offsetY = GetWrappedGridOffset(_cameraOffset.Y, gridStep);
 
-        return $"position: relative; width: 100%; height: 100%; overflow: hidden; background-color: #ffffff; background-image: linear-gradient(#eef2f7 1px, transparent 1px), linear-gradient(90deg, #eef2f7 1px, transparent 1px); background-size: {CssNumber(gridStep)}px {CssNumber(gridStep)}px; background-position: {CssNumber(offsetX)}px {CssNumber(offsetY)}px; cursor: {GetCursor()}; touch-action: none; user-select: none;";
+        return $"position: relative; width: 100%; height: 100%; overflow: hidden; background-color: {GetBoardSurfaceColor()}; background-image: linear-gradient({GetBoardGridColor()} 1px, transparent 1px), linear-gradient(90deg, {GetBoardGridColor()} 1px, transparent 1px); background-size: {CssNumber(gridStep)}px {CssNumber(gridStep)}px; background-position: {CssNumber(offsetX)}px {CssNumber(offsetY)}px; cursor: {GetCursor()}; touch-action: none; user-select: none; transition: background-color 0.2s ease;";
     }
 
     private string GetWorldStyle() =>
@@ -282,6 +284,69 @@
         var wrapped = offset % step;
         return wrapped < 0 ? wrapped + step : wrapped;
     }
+
+    private string GetBoardSurfaceColor() => ThemeManager.CurrentPreset switch
+    {
+        ThemePreset.Dark => "#10192A",
+        ThemePreset.Synthwave => "#160A29",
+        _ => "#FFFFFF"
+    };
+
+    private string GetBoardGridColor() => ThemeManager.CurrentPreset switch
+    {
+        ThemePreset.Dark => "rgba(148, 163, 184, 0.16)",
+        ThemePreset.Synthwave => "rgba(53, 242, 255, 0.16)",
+        _ => "#EEF2F7"
+    };
+
+    private string GetDefaultShapeFillColor() => ThemeManager.CurrentPreset switch
+    {
+        ThemePreset.Dark => "#18253B",
+        ThemePreset.Synthwave => "#261145",
+        _ => "#FFFFFF"
+    };
+
+    private string GetDefaultStrokeColor() => ThemeManager.CurrentPreset switch
+    {
+        ThemePreset.Dark => "#E5EEF9",
+        ThemePreset.Synthwave => "#35F2FF",
+        _ => "#0F172A"
+    };
+
+    private string GetDefaultIconColor() => ThemeManager.CurrentPreset switch
+    {
+        ThemePreset.Dark => "#E5EEF9",
+        ThemePreset.Synthwave => "#FFF0FF",
+        _ => "#0F172A"
+    };
+
+    private string GetSelectionColor() => ThemeManager.CurrentPreset switch
+    {
+        ThemePreset.Dark => "#8B5CF6",
+        ThemePreset.Synthwave => "#FF4FD8",
+        _ => "#2563EB"
+    };
+
+    private string GetSelectionTint(double opacity) => ThemeManager.CurrentPreset switch
+    {
+        ThemePreset.Dark => $"rgba(139, 92, 246, {CssNumber(opacity)})",
+        ThemePreset.Synthwave => $"rgba(255, 79, 216, {CssNumber(opacity)})",
+        _ => $"rgba(37, 99, 235, {CssNumber(opacity)})"
+    };
+
+    private string GetHandleSurfaceColor() => ThemeManager.CurrentPreset switch
+    {
+        ThemePreset.Dark => "#10192A",
+        ThemePreset.Synthwave => "#160A29",
+        _ => "#FFFFFF"
+    };
+
+    private string GetDockTargetColor() => ThemeManager.CurrentPreset switch
+    {
+        ThemePreset.Dark => "#22C55E",
+        ThemePreset.Synthwave => "#35F2FF",
+        _ => "#0F766E"
+    };
 
     private async Task OnSurfaceMouseDown(MouseEventArgs e)
     {
@@ -319,8 +384,8 @@
                 Width = 0,
                 Height = 0,
                 ShapeType = shapeType,
-                FillColor = "#ffffff",
-                StrokeColor = "#0f172a",
+                FillColor = GetDefaultShapeFillColor(),
+                StrokeColor = GetDefaultStrokeColor(),
                 StrokeWidth = 2
             };
             return;
@@ -336,7 +401,7 @@
                 Width = iconSize,
                 Height = iconSize,
                 IconName = PendingIconName,
-                Color = "#0f172a",
+                Color = GetDefaultIconColor(),
                 ZIndex = Board.Elements.Count
             };
 
@@ -789,8 +854,8 @@
                     Width = SanitizeCoordinate(_draftShape.Width),
                     Height = SanitizeCoordinate(_draftShape.Height),
                     ShapeType = _draftShape.ShapeType,
-                    FillColor = "#ffffff",
-                    StrokeColor = "#0f172a",
+                    FillColor = _draftShape.FillColor,
+                    StrokeColor = _draftShape.StrokeColor,
                     StrokeWidth = 2,
                     ZIndex = Board.Elements.Count
                 };
@@ -819,7 +884,7 @@
                     TargetX = _draftArrow.Value.TargetElementId is null ? _draftArrow.Value.Pointer.X : null,
                     TargetY = _draftArrow.Value.TargetElementId is null ? _draftArrow.Value.Pointer.Y : null,
                     TargetDock = _draftArrow.Value.TargetDock ?? ResolveFreeDock(_draftArrow.Value.SourcePoint, _draftArrow.Value.Pointer),
-                    StrokeColor = "#0f172a",
+                    StrokeColor = GetDefaultStrokeColor(),
                     StrokeWidth = 2,
                     ZIndex = Board.Elements.Count
                 };
@@ -856,7 +921,7 @@
     private string GetSelectionFrameStyle()
     {
         var bounds = GetSelectionBounds();
-        return $"position:absolute; left:{Px(bounds.Left)}; top:{Px(bounds.Top)}; width:{Px(bounds.Width)}; height:{Px(bounds.Height)}; border:{Px(2 / _zoom)} dashed #2563eb; background:rgba(37,99,235,0.10); border-radius:{Px(8 / _zoom)}; pointer-events:none;";
+        return $"position:absolute; left:{Px(bounds.Left)}; top:{Px(bounds.Top)}; width:{Px(bounds.Width)}; height:{Px(bounds.Height)}; border:{Px(2 / _zoom)} dashed {GetSelectionColor()}; background:{GetSelectionTint(0.10)}; border-radius:{Px(8 / _zoom)}; pointer-events:none;";
     }
 
     private string GetAlignmentGuideStyle(AlignmentGuide guide)
@@ -873,7 +938,7 @@
     private string GetSingleSelectionOutlineStyle(BoardElement element)
     {
         var padding = 4 / _zoom;
-        return $"position:absolute; left:{Px(element.X - padding)}; top:{Px(element.Y - padding)}; width:{Px(element.Width + padding * 2)}; height:{Px(element.Height + padding * 2)}; border:{Px(2 / _zoom)} dashed #2563eb; border-radius:{Px(12 / _zoom)}; pointer-events:none;";
+        return $"position:absolute; left:{Px(element.X - padding)}; top:{Px(element.Y - padding)}; width:{Px(element.Width + padding * 2)}; height:{Px(element.Height + padding * 2)}; border:{Px(2 / _zoom)} dashed {GetSelectionColor()}; border-radius:{Px(12 / _zoom)}; pointer-events:none;";
     }
 
     private string GetSelectionOutlineStyle()
@@ -890,7 +955,7 @@
         var right = elements.Max(element => element.X + element.Width) + padding;
         var bottom = elements.Max(element => element.Y + element.Height) + padding;
 
-        return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(right - left)}; height:{Px(bottom - top)}; border:{Px(2 / _zoom)} dashed #2563eb; border-radius:{Px(16 / _zoom)}; background:rgba(37,99,235,0.04); pointer-events:none;";
+        return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(right - left)}; height:{Px(bottom - top)}; border:{Px(2 / _zoom)} dashed {GetSelectionColor()}; border-radius:{Px(16 / _zoom)}; background:{GetSelectionTint(0.04)}; pointer-events:none;";
     }
 
     private IReadOnlyList<BoardElement> GetElementsInSelectionBounds(SelectionBounds bounds)
@@ -1567,7 +1632,7 @@
     private RenderFragment RenderShape(ShapeElement shape) => builder =>
     {
         var selected = IsSelected(shape);
-        var strokeColor = selected ? "#2563eb" : shape.StrokeColor;
+        var strokeColor = selected ? GetSelectionColor() : shape.StrokeColor;
         var containerStyle = $"position: absolute; left: {Px(shape.X)}; top: {Px(shape.Y)}; width: {Px(shape.Width)}; height: {Px(shape.Height)}; overflow: visible; pointer-events: none;";
         var svgStyle = "width: 100%; height: 100%; overflow: visible; display: block;";
         var dashArray = GetStrokeDashArray(shape.BorderLineStyle);
@@ -1787,7 +1852,7 @@
             builder,
             points,
             GetPointAlongPolyline(points, 0.5),
-            "#2563eb",
+            GetSelectionColor(),
             2,
             ArrowLineStyle.Dashed,
             ArrowHeadStyle.None,
@@ -1808,6 +1873,7 @@
         }
 
         var effectiveColor = isSelected ? "#2563eb" : strokeColor;
+        effectiveColor = isSelected ? GetSelectionColor() : strokeColor;
         var headSize = Math.Max(16, strokeWidth * 6.5);
         var visibleSourceHead = endpointDrag is null || !endpointDrag.Value.IsSource ? sourceHead : ArrowHeadStyle.None;
         var visibleTargetHead = endpointDrag is null || endpointDrag.Value.IsSource ? targetHead : ArrowHeadStyle.None;
@@ -1882,7 +1948,7 @@
         builder.AddAttribute(3, "viewBox", $"0 0 {CssNumber(Math.Max(shape.Width, 1))} {CssNumber(Math.Max(shape.Height, 1))}");
         builder.AddAttribute(4, "preserveAspectRatio", "none");
         builder.AddAttribute(5, "style", svgStyle);
-        RenderShapePrimitive(builder, 6, shape, "rgba(37, 99, 235, 0.12)", "#2563eb", 2, "6 4", 0);
+        RenderShapePrimitive(builder, 6, shape, GetSelectionTint(0.12), GetSelectionColor(), 2, "6 4", 0);
         builder.CloseElement();
         builder.CloseElement();
     };
@@ -1999,9 +2065,9 @@
         var size = (handle.IsActive || isHovered ? 16 : 12) / _zoom;
         var left = handle.Center.X - (size / 2);
         var top = handle.Center.Y - (size / 2);
-        var background = handle.IsSource ? "#ffffff" : "#2563eb";
-        var border = handle.IsSource ? "#2563eb" : "#ffffff";
-        return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(size)}; height:{Px(size)}; border-radius:999px; background:{background}; border:2px solid {border}; box-sizing:border-box; pointer-events:none; box-shadow:0 0 0 {Px(2 / _zoom)} rgba(37,99,235,0.18);";
+        var background = handle.IsSource ? GetHandleSurfaceColor() : GetSelectionColor();
+        var border = handle.IsSource ? GetSelectionColor() : GetHandleSurfaceColor();
+        return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(size)}; height:{Px(size)}; border-radius:999px; background:{background}; border:2px solid {border}; box-sizing:border-box; pointer-events:none; box-shadow:0 0 0 {Px(2 / _zoom)} {GetSelectionTint(0.18)};";
     }
 
     private ArrowEndpointHandleDefinition? GetArrowEndpointHandleAtPoint(ArrowElement arrow, Point point)
@@ -2023,9 +2089,9 @@
         var size = (handle.IsActive || handle.IsTarget ? 14 : 10) / _zoom;
         var left = handle.Center.X - (size / 2);
         var top = handle.Center.Y - (size / 2);
-        var background = handle.IsActive ? "#2563eb" : handle.IsTarget ? "#0f766e" : "#ffffff";
-        var border = handle.IsActive || handle.IsTarget ? "#ffffff" : "#2563eb";
-        return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(size)}; height:{Px(size)}; border-radius:999px; background:{background}; border:2px solid {border}; box-sizing:border-box; pointer-events:none; box-shadow:0 0 0 {Px(1 / _zoom)} rgba(37,99,235,0.12);";
+        var background = handle.IsActive ? GetSelectionColor() : handle.IsTarget ? GetDockTargetColor() : GetHandleSurfaceColor();
+        var border = handle.IsActive || handle.IsTarget ? GetHandleSurfaceColor() : GetSelectionColor();
+        return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(size)}; height:{Px(size)}; border-radius:999px; background:{background}; border:2px solid {border}; box-sizing:border-box; pointer-events:none; box-shadow:0 0 0 {Px(1 / _zoom)} {GetSelectionTint(0.12)};";
     }
 
     private DockHandleDefinition? GetDockHandleAtPoint(Point point, Guid? excludedElementId = null)
@@ -2495,7 +2561,7 @@
                 builder.AddAttribute(sequence + 1, "cx", CssNumber(tip.X - ux * circleRadius * 0.2));
                 builder.AddAttribute(sequence + 2, "cy", CssNumber(tip.Y - uy * circleRadius * 0.2));
                 builder.AddAttribute(sequence + 3, "r", CssNumber(circleRadius));
-                builder.AddAttribute(sequence + 4, "fill", "#ffffff");
+                builder.AddAttribute(sequence + 4, "fill", GetHandleSurfaceColor());
                 builder.AddAttribute(sequence + 5, "stroke", color);
                 builder.AddAttribute(sequence + 6, "stroke-width", CssNumber(Math.Max(strokeWidth, 1.5)));
                 builder.CloseElement();
@@ -2527,7 +2593,7 @@
         var size = ResizeHandleScreenSize / _zoom;
         var left = handle.Center.X - (size / 2);
         var top = handle.Center.Y - (size / 2);
-        return $"position: absolute; left: {Px(left)}; top: {Px(top)}; width: {Px(size)}; height: {Px(size)}; background: #ffffff; border: 2px solid #2563eb; border-radius: 999px; box-sizing: border-box; pointer-events: none;";
+        return $"position: absolute; left: {Px(left)}; top: {Px(top)}; width: {Px(size)}; height: {Px(size)}; background: {GetHandleSurfaceColor()}; border: 2px solid {GetSelectionColor()}; border-radius: 999px; box-sizing: border-box; pointer-events: none;";
     }
 
     private ResizeHandle GetResizeHandleAtPoint(Point point)

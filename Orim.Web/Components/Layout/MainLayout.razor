@@ -1,68 +1,81 @@
 ﻿@inherits LayoutComponentBase
 @using System.Globalization
 @using Microsoft.AspNetCore.WebUtilities
+@using Orim.Web.Services
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
+@inject IJSRuntime JS
+@inject ThemeManager ThemeManager
 
-<MudThemeProvider Theme="_theme" IsDarkMode="false" />
-<MudPopoverProvider />
-<MudDialogProvider />
-<MudSnackbarProvider />
+<ThemeShell>
+    <MudLayout>
+        <MudAppBar Elevation="1" Class="orim-appbar">
+            @if (!IsBoardEditorRoute)
+            {
+                <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                               OnClick="@ToggleDrawer" />
+            }
+            <MudText Typo="Typo.h6" Class="ml-2 orim-brand" Style="font-weight: 700; letter-spacing: -0.5px;">
+                Orim
+            </MudText>
+            <MudSpacer />
+            <AuthorizeView>
+                <Authorized>
+                    <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit"
+                             AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                        <MudMenuItem Disabled="true">
+                            @context.User.Identity?.Name
+                        </MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem OnClick="@ToggleLanguage">
+                            @(_currentLang == "de" ? "English" : "Deutsch")
+                        </MudMenuItem>
+                        <MudMenuItem Disabled="true">
+                            @Localizer["Theme"]
+                        </MudMenuItem>
+                        <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Light)" OnClick="@(() => SetThemeAsync(ThemePreset.Light))">
+                            @Localizer["ThemeLight"]
+                        </MudMenuItem>
+                        <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Dark)" OnClick="@(() => SetThemeAsync(ThemePreset.Dark))">
+                            @Localizer["ThemeDark"]
+                        </MudMenuItem>
+                        <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Synthwave)" OnClick="@(() => SetThemeAsync(ThemePreset.Synthwave))">
+                            @Localizer["ThemeSynthwave"]
+                        </MudMenuItem>
+                        <MudDivider />
+                        <MudMenuItem Href="/api/auth/logout" ForceLoad="true">
+                            @Localizer["Logout"]
+                        </MudMenuItem>
+                    </MudMenu>
+                </Authorized>
+            </AuthorizeView>
+        </MudAppBar>
 
-<MudLayout>
-    <MudAppBar Elevation="1" Style="background-color: #0d1117; color: white;">
         @if (!IsBoardEditorRoute)
         {
-            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
-                           OnClick="@ToggleDrawer" />
+            <MudDrawer @bind-Open="_drawerOpen" Elevation="2" Variant="DrawerVariant.Mini"
+                       Class="orim-drawer">
+                <MudNavMenu Color="Color.Primary">
+                    <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard"
+                                Class="orim-nav-link">
+                        @Localizer["Dashboard"]
+                    </MudNavLink>
+                    <AuthorizeView Roles="Admin">
+                        <Authorized>
+                            <MudNavLink Href="/admin/users" Icon="@Icons.Material.Filled.People"
+                                        Class="orim-nav-link">
+                                @Localizer["Users"]
+                            </MudNavLink>
+                        </Authorized>
+                    </AuthorizeView>
+                </MudNavMenu>
+            </MudDrawer>
         }
-        <MudText Typo="Typo.h6" Class="ml-2" Style="font-weight: 700; letter-spacing: -0.5px;">
-            Orim
-        </MudText>
-        <MudSpacer />
-        <AuthorizeView>
-            <Authorized>
-                <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit"
-                         AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-                    <MudMenuItem Disabled="true">
-                        @context.User.Identity?.Name
-                    </MudMenuItem>
-                    <MudDivider />
-                    <MudMenuItem OnClick="@ToggleLanguage">
-                        @(_currentLang == "de" ? "English" : "Deutsch")
-                    </MudMenuItem>
-                    <MudMenuItem Href="/api/auth/logout" ForceLoad="true">
-                        @Localizer["Logout"]
-                    </MudMenuItem>
-                </MudMenu>
-            </Authorized>
-        </AuthorizeView>
-    </MudAppBar>
 
-    @if (!IsBoardEditorRoute)
-    {
-        <MudDrawer @bind-Open="_drawerOpen" Elevation="2" Variant="DrawerVariant.Mini"
-                   Style="background-color: #161b22; color: #c9d1d9;">
-            <MudNavMenu Color="Color.Primary">
-                <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard"
-                            Style="color: #c9d1d9;">
-                    @Localizer["Dashboard"]
-                </MudNavLink>
-                <AuthorizeView Roles="Admin">
-                    <Authorized>
-                        <MudNavLink Href="/admin/users" Icon="@Icons.Material.Filled.People"
-                                    Style="color: #c9d1d9;">
-                            @Localizer["Users"]
-                        </MudNavLink>
-                    </Authorized>
-                </AuthorizeView>
-            </MudNavMenu>
-        </MudDrawer>
-    }
-
-    <MudMainContent Class="pt-16" Style="min-height: 100vh; background-color: #f6f8fa;">
-        @Body
-    </MudMainContent>
-</MudLayout>
+        <MudMainContent Class="pt-16 orim-main-content">
+            @Body
+        </MudMainContent>
+    </MudLayout>
+</ThemeShell>
 
 @code {
     private bool _drawerOpen = true;
@@ -77,6 +90,12 @@
     {
         _currentLang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
     }
+
+    private Task SetThemeAsync(ThemePreset preset) => ThemeManager.SetThemeAsync(preset, JS);
+
+    private string GetThemeIcon(ThemePreset preset) => ThemeManager.CurrentPreset == preset
+        ? Icons.Material.Filled.RadioButtonChecked
+        : Icons.Material.Filled.RadioButtonUnchecked;
 
     private void ToggleLanguage()
     {
@@ -103,33 +122,6 @@
 
         Navigation.NavigateTo(switchUri, forceLoad: true);
     }
-
-    private readonly MudTheme _theme = new()
-    {
-        PaletteLight = new PaletteLight
-        {
-            Primary = "#6E40C9",
-            Secondary = "#238636",
-            AppbarBackground = "#0d1117",
-            Background = "#f6f8fa",
-            Surface = "#ffffff",
-            DrawerBackground = "#161b22",
-            DrawerText = "#c9d1d9",
-            TextPrimary = "#24292f",
-            TextSecondary = "#57606a"
-        },
-        Typography = new Typography
-        {
-            Default = new DefaultTypography
-            {
-                FontFamily = ["Inter", "system-ui", "-apple-system", "sans-serif"]
-            }
-        },
-        LayoutProperties = new LayoutProperties
-        {
-            DefaultBorderRadius = "8px"
-        }
-    };
 }
 
 <div id="blazor-error-ui" data-nosnippet>

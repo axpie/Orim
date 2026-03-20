@@ -19,6 +19,10 @@
   <data name="AppTitle" xml:space="preserve"><value>Orim – Kollaboratives Whiteboard</value></data>
   <data name="Login" xml:space="preserve"><value>Anmelden</value></data>
   <data name="Logout" xml:space="preserve"><value>Abmelden</value></data>
+  <data name="Theme" xml:space="preserve"><value>Theme</value></data>
+  <data name="ThemeLight" xml:space="preserve"><value>Hell</value></data>
+  <data name="ThemeDark" xml:space="preserve"><value>Dunkel</value></data>
+  <data name="ThemeSynthwave" xml:space="preserve"><value>Synthwave</value></data>
   <data name="Dashboard" xml:space="preserve"><value>Dashboard</value></data>
   <data name="MyBoards" xml:space="preserve"><value>Meine Boards</value></data>
   <data name="NewBoard" xml:space="preserve"><value>Neues Board</value></data>

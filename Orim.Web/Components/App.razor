@@ -8,7 +8,17 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <base href="/" />
     <ResourcePreloader />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <script>
+        (function () {
+            try {
+                var theme = window.localStorage.getItem("orim-theme") || "light";
+                document.documentElement.setAttribute("data-orim-theme", theme);
+            } catch {
+                document.documentElement.setAttribute("data-orim-theme", "light");
+            }
+        })();
+    </script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <link href="vendor/mdi/css/materialdesignicons.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="@Assets["app.css"]" />
@@ -22,6 +32,7 @@
     <ReconnectModal />
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="js/theme.js"></script>
     <script src="js/whiteboard.js"></script>
 </body>
 

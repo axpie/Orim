@@ -1,11 +1,139 @@
 /* Orim Whiteboard App Styles */
 
+:root {
+    --orim-page-background: #f6f8fa;
+    --orim-body-text: #24292f;
+    --orim-shell-appbar: linear-gradient(135deg, #0d1117 0%, #151c29 100%);
+    --orim-shell-appbar-text: #ffffff;
+    --orim-shell-drawer: #161b22;
+    --orim-shell-drawer-text: #c9d1d9;
+    --orim-shell-main: #f6f8fa;
+    --orim-brand: #6e40c9;
+    --orim-brand-muted: #238636;
+    --orim-nav-hover: rgba(110, 64, 201, 0.1);
+    --orim-card-hover-shadow: 0 4px 20px rgba(110, 64, 201, 0.15);
+    --orim-login-background: linear-gradient(135deg, #eef2ff 0%, #f8fafc 45%, #e9d5ff 100%);
+    --orim-login-card-background: rgba(255, 255, 255, 0.92);
+    --orim-login-card-shadow: 0 30px 80px rgba(79, 70, 229, 0.16);
+    --orim-login-subtitle: #4b5563;
+    --orim-shared-header: linear-gradient(135deg, #0d1117 0%, #161b22 100%);
+    --orim-shared-header-text: #c9d1d9;
+    --orim-shared-divider: #30363d;
+    --orim-board-toolbar-bg: rgba(255, 255, 255, 0.92);
+    --orim-board-toolbar-border: #e1e4e8;
+    --orim-board-toolbar-text: #0f172a;
+    --orim-board-input-bg: #ffffff;
+    --orim-board-input-border: #d0d7de;
+    --orim-board-input-text: #0f172a;
+    --orim-board-muted-text: #667085;
+    --orim-icon-card-bg: #ffffff;
+    --orim-icon-card-border: #d0d7de;
+    --orim-icon-card-text: #475467;
+    --orim-icon-card-icon: #0f172a;
+    --orim-properties-panel-bg: #fbfcfe;
+    --orim-properties-panel-border: #d8dee9;
+    --orim-properties-muted: #667085;
+    --orim-properties-input-bg: #ffffff;
+    --orim-properties-input-border: #b0bec5;
+    --orim-properties-input-text: #0f172a;
+    --orim-properties-preview-stroke: #0f172a;
+}
+
+html[data-orim-theme='dark'] {
+    --orim-page-background: #09111f;
+    --orim-body-text: #e5eef9;
+    --orim-shell-appbar: linear-gradient(135deg, #0b1220 0%, #111b2e 100%);
+    --orim-shell-appbar-text: #f8fafc;
+    --orim-shell-drawer: #0f172a;
+    --orim-shell-drawer-text: #d7e0f2;
+    --orim-shell-main: #09111f;
+    --orim-brand: #8b5cf6;
+    --orim-brand-muted: #22c55e;
+    --orim-nav-hover: rgba(139, 92, 246, 0.14);
+    --orim-card-hover-shadow: 0 10px 28px rgba(139, 92, 246, 0.18);
+    --orim-login-background: linear-gradient(135deg, #07101d 0%, #0f172a 55%, #172554 100%);
+    --orim-login-card-background: rgba(18, 26, 43, 0.88);
+    --orim-login-card-shadow: 0 34px 90px rgba(3, 7, 18, 0.45);
+    --orim-login-subtitle: #a8b4c8;
+    --orim-shared-header: linear-gradient(135deg, #0b1220 0%, #0f172a 100%);
+    --orim-shared-header-text: #d7e0f2;
+    --orim-shared-divider: #23314c;
+    --orim-board-toolbar-bg: rgba(18, 26, 43, 0.88);
+    --orim-board-toolbar-border: #24324a;
+    --orim-board-toolbar-text: #e5eef9;
+    --orim-board-input-bg: #10192a;
+    --orim-board-input-border: #31415d;
+    --orim-board-input-text: #e5eef9;
+    --orim-board-muted-text: #94a3b8;
+    --orim-icon-card-bg: rgba(16, 25, 42, 0.94);
+    --orim-icon-card-border: #31415d;
+    --orim-icon-card-text: #b4c2d8;
+    --orim-icon-card-icon: #e5eef9;
+    --orim-properties-panel-bg: #10192a;
+    --orim-properties-panel-border: #24324a;
+    --orim-properties-muted: #94a3b8;
+    --orim-properties-input-bg: #0c1423;
+    --orim-properties-input-border: #31415d;
+    --orim-properties-input-text: #e5eef9;
+    --orim-properties-preview-stroke: #e5eef9;
+}
+
+html[data-orim-theme='synthwave'] {
+    --orim-page-background: #12051f;
+    --orim-body-text: #fff0ff;
+    --orim-shell-appbar: linear-gradient(135deg, #14071f 0%, #24104a 55%, #3d145b 100%);
+    --orim-shell-appbar-text: #fff4fd;
+    --orim-shell-drawer: #130720;
+    --orim-shell-drawer-text: #f6d6ff;
+    --orim-shell-main: radial-gradient(circle at top, rgba(53, 242, 255, 0.08), transparent 36%), #12051f;
+    --orim-brand: #ff4fd8;
+    --orim-brand-muted: #35f2ff;
+    --orim-nav-hover: rgba(53, 242, 255, 0.16);
+    --orim-card-hover-shadow: 0 12px 34px rgba(255, 79, 216, 0.28);
+    --orim-login-background: radial-gradient(circle at top, rgba(53, 242, 255, 0.2), transparent 32%), linear-gradient(135deg, #14051f 0%, #2c1250 52%, #ff4fd8 140%);
+    --orim-login-card-background: rgba(27, 13, 51, 0.86);
+    --orim-login-card-shadow: 0 36px 110px rgba(255, 79, 216, 0.24);
+    --orim-login-subtitle: #d6c7ff;
+    --orim-shared-header: linear-gradient(135deg, #160a29 0%, #26104a 58%, #3c1658 100%);
+    --orim-shared-header-text: #f6d6ff;
+    --orim-shared-divider: rgba(53, 242, 255, 0.28);
+    --orim-board-toolbar-bg: rgba(27, 13, 51, 0.84);
+    --orim-board-toolbar-border: rgba(53, 242, 255, 0.22);
+    --orim-board-toolbar-text: #fff0ff;
+    --orim-board-input-bg: #160a29;
+    --orim-board-input-border: rgba(53, 242, 255, 0.34);
+    --orim-board-input-text: #fff0ff;
+    --orim-board-muted-text: #c6a9ff;
+    --orim-icon-card-bg: rgba(22, 10, 41, 0.96);
+    --orim-icon-card-border: rgba(53, 242, 255, 0.24);
+    --orim-icon-card-text: #d6c7ff;
+    --orim-icon-card-icon: #35f2ff;
+    --orim-properties-panel-bg: #160a29;
+    --orim-properties-panel-border: rgba(53, 242, 255, 0.24);
+    --orim-properties-muted: #c6a9ff;
+    --orim-properties-input-bg: #12051f;
+    --orim-properties-input-border: rgba(53, 242, 255, 0.34);
+    --orim-properties-input-text: #fff0ff;
+    --orim-properties-preview-stroke: #35f2ff;
+}
+
 html, body {
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
     margin: 0;
     padding: 0;
     height: 100%;
-    background-color: #f6f8fa;
+    background: var(--orim-page-background);
+    color: var(--orim-body-text);
+    transition: background 0.25s ease, color 0.25s ease;
+}
+
+html[data-orim-theme='synthwave'] body {
+    background-image:
+        linear-gradient(rgba(53, 242, 255, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(53, 242, 255, 0.08) 1px, transparent 1px),
+        radial-gradient(circle at top, rgba(255, 79, 216, 0.12), transparent 40%);
+    background-size: 48px 48px, 48px 48px, auto;
+    background-attachment: fixed;
 }
 
 h1:focus {
@@ -40,9 +168,45 @@ h1:focus {
 
 /* Board card hover effect */
 .hover-card:hover {
-    box-shadow: 0 4px 20px rgba(110, 64, 201, 0.15) !important;
+    box-shadow: var(--orim-card-hover-shadow) !important;
     transform: translateY(-2px);
     transition: all 0.2s ease;
+}
+
+.orim-appbar {
+    background: var(--orim-shell-appbar) !important;
+    color: var(--orim-shell-appbar-text) !important;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(18px);
+}
+
+.orim-drawer {
+    background: var(--orim-shell-drawer) !important;
+    color: var(--orim-shell-drawer-text) !important;
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.orim-main-content {
+    min-height: 100vh;
+    background: var(--orim-shell-main);
+    color: var(--orim-body-text);
+    transition: background 0.25s ease, color 0.25s ease;
+}
+
+.orim-brand {
+    color: var(--orim-brand) !important;
+    font-weight: 700;
+}
+
+html[data-orim-theme='synthwave'] .orim-brand {
+    font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+    letter-spacing: 0.08em !important;
+    text-transform: uppercase;
+    text-shadow: 0 0 22px rgba(255, 79, 216, 0.28);
+}
+
+.orim-nav-link {
+    color: var(--orim-shell-drawer-text) !important;
 }
 
 /* MudBlazor drawer nav items */
@@ -51,8 +215,191 @@ h1:focus {
     margin: 2px 8px;
 }
 
-.mud-nav-link:hover {
-    background-color: rgba(110, 64, 201, 0.1) !important;
+.mud-nav-link.orim-nav-link:hover {
+    background-color: var(--orim-nav-hover) !important;
+}
+
+.orim-login-shell {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 24px;
+    background: var(--orim-login-background);
+}
+
+.orim-login-card {
+    width: 400px;
+    border-radius: 16px !important;
+    background: var(--orim-login-card-background) !important;
+    box-shadow: var(--orim-login-card-shadow) !important;
+    backdrop-filter: blur(18px);
+}
+
+.orim-login-subtitle {
+    color: var(--orim-login-subtitle) !important;
+}
+
+.orim-shared-header {
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--orim-shared-header) !important;
+    color: var(--orim-shell-appbar-text) !important;
+}
+
+.orim-shared-subtitle {
+    color: var(--orim-shared-header-text) !important;
+}
+
+.orim-shared-divider {
+    border-color: var(--orim-shared-divider) !important;
+}
+
+.orim-board-toolbar {
+    padding: 4px 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    z-index: 10;
+    background: var(--orim-board-toolbar-bg) !important;
+    color: var(--orim-board-toolbar-text) !important;
+    border-bottom: 1px solid var(--orim-board-toolbar-border);
+    backdrop-filter: blur(18px);
+}
+
+.orim-board-zoom-input {
+    width: 72px;
+    height: 32px;
+    border: 1px solid var(--orim-board-input-border);
+    border-radius: 8px;
+    padding: 0 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--orim-board-input-text);
+    text-align: right;
+    background: var(--orim-board-input-bg);
+}
+
+.orim-board-muted-text {
+    color: var(--orim-board-muted-text) !important;
+}
+
+.orim-icon-picker-grid {
+    max-height: 420px;
+    overflow: auto;
+    border: 1px solid var(--orim-icon-card-border);
+    border-radius: 10px;
+    padding: 8px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: 8px;
+    background: color-mix(in srgb, var(--orim-icon-card-bg) 70%, transparent);
+}
+
+.orim-icon-picker-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: 82px;
+    border: 1px solid var(--orim-icon-card-border);
+    border-radius: 8px;
+    background: var(--orim-icon-card-bg);
+    cursor: pointer;
+    padding: 8px;
+    transition: transform 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+.orim-icon-picker-card:hover {
+    transform: translateY(-1px);
+    border-color: var(--orim-brand);
+    box-shadow: 0 10px 24px color-mix(in srgb, var(--orim-brand) 18%, transparent);
+}
+
+.orim-icon-picker-preview {
+    font-size: 28px;
+    line-height: 1;
+    color: var(--orim-icon-card-icon);
+}
+
+.orim-icon-picker-label {
+    font-size: 11px;
+    line-height: 1.2;
+    color: var(--orim-icon-card-text);
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.orim-properties-panel {
+    width: 360px;
+    min-width: 360px;
+    height: 100%;
+    border-radius: 0 !important;
+    border-left: 1px solid var(--orim-properties-panel-border);
+    padding: 20px;
+    background: var(--orim-properties-panel-bg) !important;
+    color: var(--orim-body-text);
+    overflow-y: auto;
+    box-sizing: border-box;
+}
+
+.orim-properties-muted-text {
+    color: var(--orim-properties-muted) !important;
+}
+
+.orim-properties-label {
+    font-size: 12px;
+    color: var(--orim-properties-muted);
+    display: block;
+    margin-bottom: 2px;
+}
+
+.orim-properties-input,
+.orim-properties-textarea {
+    width: 100%;
+    border: 1px solid var(--orim-properties-input-border);
+    border-radius: 4px;
+    padding: 6px 8px;
+    font-size: 14px;
+    box-sizing: border-box;
+    background: var(--orim-properties-input-bg);
+    color: var(--orim-properties-input-text);
+}
+
+.orim-properties-textarea {
+    padding: 8px;
+    resize: vertical;
+    font-family: inherit;
+    line-height: 1.3;
+}
+
+.orim-properties-color-code {
+    font-size: 12px;
+    color: var(--orim-properties-muted);
+}
+
+.orim-properties-symbol-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 28px;
+    font-size: 20px;
+    line-height: 1;
+    color: var(--orim-properties-preview-stroke);
+}
+
+.orim-properties-icon-preview {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+    padding: 10px;
+    border: 1px solid var(--orim-icon-card-border);
+    border-radius: 8px;
+    background: var(--orim-icon-card-bg);
 }
 
 /* SVG canvas styling */

@@ -1,42 +1,42 @@
 @using MudBlazor.Utilities
 @using Orim.Web.Components.Pages
 
-<MudPaper Elevation="0" Style="width: 360px; min-width: 360px; height: 100%; border-radius: 0; border-left: 1px solid #d8dee9; padding: 20px; background: #fbfcfe; overflow-y: auto; box-sizing: border-box;">
+<MudPaper Elevation="0" Class="orim-properties-panel">
     <MudText Typo="Typo.subtitle2" Class="mb-1" Style="font-weight: 700;">Eigenschaften</MudText>
     @if (Element is null)
     {
-        <MudText Typo="Typo.body2" Class="mb-3" Style="color: #667085;">
+        <MudText Typo="Typo.body2" Class="mb-3 orim-properties-muted-text">
             @(SelectionCount > 1 ? "Mehrfachauswahl aktiv. Bitte genau ein Element auswählen, um Eigenschaften zu bearbeiten." : "Kein Element ausgewählt. Wähle ein Element aus, um seine Eigenschaften zu bearbeiten.")
         </MudText>
     }
     else
     {
-        <MudText Typo="Typo.body2" Class="mb-3" Style="color: #667085;">Element bearbeiten</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3 orim-properties-muted-text">Element bearbeiten</MudText>
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
         <div>
-            <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">X</label>
+            <label class="orim-properties-label">X</label>
             <input type="number" value="@Element.X.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                    @onchange="HandleXChange"
-                   style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
+                   class="orim-properties-input" />
         </div>
         <div>
-            <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Y</label>
+            <label class="orim-properties-label">Y</label>
             <input type="number" value="@Element.Y.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                    @onchange="HandleYChange"
-                   style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
+                   class="orim-properties-input" />
         </div>
         <div>
-            <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Breite</label>
+            <label class="orim-properties-label">Breite</label>
             <input type="number" value="@Element.Width.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                    @onchange="HandleWidthChange"
-                   style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
+                   class="orim-properties-input" />
         </div>
         <div>
-            <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Höhe</label>
+            <label class="orim-properties-label">Höhe</label>
             <input type="number" value="@Element.Height.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                    @onchange="HandleHeightChange"
-                   style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
+                   class="orim-properties-input" />
         </div>
     </div>
 
@@ -44,16 +44,16 @@
     {
         <MudDivider Class="my-3" />
         <div>
-            <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Label</label>
+            <label class="orim-properties-label">Label</label>
             <textarea rows="4"
                       value="@Element.Label"
                       @oninput="HandleLabelTextInput"
-                      style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:8px; font-size:14px; box-sizing:border-box; resize:vertical; font-family:inherit; line-height:1.3;">@Element.Label</textarea>
+                      class="orim-properties-textarea">@Element.Label</textarea>
         </div>
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
             <div>
-                <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Horizontal</label>
+                <label class="orim-properties-label">Horizontal</label>
                 <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" Style="border-radius: 8px;">
                     <MudTooltip Text="Links" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.FormatAlignLeft"
@@ -73,7 +73,7 @@
                 </MudButtonGroup>
             </div>
             <div>
-                <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Vertikal</label>
+                <label class="orim-properties-label">Vertikal</label>
                 <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" Style="border-radius: 8px;">
                     <MudTooltip Text="Oben" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.VerticalAlignTop"
@@ -100,11 +100,11 @@
         @if (!_labelAutoSize)
         {
             <div class="mt-2">
-                <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Schriftgröße</label>
+                <label class="orim-properties-label">Schriftgröße</label>
                 <input type="number" min="1"
                        value="@_labelFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                        @onchange="HandleLabelFontSizeChange"
-                       style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
+                       class="orim-properties-input" />
             </div>
         }
     }
@@ -113,14 +113,14 @@
     {
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:8px;">
             <div style="@GetColorSwatchStyle(ToCssColor(_fillColor, true))"></div>
-            <span style="font-size:12px; color:#667085;">@ToCssColor(_fillColor, true)</span>
+            <span class="orim-properties-color-code">@ToCssColor(_fillColor, true)</span>
         </div>
         <MudColorPicker Value="_fillColor" Label="Füllung" Variant="Variant.Outlined"
                         Class="mb-2"
                         ValueChanged="@(c => { _fillColor = c; shape.FillColor = ToCssColor(c, true); OnValueChanged(); })" />
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
             <div style="@GetColorSwatchStyle(ToCssColor(_strokeColor))"></div>
-            <span style="font-size:12px; color:#667085;">@ToCssColor(_strokeColor)</span>
+            <span class="orim-properties-color-code">@ToCssColor(_strokeColor)</span>
         </div>
         <MudColorPicker Value="_strokeColor" Label="Rahmen" Variant="Variant.Outlined"
                         DisableAlpha="true" Class="mb-2"
@@ -135,7 +135,7 @@
                 <MudSelectItem Value="option.Style">
                     <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
                         <svg width="56" height="14" viewBox="0 0 56 14" aria-hidden="true" focusable="false">
-                            <line x1="2" y1="7" x2="54" y2="7" stroke="#0f172a" stroke-width="2.5" stroke-dasharray="@option.PreviewDashArray" />
+                            <line x1="2" y1="7" x2="54" y2="7" stroke="var(--orim-properties-preview-stroke)" stroke-width="2.5" stroke-dasharray="@option.PreviewDashArray" />
                         </svg>
                         <span>@option.Label</span>
                     </div>
@@ -152,7 +152,7 @@
                  Size="Size.Small" Margin="Margin.Dense" T="double" />
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:8px;">
             <div style="@GetColorSwatchStyle(ToCssColor(_textColor))"></div>
-            <span style="font-size:12px; color:#667085;">@ToCssColor(_textColor)</span>
+            <span class="orim-properties-color-code">@ToCssColor(_textColor)</span>
         </div>
         <MudColorPicker Value="_textColor" Label="Farbe" Variant="Variant.Outlined" DisableAlpha="true"
                         ValueChanged="@(c => { _textColor = c; text.Color = ToCssColor(c); OnValueChanged(); })" />
@@ -168,7 +168,7 @@
         <MudDivider Class="my-3" />
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:8px;">
             <div style="@GetColorSwatchStyle(ToCssColor(_arrowColor))"></div>
-            <span style="font-size:12px; color:#667085;">@ToCssColor(_arrowColor)</span>
+            <span class="orim-properties-color-code">@ToCssColor(_arrowColor)</span>
         </div>
         <MudColorPicker Value="_arrowColor" Label="Farbe" Variant="Variant.Outlined" DisableAlpha="true"
                         ValueChanged="@(c => { _arrowColor = c; arrow.StrokeColor = ToCssColor(c); OnValueChanged(); })" />
@@ -196,7 +196,7 @@
             @foreach (var option in _arrowHeadOptions)
             {
                 <MudSelectItem Value="option.Style">
-                    <div title="@option.Label" aria-label="@option.Label" style="display:flex; align-items:center; justify-content:center; min-height:28px; font-size:20px; line-height:1; color:#0f172a;">
+                    <div title="@option.Label" aria-label="@option.Label" class="orim-properties-symbol-option">
                         @GetArrowHeadOptionSymbol(option.Style)
                     </div>
                 </MudSelectItem>
@@ -208,7 +208,7 @@
             @foreach (var option in _arrowHeadOptions)
             {
                 <MudSelectItem Value="option.Style">
-                    <div title="@option.Label" aria-label="@option.Label" style="display:flex; align-items:center; justify-content:center; min-height:28px; font-size:20px; line-height:1; color:#0f172a;">
+                    <div title="@option.Label" aria-label="@option.Label" class="orim-properties-symbol-option">
                         @GetArrowHeadOptionSymbol(option.Style)
                     </div>
                 </MudSelectItem>
@@ -236,13 +236,13 @@
     else if (Element is IconElement icon)
     {
         <MudDivider Class="my-3" />
-        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; padding:10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+        <div class="orim-properties-icon-preview">
             <span class="mdi @icon.IconName" style="font-size:28px; line-height:1; color:@icon.Color;"></span>
-            <span style="font-size:12px; color:#667085; overflow-wrap:anywhere;">@icon.IconName</span>
+            <span class="orim-properties-muted-text" style="font-size:12px; overflow-wrap:anywhere;">@icon.IconName</span>
         </div>
         <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:8px;">
             <div style="@GetColorSwatchStyle(ToCssColor(_iconColor))"></div>
-            <span style="font-size:12px; color:#667085;">@ToCssColor(_iconColor)</span>
+            <span class="orim-properties-color-code">@ToCssColor(_iconColor)</span>
         </div>
         <MudColorPicker Value="_iconColor" Label="Symbolfarbe" Variant="Variant.Outlined" DisableAlpha="true"
                         ValueChanged="@(c => { _iconColor = c; icon.Color = ToCssColor(c); OnValueChanged(); })" />
@@ -250,10 +250,10 @@
 
     <MudDivider Class="my-3" />
     <div>
-        <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Z-Index</label>
+        <label class="orim-properties-label">Z-Index</label>
         <input type="number" value="@Element.ZIndex.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                @onchange="HandleZIndexChange"
-               style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
+               class="orim-properties-input" />
     </div>
     }
 </MudPaper>
@@ -513,7 +513,7 @@
             : Math.Clamp(Math.Min(Math.Max(element.Width, 1), Math.Max(element.Height, 1)) * 0.28, 10, 48);
 
     private static string GetColorSwatchStyle(string color) =>
-        $"width: 18px; height: 18px; border-radius: 4px; border: 1px solid #b0bec5; background: {color}; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); flex: 0 0 auto;";
+        $"width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--orim-properties-input-border); background: {color}; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); flex: 0 0 auto;";
 
     private static string GetArrowHeadOptionSymbol(ArrowHeadStyle style) => style switch
     {
