@@ -2,41 +2,42 @@
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
 @inject UserService UserService
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 
-<PageTitle>Orim – Benutzerverwaltung</PageTitle>
+<PageTitle>@Localizer["AppTitle"] - @Localizer["UserManagement"]</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="py-8">
     <div class="d-flex justify-space-between align-center mb-6">
-        <MudText Typo="Typo.h4" Style="font-weight: 700;">Benutzerverwaltung</MudText>
+        <MudText Typo="Typo.h4" Style="font-weight: 700;">@Localizer["UserManagement"]</MudText>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.PersonAdd"
                    OnClick="@OpenCreateDialog" Style="border-radius: 8px;">
-            Neuer Benutzer
+            @Localizer["NewUser"]
         </MudButton>
     </div>
 
     <MudTable Items="@_users" Hover="true" Elevation="2" Style="border-radius: 12px;" Loading="@(_users is null)">
         <HeaderContent>
-            <MudTh>Benutzername</MudTh>
-            <MudTh>Rolle</MudTh>
-            <MudTh>Status</MudTh>
-            <MudTh>Erstellt</MudTh>
-            <MudTh>Aktionen</MudTh>
+            <MudTh>@Localizer["Username"]</MudTh>
+            <MudTh>@Localizer["Role"]</MudTh>
+            <MudTh>@Localizer["Status"]</MudTh>
+            <MudTh>@Localizer["Created"]</MudTh>
+            <MudTh>@Localizer["Actions"]</MudTh>
         </HeaderContent>
         <RowTemplate>
-            <MudTd DataLabel="Benutzername">@context.Username</MudTd>
-            <MudTd DataLabel="Rolle">
+            <MudTd DataLabel="@Localizer["Username"]">@context.Username</MudTd>
+            <MudTd DataLabel="@Localizer["Role"]">
                 <MudChip T="string" Size="Size.Small"
                          Color="@(context.Role == UserRole.Admin ? Color.Primary : Color.Default)">
-                    @context.Role
+                    @(context.Role == UserRole.Admin ? Localizer["Admin"] : Localizer["User"])
                 </MudChip>
             </MudTd>
-            <MudTd DataLabel="Status">
+            <MudTd DataLabel="@Localizer["Status"]">
                 <MudChip T="string" Size="Size.Small"
                          Color="@(context.IsActive ? Color.Success : Color.Error)">
-                    @(context.IsActive ? "Aktiv" : "Deaktiviert")
+                    @(context.IsActive ? Localizer["Active"] : Localizer["Deactivated"])
                 </MudChip>
             </MudTd>
-            <MudTd DataLabel="Erstellt">@context.CreatedAt.ToString("dd.MM.yyyy")</MudTd>
+            <MudTd DataLabel="@Localizer["Created"]">@context.CreatedAt.ToString("d")</MudTd>
             <MudTd>
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
                                OnClick="@(() => OpenEditDialog(context))" />
@@ -52,18 +53,18 @@
 
 <MudDialog @bind-Visible="_dialogVisible">
     <TitleContent>
-        <MudText Typo="Typo.h6">@(_editingUser is null ? "Neuer Benutzer" : "Benutzer bearbeiten")</MudText>
+        <MudText Typo="Typo.h6">@(_editingUser is null ? Localizer["NewUser"] : Localizer["EditUser"])</MudText>
     </TitleContent>
     <DialogContent>
-        <MudTextField @bind-Value="_formUsername" Label="Benutzername" Variant="Variant.Outlined"
+        <MudTextField @bind-Value="_formUsername" Label="@Localizer["Username"]" Variant="Variant.Outlined"
                       Required="true" Disabled="@(_editingUser is not null)" />
-        <MudTextField @bind-Value="_formPassword" Label="Passwort" Variant="Variant.Outlined"
+        <MudTextField @bind-Value="_formPassword" Label="@Localizer["Password"]" Variant="Variant.Outlined"
                       InputType="InputType.Password" Class="mt-4"
-                      HelperText="@(_editingUser is not null ? "Leer lassen um kein Passwort zu ändern" : "")"
+                      HelperText="@(_editingUser is not null ? Localizer["LeavePasswordEmpty"] : string.Empty)"
                       Required="@(_editingUser is null)" />
-        <MudSelect @bind-Value="_formRole" Label="Rolle" Variant="Variant.Outlined" Class="mt-4">
-            <MudSelectItem Value="UserRole.User">User</MudSelectItem>
-            <MudSelectItem Value="UserRole.Admin">Admin</MudSelectItem>
+        <MudSelect @bind-Value="_formRole" Label="@Localizer["Role"]" Variant="Variant.Outlined" Class="mt-4">
+            <MudSelectItem Value="UserRole.User">@Localizer["User"]</MudSelectItem>
+            <MudSelectItem Value="UserRole.Admin">@Localizer["Admin"]</MudSelectItem>
         </MudSelect>
         @if (!string.IsNullOrEmpty(_formError))
         {
@@ -71,8 +72,8 @@
         }
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="@CloseDialog">Abbrechen</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SaveUser">Speichern</MudButton>
+        <MudButton OnClick="@CloseDialog">@Localizer["Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@SaveUser">@Localizer["Save"]</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -121,7 +122,7 @@
             {
                 if (string.IsNullOrWhiteSpace(_formUsername) || string.IsNullOrWhiteSpace(_formPassword))
                 {
-                    _formError = "Benutzername und Passwort sind erforderlich.";
+                    _formError = Localizer["UsernameAndPasswordRequired"];
                     return;
                 }
                 await UserService.CreateUserAsync(_formUsername.Trim(), _formPassword, _formRole);

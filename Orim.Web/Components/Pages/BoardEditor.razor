@@ -6,8 +6,9 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JS
 @inject IWebHostEnvironment Environment
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 
-<PageTitle>Orim – @(_board?.Title ?? "Board")</PageTitle>
+<PageTitle>@Localizer["AppTitle"] - @(_board?.Title ?? Localizer["Board"])</PageTitle>
 
 @if (_board is null)
 {
@@ -18,7 +19,7 @@
 else if (!_hasAccess)
 {
     <MudContainer Class="py-8">
-        <MudAlert Severity="Severity.Error">Kein Zugriff auf dieses Board.</MudAlert>
+        <MudAlert Severity="Severity.Error">@Localizer["NoBoardAccess"]</MudAlert>
     </MudContainer>
 }
 else
@@ -28,7 +29,7 @@ else
 
     <div style="display: flex; flex-direction: column; height: calc(100vh - 64px);">
         <MudPaper Elevation="1" Style="padding: 4px 16px; display: flex; align-items: center; gap: 8px; background: #fff; z-index: 10; border-bottom: 1px solid #e1e4e8;">
-            <MudTooltip Text="Zur Übersicht" Arrow="true">
+            <MudTooltip Text="@Localizer["BackToOverview"]" Arrow="true">
                 <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@GoBack" Size="Size.Small" />
             </MudTooltip>
             <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">@_board.Title</MudText>
@@ -37,39 +38,39 @@ else
             @if (_canEdit)
             {
                 <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" Style="border-radius: 8px;">
-                    <MudTooltip Text="Auswahlwerkzeug" Arrow="true">
+                    <MudTooltip Text="@Localizer["SelectToolTooltip"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.NearMe"
                                        Color="@(_selectedTool == Tool.Select ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SelectTool(Tool.Select))" />
                     </MudTooltip>
-                    <MudTooltip Text="Rechteck zeichnen" Arrow="true">
+                    <MudTooltip Text="@Localizer["DrawRectangleTooltip"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.Rectangle"
                                        Color="@(_selectedTool == Tool.Rectangle ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SelectTool(Tool.Rectangle))" />
                     </MudTooltip>
-                    <MudTooltip Text="Kreis zeichnen" Arrow="true">
+                    <MudTooltip Text="@Localizer["DrawCircleTooltip"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.PanoramaFishEye"
                                        Color="@(_selectedTool == Tool.Circle ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SelectTool(Tool.Circle))" />
                     </MudTooltip>
-                    <MudTooltip Text="Dreieck zeichnen" Arrow="true">
+                    <MudTooltip Text="@Localizer["DrawTriangleTooltip"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.ChangeHistory"
                                        Color="@(_selectedTool == Tool.Triangle ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SelectTool(Tool.Triangle))" />
                     </MudTooltip>
-                    <MudTooltip Text="Pfeil verbinden" Arrow="true">
+                    <MudTooltip Text="@Localizer["ConnectArrowTooltip"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.NorthEast"
                                        Color="@(_selectedTool == Tool.Arrow ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SelectTool(Tool.Arrow))" />
                     </MudTooltip>
-                    <MudTooltip Text="Symbol einfügen" Arrow="true">
+                    <MudTooltip Text="@Localizer["InsertIconTooltip"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.AddReaction"
                                        Color="@(_selectedTool == Tool.Icon ? Color.Primary : Color.Default)"
                                        OnClick="@OpenIconPickerAsync" />
                     </MudTooltip>
                 </MudButtonGroup>
 
-                <MudTooltip Text="Rückgängig" Arrow="true">
+                <MudTooltip Text="@Localizer["Undo"]" Arrow="true">
                     <MudIconButton Icon="@Icons.Material.Filled.Undo"
                                    Size="Size.Small"
                                    Color="Color.Default"
@@ -77,7 +78,7 @@ else
                                    OnClick="@UndoAsync" />
                 </MudTooltip>
 
-                <MudTooltip Text="Wiederholen" Arrow="true">
+                <MudTooltip Text="@Localizer["Redo"]" Arrow="true">
                     <MudIconButton Icon="@Icons.Material.Filled.Redo"
                                    Size="Size.Small"
                                    Color="Color.Default"
@@ -87,7 +88,7 @@ else
 
                 <MudDivider Vertical="true" FlexItem="true" />
 
-                <MudTooltip Text="Zoom verkleinern" Arrow="true">
+                <MudTooltip Text="@Localizer["ZoomOut"]" Arrow="true">
                     <MudIconButton Icon="@Icons.Material.Filled.Remove"
                                    Size="Size.Small"
                                    Color="Color.Default"
@@ -97,23 +98,23 @@ else
                 <input value="@_zoomDisplayValue"
                        @onchange="HandleZoomInputChangedAsync"
                        style="width:72px; height:32px; border:1px solid #d0d7de; border-radius:8px; padding:0 10px; font-size:14px; font-weight:600; color:#0f172a; text-align:right; background:white;"
-                       aria-label="Zoomstufe in Prozent" />
+                       aria-label="@Localizer["ZoomLevelPercent"]" />
 
-                <MudTooltip Text="Zoom vergrößern" Arrow="true">
+                <MudTooltip Text="@Localizer["ZoomIn"]" Arrow="true">
                     <MudIconButton Icon="@Icons.Material.Filled.Add"
                                    Size="Size.Small"
                                    Color="Color.Default"
                                    OnClick="@ZoomInAsync" />
                 </MudTooltip>
 
-                <MudTooltip Text="Alles einpassen" Arrow="true">
+                <MudTooltip Text="@Localizer["FitToContent"]" Arrow="true">
                     <MudIconButton Icon="@Icons.Material.Filled.FitScreen"
                                    Size="Size.Small"
                                    Color="Color.Default"
                                    OnClick="@FitToContentAsync" />
                 </MudTooltip>
 
-                <MudTooltip Text="Bedienhilfe öffnen" Arrow="true">
+                <MudTooltip Text="@Localizer["OpenHelp"]" Arrow="true">
                     <MudIconButton Icon="@Icons.Material.Filled.Info"
                                    Size="Size.Small"
                                    Color="Color.Default"
@@ -122,7 +123,7 @@ else
 
                 @if (_selectedElement is not null)
                 {
-                    <MudTooltip Text="Ausgewähltes Element löschen" Arrow="true">
+                    <MudTooltip Text="@Localizer["DeleteSelectedElement"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                        Color="Color.Error"
                                        Size="Size.Small"
@@ -132,7 +133,7 @@ else
 
                 @if (CanGroupSelection)
                 {
-                    <MudTooltip Text="Auswahl gruppieren" Arrow="true">
+                    <MudTooltip Text="@Localizer["GroupSelection"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.CreateNewFolder"
                                        Color="Color.Primary"
                                        Size="Size.Small"
@@ -142,7 +143,7 @@ else
 
                 @if (CanUngroupSelection)
                 {
-                    <MudTooltip Text="Gruppe auflösen" Arrow="true">
+                    <MudTooltip Text="@Localizer["UngroupSelection"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.FolderOff"
                                        Size="Size.Small"
                                        OnClick="@UngroupSelectedElementsAsync" />
@@ -152,7 +153,7 @@ else
                 <MudDivider Vertical="true" FlexItem="true" />
             }
 
-            <MudTooltip Text="Board als JSON exportieren" Arrow="true">
+            <MudTooltip Text="@Localizer["ExportBoardJson"]" Arrow="true">
                 <MudIconButton Icon="@Icons.Material.Filled.FileDownload"
                                Size="Size.Small"
                                OnClick="@ExportJson" />
@@ -160,7 +161,7 @@ else
 
             @if (_board.OwnerId == _userId)
             {
-                <MudTooltip Text="Board löschen" Arrow="true">
+                <MudTooltip Text="@Localizer["DeleteBoard"]" Arrow="true">
                     <MudIconButton Icon="@Icons.Material.Filled.DeleteForever"
                                    Color="Color.Error"
                                    Size="Size.Small"
@@ -197,11 +198,11 @@ else
 
     <MudDialog @bind-Visible="_iconPickerVisible" Options="_iconDialogOptions">
         <TitleContent>
-            <MudText Typo="Typo.h6">Material Design Icons</MudText>
+            <MudText Typo="Typo.h6">@Localizer["MaterialDesignIcons"]</MudText>
         </TitleContent>
         <DialogContent>
             <MudTextField @bind-Value="_iconSearch"
-                          Label="Symbol suchen"
+                          Label="@Localizer["SearchIcon"]"
                           Variant="Variant.Outlined"
                           Immediate="true"
                           Adornment="Adornment.Start"
@@ -220,7 +221,7 @@ else
             else
             {
                 <MudText Typo="Typo.caption" Class="mt-2 mb-2" Style="color:#667085;">
-                    @FilteredMaterialIcons.Count Symbole
+                    @string.Format(Localizer["IconCount"], FilteredMaterialIcons.Count)
                 </MudText>
                 <div style="max-height:420px; overflow:auto; border:1px solid #e5e7eb; border-radius:10px; padding:8px; display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:8px;">
                     @foreach (var iconName in FilteredMaterialIcons)
@@ -236,47 +237,48 @@ else
             }
         </DialogContent>
         <DialogActions>
-            <MudButton OnClick="@CloseIconPicker">Abbrechen</MudButton>
+            <MudButton OnClick="@CloseIconPicker">@Localizer["Cancel"]</MudButton>
         </DialogActions>
     </MudDialog>
 
     <MudDialog @bind-Visible="_helpDialogVisible" Options="_helpDialogOptions">
         <TitleContent>
-            <MudText Typo="Typo.h6">Bedienhilfe</MudText>
+            <MudText Typo="Typo.h6">@Localizer["HelpDialogTitle"]</MudText>
         </TitleContent>
         <DialogContent>
-            <MudText Typo="Typo.subtitle2" Class="mb-2">Werkzeuge</MudText>
+            <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["ToolsSectionTitle"]</MudText>
             <ul style="margin:0 0 16px 18px; padding:0; color:#334155; line-height:1.5;">
-                <li>Auswahl: Elemente anklicken, verschieben und bearbeiten.</li>
-                <li>Formen: Rechteck, Kreis und Dreieck mit Klick und Ziehen aufziehen.</li>
-                <li>Pfeil: Von einem Andockpunkt zum anderen ziehen, um Elemente zu verbinden.</li>
-                <li>Symbol: Symbol wählen und danach per Klick auf dem Board platzieren.</li>
+                <li>@Localizer["HelpToolsSelect"]</li>
+                <li>@Localizer["HelpToolsShapes"]</li>
+                <li>@Localizer["HelpToolsArrow"]</li>
+                <li>@Localizer["HelpToolsIcon"]</li>
             </ul>
 
-            <MudText Typo="Typo.subtitle2" Class="mb-2">Auswahl und Gruppen</MudText>
+            <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["SelectionGroupsSectionTitle"]</MudText>
             <ul style="margin:0 0 16px 18px; padding:0; color:#334155; line-height:1.5;">
-                <li>Shift gedrückt halten und auf leerer Fläche ziehen: Selektionsrahmen aufziehen.</li>
-                <li>Cmd/Ctrl + Klick: Mehrere Elemente zur Auswahl hinzufügen oder entfernen.</li>
-                <li>Gruppierte Elemente werden gemeinsam ausgewählt und gemeinsam verschoben.</li>
-                <li>Größe ändern und Pfeil-Endpunkte ziehen funktioniert weiterhin bei Einzelauswahl.</li>
-                <li>Mit den +/- Buttons oder der Prozentanzeige oben kann die Zoomstufe direkt gesetzt werden.</li>
+                <li>@Localizer["HelpSelectionMarquee"]</li>
+                <li>@Localizer["HelpSelectionAdditive"]</li>
+                <li>@Localizer["HelpSelectionGroupMove"]</li>
+                <li>@Localizer["HelpSelectionSingleEdit"]</li>
+                <li>@Localizer["HelpSelectionZoom"]</li>
+                <li>@Localizer["HelpSelectionSnapDisable"]</li>
             </ul>
 
-            <MudText Typo="Typo.subtitle2" Class="mb-2">Shortcuts</MudText>
+            <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["ShortcutsSectionTitle"]</MudText>
             <ul style="margin:0 0 0 18px; padding:0; color:#334155; line-height:1.5;">
-                <li>Cmd/Ctrl + Z: Rückgängig</li>
-                <li>Cmd/Ctrl + Shift + Z oder Cmd/Ctrl + Y: Wiederholen</li>
-                <li>Cmd/Ctrl + A: Alles auswählen</li>
-                <li>Cmd/Ctrl + C: Auswahl kopieren</li>
-                <li>Cmd/Ctrl + X: Auswahl ausschneiden</li>
-                <li>Cmd/Ctrl + V: Auswahl einfügen</li>
-                <li>Cmd/Ctrl + G: Auswahl gruppieren</li>
-                <li>Cmd/Ctrl + Shift + G: Gruppe auflösen</li>
-                <li>Entf oder Backspace: Auswahl löschen</li>
+                <li>@Localizer["ShortcutUndo"]</li>
+                <li>@Localizer["ShortcutRedo"]</li>
+                <li>@Localizer["ShortcutSelectAll"]</li>
+                <li>@Localizer["ShortcutCopy"]</li>
+                <li>@Localizer["ShortcutCut"]</li>
+                <li>@Localizer["ShortcutPaste"]</li>
+                <li>@Localizer["ShortcutGroup"]</li>
+                <li>@Localizer["ShortcutUngroup"]</li>
+                <li>@Localizer["ShortcutDelete"]</li>
             </ul>
         </DialogContent>
         <DialogActions>
-            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CloseHelpDialog">Schließen</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CloseHelpDialog">@Localizer["Close"]</MudButton>
         </DialogActions>
     </MudDialog>
 }
@@ -455,7 +457,7 @@ else
         }
         catch
         {
-            _iconLoadError = "Die lokal eingebetteten MaterialDesignIcons konnten nicht geladen werden.";
+            _iconLoadError = Localizer["MaterialIconsLoadError"];
         }
         finally
         {
@@ -663,7 +665,7 @@ else
             return;
         }
 
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Board '{_board.Title}' wirklich löschen?");
+        var confirmed = await JS.InvokeAsync<bool>("confirm", string.Format(Localizer["DeleteBoardConfirmation"], _board.Title));
         if (!confirmed)
         {
             return;

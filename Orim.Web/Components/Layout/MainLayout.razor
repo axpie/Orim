@@ -1,4 +1,7 @@
 ﻿@inherits LayoutComponentBase
+@using System.Globalization
+@using Microsoft.AspNetCore.WebUtilities
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 
 <MudThemeProvider Theme="_theme" IsDarkMode="false" />
 <MudPopoverProvider />
@@ -25,7 +28,7 @@
                         @(_currentLang == "de" ? "English" : "Deutsch")
                     </MudMenuItem>
                     <MudMenuItem Href="/api/auth/logout" ForceLoad="true">
-                        Logout
+                        @Localizer["Logout"]
                     </MudMenuItem>
                 </MudMenu>
             </Authorized>
@@ -37,13 +40,13 @@
         <MudNavMenu Color="Color.Primary">
             <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard"
                         Style="color: #c9d1d9;">
-                Dashboard
+                @Localizer["Dashboard"]
             </MudNavLink>
             <AuthorizeView Roles="Admin">
                 <Authorized>
                     <MudNavLink Href="/admin/users" Icon="@Icons.Material.Filled.People"
                                 Style="color: #c9d1d9;">
-                        Benutzer
+                        @Localizer["Users"]
                     </MudNavLink>
                 </Authorized>
             </AuthorizeView>
@@ -57,17 +60,41 @@
 
 @code {
     private bool _drawerOpen = true;
-    private string _currentLang = "de";
+    private string _currentLang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
 
     [Inject] private NavigationManager Navigation { get; set; } = default!;
 
     private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
 
+    protected override void OnInitialized()
+    {
+        _currentLang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    }
+
     private void ToggleLanguage()
     {
-        _currentLang = _currentLang == "de" ? "en" : "de";
-        var uri = new Uri(Navigation.Uri);
-        Navigation.NavigateTo($"{uri.AbsolutePath}?culture={_currentLang}", forceLoad: true);
+        var nextLanguage = _currentLang == "de" ? "en" : "de";
+        var currentRelativeUri = Navigation.ToBaseRelativePath(Navigation.Uri);
+        var relativeUriWithLeadingSlash = string.IsNullOrWhiteSpace(currentRelativeUri)
+            ? "/"
+            : $"/{currentRelativeUri}";
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query)
+            .Where(entry => !string.Equals(entry.Key, "culture", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(entry.Key, "ui-culture", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(entry => entry.Key, entry => entry.Value.LastOrDefault());
+
+        _currentLang = nextLanguage;
+        var redirectUri = QueryHelpers.AddQueryString(relativeUriWithLeadingSlash.Split('?', 2)[0], query);
+        var switchUri = QueryHelpers.AddQueryString(
+            "/api/culture/set",
+            new Dictionary<string, string?>
+            {
+                ["culture"] = nextLanguage,
+                ["redirectUri"] = redirectUri
+            });
+
+        Navigation.NavigateTo(switchUri, forceLoad: true);
     }
 
     private readonly MudTheme _theme = new()

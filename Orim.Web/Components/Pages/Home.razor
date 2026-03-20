@@ -6,15 +6,16 @@
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JS
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 
-<PageTitle>Orim – Dashboard</PageTitle>
+<PageTitle>@Localizer["AppTitle"] - @Localizer["Dashboard"]</PageTitle>
 
 <MudContainer MaxWidth="MaxWidth.Large" Class="py-8">
     <div class="d-flex justify-space-between align-center mb-6">
-        <MudText Typo="Typo.h4" Style="font-weight: 700;">Meine Boards</MudText>
+        <MudText Typo="Typo.h4" Style="font-weight: 700;">@Localizer["MyBoards"]</MudText>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add"
                    OnClick="@CreateBoard" Style="border-radius: 8px; font-weight: 600;">
-            Neues Board
+            @Localizer["NewBoard"]
         </MudButton>
     </div>
 
@@ -25,7 +26,7 @@
     else if (_boards.Count == 0)
     {
         <MudAlert Severity="Severity.Info">
-            Noch keine Boards vorhanden. Erstelle dein erstes Board!
+            @Localizer["NoBoards"]
         </MudAlert>
     }
     else
@@ -44,7 +45,7 @@
                                 @if (board.OwnerId == _userId)
                                 {
                                     <div @onclick:stopPropagation="true">
-                                        <MudTooltip Text="Board löschen" Arrow="true">
+                                        <MudTooltip Text="@Localizer["DeleteBoard"]" Arrow="true">
                                             <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                                            Color="Color.Error"
                                                            Size="Size.Small"
@@ -54,16 +55,16 @@
                                 }
                                 <MudChip T="string" Size="Size.Small"
                                          Color="@GetVisibilityColor(board.Visibility)">
-                                    @board.Visibility
+                                    @GetVisibilityLabel(board.Visibility)
                                 </MudChip>
                             </CardHeaderActions>
                         </MudCardHeader>
                         <MudCardContent>
                             <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                @board.Elements.Count Elemente · @board.Members.Count Mitglieder
+                                @string.Format(Localizer["ElementsMembersSummary"], board.Elements.Count, board.Members.Count)
                             </MudText>
                             <MudText Typo="Typo.caption" Color="Color.Secondary">
-                                Aktualisiert: @board.UpdatedAt.ToString("dd.MM.yyyy HH:mm")
+                                @Localizer["UpdatedAt"]: @board.UpdatedAt.ToString("g")
                             </MudText>
                         </MudCardContent>
                     </MudCard>
@@ -75,18 +76,18 @@
 
 <MudDialog @bind-Visible="_createDialogVisible">
     <TitleContent>
-        <MudText Typo="Typo.h6">Neues Board erstellen</MudText>
+        <MudText Typo="Typo.h6">@Localizer["CreateBoardTitle"]</MudText>
     </TitleContent>
     <DialogContent>
-        <MudTextField @bind-Value="_newBoardTitle" Label="Board-Name" Variant="Variant.Outlined" Required="true" />
-        <MudSelect @bind-Value="_newBoardVisibility" Label="Sichtbarkeit" Variant="Variant.Outlined" Class="mt-4">
-            <MudSelectItem Value="BoardVisibility.Private">Privat</MudSelectItem>
-            <MudSelectItem Value="BoardVisibility.Public">Öffentlich</MudSelectItem>
+        <MudTextField @bind-Value="_newBoardTitle" Label="@Localizer["BoardName"]" Variant="Variant.Outlined" Required="true" />
+        <MudSelect @bind-Value="_newBoardVisibility" Label="@Localizer["Visibility"]" Variant="Variant.Outlined" Class="mt-4">
+            <MudSelectItem Value="BoardVisibility.Private">@Localizer["Private"]</MudSelectItem>
+            <MudSelectItem Value="BoardVisibility.Public">@Localizer["Public"]</MudSelectItem>
         </MudSelect>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="@(() => _createDialogVisible = false)">Abbrechen</MudButton>
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ConfirmCreateBoard">Erstellen</MudButton>
+        <MudButton OnClick="@(() => _createDialogVisible = false)">@Localizer["Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ConfirmCreateBoard">@Localizer["Create"]</MudButton>
     </DialogActions>
 </MudDialog>
 
@@ -128,7 +129,7 @@
 
     private async Task DeleteBoardFromOverviewAsync(Board board)
     {
-        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Board '{board.Title}' wirklich löschen?");
+        var confirmed = await JS.InvokeAsync<bool>("confirm", string.Format(Localizer["DeleteBoardConfirmation"], board.Title));
         if (!confirmed)
         {
             return;
@@ -147,5 +148,13 @@
         BoardVisibility.Public => Color.Success,
         BoardVisibility.Shared => Color.Info,
         _ => Color.Default
+    };
+
+    private string GetVisibilityLabel(BoardVisibility visibility) => visibility switch
+    {
+        BoardVisibility.Private => Localizer["Private"],
+        BoardVisibility.Public => Localizer["Public"],
+        BoardVisibility.Shared => Localizer["Shared"],
+        _ => visibility.ToString()
     };
 }

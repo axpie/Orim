@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Localization;
 using MudBlazor.Services;
 using Orim.Core.Models;
 using Orim.Core.Services;
@@ -95,14 +96,47 @@ if (!app.Environment.IsDevelopment())
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
+var localizationOptions = new RequestLocalizationOptions()
+    .SetDefaultCulture("de")
+    .AddSupportedCultures("de", "en")
+    .AddSupportedUICultures("de", "en");
+
+app.UseRequestLocalization(localizationOptions);
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
-app.UseRequestLocalization(new RequestLocalizationOptions()
-    .SetDefaultCulture("de")
-    .AddSupportedCultures("de", "en")
-    .AddSupportedUICultures("de", "en"));
+app.MapGet("/api/culture/set", (string culture, string? redirectUri, HttpContext context) =>
+{
+    var supportedCulture = localizationOptions.SupportedCultures?
+        .FirstOrDefault(candidate => string.Equals(candidate.Name, culture, StringComparison.OrdinalIgnoreCase));
+
+    if (supportedCulture is null)
+    {
+        return Results.BadRequest("Unsupported culture.");
+    }
+
+    context.Response.Cookies.Append(
+        CookieRequestCultureProvider.DefaultCookieName,
+        CookieRequestCultureProvider.MakeCookieValue(new RequestCulture(supportedCulture.Name)),
+        new CookieOptions
+        {
+            Expires = DateTimeOffset.UtcNow.AddYears(1),
+            IsEssential = true,
+            HttpOnly = false,
+            Secure = context.Request.IsHttps,
+            SameSite = SameSiteMode.Lax
+        });
+
+    var target = string.IsNullOrWhiteSpace(redirectUri) ? "/" : redirectUri;
+    if (!Uri.IsWellFormedUriString(target, UriKind.Relative) || !target.StartsWith('/'))
+    {
+        target = "/";
+    }
+
+    return Results.LocalRedirect(target);
+});
 
 // Auth endpoints (minimal API for form-based login/logout)
 app.MapPost("/api/auth/login", async (HttpContext context, UserService userService) =>

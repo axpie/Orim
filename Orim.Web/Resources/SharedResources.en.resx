@@ -66,4 +66,64 @@
   <data name="Italic" xml:space="preserve"><value>Italic</value></data>
   <data name="Width" xml:space="preserve"><value>Width</value></data>
   <data name="Height" xml:space="preserve"><value>Height</value></data>
+  <data name="CollaborativeWhiteboard" xml:space="preserve"><value>Collaborative Whiteboard</value></data>
+  <data name="DeleteBoard" xml:space="preserve"><value>Delete board</value></data>
+  <data name="ElementsMembersSummary" xml:space="preserve"><value>{0} elements · {1} members</value></data>
+  <data name="UpdatedAt" xml:space="preserve"><value>Updated</value></data>
+  <data name="CreateBoardTitle" xml:space="preserve"><value>Create new board</value></data>
+  <data name="DeleteBoardConfirmation" xml:space="preserve"><value>Delete board '{0}'?</value></data>
+  <data name="Status" xml:space="preserve"><value>Status</value></data>
+  <data name="Created" xml:space="preserve"><value>Created</value></data>
+  <data name="Actions" xml:space="preserve"><value>Actions</value></data>
+  <data name="EditUser" xml:space="preserve"><value>Edit user</value></data>
+  <data name="LeavePasswordEmpty" xml:space="preserve"><value>Leave empty to keep the current password</value></data>
+  <data name="UsernameAndPasswordRequired" xml:space="preserve"><value>Username and password are required.</value></data>
+  <data name="User" xml:space="preserve"><value>User</value></data>
+  <data name="Admin" xml:space="preserve"><value>Admin</value></data>
+  <data name="Board" xml:space="preserve"><value>Board</value></data>
+  <data name="NoBoardAccess" xml:space="preserve"><value>No access to this board.</value></data>
+  <data name="BackToOverview" xml:space="preserve"><value>Back to overview</value></data>
+  <data name="SelectToolTooltip" xml:space="preserve"><value>Select tool</value></data>
+  <data name="DrawRectangleTooltip" xml:space="preserve"><value>Draw rectangle</value></data>
+  <data name="DrawCircleTooltip" xml:space="preserve"><value>Draw circle</value></data>
+  <data name="DrawTriangleTooltip" xml:space="preserve"><value>Draw triangle</value></data>
+  <data name="ConnectArrowTooltip" xml:space="preserve"><value>Connect arrow</value></data>
+  <data name="InsertIconTooltip" xml:space="preserve"><value>Insert icon</value></data>
+  <data name="ZoomOut" xml:space="preserve"><value>Zoom out</value></data>
+  <data name="ZoomLevelPercent" xml:space="preserve"><value>Zoom level in percent</value></data>
+  <data name="ZoomIn" xml:space="preserve"><value>Zoom in</value></data>
+  <data name="FitToContent" xml:space="preserve"><value>Fit to content</value></data>
+  <data name="OpenHelp" xml:space="preserve"><value>Open help</value></data>
+  <data name="DeleteSelectedElement" xml:space="preserve"><value>Delete selected element</value></data>
+  <data name="GroupSelection" xml:space="preserve"><value>Group selection</value></data>
+  <data name="UngroupSelection" xml:space="preserve"><value>Ungroup selection</value></data>
+  <data name="ExportBoardJson" xml:space="preserve"><value>Export board as JSON</value></data>
+  <data name="MaterialDesignIcons" xml:space="preserve"><value>Material Design Icons</value></data>
+  <data name="SearchIcon" xml:space="preserve"><value>Search icon</value></data>
+  <data name="IconCount" xml:space="preserve"><value>{0} icons</value></data>
+  <data name="HelpDialogTitle" xml:space="preserve"><value>Help</value></data>
+  <data name="ToolsSectionTitle" xml:space="preserve"><value>Tools</value></data>
+  <data name="SelectionGroupsSectionTitle" xml:space="preserve"><value>Selection and groups</value></data>
+  <data name="ShortcutsSectionTitle" xml:space="preserve"><value>Shortcuts</value></data>
+  <data name="HelpToolsSelect" xml:space="preserve"><value>Select: click, move, and edit elements.</value></data>
+  <data name="HelpToolsShapes" xml:space="preserve"><value>Shapes: draw rectangles, circles, and triangles by clicking and dragging.</value></data>
+  <data name="HelpToolsArrow" xml:space="preserve"><value>Arrow: drag from one dock point to another to connect elements.</value></data>
+  <data name="HelpToolsIcon" xml:space="preserve"><value>Icon: choose an icon and place it on the board with a click.</value></data>
+  <data name="HelpSelectionMarquee" xml:space="preserve"><value>Hold Shift and drag on empty space to create a selection marquee.</value></data>
+  <data name="HelpSelectionAdditive" xml:space="preserve"><value>Cmd/Ctrl + click adds or removes elements from the selection.</value></data>
+  <data name="HelpSelectionGroupMove" xml:space="preserve"><value>Grouped elements are selected and moved together.</value></data>
+  <data name="HelpSelectionSingleEdit" xml:space="preserve"><value>Resize handles and arrow endpoints stay available for single-element selections.</value></data>
+  <data name="HelpSelectionZoom" xml:space="preserve"><value>Use the +/- buttons or the percentage field to set the zoom directly.</value></data>
+  <data name="HelpSelectionSnapDisable" xml:space="preserve"><value>Hold Ctrl to temporarily disable all snapping while dragging, resizing, or connecting arrows.</value></data>
+  <data name="ShortcutUndo" xml:space="preserve"><value>Cmd/Ctrl + Z: Undo</value></data>
+  <data name="ShortcutRedo" xml:space="preserve"><value>Cmd/Ctrl + Shift + Z or Cmd/Ctrl + Y: Redo</value></data>
+  <data name="ShortcutSelectAll" xml:space="preserve"><value>Cmd/Ctrl + A: Select all</value></data>
+  <data name="ShortcutCopy" xml:space="preserve"><value>Cmd/Ctrl + C: Copy selection</value></data>
+  <data name="ShortcutCut" xml:space="preserve"><value>Cmd/Ctrl + X: Cut selection</value></data>
+  <data name="ShortcutPaste" xml:space="preserve"><value>Cmd/Ctrl + V: Paste selection</value></data>
+  <data name="ShortcutGroup" xml:space="preserve"><value>Cmd/Ctrl + G: Group selection</value></data>
+  <data name="ShortcutUngroup" xml:space="preserve"><value>Cmd/Ctrl + Shift + G: Ungroup</value></data>
+  <data name="ShortcutDelete" xml:space="preserve"><value>Delete or Backspace: Delete selection</value></data>
+  <data name="Close" xml:space="preserve"><value>Close</value></data>
+  <data name="MaterialIconsLoadError" xml:space="preserve"><value>The embedded Material Design Icons could not be loaded.</value></data>
 </root>

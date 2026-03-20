@@ -66,4 +66,64 @@
   <data name="Italic" xml:space="preserve"><value>Kursiv</value></data>
   <data name="Width" xml:space="preserve"><value>Breite</value></data>
   <data name="Height" xml:space="preserve"><value>Höhe</value></data>
+  <data name="CollaborativeWhiteboard" xml:space="preserve"><value>Kollaboratives Whiteboard</value></data>
+  <data name="DeleteBoard" xml:space="preserve"><value>Board löschen</value></data>
+  <data name="ElementsMembersSummary" xml:space="preserve"><value>{0} Elemente · {1} Mitglieder</value></data>
+  <data name="UpdatedAt" xml:space="preserve"><value>Aktualisiert</value></data>
+  <data name="CreateBoardTitle" xml:space="preserve"><value>Neues Board erstellen</value></data>
+  <data name="DeleteBoardConfirmation" xml:space="preserve"><value>Board '{0}' wirklich löschen?</value></data>
+  <data name="Status" xml:space="preserve"><value>Status</value></data>
+  <data name="Created" xml:space="preserve"><value>Erstellt</value></data>
+  <data name="Actions" xml:space="preserve"><value>Aktionen</value></data>
+  <data name="EditUser" xml:space="preserve"><value>Benutzer bearbeiten</value></data>
+  <data name="LeavePasswordEmpty" xml:space="preserve"><value>Leer lassen, um das aktuelle Passwort zu behalten</value></data>
+  <data name="UsernameAndPasswordRequired" xml:space="preserve"><value>Benutzername und Passwort sind erforderlich.</value></data>
+  <data name="User" xml:space="preserve"><value>Benutzer</value></data>
+  <data name="Admin" xml:space="preserve"><value>Admin</value></data>
+  <data name="Board" xml:space="preserve"><value>Board</value></data>
+  <data name="NoBoardAccess" xml:space="preserve"><value>Kein Zugriff auf dieses Board.</value></data>
+  <data name="BackToOverview" xml:space="preserve"><value>Zur Übersicht</value></data>
+  <data name="SelectToolTooltip" xml:space="preserve"><value>Auswahlwerkzeug</value></data>
+  <data name="DrawRectangleTooltip" xml:space="preserve"><value>Rechteck zeichnen</value></data>
+  <data name="DrawCircleTooltip" xml:space="preserve"><value>Kreis zeichnen</value></data>
+  <data name="DrawTriangleTooltip" xml:space="preserve"><value>Dreieck zeichnen</value></data>
+  <data name="ConnectArrowTooltip" xml:space="preserve"><value>Pfeil verbinden</value></data>
+  <data name="InsertIconTooltip" xml:space="preserve"><value>Symbol einfügen</value></data>
+  <data name="ZoomOut" xml:space="preserve"><value>Zoom verkleinern</value></data>
+  <data name="ZoomLevelPercent" xml:space="preserve"><value>Zoomstufe in Prozent</value></data>
+  <data name="ZoomIn" xml:space="preserve"><value>Zoom vergrößern</value></data>
+  <data name="FitToContent" xml:space="preserve"><value>Alles einpassen</value></data>
+  <data name="OpenHelp" xml:space="preserve"><value>Bedienhilfe öffnen</value></data>
+  <data name="DeleteSelectedElement" xml:space="preserve"><value>Ausgewähltes Element löschen</value></data>
+  <data name="GroupSelection" xml:space="preserve"><value>Auswahl gruppieren</value></data>
+  <data name="UngroupSelection" xml:space="preserve"><value>Gruppe auflösen</value></data>
+  <data name="ExportBoardJson" xml:space="preserve"><value>Board als JSON exportieren</value></data>
+  <data name="MaterialDesignIcons" xml:space="preserve"><value>Material Design Icons</value></data>
+  <data name="SearchIcon" xml:space="preserve"><value>Symbol suchen</value></data>
+  <data name="IconCount" xml:space="preserve"><value>{0} Symbole</value></data>
+  <data name="HelpDialogTitle" xml:space="preserve"><value>Bedienhilfe</value></data>
+  <data name="ToolsSectionTitle" xml:space="preserve"><value>Werkzeuge</value></data>
+  <data name="SelectionGroupsSectionTitle" xml:space="preserve"><value>Auswahl und Gruppen</value></data>
+  <data name="ShortcutsSectionTitle" xml:space="preserve"><value>Shortcuts</value></data>
+  <data name="HelpToolsSelect" xml:space="preserve"><value>Auswahl: Elemente anklicken, verschieben und bearbeiten.</value></data>
+  <data name="HelpToolsShapes" xml:space="preserve"><value>Formen: Rechteck, Kreis und Dreieck mit Klick und Ziehen aufziehen.</value></data>
+  <data name="HelpToolsArrow" xml:space="preserve"><value>Pfeil: Von einem Andockpunkt zum anderen ziehen, um Elemente zu verbinden.</value></data>
+  <data name="HelpToolsIcon" xml:space="preserve"><value>Symbol: Symbol wählen und danach per Klick auf dem Board platzieren.</value></data>
+  <data name="HelpSelectionMarquee" xml:space="preserve"><value>Shift gedrückt halten und auf leerer Fläche ziehen: Selektionsrahmen aufziehen.</value></data>
+  <data name="HelpSelectionAdditive" xml:space="preserve"><value>Cmd/Ctrl + Klick: Mehrere Elemente zur Auswahl hinzufügen oder entfernen.</value></data>
+  <data name="HelpSelectionGroupMove" xml:space="preserve"><value>Gruppierte Elemente werden gemeinsam ausgewählt und gemeinsam verschoben.</value></data>
+  <data name="HelpSelectionSingleEdit" xml:space="preserve"><value>Größe ändern und Pfeil-Endpunkte ziehen funktioniert weiterhin bei Einzelauswahl.</value></data>
+  <data name="HelpSelectionZoom" xml:space="preserve"><value>Mit den +/- Buttons oder der Prozentanzeige oben kann die Zoomstufe direkt gesetzt werden.</value></data>
+  <data name="HelpSelectionSnapDisable" xml:space="preserve"><value>Strg gedrückt halten deaktiviert das Snapping vorübergehend beim Verschieben, Größenändern und Verbinden von Pfeilen.</value></data>
+  <data name="ShortcutUndo" xml:space="preserve"><value>Cmd/Ctrl + Z: Rückgängig</value></data>
+  <data name="ShortcutRedo" xml:space="preserve"><value>Cmd/Ctrl + Shift + Z oder Cmd/Ctrl + Y: Wiederholen</value></data>
+  <data name="ShortcutSelectAll" xml:space="preserve"><value>Cmd/Ctrl + A: Alles auswählen</value></data>
+  <data name="ShortcutCopy" xml:space="preserve"><value>Cmd/Ctrl + C: Auswahl kopieren</value></data>
+  <data name="ShortcutCut" xml:space="preserve"><value>Cmd/Ctrl + X: Auswahl ausschneiden</value></data>
+  <data name="ShortcutPaste" xml:space="preserve"><value>Cmd/Ctrl + V: Auswahl einfügen</value></data>
+  <data name="ShortcutGroup" xml:space="preserve"><value>Cmd/Ctrl + G: Auswahl gruppieren</value></data>
+  <data name="ShortcutUngroup" xml:space="preserve"><value>Cmd/Ctrl + Shift + G: Gruppe auflösen</value></data>
+  <data name="ShortcutDelete" xml:space="preserve"><value>Entf oder Backspace: Auswahl löschen</value></data>
+  <data name="Close" xml:space="preserve"><value>Schließen</value></data>
+  <data name="MaterialIconsLoadError" xml:space="preserve"><value>Die lokal eingebetteten MaterialDesignIcons konnten nicht geladen werden.</value></data>
 </root>

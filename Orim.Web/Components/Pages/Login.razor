@@ -1,7 +1,8 @@
 @page "/login"
 @layout EmptyLayout
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 
-<PageTitle>Orim – Login</PageTitle>
+<PageTitle>@Localizer["AppTitle"] - @Localizer["Login"]</PageTitle>
 
 <MudThemeProvider Theme="_theme" IsDarkMode="false" />
 <MudPopoverProvider />
@@ -14,7 +15,7 @@
             <CardHeaderContent>
                 <div style="text-align: center; width: 100%;">
                     <MudText Typo="Typo.h4" Style="font-weight: 700; color: #6E40C9;">Orim</MudText>
-                    <MudText Typo="Typo.body2" Color="Color.Secondary">Kollaboratives Whiteboard</MudText>
+                    <MudText Typo="Typo.body2" Color="Color.Secondary">@Localizer["CollaborativeWhiteboard"]</MudText>
                 </div>
             </CardHeaderContent>
         </MudCardHeader>
@@ -22,20 +23,20 @@
             @if (_error)
             {
                 <MudAlert Severity="Severity.Error" Class="mb-4">
-                    Benutzername oder Passwort ungültig.
+                    @Localizer["InvalidCredentials"]
                 </MudAlert>
             }
             <form method="post" action="/api/auth/login">
                 <AntiforgeryToken />
-                <MudTextField T="string" Name="username" Label="Benutzername" Variant="Variant.Outlined"
+                <MudTextField T="string" Name="username" Label="@Localizer["Username"]" Variant="Variant.Outlined"
                               Required="true" Class="mb-4" Adornment="Adornment.Start"
                               AdornmentIcon="@Icons.Material.Filled.Person" />
-                <MudTextField T="string" Name="password" Label="Passwort" Variant="Variant.Outlined"
+                <MudTextField T="string" Name="password" Label="@Localizer["Password"]" Variant="Variant.Outlined"
                               InputType="InputType.Password" Required="true" Class="mb-4"
                               Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Lock" />
                 <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled" Color="Color.Primary"
                            FullWidth="true" Size="Size.Large" Style="border-radius: 8px; font-weight: 600;">
-                    Anmelden
+                    @Localizer["Login"]
                 </MudButton>
             </form>
         </MudCardContent>
