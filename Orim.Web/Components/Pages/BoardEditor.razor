@@ -5,6 +5,7 @@
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JS
+@inject IWebHostEnvironment Environment
 
 <PageTitle>Orim – @(_board?.Title ?? "Board")</PageTitle>
 
@@ -22,8 +23,8 @@ else if (!_hasAccess)
 }
 else
 {
-    var propertiesPanelOpen = _canvas?.SelectedElement is not null && _canEdit;
-    var selectedElement = _canvas?.SelectedElement;
+    var propertiesPanelOpen = _selectedElement is not null && _canEdit;
+    var selectedElement = _selectedElement;
 
     <div style="display: flex; flex-direction: column; height: calc(100vh - 64px);">
         <MudPaper Elevation="1" Style="padding: 4px 16px; display: flex; align-items: center; gap: 8px; background: #fff; z-index: 10; border-bottom: 1px solid #e1e4e8;">
@@ -46,7 +47,37 @@ else
                                        Color="@(_selectedTool == Tool.Rectangle ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SelectTool(Tool.Rectangle))" />
                     </MudTooltip>
+                    <MudTooltip Text="Kreis zeichnen" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.PanoramaFishEye"
+                                       Color="@(_selectedTool == Tool.Circle ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SelectTool(Tool.Circle))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Dreieck zeichnen" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.ChangeHistory"
+                                       Color="@(_selectedTool == Tool.Triangle ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SelectTool(Tool.Triangle))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Pfeil verbinden" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.NorthEast"
+                                       Color="@(_selectedTool == Tool.Arrow ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SelectTool(Tool.Arrow))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Symbol einfügen" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.AddReaction"
+                                       Color="@(_selectedTool == Tool.Icon ? Color.Primary : Color.Default)"
+                                       OnClick="@OpenIconPickerAsync" />
+                    </MudTooltip>
                 </MudButtonGroup>
+
+                @if (_selectedElement is not null)
+                {
+                    <MudTooltip Text="Ausgewähltes Element löschen" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="@DeleteSelectedElementAsync" />
+                    </MudTooltip>
+                }
 
                 <MudDivider Vertical="true" FlexItem="true" />
             }
@@ -59,24 +90,82 @@ else
                 </ActivatorContent>
                 <ChildContent>
                     <MudMenuItem OnClick="@ExportJson">Export als JSON</MudMenuItem>
+                    @if (_board.OwnerId == _userId)
+                    {
+                        <MudMenuItem OnClick="@DeleteBoardAsync">Board löschen</MudMenuItem>
+                    }
                 </ChildContent>
             </MudMenu>
         </MudPaper>
 
         <div style="display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden;">
-            <div style="flex: 1; min-width: 0; min-height: 0; overflow: hidden; position: relative;" @onkeydown="HandleKeyDown" tabindex="0">
+            <div @ref="_editorSurface"
+                 style="flex: 1; min-width: 0; min-height: 0; overflow: hidden; position: relative; outline: none;"
+                 @onmousedown="FocusEditorSurfaceAsync"
+                 @onkeydown="HandleKeyDown"
+                 tabindex="0">
                 <WhiteboardCanvas @ref="_canvas" Board="@_board" CanEdit="@_canEdit"
                                   CommandStack="@_commandStack"
-                                  OnBoardChanged="@SaveBoard" SelectedTool="@_selectedTool" />
+                                  OnBoardChanged="@SaveBoard"
+                                  OnSelectedElementChanged="@HandleSelectedElementChanged"
+                                  OnToolChanged="@HandleToolChanged"
+                                  PendingIconName="@_pendingIconName"
+                                  SelectedTool="@_selectedTool" />
             </div>
 
             @if (propertiesPanelOpen)
             {
-                <ElementPropertiesPanel Element="@(selectedElement!)"
+                <ElementPropertiesPanel @key="selectedElement!.Id"
+                                        Element="@(selectedElement!)"
                                         OnChanged="@OnElementPropertyChanged" />
             }
         </div>
     </div>
+
+    <MudDialog @bind-Visible="_iconPickerVisible" Options="_iconDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Material Design Icons</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudTextField @bind-Value="_iconSearch"
+                          Label="Symbol suchen"
+                          Variant="Variant.Outlined"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" />
+
+            @if (_isLoadingIcons)
+            {
+                <div style="display:flex; align-items:center; justify-content:center; min-height:220px;">
+                    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(_iconLoadError))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-4">@_iconLoadError</MudAlert>
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Class="mt-2 mb-2" Style="color:#667085;">
+                    @FilteredMaterialIcons.Count Symbole
+                </MudText>
+                <div style="max-height:420px; overflow:auto; border:1px solid #e5e7eb; border-radius:10px; padding:8px; display:grid; grid-template-columns:repeat(auto-fill, minmax(92px, 1fr)); gap:8px;">
+                    @foreach (var iconName in FilteredMaterialIcons)
+                    {
+                        <button type="button"
+                                @onclick="@(() => SelectMaterialIconAsync(iconName))"
+                                style="display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; min-height:82px; border:1px solid #d0d7de; border-radius:8px; background:white; cursor:pointer; padding:8px;">
+                            <span class="mdi @iconName" style="font-size:28px; line-height:1; color:#0f172a;"></span>
+                            <span style="font-size:11px; line-height:1.2; color:#475467; text-align:center; overflow-wrap:anywhere;">@iconName[4..]</span>
+                        </button>
+                    }
+                </div>
+            }
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@CloseIconPicker">Abbrechen</MudButton>
+        </DialogActions>
+    </MudDialog>
 }
 
 @code {
@@ -89,6 +178,25 @@ else
     private Tool _selectedTool = Tool.Select;
     private readonly CommandStack _commandStack = new();
     private WhiteboardCanvas? _canvas;
+    private BoardElement? _selectedElement;
+    private ElementReference _editorSurface;
+    private bool _iconPickerVisible;
+    private bool _isLoadingIcons;
+    private string _iconSearch = string.Empty;
+    private string? _iconLoadError;
+    private string? _pendingIconName;
+    private BoardElement? _clipboardElement;
+    private int _pasteSequence;
+    private List<string> _materialIcons = [];
+    private readonly DialogOptions _iconDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true };
+    private static List<string>? _cachedMaterialIcons;
+
+    private IReadOnlyList<string> FilteredMaterialIcons => _materialIcons
+        .Where(icon => string.IsNullOrWhiteSpace(_iconSearch) || icon.Contains(_iconSearch.Trim(), StringComparison.OrdinalIgnoreCase))
+        .OrderBy(icon => icon.StartsWith($"mdi-{_iconSearch.Trim()}", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+        .ThenBy(icon => icon)
+        .Take(240)
+        .ToList();
 
     protected override async Task OnInitializedAsync()
     {
@@ -106,22 +214,190 @@ else
         _canEdit = BoardService.HasAccess(_board, _userId, BoardRole.Editor);
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && _board is not null && _hasAccess)
+        {
+            await _editorSurface.FocusAsync();
+        }
+    }
+
     private void SelectTool(Tool tool) => _selectedTool = tool;
+
+    private async Task OpenIconPickerAsync()
+    {
+        _iconPickerVisible = true;
+        _iconSearch = string.Empty;
+        await EnsureMaterialIconsLoadedAsync();
+    }
+
+    private void CloseIconPicker()
+    {
+        _iconPickerVisible = false;
+        if (_selectedTool == Tool.Icon)
+        {
+            _selectedTool = Tool.Select;
+        }
+    }
+
+    private async Task EnsureMaterialIconsLoadedAsync()
+    {
+        if (_materialIcons.Count > 0 || _isLoadingIcons)
+        {
+            return;
+        }
+
+        if (_cachedMaterialIcons is not null)
+        {
+            _materialIcons = _cachedMaterialIcons;
+            return;
+        }
+
+        _isLoadingIcons = true;
+        _iconLoadError = null;
+
+        try
+        {
+            var path = Path.Combine(Environment.WebRootPath, "data", "materialdesignicons.json");
+            if (!File.Exists(path))
+            {
+                throw new FileNotFoundException("materialdesignicons.json not found", path);
+            }
+
+            await using var stream = File.OpenRead(path);
+            var icons = await System.Text.Json.JsonSerializer.DeserializeAsync<List<string>>(stream) ?? [];
+            _materialIcons = icons.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(icon => icon).ToList();
+            _cachedMaterialIcons = _materialIcons;
+        }
+        catch
+        {
+            _iconLoadError = "Die lokal eingebetteten MaterialDesignIcons konnten nicht geladen werden.";
+        }
+        finally
+        {
+            _isLoadingIcons = false;
+            StateHasChanged();
+        }
+    }
+
+    private Task SelectMaterialIconAsync(string iconName)
+    {
+        _pendingIconName = iconName;
+        _selectedTool = Tool.Icon;
+        _iconPickerVisible = false;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleToolChanged(Tool tool)
+    {
+        _selectedTool = tool;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
         if (_board is null || !_canEdit) return;
 
-        if (e.Key == "Delete" || e.Key == "Backspace")
+        var hasModifier = e.CtrlKey || e.MetaKey;
+        var key = e.Key?.ToLowerInvariant();
+
+        if (hasModifier)
         {
-            if (_canvas?.SelectedElement is not null)
+            switch (key)
             {
-                var cmd = new RemoveElementCommand(_canvas.SelectedElement.Id);
-                _commandStack.Execute(_board, cmd);
-                _canvas.ClearSelection();
-                await SaveBoard();
+                case "c":
+                    CopySelectedElement();
+                    return;
+                case "x":
+                    await CutSelectedElementAsync();
+                    return;
+                case "v":
+                    await PasteClipboardElementAsync();
+                    return;
             }
         }
+
+        if (e.Key == "Delete" || e.Key == "Backspace")
+        {
+            await DeleteSelectedElementAsync();
+        }
+    }
+
+    private async Task FocusEditorSurfaceAsync()
+    {
+        await _editorSurface.FocusAsync();
+    }
+
+    private async Task DeleteSelectedElementAsync()
+    {
+        if (_board is null || !_canEdit || _selectedElement is null)
+        {
+            return;
+        }
+
+        var cmd = new RemoveElementCommand(_selectedElement.Id);
+        _commandStack.Execute(_board, cmd);
+        _selectedElement = null;
+        _canvas?.ClearSelection();
+        await SaveBoard();
+        StateHasChanged();
+    }
+
+    private void CopySelectedElement()
+    {
+        if (_selectedElement is null)
+        {
+            return;
+        }
+
+        _clipboardElement = CloneElement(_selectedElement);
+        _pasteSequence = 0;
+    }
+
+    private async Task CutSelectedElementAsync()
+    {
+        if (_selectedElement is null)
+        {
+            return;
+        }
+
+        CopySelectedElement();
+        await DeleteSelectedElementAsync();
+    }
+
+    private async Task PasteClipboardElementAsync()
+    {
+        if (_board is null || _clipboardElement is null)
+        {
+            return;
+        }
+
+        _pasteSequence++;
+        var pastedElement = CloneForPaste(_clipboardElement, _board.Elements.Count, _pasteSequence);
+        _board.Elements.Add(pastedElement);
+        _selectedElement = pastedElement;
+        await _canvas?.SelectElementAsync(pastedElement)!;
+        await SaveBoard();
+        StateHasChanged();
+    }
+
+    private async Task DeleteBoardAsync()
+    {
+        if (_board is null || _board.OwnerId != _userId)
+        {
+            return;
+        }
+
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Board '{_board.Title}' wirklich löschen?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await BoardService.DeleteBoardAsync(_board.Id);
+        Navigation.NavigateTo("/");
     }
 
     private async Task SaveBoard()
@@ -153,9 +429,135 @@ else
         StateHasChanged();
     }
 
+    private Task HandleSelectedElementChanged(BoardElement? element)
+    {
+        _selectedElement = element;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private static BoardElement CloneElement(BoardElement element) => element switch
+    {
+        ShapeElement shape => CloneShape(shape),
+        TextElement text => CloneText(text),
+        ArrowElement arrow => CloneArrow(arrow),
+        StickyNoteElement sticky => CloneSticky(sticky),
+        IconElement icon => CloneIcon(icon),
+        _ => throw new InvalidOperationException($"Unsupported element type '{element.GetType().Name}'.")
+    };
+
+    private static BoardElement CloneForPaste(BoardElement source, int zIndex, int pasteSequence)
+    {
+        var clone = CloneElement(source);
+        clone.Id = Guid.NewGuid();
+        clone.ZIndex = zIndex;
+
+        if (clone is not ArrowElement)
+        {
+            var offset = 24 * pasteSequence;
+            clone.X += offset;
+            clone.Y += offset;
+        }
+
+        return clone;
+    }
+
+    private static ShapeElement CloneShape(ShapeElement shape)
+    {
+        var clone = new ShapeElement
+        {
+            ShapeType = shape.ShapeType,
+            FillColor = shape.FillColor,
+            StrokeColor = shape.StrokeColor,
+            StrokeWidth = shape.StrokeWidth,
+            BorderLineStyle = shape.BorderLineStyle
+        };
+
+        CopySharedElementProperties(shape, clone);
+        return clone;
+    }
+
+    private static TextElement CloneText(TextElement text)
+    {
+        var clone = new TextElement
+        {
+            Text = text.Text,
+            FontSize = text.FontSize,
+            Color = text.Color,
+            IsBold = text.IsBold,
+            IsItalic = text.IsItalic
+        };
+
+        CopySharedElementProperties(text, clone);
+        return clone;
+    }
+
+    private static ArrowElement CloneArrow(ArrowElement arrow)
+    {
+        var clone = new ArrowElement
+        {
+            SourceElementId = arrow.SourceElementId,
+            TargetElementId = arrow.TargetElementId,
+            SourceDock = arrow.SourceDock,
+            TargetDock = arrow.TargetDock,
+            StrokeColor = arrow.StrokeColor,
+            StrokeWidth = arrow.StrokeWidth,
+            LineStyle = arrow.LineStyle,
+            SourceHeadStyle = arrow.SourceHeadStyle,
+            TargetHeadStyle = arrow.TargetHeadStyle,
+            RouteStyle = arrow.RouteStyle
+        };
+
+        CopySharedElementProperties(arrow, clone);
+        return clone;
+    }
+
+    private static StickyNoteElement CloneSticky(StickyNoteElement sticky)
+    {
+        var clone = new StickyNoteElement
+        {
+            Text = sticky.Text,
+            BackgroundColor = sticky.BackgroundColor,
+            FontSize = sticky.FontSize
+        };
+
+        CopySharedElementProperties(sticky, clone);
+        return clone;
+    }
+
+    private static IconElement CloneIcon(IconElement icon)
+    {
+        var clone = new IconElement
+        {
+            IconName = icon.IconName,
+            Color = icon.Color
+        };
+
+        CopySharedElementProperties(icon, clone);
+        return clone;
+    }
+
+    private static void CopySharedElementProperties(BoardElement source, BoardElement target)
+    {
+        target.X = source.X;
+        target.Y = source.Y;
+        target.Width = source.Width;
+        target.Height = source.Height;
+        target.ZIndex = source.ZIndex;
+        target.Rotation = source.Rotation;
+        target.Label = source.Label;
+        target.LabelFontSize = source.LabelFontSize;
+        target.LabelHorizontalAlignment = source.LabelHorizontalAlignment;
+        target.LabelVerticalAlignment = source.LabelVerticalAlignment;
+    }
+
     public enum Tool
     {
         Select,
-        Rectangle
+        Rectangle,
+        Circle,
+        Triangle,
+        Arrow,
+        Icon
     }
 }

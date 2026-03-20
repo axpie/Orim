@@ -1,4 +1,6 @@
 window.orimWhiteboard = {
+    _mdiIconsPromise: null,
+
     exportPng: function (svgId) {
         const svg = document.getElementById(svgId);
         if (!svg) return;
@@ -92,5 +94,19 @@ window.orimWhiteboard = {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
+    },
+
+    getMaterialDesignIcons: async function () {
+        if (!window.orimWhiteboard._mdiIconsPromise) {
+            window.orimWhiteboard._mdiIconsPromise = fetch('/data/materialdesignicons.json')
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('mdi-json-load-failed');
+                    }
+                    return response.json();
+                });
+        }
+
+        return await window.orimWhiteboard._mdiIconsPromise;
     }
 };

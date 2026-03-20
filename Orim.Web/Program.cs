@@ -123,9 +123,9 @@ app.MapGet("/api/export/pdf/{boardId:guid}", async (Guid boardId, BoardService b
         {
             case Orim.Core.Models.ShapeElement shape:
                 var fillBrush = new PdfSharp.Drawing.XSolidBrush(PdfSharp.Drawing.XColor.FromArgb(
-                    ParseHexColor(shape.FillColor)));
+                    ParseColor(shape.FillColor)));
                 var strokePen = new PdfSharp.Drawing.XPen(PdfSharp.Drawing.XColor.FromArgb(
-                    ParseHexColor(shape.StrokeColor)), shape.StrokeWidth);
+                    ParseColor(shape.StrokeColor)), shape.StrokeWidth);
                 switch (shape.ShapeType)
                 {
                     case Orim.Core.Models.ShapeType.Rectangle:
@@ -144,6 +144,35 @@ app.MapGet("/api/export/pdf/{boardId:guid}", async (Guid boardId, BoardService b
                         gfx.DrawPolygon(strokePen, fillBrush, points, PdfSharp.Drawing.XFillMode.Winding);
                         break;
                 }
+
+                if (!string.IsNullOrWhiteSpace(shape.Label))
+                {
+                    var labelFont = new PdfSharp.Drawing.XFont("Helvetica", ResolveLabelFontSize(shape), PdfSharp.Drawing.XFontStyleEx.Bold);
+                    var labelBrush = new PdfSharp.Drawing.XSolidBrush(PdfSharp.Drawing.XColor.FromArgb(
+                        ParseColor(shape.StrokeColor)));
+                    var format = new PdfSharp.Drawing.XStringFormat
+                    {
+                        Alignment = shape.LabelHorizontalAlignment switch
+                        {
+                            HorizontalLabelAlignment.Left => PdfSharp.Drawing.XStringAlignment.Near,
+                            HorizontalLabelAlignment.Right => PdfSharp.Drawing.XStringAlignment.Far,
+                            _ => PdfSharp.Drawing.XStringAlignment.Center
+                        },
+                        LineAlignment = shape.LabelVerticalAlignment switch
+                        {
+                            VerticalLabelAlignment.Top => PdfSharp.Drawing.XLineAlignment.Near,
+                            VerticalLabelAlignment.Bottom => PdfSharp.Drawing.XLineAlignment.Far,
+                            _ => PdfSharp.Drawing.XLineAlignment.Center
+                        }
+                    };
+                    gfx.DrawString(
+                        shape.Label,
+                        labelFont,
+                        labelBrush,
+                        new PdfSharp.Drawing.XRect(shape.X, shape.Y, shape.Width, shape.Height),
+                        format);
+                }
+
                 break;
             case Orim.Core.Models.TextElement text:
                 var fontStyle = PdfSharp.Drawing.XFontStyleEx.Regular;
@@ -152,7 +181,7 @@ app.MapGet("/api/export/pdf/{boardId:guid}", async (Guid boardId, BoardService b
                 else if (text.IsItalic) fontStyle = PdfSharp.Drawing.XFontStyleEx.Italic;
                 var font = new PdfSharp.Drawing.XFont("Helvetica", text.FontSize, fontStyle);
                 var textBrush = new PdfSharp.Drawing.XSolidBrush(PdfSharp.Drawing.XColor.FromArgb(
-                    ParseHexColor(text.Color)));
+                    ParseColor(text.Color)));
                 gfx.DrawString(text.Text, font, textBrush, text.X, text.Y + text.FontSize);
                 break;
         }
@@ -163,11 +192,69 @@ app.MapGet("/api/export/pdf/{boardId:guid}", async (Guid boardId, BoardService b
     return Results.File(ms.ToArray(), "application/pdf", $"{board.Title}.pdf");
 });
 
-static int ParseHexColor(string hex)
+static int ParseColor(string value)
 {
-    hex = hex.TrimStart('#');
-    if (hex.Length == 6) hex = "FF" + hex;
-    return (int)uint.Parse(hex, System.Globalization.NumberStyles.HexNumber);
+    var color = value.Trim();
+
+    if (color.StartsWith('#'))
+    {
+        var hex = color.TrimStart('#');
+
+        if (hex.Length == 6)
+        {
+            hex = "FF" + hex;
+            return (int)uint.Parse(hex, System.Globalization.NumberStyles.HexNumber);
+        }
+
+        if (hex.Length == 8)
+        {
+            var rrggbbaa = hex;
+            var aarrggbb = rrggbbaa.Substring(6, 2) + rrggbbaa.Substring(0, 6);
+            return (int)uint.Parse(aarrggbb, System.Globalization.NumberStyles.HexNumber);
+        }
+    }
+
+    if (color.StartsWith("rgba(", StringComparison.OrdinalIgnoreCase))
+    {
+        var components = color[5..^1].Split(',', StringSplitOptions.TrimEntries);
+        if (components.Length == 4)
+        {
+            var red = byte.Parse(components[0], System.Globalization.CultureInfo.InvariantCulture);
+            var green = byte.Parse(components[1], System.Globalization.CultureInfo.InvariantCulture);
+            var blue = byte.Parse(components[2], System.Globalization.CultureInfo.InvariantCulture);
+            var alpha = (byte)Math.Round(
+                double.Parse(components[3], System.Globalization.CultureInfo.InvariantCulture) * 255,
+                MidpointRounding.AwayFromZero);
+
+            return (alpha << 24) | (red << 16) | (green << 8) | blue;
+        }
+    }
+
+    if (color.StartsWith("rgb(", StringComparison.OrdinalIgnoreCase))
+    {
+        var components = color[4..^1].Split(',', StringSplitOptions.TrimEntries);
+        if (components.Length == 3)
+        {
+            var red = byte.Parse(components[0], System.Globalization.CultureInfo.InvariantCulture);
+            var green = byte.Parse(components[1], System.Globalization.CultureInfo.InvariantCulture);
+            var blue = byte.Parse(components[2], System.Globalization.CultureInfo.InvariantCulture);
+
+            return (255 << 24) | (red << 16) | (green << 8) | blue;
+        }
+    }
+
+    throw new FormatException($"Unsupported color format: {value}");
+}
+
+static double ResolveLabelFontSize(BoardElement element)
+{
+    if (element.LabelFontSize is double fontSize)
+    {
+        return Math.Max(1, fontSize);
+    }
+
+    var basis = Math.Min(Math.Max(element.Width, 1), Math.Max(element.Height, 1));
+    return Math.Clamp(basis * 0.28, 10, 48);
 }
 
 app.MapStaticAssets();

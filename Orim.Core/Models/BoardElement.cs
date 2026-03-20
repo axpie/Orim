@@ -6,6 +6,7 @@ namespace Orim.Core.Models;
 [JsonDerivedType(typeof(TextElement), "text")]
 [JsonDerivedType(typeof(ArrowElement), "arrow")]
 [JsonDerivedType(typeof(StickyNoteElement), "stickyNote")]
+[JsonDerivedType(typeof(IconElement), "icon")]
 public abstract class BoardElement
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -15,6 +16,24 @@ public abstract class BoardElement
     public double Height { get; set; }
     public int ZIndex { get; set; }
     public double Rotation { get; set; }
+    public string Label { get; set; } = string.Empty;
+    public double? LabelFontSize { get; set; }
+    public HorizontalLabelAlignment LabelHorizontalAlignment { get; set; } = HorizontalLabelAlignment.Center;
+    public VerticalLabelAlignment LabelVerticalAlignment { get; set; } = VerticalLabelAlignment.Middle;
+}
+
+public enum HorizontalLabelAlignment
+{
+    Left,
+    Center,
+    Right
+}
+
+public enum VerticalLabelAlignment
+{
+    Top,
+    Middle,
+    Bottom
 }
 
 public class ShapeElement : BoardElement
@@ -23,6 +42,17 @@ public class ShapeElement : BoardElement
     public string FillColor { get; set; } = "#FFFFFF";
     public string StrokeColor { get; set; } = "#000000";
     public double StrokeWidth { get; set; } = 2;
+    public BorderLineStyle BorderLineStyle { get; set; } = BorderLineStyle.Solid;
+}
+
+public enum BorderLineStyle
+{
+    Solid,
+    Dashed,
+    Dotted,
+    DashDot,
+    LongDash,
+    Double
 }
 
 public enum ShapeType
@@ -49,6 +79,34 @@ public class ArrowElement : BoardElement
     public DockPoint TargetDock { get; set; } = DockPoint.Left;
     public string StrokeColor { get; set; } = "#000000";
     public double StrokeWidth { get; set; } = 2;
+    public ArrowLineStyle LineStyle { get; set; } = ArrowLineStyle.Solid;
+    public ArrowHeadStyle SourceHeadStyle { get; set; } = ArrowHeadStyle.None;
+    public ArrowHeadStyle TargetHeadStyle { get; set; } = ArrowHeadStyle.FilledTriangle;
+    public ArrowRouteStyle RouteStyle { get; set; } = ArrowRouteStyle.Straight;
+}
+
+public enum ArrowLineStyle
+{
+    Solid,
+    Dashed,
+    Dotted,
+    DashDot,
+    LongDash
+}
+
+public enum ArrowHeadStyle
+{
+    None,
+    FilledTriangle,
+    OpenTriangle,
+    FilledCircle,
+    OpenCircle
+}
+
+public enum ArrowRouteStyle
+{
+    Straight,
+    Orthogonal
 }
 
 public enum DockPoint
@@ -65,4 +123,10 @@ public class StickyNoteElement : BoardElement
     public string Text { get; set; } = string.Empty;
     public string BackgroundColor { get; set; } = "#FFEB3B";
     public double FontSize { get; set; } = 14;
+}
+
+public class IconElement : BoardElement
+{
+    public string IconName { get; set; } = "mdi-star";
+    public string Color { get; set; } = "#0f172a";
 }

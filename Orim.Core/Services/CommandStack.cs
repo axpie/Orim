@@ -19,17 +19,32 @@ public class AddElementCommand : IBoardCommand
 public class RemoveElementCommand : IBoardCommand
 {
     private readonly Guid _elementId;
-    private BoardElement? _removed;
+    private List<BoardElement> _removed = [];
     public RemoveElementCommand(Guid elementId) => _elementId = elementId;
     public void Execute(Board board)
     {
-        _removed = board.Elements.FirstOrDefault(e => e.Id == _elementId);
-        board.Elements.RemoveAll(e => e.Id == _elementId);
+        _removed = board.Elements
+            .Where(e => e.Id == _elementId ||
+                        (e is ArrowElement arrow &&
+                         (arrow.SourceElementId == _elementId || arrow.TargetElementId == _elementId)))
+            .ToList();
+
+        if (_removed.Count == 0)
+        {
+            return;
+        }
+
+        var removedIds = _removed.Select(element => element.Id).ToHashSet();
+        board.Elements.RemoveAll(e => removedIds.Contains(e.Id));
     }
     public void Undo(Board board)
     {
-        if (_removed is not null)
-            board.Elements.Add(_removed);
+        if (_removed.Count == 0)
+        {
+            return;
+        }
+
+        board.Elements.AddRange(_removed);
     }
 }
 

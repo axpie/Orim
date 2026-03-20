@@ -1,3 +1,4 @@
+@using Microsoft.AspNetCore.Components.Rendering
 @using Orim.Web.Components.Pages
 @inject IJSRuntime JS
 
@@ -20,14 +21,43 @@
             }
         }
 
-        @if (_draftRectangle is not null)
+        @if (_draftShape is not null)
         {
-            <div style="position: absolute; left: @Px(_draftRectangle.X); top: @Px(_draftRectangle.Y); width: @Px(_draftRectangle.Width); height: @Px(_draftRectangle.Height); border: 2px dashed #2563eb; background: rgba(37, 99, 235, 0.12); border-radius: 10px; pointer-events: none;"></div>
+            @RenderDraftShape(_draftShape)
         }
 
-        @if (SelectedElement is not null)
+        @if (_draftArrow is not null)
+        {
+            @RenderDraftArrow(_draftArrow.Value)
+        }
+
+        @if (CanEdit && (SelectedTool == BoardEditor.Tool.Arrow || _draftArrow is not null || _arrowEndpointDrag is not null))
+        {
+            @foreach (var handle in GetDockHandles())
+            {
+                <div style="@GetDockHandleStyle(handle)"></div>
+            }
+        }
+
+        @if (SelectedElement is not null && SelectedElement is not ArrowElement)
         {
             <div style="position: absolute; left: @Px(SelectedElement.X - 4); top: @Px(SelectedElement.Y - 4); width: @Px(SelectedElement.Width + 8); height: @Px(SelectedElement.Height + 8); border: 2px dashed #2563eb; border-radius: 12px; pointer-events: none;"></div>
+
+            @if (CanResizeSelectedElement)
+            {
+                @foreach (var handle in GetResizeHandles(SelectedElement))
+                {
+                    <div style="@GetResizeHandleStyle(handle)"></div>
+                }
+            }
+        }
+
+        @if (CanEdit && SelectedTool == BoardEditor.Tool.Select && SelectedElement is ArrowElement selectedArrow)
+        {
+            @foreach (var handle in GetArrowEndpointHandles(selectedArrow))
+            {
+                <div style="@GetArrowEndpointHandleStyle(handle)"></div>
+            }
         }
     </div>
 </div>
@@ -38,11 +68,19 @@
     private const double MinZoom = 0.2;
     private const double MaxZoom = 3.5;
     private const double ZoomStep = 1.1;
+    private const double ResizeHandleScreenSize = 10;
+    private const double ResizeHandleHitScreenSize = 16;
+    private const double MinimumLabelFontSize = 10;
+    private const double MaximumLabelFontSize = 48;
+    private const double ClickPanThreshold = 3;
 
     [Parameter] public Board? Board { get; set; }
     [Parameter] public bool CanEdit { get; set; }
     [Parameter] public CommandStack CommandStack { get; set; } = new();
     [Parameter] public EventCallback OnBoardChanged { get; set; }
+    [Parameter] public EventCallback<BoardElement?> OnSelectedElementChanged { get; set; }
+    [Parameter] public EventCallback<BoardEditor.Tool> OnToolChanged { get; set; }
+    [Parameter] public string? PendingIconName { get; set; }
     [Parameter] public BoardEditor.Tool SelectedTool { get; set; }
 
     public BoardElement? SelectedElement { get; private set; }
@@ -50,23 +88,67 @@
     private bool _isDraggingSelection;
     private bool _isDrawingRectangle;
     private bool _isPanning;
+    private bool _isResizingSelection;
     private bool _hasInteractionChanged;
+    private bool _clearSelectionOnPanRelease;
+    private bool _panExceededClickThreshold;
     private Point _dragPointerOffset;
     private Point _drawStart;
     private Point _panStartScreen;
+    private Point _panPointerOrigin;
     private Point _cameraOffset = new(0, 0);
     private Size _surfaceSize;
-    private ShapeElement? _draftRectangle;
+    private ShapeElement? _draftShape;
+    private ArrowDraft? _draftArrow;
+    private ArrowEndpointDrag? _arrowEndpointDrag;
+    private ArrowEndpointHandleDefinition? _hoverArrowEndpointHandle;
     private double _zoom = 1;
+    private ResizeHandle _activeResizeHandle;
+    private ResizeHandle _hoverResizeHandle;
+    private ElementBounds _resizeStartBounds;
 
     private record struct Point(double X, double Y);
     private record struct Size(double Width, double Height);
     private record struct RelativePointer(double X, double Y, double Width, double Height);
+    private record struct ElementBounds(double X, double Y, double Width, double Height);
+    private record struct ResizeHandleDefinition(ResizeHandle Handle, Point Center);
+    private record struct DockHandleDefinition(Guid ElementId, DockPoint DockPoint, Point Center, bool IsActive, bool IsTarget);
+    private record struct ArrowDraft(Guid SourceElementId, DockPoint SourceDock, Guid? TargetElementId, DockPoint? TargetDock, Point Pointer);
+    private record struct ArrowRenderData(IReadOnlyList<Point> Points, Point LabelPoint);
+    private record struct ArrowEndpointHandleDefinition(bool IsSource, Point Center, bool IsActive);
+    private record struct ArrowEndpointDrag(Guid ArrowId, bool IsSource, Guid FixedElementId, DockPoint FixedDock, Guid? HoverElementId, DockPoint? HoverDock, Point Pointer);
+
+    private enum ResizeHandle
+    {
+        None,
+        NorthWest,
+        North,
+        NorthEast,
+        East,
+        SouthEast,
+        South,
+        SouthWest,
+        West
+    }
+
+    private bool CanResizeSelectedElement => SelectedElement is not null and not ArrowElement;
 
     public void ClearSelection()
     {
-        SelectedElement = null;
+        _ = SetSelectedElementAsync(null);
         StateHasChanged();
+    }
+
+    public async Task SelectElementAsync(BoardElement? element)
+    {
+        await SetSelectedElementAsync(element);
+        StateHasChanged();
+    }
+
+    private async Task SetSelectedElementAsync(BoardElement? element)
+    {
+        SelectedElement = element;
+        await OnSelectedElementChanged.InvokeAsync(element);
     }
 
     private async Task<Point> GetScreenPointerAsync(MouseEventArgs e)
@@ -116,24 +198,27 @@
         {
             _isPanning = true;
             _panStartScreen = screenPoint;
+            _panPointerOrigin = screenPoint;
+            _clearSelectionOnPanRelease = false;
+            _panExceededClickThreshold = true;
             return;
         }
 
         var worldPoint = ScreenToWorld(screenPoint);
 
-        if (SelectedTool == BoardEditor.Tool.Rectangle && CanEdit)
+        if (CanEdit && TryGetShapeTypeFromTool(SelectedTool, out var shapeType))
         {
-            SelectedElement = null;
+            await SetSelectedElementAsync(null);
             _isDrawingRectangle = true;
             _hasInteractionChanged = false;
             _drawStart = worldPoint;
-            _draftRectangle = new ShapeElement
+            _draftShape = new ShapeElement
             {
                 X = SanitizeCoordinate(worldPoint.X),
                 Y = SanitizeCoordinate(worldPoint.Y),
                 Width = 0,
                 Height = 0,
-                ShapeType = ShapeType.Rectangle,
+                ShapeType = shapeType,
                 FillColor = "#ffffff",
                 StrokeColor = "#0f172a",
                 StrokeWidth = 2
@@ -141,8 +226,81 @@
             return;
         }
 
+        if (CanEdit && SelectedTool == BoardEditor.Tool.Icon && !string.IsNullOrWhiteSpace(PendingIconName) && Board is not null)
+        {
+            var iconSize = 96d;
+            var icon = new IconElement
+            {
+                X = SanitizeCoordinate(worldPoint.X - (iconSize / 2)),
+                Y = SanitizeCoordinate(worldPoint.Y - (iconSize / 2)),
+                Width = iconSize,
+                Height = iconSize,
+                IconName = PendingIconName,
+                Color = "#0f172a",
+                ZIndex = Board.Elements.Count
+            };
+
+            Board.Elements.Add(icon);
+            await SetSelectedElementAsync(icon);
+            await OnBoardChanged.InvokeAsync();
+            await OnToolChanged.InvokeAsync(BoardEditor.Tool.Select);
+            return;
+        }
+
+        if (CanEdit && SelectedTool == BoardEditor.Tool.Arrow)
+        {
+            var anchor = GetDockHandleAtPoint(worldPoint);
+            if (anchor is not null)
+            {
+                _draftArrow = new ArrowDraft(anchor.Value.ElementId, anchor.Value.DockPoint, null, null, worldPoint);
+                _hasInteractionChanged = false;
+                await SetSelectedElementAsync(null);
+            }
+
+            return;
+        }
+
+        if (CanEdit && SelectedTool == BoardEditor.Tool.Select && CanResizeSelectedElement)
+        {
+            var resizeHandle = GetResizeHandleAtPoint(worldPoint);
+            if (resizeHandle != ResizeHandle.None && SelectedElement is not null)
+            {
+                _activeResizeHandle = resizeHandle;
+                _hoverResizeHandle = resizeHandle;
+                _isResizingSelection = true;
+                _hasInteractionChanged = false;
+                _resizeStartBounds = new ElementBounds(SelectedElement.X, SelectedElement.Y, SelectedElement.Width, SelectedElement.Height);
+                return;
+            }
+        }
+
+        if (CanEdit && SelectedTool == BoardEditor.Tool.Select && SelectedElement is ArrowElement selectedArrow)
+        {
+            var endpointHandle = GetArrowEndpointHandleAtPoint(selectedArrow, worldPoint);
+            if (endpointHandle is not null)
+            {
+                if (endpointHandle.Value.IsSource && selectedArrow.TargetElementId is Guid targetElementId)
+                {
+                    _arrowEndpointDrag = new ArrowEndpointDrag(selectedArrow.Id, true, targetElementId, selectedArrow.TargetDock, null, null, worldPoint);
+                    return;
+                }
+
+                if (!endpointHandle.Value.IsSource && selectedArrow.SourceElementId is Guid sourceElementId)
+                {
+                    _arrowEndpointDrag = new ArrowEndpointDrag(selectedArrow.Id, false, sourceElementId, selectedArrow.SourceDock, null, null, worldPoint);
+                    return;
+                }
+
+                return;
+            }
+        }
+
         var clicked = HitTest(worldPoint);
-        SelectedElement = clicked;
+        if (clicked is not null)
+        {
+            await SetSelectedElementAsync(clicked);
+        }
+        _hoverResizeHandle = ResizeHandle.None;
 
         if (!CanEdit || SelectedTool != BoardEditor.Tool.Select)
         {
@@ -153,6 +311,14 @@
         {
             _isPanning = true;
             _panStartScreen = screenPoint;
+            _panPointerOrigin = screenPoint;
+            _clearSelectionOnPanRelease = true;
+            _panExceededClickThreshold = false;
+            return;
+        }
+
+        if (clicked is ArrowElement)
+        {
             return;
         }
 
@@ -169,12 +335,57 @@
         {
             var dx = screenPoint.X - _panStartScreen.X;
             var dy = screenPoint.Y - _panStartScreen.Y;
+            var totalDx = screenPoint.X - _panPointerOrigin.X;
+            var totalDy = screenPoint.Y - _panPointerOrigin.Y;
+            if (!_panExceededClickThreshold && Math.Sqrt(totalDx * totalDx + totalDy * totalDy) > ClickPanThreshold)
+            {
+                _panExceededClickThreshold = true;
+            }
+
             _cameraOffset = new Point(_cameraOffset.X + dx, _cameraOffset.Y + dy);
             _panStartScreen = screenPoint;
             return;
         }
 
         var worldPoint = ScreenToWorld(screenPoint);
+
+        if (!_isDraggingSelection && !_isDrawingRectangle && !_isResizingSelection)
+        {
+            _hoverResizeHandle = CanResizeSelectedElement ? GetResizeHandleAtPoint(worldPoint) : ResizeHandle.None;
+            _hoverArrowEndpointHandle = CanEdit && SelectedTool == BoardEditor.Tool.Select && SelectedElement is ArrowElement selectedArrow
+                ? GetArrowEndpointHandleAtPoint(selectedArrow, worldPoint)
+                : null;
+        }
+
+        if (_isResizingSelection && SelectedElement is not null)
+        {
+            ResizeSelectedElement(worldPoint);
+            return;
+        }
+
+        if (_arrowEndpointDrag is not null)
+        {
+            var nextTarget = GetDockHandleAtPoint(worldPoint);
+            _arrowEndpointDrag = _arrowEndpointDrag.Value with
+            {
+                HoverElementId = nextTarget?.ElementId,
+                HoverDock = nextTarget?.DockPoint,
+                Pointer = worldPoint
+            };
+            return;
+        }
+
+        if (_draftArrow is not null)
+        {
+            var nextTarget = GetDockHandleAtPoint(worldPoint, _draftArrow.Value.SourceElementId);
+            _draftArrow = _draftArrow.Value with
+            {
+                TargetElementId = nextTarget?.ElementId,
+                TargetDock = nextTarget?.DockPoint,
+                Pointer = worldPoint
+            };
+            return;
+        }
 
         if (_isDraggingSelection && SelectedElement is not null)
         {
@@ -191,7 +402,7 @@
             return;
         }
 
-        if (_isDrawingRectangle && _draftRectangle is not null)
+        if (_isDrawingRectangle && _draftShape is not null)
         {
             UpdateDraftRectangle(worldPoint);
         }
@@ -228,7 +439,22 @@
 
     private async Task FinalizeInteractionAsync(Point? pointer)
     {
+        var shouldClearSelection = _isPanning && _clearSelectionOnPanRelease && !_panExceededClickThreshold && pointer is not null;
         _isPanning = false;
+        _clearSelectionOnPanRelease = false;
+        _panExceededClickThreshold = false;
+        _hoverArrowEndpointHandle = null;
+
+        if (_isResizingSelection)
+        {
+            _isResizingSelection = false;
+            _activeResizeHandle = ResizeHandle.None;
+            if (_hasInteractionChanged)
+            {
+                _hasInteractionChanged = false;
+                await OnBoardChanged.InvokeAsync();
+            }
+        }
 
         if (_isDraggingSelection)
         {
@@ -240,27 +466,54 @@
             }
         }
 
+        if (_arrowEndpointDrag is not null)
+        {
+            if (Board is not null)
+            {
+                var arrow = Board.Elements.OfType<ArrowElement>().FirstOrDefault(candidate => candidate.Id == _arrowEndpointDrag.Value.ArrowId);
+                if (arrow is not null &&
+                    _arrowEndpointDrag.Value.HoverElementId is Guid hoverElementId &&
+                    _arrowEndpointDrag.Value.HoverDock is DockPoint hoverDock)
+                {
+                    if (_arrowEndpointDrag.Value.IsSource)
+                    {
+                        arrow.SourceElementId = hoverElementId;
+                        arrow.SourceDock = hoverDock;
+                    }
+                    else
+                    {
+                        arrow.TargetElementId = hoverElementId;
+                        arrow.TargetDock = hoverDock;
+                    }
+
+                    await OnBoardChanged.InvokeAsync();
+                }
+            }
+
+            _arrowEndpointDrag = null;
+        }
+
         if (_isDrawingRectangle)
         {
-            if (pointer is not null && _draftRectangle is not null)
+            if (pointer is not null && _draftShape is not null)
             {
                 UpdateDraftRectangle(pointer.Value);
             }
 
             _isDrawingRectangle = false;
 
-            if (_draftRectangle is not null &&
-                _draftRectangle.Width >= MinimumRectangleSize &&
-                _draftRectangle.Height >= MinimumRectangleSize &&
+            if (_draftShape is not null &&
+                _draftShape.Width >= MinimumRectangleSize &&
+                _draftShape.Height >= MinimumRectangleSize &&
                 Board is not null)
             {
                 var rectangle = new ShapeElement
                 {
-                    X = SanitizeCoordinate(_draftRectangle.X),
-                    Y = SanitizeCoordinate(_draftRectangle.Y),
-                    Width = SanitizeCoordinate(_draftRectangle.Width),
-                    Height = SanitizeCoordinate(_draftRectangle.Height),
-                    ShapeType = ShapeType.Rectangle,
+                    X = SanitizeCoordinate(_draftShape.X),
+                    Y = SanitizeCoordinate(_draftShape.Y),
+                    Width = SanitizeCoordinate(_draftShape.Width),
+                    Height = SanitizeCoordinate(_draftShape.Height),
+                    ShapeType = _draftShape.ShapeType,
                     FillColor = "#ffffff",
                     StrokeColor = "#0f172a",
                     StrokeWidth = 2,
@@ -268,18 +521,55 @@
                 };
 
                 Board.Elements.Add(rectangle);
-                SelectedElement = rectangle;
+                await SetSelectedElementAsync(rectangle);
                 await OnBoardChanged.InvokeAsync();
+                await OnToolChanged.InvokeAsync(BoardEditor.Tool.Select);
             }
 
-            _draftRectangle = null;
+            _draftShape = null;
             _hasInteractionChanged = false;
+        }
+
+        if (_draftArrow is not null)
+        {
+            if (_draftArrow.Value.TargetElementId is Guid targetElementId &&
+                _draftArrow.Value.TargetDock is DockPoint targetDock &&
+                Board is not null)
+            {
+                var arrow = new ArrowElement
+                {
+                    SourceElementId = _draftArrow.Value.SourceElementId,
+                    SourceDock = _draftArrow.Value.SourceDock,
+                    TargetElementId = targetElementId,
+                    TargetDock = targetDock,
+                    StrokeColor = "#0f172a",
+                    StrokeWidth = 2,
+                    ZIndex = Board.Elements.Count
+                };
+
+                Board.Elements.Add(arrow);
+                await SetSelectedElementAsync(arrow);
+                await OnBoardChanged.InvokeAsync();
+                await OnToolChanged.InvokeAsync(BoardEditor.Tool.Select);
+            }
+
+            _draftArrow = null;
+        }
+
+        if (shouldClearSelection)
+        {
+            await SetSelectedElementAsync(null);
+        }
+
+        if (!_isDraggingSelection && !_isDrawingRectangle && _draftArrow is null)
+        {
+            _hoverResizeHandle = ResizeHandle.None;
         }
     }
 
     private void UpdateDraftRectangle(Point point)
     {
-        if (_draftRectangle is null)
+        if (_draftShape is null)
         {
             return;
         }
@@ -289,11 +579,11 @@
         var startX = SanitizeCoordinate(_drawStart.X);
         var startY = SanitizeCoordinate(_drawStart.Y);
 
-        _draftRectangle.X = Math.Min(startX, currentX);
-        _draftRectangle.Y = Math.Min(startY, currentY);
-        _draftRectangle.Width = Math.Abs(currentX - startX);
-        _draftRectangle.Height = Math.Abs(currentY - startY);
-        _hasInteractionChanged = _draftRectangle.Width >= MinimumRectangleSize || _draftRectangle.Height >= MinimumRectangleSize;
+        _draftShape.X = Math.Min(startX, currentX);
+        _draftShape.Y = Math.Min(startY, currentY);
+        _draftShape.Width = Math.Abs(currentX - startX);
+        _draftShape.Height = Math.Abs(currentY - startY);
+        _hasInteractionChanged = _draftShape.Width >= MinimumRectangleSize || _draftShape.Height >= MinimumRectangleSize;
     }
 
     private BoardElement? HitTest(Point point)
@@ -307,16 +597,13 @@
         {
             if (element is ArrowElement arrow)
             {
-                var source = Board.Elements.FirstOrDefault(candidate => candidate.Id == arrow.SourceElementId);
-                var target = Board.Elements.FirstOrDefault(candidate => candidate.Id == arrow.TargetElementId);
-                if (source is null || target is null)
+                var renderData = GetArrowRenderData(arrow);
+                if (renderData is null)
                 {
                     continue;
                 }
 
-                var start = GetDockPosition(source, arrow.SourceDock);
-                var end = GetDockPosition(target, arrow.TargetDock);
-                if (PointToLineDistance(point, start, end) <= 8)
+                if (IsPointNearPolyline(point, renderData.Value.Points, Math.Max(8, arrow.StrokeWidth + 4)))
                 {
                     return element;
                 }
@@ -337,7 +624,11 @@
     private string GetCursor() => SelectedTool switch
     {
         _ when _isPanning => "grabbing",
-        BoardEditor.Tool.Rectangle => "crosshair",
+        _ when _isResizingSelection => GetResizeCursor(_activeResizeHandle),
+        BoardEditor.Tool.Rectangle or BoardEditor.Tool.Circle or BoardEditor.Tool.Triangle => "crosshair",
+        BoardEditor.Tool.Arrow => "crosshair",
+        _ when _arrowEndpointDrag is not null || _hoverArrowEndpointHandle is not null => "pointer",
+        _ when _hoverResizeHandle != ResizeHandle.None => GetResizeCursor(_hoverResizeHandle),
         _ when _isDraggingSelection => "grabbing",
         _ => "grab"
     };
@@ -373,6 +664,19 @@
         return Math.Sqrt(Math.Pow(point.X - projectionX, 2) + Math.Pow(point.Y - projectionY, 2));
     }
 
+    private static bool IsPointNearPolyline(Point point, IReadOnlyList<Point> points, double tolerance)
+    {
+        for (var index = 0; index < points.Count - 1; index++)
+        {
+            if (PointToLineDistance(point, points[index], points[index + 1]) <= tolerance)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static Point GetDockPosition(BoardElement element, DockPoint dockPoint) => dockPoint switch
     {
         DockPoint.Top => new Point(element.X + element.Width / 2, element.Y),
@@ -387,6 +691,7 @@
         ShapeElement shape => RenderShape(shape),
         TextElement text => RenderText(text),
         StickyNoteElement sticky => RenderSticky(sticky),
+        IconElement icon => RenderIcon(icon),
         ArrowElement arrow => RenderArrow(arrow),
         _ => builder => { }
     };
@@ -394,18 +699,115 @@
     private RenderFragment RenderShape(ShapeElement shape) => builder =>
     {
         var selected = SelectedElement?.Id == shape.Id;
-        var style = $"position: absolute; left: {Px(shape.X)}; top: {Px(shape.Y)}; width: {Px(shape.Width)}; height: {Px(shape.Height)}; background: {shape.FillColor}; border: {CssNumber(shape.StrokeWidth)}px solid {(selected ? "#2563eb" : shape.StrokeColor)}; box-sizing: border-box;";
+        var strokeColor = selected ? "#2563eb" : shape.StrokeColor;
+        var containerStyle = $"position: absolute; left: {Px(shape.X)}; top: {Px(shape.Y)}; width: {Px(shape.Width)}; height: {Px(shape.Height)}; overflow: visible; pointer-events: none;";
+        var svgStyle = "width: 100%; height: 100%; overflow: visible; display: block;";
+        var dashArray = GetStrokeDashArray(shape.BorderLineStyle);
+        var inset = shape.BorderLineStyle == BorderLineStyle.Double ? Math.Max(shape.StrokeWidth * 2.2, 4) : 0;
+        var strokeWidth = Math.Max(shape.StrokeWidth, 1);
 
         builder.OpenElement(0, "div");
-        builder.AddAttribute(1, "style", style + GetShapeSpecificStyle(shape.ShapeType));
+        builder.AddAttribute(1, "style", containerStyle);
+
+        builder.OpenElement(2, "svg");
+        builder.AddAttribute(3, "viewBox", $"0 0 {CssNumber(Math.Max(shape.Width, 1))} {CssNumber(Math.Max(shape.Height, 1))}");
+        builder.AddAttribute(4, "preserveAspectRatio", "none");
+        builder.AddAttribute(5, "style", svgStyle);
+
+        RenderShapePrimitive(builder, 6, shape, shape.FillColor, strokeColor, strokeWidth, dashArray, 0);
+
+        if (shape.BorderLineStyle == BorderLineStyle.Double)
+        {
+            RenderShapePrimitive(builder, 26, shape, "transparent", strokeColor, Math.Max(shape.StrokeWidth * 0.85, 1), string.Empty, inset);
+        }
+
+        builder.CloseElement();
+
+        if (!string.IsNullOrWhiteSpace(shape.Label))
+        {
+            builder.OpenElement(30, "div");
+            builder.AddAttribute(31, "style", GetElementLabelStyle(shape, shape.StrokeColor));
+            builder.AddContent(32, shape.Label);
+            builder.CloseElement();
+        }
+
         builder.CloseElement();
     };
 
-    private string GetShapeSpecificStyle(ShapeType shapeType) => shapeType switch
+    private void RenderShapePrimitive(RenderTreeBuilder builder, int sequence, ShapeElement shape, string fillColor, string strokeColor, double strokeWidth, string dashArray, double inset)
     {
-        ShapeType.Ellipse => " border-radius: 999px;",
-        ShapeType.Triangle => " clip-path: polygon(50% 0%, 0% 100%, 100% 100%);",
-        _ => " border-radius: 10px;"
+        var safeWidth = Math.Max(shape.Width, 1);
+        var safeHeight = Math.Max(shape.Height, 1);
+        var halfStroke = strokeWidth / 2;
+        var left = Math.Min(inset + halfStroke, safeWidth / 2);
+        var top = Math.Min(inset + halfStroke, safeHeight / 2);
+        var width = Math.Max(safeWidth - (inset * 2) - strokeWidth, 0.01);
+        var height = Math.Max(safeHeight - (inset * 2) - strokeWidth, 0.01);
+
+        switch (shape.ShapeType)
+        {
+            case ShapeType.Ellipse:
+                builder.OpenElement(sequence, "ellipse");
+                builder.AddAttribute(sequence + 1, "cx", CssNumber(safeWidth / 2));
+                builder.AddAttribute(sequence + 2, "cy", CssNumber(safeHeight / 2));
+                builder.AddAttribute(sequence + 3, "rx", CssNumber(Math.Max((safeWidth / 2) - inset - halfStroke, 0.01)));
+                builder.AddAttribute(sequence + 4, "ry", CssNumber(Math.Max((safeHeight / 2) - inset - halfStroke, 0.01)));
+                break;
+            case ShapeType.Triangle:
+                builder.OpenElement(sequence, "polygon");
+                builder.AddAttribute(sequence + 1, "points", GetTrianglePoints(safeWidth, safeHeight, inset + halfStroke));
+                break;
+            default:
+                builder.OpenElement(sequence, "rect");
+                builder.AddAttribute(sequence + 1, "x", CssNumber(left));
+                builder.AddAttribute(sequence + 2, "y", CssNumber(top));
+                builder.AddAttribute(sequence + 3, "width", CssNumber(width));
+                builder.AddAttribute(sequence + 4, "height", CssNumber(height));
+                builder.AddAttribute(sequence + 5, "rx", CssNumber(Math.Max(10 - inset, 0)));
+                builder.AddAttribute(sequence + 6, "ry", CssNumber(Math.Max(10 - inset, 0)));
+                break;
+        }
+
+        builder.AddAttribute(sequence + 10, "fill", fillColor);
+        builder.AddAttribute(sequence + 11, "stroke", strokeColor);
+        builder.AddAttribute(sequence + 12, "stroke-width", CssNumber(strokeWidth));
+        builder.AddAttribute(sequence + 13, "vector-effect", "non-scaling-stroke");
+
+        if (!string.IsNullOrWhiteSpace(dashArray))
+        {
+            builder.AddAttribute(sequence + 14, "stroke-dasharray", dashArray);
+        }
+
+        builder.CloseElement();
+    }
+
+    private static string GetTrianglePoints(double width, double height, double inset)
+    {
+        var topX = width / 2;
+        var topY = inset;
+        var leftX = inset;
+        var leftY = Math.Max(height - inset, inset);
+        var rightX = Math.Max(width - inset, inset);
+        var rightY = Math.Max(height - inset, inset);
+        return $"{CssNumber(topX)},{CssNumber(topY)} {CssNumber(leftX)},{CssNumber(leftY)} {CssNumber(rightX)},{CssNumber(rightY)}";
+    }
+
+    private static string GetStrokeDashArray(BorderLineStyle borderLineStyle) => borderLineStyle switch
+    {
+        BorderLineStyle.Dashed => "10 6",
+        BorderLineStyle.Dotted => "2 5",
+        BorderLineStyle.DashDot => "10 4 2 4",
+        BorderLineStyle.LongDash => "16 6",
+        _ => string.Empty
+    };
+
+    private static string GetStrokeDashArray(ArrowLineStyle lineStyle) => lineStyle switch
+    {
+        ArrowLineStyle.Dashed => "10 6",
+        ArrowLineStyle.Dotted => "2 5",
+        ArrowLineStyle.DashDot => "10 4 2 4",
+        ArrowLineStyle.LongDash => "16 6",
+        _ => string.Empty
     };
 
     private RenderFragment RenderText(TextElement text) => builder =>
@@ -426,30 +828,781 @@
         builder.CloseElement();
     };
 
+    private RenderFragment RenderIcon(IconElement icon) => builder =>
+    {
+        var containerStyle = $"position: absolute; left: {Px(icon.X)}; top: {Px(icon.Y)}; width: {Px(icon.Width)}; height: {Px(icon.Height)}; display:flex; align-items:center; justify-content:center; pointer-events:none;";
+        var iconSize = Math.Clamp(Math.Min(Math.Max(icon.Width, 1), Math.Max(icon.Height, 1)) * 0.82, 16, 512);
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "style", containerStyle);
+        builder.OpenElement(2, "span");
+        builder.AddAttribute(3, "class", $"mdi {icon.IconName}");
+        builder.AddAttribute(4, "style", $"font-size:{Px(iconSize)}; line-height:1; color:{icon.Color}; display:inline-flex; align-items:center; justify-content:center;");
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
     private RenderFragment RenderArrow(ArrowElement arrow) => builder =>
+    {
+        var renderData = GetArrowRenderData(arrow);
+        if (renderData is null)
+        {
+            return;
+        }
+
+        RenderArrowVisual(
+            builder,
+            renderData.Value.Points,
+            renderData.Value.LabelPoint,
+            arrow.StrokeColor,
+            Math.Max(arrow.StrokeWidth, 1),
+            arrow.LineStyle,
+            arrow.SourceHeadStyle,
+            arrow.TargetHeadStyle,
+            string.IsNullOrWhiteSpace(arrow.Label) ? null : arrow.Label,
+            GetResolvedLabelFontSize(arrow),
+            arrow.LabelHorizontalAlignment,
+            arrow.LabelVerticalAlignment,
+                SelectedElement?.Id == arrow.Id,
+                1,
+                _arrowEndpointDrag is not null && _arrowEndpointDrag.Value.ArrowId == arrow.Id ? _arrowEndpointDrag : null);
+    };
+
+    private RenderFragment RenderDraftArrow(ArrowDraft draft) => builder =>
     {
         if (Board is null)
         {
             return;
         }
 
-        var source = Board.Elements.FirstOrDefault(element => element.Id == arrow.SourceElementId);
-        var target = Board.Elements.FirstOrDefault(element => element.Id == arrow.TargetElementId);
-        if (source is null || target is null)
+        var source = Board.Elements.FirstOrDefault(element => element.Id == draft.SourceElementId);
+        if (source is null)
         {
             return;
         }
 
-        var start = GetDockPosition(source, arrow.SourceDock);
-        var end = GetDockPosition(target, arrow.TargetDock);
-        var dx = end.X - start.X;
-        var dy = end.Y - start.Y;
-        var length = Math.Sqrt(dx * dx + dy * dy);
-        var angle = Math.Atan2(dy, dx) * (180 / Math.PI);
-        var style = $"position: absolute; left: {Px(start.X)}; top: {Px(start.Y)}; width: {Px(length)}; height: {Px(Math.Max(arrow.StrokeWidth, 2))}; background: {arrow.StrokeColor}; transform-origin: 0 50%; transform: translateY(-50%) rotate({CssNumber(angle)}deg); border-radius: 999px;";
+        var start = GetDockPosition(source, draft.SourceDock);
+        var end = draft.Pointer;
+        if (draft.TargetElementId is Guid targetElementId && draft.TargetDock is DockPoint targetDock)
+        {
+            var target = Board.Elements.FirstOrDefault(element => element.Id == targetElementId);
+            if (target is not null)
+            {
+                end = GetDockPosition(target, targetDock);
+            }
+        }
+
+        var points = BuildArrowPath(start, draft.SourceDock, end, ResolvePreviewTargetDock(draft, start, end), ArrowRouteStyle.Straight);
+        RenderArrowVisual(
+            builder,
+            points,
+            GetPointAlongPolyline(points, 0.5),
+            "#2563eb",
+            2,
+            ArrowLineStyle.Dashed,
+            ArrowHeadStyle.None,
+            ArrowHeadStyle.FilledTriangle,
+            null,
+            14,
+            HorizontalLabelAlignment.Center,
+            VerticalLabelAlignment.Middle,
+            false,
+            0.6);
+    };
+
+    private void RenderArrowVisual(RenderTreeBuilder builder, IReadOnlyList<Point> points, Point labelPoint, string strokeColor, double strokeWidth, ArrowLineStyle lineStyle, ArrowHeadStyle sourceHead, ArrowHeadStyle targetHead, string? label, double labelFontSize, HorizontalLabelAlignment horizontalAlignment, VerticalLabelAlignment verticalAlignment, bool isSelected, double opacity = 1, ArrowEndpointDrag? endpointDrag = null)
+    {
+        if (points.Count < 2)
+        {
+            return;
+        }
+
+        var effectiveColor = isSelected ? "#2563eb" : strokeColor;
+        var headSize = Math.Max(16, strokeWidth * 6.5);
+        var visibleSourceHead = endpointDrag is null || !endpointDrag.Value.IsSource ? sourceHead : ArrowHeadStyle.None;
+        var visibleTargetHead = endpointDrag is null || endpointDrag.Value.IsSource ? targetHead : ArrowHeadStyle.None;
+        var linePoints = GetTrimmedArrowLinePoints(points, visibleSourceHead, visibleTargetHead, headSize);
+        var margin = Math.Max(20, headSize + strokeWidth * 2);
+        var minX = points.Min(point => point.X) - margin;
+        var minY = points.Min(point => point.Y) - margin;
+        var maxX = points.Max(point => point.X) + margin;
+        var maxY = points.Max(point => point.Y) + margin;
+        var width = Math.Max(maxX - minX, 1);
+        var height = Math.Max(maxY - minY, 1);
+        var translated = points.Select(point => new Point(point.X - minX, point.Y - minY)).ToList();
+        var translatedLine = linePoints.Select(point => new Point(point.X - minX, point.Y - minY)).ToList();
+        var polylinePoints = string.Join(" ", translatedLine.Select(point => $"{CssNumber(point.X)},{CssNumber(point.Y)}"));
+        var dashArray = GetStrokeDashArray(lineStyle);
 
         builder.OpenElement(0, "div");
-        builder.AddAttribute(1, "style", style);
+        builder.AddAttribute(1, "style", $"position:absolute; left:{Px(minX)}; top:{Px(minY)}; width:{Px(width)}; height:{Px(height)}; overflow:visible; pointer-events:none; opacity:{CssNumber(opacity)};");
+        builder.OpenElement(2, "svg");
+        builder.AddAttribute(3, "viewBox", $"0 0 {CssNumber(width)} {CssNumber(height)}");
+        builder.AddAttribute(4, "style", "width:100%; height:100%; overflow:visible; display:block;");
+
+        builder.OpenElement(5, "polyline");
+        builder.AddAttribute(6, "points", polylinePoints);
+        builder.AddAttribute(7, "fill", "none");
+        builder.AddAttribute(8, "stroke", effectiveColor);
+        builder.AddAttribute(9, "stroke-width", CssNumber(strokeWidth));
+        builder.AddAttribute(10, "stroke-linecap", "round");
+        builder.AddAttribute(11, "stroke-linejoin", "round");
+        builder.AddAttribute(12, "vector-effect", "non-scaling-stroke");
+        if (!string.IsNullOrWhiteSpace(dashArray))
+        {
+            builder.AddAttribute(13, "stroke-dasharray", dashArray);
+        }
+
         builder.CloseElement();
+
+        if (visibleSourceHead != ArrowHeadStyle.None)
+        {
+            RenderArrowHead(builder, 20, sourceHead, translated[0], translated[1], effectiveColor, strokeWidth, headSize, true);
+        }
+
+        if (visibleTargetHead != ArrowHeadStyle.None)
+        {
+            RenderArrowHead(builder, 40, targetHead, translated[^1], translated[^2], effectiveColor, strokeWidth, headSize, false);
+        }
+
+        builder.CloseElement();
+        builder.CloseElement();
+
+        if (!string.IsNullOrWhiteSpace(label))
+        {
+            var totalLength = GetPolylineLength(points);
+            var labelWidth = Math.Min(Math.Max(totalLength * 0.35, 70), 220);
+            var labelHeight = Math.Max(labelFontSize * 3, 32);
+            var labelStyle = $"position: absolute; left: {Px(labelPoint.X - labelWidth / 2)}; top: {Px(labelPoint.Y - labelHeight / 2)}; width: {Px(labelWidth)}; min-height: {Px(labelHeight)}; display:flex; align-items:{GetCssAlignItems(verticalAlignment)}; justify-content:{GetCssJustifyContent(horizontalAlignment)}; text-align:{GetCssTextAlign(horizontalAlignment)}; color: {effectiveColor}; font-size: {Px(labelFontSize)}; line-height: 1.15; pointer-events: none; white-space: pre-wrap; overflow-wrap: anywhere; box-sizing:border-box; background: transparent; border-radius: 10px; padding: 4px 8px;";
+            builder.OpenElement(2, "div");
+            builder.AddAttribute(3, "style", labelStyle);
+            builder.AddContent(4, label);
+            builder.CloseElement();
+        }
+    }
+
+    private RenderFragment RenderDraftShape(ShapeElement shape) => builder =>
+    {
+        var containerStyle = $"position: absolute; left: {Px(shape.X)}; top: {Px(shape.Y)}; width: {Px(shape.Width)}; height: {Px(shape.Height)}; overflow: visible; pointer-events: none; opacity: 0.7;";
+        var svgStyle = "width: 100%; height: 100%; overflow: visible; display: block;";
+
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "style", containerStyle);
+        builder.OpenElement(2, "svg");
+        builder.AddAttribute(3, "viewBox", $"0 0 {CssNumber(Math.Max(shape.Width, 1))} {CssNumber(Math.Max(shape.Height, 1))}");
+        builder.AddAttribute(4, "preserveAspectRatio", "none");
+        builder.AddAttribute(5, "style", svgStyle);
+        RenderShapePrimitive(builder, 6, shape, "rgba(37, 99, 235, 0.12)", "#2563eb", 2, "6 4", 0);
+        builder.CloseElement();
+        builder.CloseElement();
+    };
+
+    private static bool TryGetShapeTypeFromTool(BoardEditor.Tool tool, out ShapeType shapeType)
+    {
+        switch (tool)
+        {
+            case BoardEditor.Tool.Rectangle:
+                shapeType = ShapeType.Rectangle;
+                return true;
+            case BoardEditor.Tool.Circle:
+                shapeType = ShapeType.Ellipse;
+                return true;
+            case BoardEditor.Tool.Triangle:
+                shapeType = ShapeType.Triangle;
+                return true;
+            default:
+                shapeType = default;
+                return false;
+        }
+    }
+
+    private string GetElementLabelStyle(BoardElement element, string color)
+    {
+        var padding = Math.Max(8 / _zoom, 4);
+        return $"position: absolute; inset: 0; display: flex; align-items: {GetCssAlignItems(element.LabelVerticalAlignment)}; justify-content: {GetCssJustifyContent(element.LabelHorizontalAlignment)}; padding: {Px(padding)}; box-sizing: border-box; text-align: {GetCssTextAlign(element.LabelHorizontalAlignment)}; color: {color}; font-size: {Px(GetResolvedLabelFontSize(element))}; line-height: 1.15; white-space: pre-wrap; overflow-wrap: anywhere; pointer-events: none;";
+    }
+
+    private double GetResolvedLabelFontSize(BoardElement element)
+    {
+        if (element.LabelFontSize is double fontSize)
+        {
+            return Math.Max(1, fontSize);
+        }
+
+        if (element is ArrowElement arrow && Board is not null)
+        {
+            var source = Board.Elements.FirstOrDefault(candidate => candidate.Id == arrow.SourceElementId);
+            var target = Board.Elements.FirstOrDefault(candidate => candidate.Id == arrow.TargetElementId);
+            if (source is not null && target is not null)
+            {
+                var points = BuildArrowPath(GetDockPosition(source, arrow.SourceDock), arrow.SourceDock, GetDockPosition(target, arrow.TargetDock), arrow.TargetDock, arrow.RouteStyle);
+                var length = GetPolylineLength(points);
+                return Math.Clamp(length * 0.08, MinimumLabelFontSize, 24);
+            }
+        }
+
+        var basis = Math.Min(Math.Max(element.Width, 1), Math.Max(element.Height, 1));
+        return Math.Clamp(basis * 0.28, MinimumLabelFontSize, MaximumLabelFontSize);
+    }
+
+    private static string GetCssTextAlign(HorizontalLabelAlignment alignment) => alignment switch
+    {
+        HorizontalLabelAlignment.Left => "left",
+        HorizontalLabelAlignment.Right => "right",
+        _ => "center"
+    };
+
+    private static string GetCssJustifyContent(HorizontalLabelAlignment alignment) => alignment switch
+    {
+        HorizontalLabelAlignment.Left => "flex-start",
+        HorizontalLabelAlignment.Right => "flex-end",
+        _ => "center"
+    };
+
+    private static string GetCssAlignItems(VerticalLabelAlignment alignment) => alignment switch
+    {
+        VerticalLabelAlignment.Top => "flex-start",
+        VerticalLabelAlignment.Bottom => "flex-end",
+        _ => "center"
+    };
+
+    private IEnumerable<DockHandleDefinition> GetDockHandles()
+    {
+        if (Board is null)
+        {
+            yield break;
+        }
+
+        var draft = _draftArrow;
+        var endpointDrag = _arrowEndpointDrag;
+
+        foreach (var element in Board.Elements.Where(element => element is not ArrowElement))
+        {
+            foreach (var dockPoint in new[] { DockPoint.Top, DockPoint.Right, DockPoint.Bottom, DockPoint.Left })
+            {
+                var isActive = (draft is not null && draft.Value.SourceElementId == element.Id && draft.Value.SourceDock == dockPoint)
+                    || (endpointDrag is not null && endpointDrag.Value.HoverElementId == element.Id && endpointDrag.Value.HoverDock == dockPoint);
+                var isTarget = draft is not null && draft.Value.TargetElementId == element.Id && draft.Value.TargetDock == dockPoint;
+                yield return new DockHandleDefinition(element.Id, dockPoint, GetDockPosition(element, dockPoint), isActive, isTarget);
+            }
+        }
+    }
+
+    private IEnumerable<ArrowEndpointHandleDefinition> GetArrowEndpointHandles(ArrowElement arrow)
+    {
+        var renderData = GetArrowRenderData(arrow);
+        if (renderData is null || renderData.Value.Points.Count < 2)
+        {
+            yield break;
+        }
+
+        yield return new ArrowEndpointHandleDefinition(true, renderData.Value.Points[0], _arrowEndpointDrag is not null && _arrowEndpointDrag.Value.ArrowId == arrow.Id && _arrowEndpointDrag.Value.IsSource);
+        yield return new ArrowEndpointHandleDefinition(false, renderData.Value.Points[^1], _arrowEndpointDrag is not null && _arrowEndpointDrag.Value.ArrowId == arrow.Id && !_arrowEndpointDrag.Value.IsSource);
+    }
+
+    private string GetArrowEndpointHandleStyle(ArrowEndpointHandleDefinition handle)
+    {
+        var isHovered = _hoverArrowEndpointHandle is not null &&
+            _hoverArrowEndpointHandle.Value.IsSource == handle.IsSource &&
+            Math.Abs(_hoverArrowEndpointHandle.Value.Center.X - handle.Center.X) < 0.1 &&
+            Math.Abs(_hoverArrowEndpointHandle.Value.Center.Y - handle.Center.Y) < 0.1;
+        var size = (handle.IsActive || isHovered ? 16 : 12) / _zoom;
+        var left = handle.Center.X - (size / 2);
+        var top = handle.Center.Y - (size / 2);
+        var background = handle.IsSource ? "#ffffff" : "#2563eb";
+        var border = handle.IsSource ? "#2563eb" : "#ffffff";
+        return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(size)}; height:{Px(size)}; border-radius:999px; background:{background}; border:2px solid {border}; box-sizing:border-box; pointer-events:none; box-shadow:0 0 0 {Px(2 / _zoom)} rgba(37,99,235,0.18);";
+    }
+
+    private ArrowEndpointHandleDefinition? GetArrowEndpointHandleAtPoint(ArrowElement arrow, Point point)
+    {
+        foreach (var handle in GetArrowEndpointHandles(arrow))
+        {
+            var hitSize = 18 / _zoom;
+            if (Math.Abs(point.X - handle.Center.X) <= hitSize && Math.Abs(point.Y - handle.Center.Y) <= hitSize)
+            {
+                return handle;
+            }
+        }
+
+        return null;
+    }
+
+    private string GetDockHandleStyle(DockHandleDefinition handle)
+    {
+        var size = (handle.IsActive || handle.IsTarget ? 14 : 10) / _zoom;
+        var left = handle.Center.X - (size / 2);
+        var top = handle.Center.Y - (size / 2);
+        var background = handle.IsActive ? "#2563eb" : handle.IsTarget ? "#0f766e" : "#ffffff";
+        var border = handle.IsActive || handle.IsTarget ? "#ffffff" : "#2563eb";
+        return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(size)}; height:{Px(size)}; border-radius:999px; background:{background}; border:2px solid {border}; box-sizing:border-box; pointer-events:none; box-shadow:0 0 0 {Px(1 / _zoom)} rgba(37,99,235,0.12);";
+    }
+
+    private DockHandleDefinition? GetDockHandleAtPoint(Point point, Guid? excludedElementId = null)
+    {
+        foreach (var handle in GetDockHandles())
+        {
+            if (excludedElementId.HasValue && handle.ElementId == excludedElementId.Value)
+            {
+                continue;
+            }
+
+            var hitSize = 18 / _zoom;
+            if (Math.Abs(point.X - handle.Center.X) <= hitSize && Math.Abs(point.Y - handle.Center.Y) <= hitSize)
+            {
+                return handle;
+            }
+        }
+
+        return null;
+    }
+
+    private ArrowRenderData? GetArrowRenderData(ArrowElement arrow)
+    {
+        if (Board is null)
+        {
+            return null;
+        }
+
+        if (_arrowEndpointDrag is not null && _arrowEndpointDrag.Value.ArrowId == arrow.Id)
+        {
+            return GetArrowRenderData(_arrowEndpointDrag.Value);
+        }
+
+        var source = Board.Elements.FirstOrDefault(element => element.Id == arrow.SourceElementId);
+        var target = Board.Elements.FirstOrDefault(element => element.Id == arrow.TargetElementId);
+        if (source is null || target is null)
+        {
+            return null;
+        }
+
+        var points = BuildArrowPath(GetDockPosition(source, arrow.SourceDock), arrow.SourceDock, GetDockPosition(target, arrow.TargetDock), arrow.TargetDock, arrow.RouteStyle);
+        return new ArrowRenderData(points, GetPointAlongPolyline(points, 0.5));
+    }
+
+    private ArrowRenderData? GetArrowRenderData(ArrowEndpointDrag drag)
+    {
+        if (Board is null)
+        {
+            return null;
+        }
+
+        var arrow = Board.Elements.OfType<ArrowElement>().FirstOrDefault(candidate => candidate.Id == drag.ArrowId);
+        if (arrow is null)
+        {
+            return null;
+        }
+
+        var fixedElement = Board.Elements.FirstOrDefault(element => element.Id == drag.FixedElementId);
+        if (fixedElement is null)
+        {
+            return null;
+        }
+
+        var fixedPoint = GetDockPosition(fixedElement, drag.FixedDock);
+        var movingPoint = drag.Pointer;
+        var movingDock = ResolvePreviewTargetDock(new ArrowDraft(Guid.Empty, DockPoint.Top, drag.HoverElementId, drag.HoverDock, drag.Pointer), fixedPoint, drag.Pointer);
+
+        if (drag.HoverElementId is Guid hoverElementId && drag.HoverDock is DockPoint hoverDock)
+        {
+            var hoverElement = Board.Elements.FirstOrDefault(element => element.Id == hoverElementId);
+            if (hoverElement is not null)
+            {
+                movingPoint = GetDockPosition(hoverElement, hoverDock);
+                movingDock = hoverDock;
+            }
+        }
+
+        var points = drag.IsSource
+            ? BuildArrowPath(movingPoint, movingDock, fixedPoint, drag.FixedDock, arrow.RouteStyle)
+            : BuildArrowPath(fixedPoint, drag.FixedDock, movingPoint, movingDock, arrow.RouteStyle);
+
+        return new ArrowRenderData(points, GetPointAlongPolyline(points, 0.5));
+    }
+
+    private static List<Point> BuildArrowPath(Point start, DockPoint sourceDock, Point end, DockPoint targetDock, ArrowRouteStyle routeStyle)
+    {
+        if (routeStyle == ArrowRouteStyle.Straight)
+        {
+            return new List<Point> { start, end };
+        }
+
+        const double stub = 24;
+        var startStub = OffsetPoint(start, sourceDock, stub);
+        var endStub = OffsetPoint(end, targetDock, stub);
+        var points = new List<Point> { start, startStub };
+        var sourceHorizontal = sourceDock is DockPoint.Left or DockPoint.Right;
+        var targetHorizontal = targetDock is DockPoint.Left or DockPoint.Right;
+
+        if (sourceHorizontal && targetHorizontal)
+        {
+            var middleX = (startStub.X + endStub.X) / 2;
+            points.Add(new Point(middleX, startStub.Y));
+            points.Add(new Point(middleX, endStub.Y));
+        }
+        else if (!sourceHorizontal && !targetHorizontal)
+        {
+            var middleY = (startStub.Y + endStub.Y) / 2;
+            points.Add(new Point(startStub.X, middleY));
+            points.Add(new Point(endStub.X, middleY));
+        }
+        else if (sourceHorizontal)
+        {
+            points.Add(new Point(endStub.X, startStub.Y));
+        }
+        else
+        {
+            points.Add(new Point(startStub.X, endStub.Y));
+        }
+
+        points.Add(endStub);
+        points.Add(end);
+        return SimplifyPoints(points);
+    }
+
+    private static List<Point> SimplifyPoints(IEnumerable<Point> points)
+    {
+        var simplified = new List<Point>();
+
+        foreach (var point in points)
+        {
+            if (simplified.Count == 0)
+            {
+                simplified.Add(point);
+                continue;
+            }
+
+            var previous = simplified[^1];
+            if (Math.Abs(previous.X - point.X) < 0.1 && Math.Abs(previous.Y - point.Y) < 0.1)
+            {
+                continue;
+            }
+
+            simplified.Add(point);
+
+            while (simplified.Count >= 3)
+            {
+                var a = simplified[^3];
+                var b = simplified[^2];
+                var c = simplified[^1];
+                var sameX = Math.Abs(a.X - b.X) < 0.1 && Math.Abs(b.X - c.X) < 0.1;
+                var sameY = Math.Abs(a.Y - b.Y) < 0.1 && Math.Abs(b.Y - c.Y) < 0.1;
+                if (!sameX && !sameY)
+                {
+                    break;
+                }
+
+                simplified.RemoveAt(simplified.Count - 2);
+            }
+        }
+
+        return simplified;
+    }
+
+    private static Point OffsetPoint(Point point, DockPoint dockPoint, double distance) => dockPoint switch
+    {
+        DockPoint.Top => new Point(point.X, point.Y - distance),
+        DockPoint.Right => new Point(point.X + distance, point.Y),
+        DockPoint.Bottom => new Point(point.X, point.Y + distance),
+        DockPoint.Left => new Point(point.X - distance, point.Y),
+        _ => point
+    };
+
+    private static DockPoint ResolvePreviewTargetDock(ArrowDraft draft, Point start, Point end)
+    {
+        if (draft.TargetDock is DockPoint dockPoint)
+        {
+            return dockPoint;
+        }
+
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        return Math.Abs(dx) >= Math.Abs(dy)
+            ? dx >= 0 ? DockPoint.Left : DockPoint.Right
+            : dy >= 0 ? DockPoint.Top : DockPoint.Bottom;
+    }
+
+    private static double GetPolylineLength(IReadOnlyList<Point> points)
+    {
+        var total = 0d;
+        for (var index = 0; index < points.Count - 1; index++)
+        {
+            total += Math.Sqrt(Math.Pow(points[index + 1].X - points[index].X, 2) + Math.Pow(points[index + 1].Y - points[index].Y, 2));
+        }
+
+        return total;
+    }
+
+    private static Point GetPointAlongPolyline(IReadOnlyList<Point> points, double progress)
+    {
+        if (points.Count == 0)
+        {
+            return default;
+        }
+
+        if (points.Count == 1)
+        {
+            return points[0];
+        }
+
+        var target = GetPolylineLength(points) * Math.Clamp(progress, 0, 1);
+        var traversed = 0d;
+
+        for (var index = 0; index < points.Count - 1; index++)
+        {
+            var start = points[index];
+            var end = points[index + 1];
+            var segmentLength = Math.Sqrt(Math.Pow(end.X - start.X, 2) + Math.Pow(end.Y - start.Y, 2));
+            if (traversed + segmentLength >= target)
+            {
+                var factor = segmentLength <= 0.001 ? 0 : (target - traversed) / segmentLength;
+                return new Point(start.X + (end.X - start.X) * factor, start.Y + (end.Y - start.Y) * factor);
+            }
+
+            traversed += segmentLength;
+        }
+
+        return points[^1];
+    }
+
+    private static List<Point> GetTrimmedArrowLinePoints(IReadOnlyList<Point> points, ArrowHeadStyle sourceHead, ArrowHeadStyle targetHead, double headSize)
+    {
+        if (points.Count < 2)
+        {
+            return points.ToList();
+        }
+
+        var trimmed = points.ToList();
+
+        if (RequiresLineTrim(sourceHead))
+        {
+            trimmed[0] = MovePointToward(trimmed[0], trimmed[1], headSize * 0.92);
+        }
+
+        if (RequiresLineTrim(targetHead))
+        {
+            var lastIndex = trimmed.Count - 1;
+            trimmed[lastIndex] = MovePointToward(trimmed[lastIndex], trimmed[lastIndex - 1], headSize * 0.92);
+        }
+
+        return trimmed;
+    }
+
+    private static bool RequiresLineTrim(ArrowHeadStyle headStyle) => headStyle is ArrowHeadStyle.FilledTriangle or ArrowHeadStyle.OpenTriangle;
+
+    private static Point MovePointToward(Point point, Point toward, double distance)
+    {
+        var dx = toward.X - point.X;
+        var dy = toward.Y - point.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 0.001)
+        {
+            return point;
+        }
+
+        var safeDistance = Math.Min(distance, Math.Max(0, length - 0.5));
+        var factor = safeDistance / length;
+        return new Point(point.X + dx * factor, point.Y + dy * factor);
+    }
+
+    private void RenderArrowHead(RenderTreeBuilder builder, int sequence, ArrowHeadStyle style, Point tip, Point adjacent, string color, double strokeWidth, double size, bool reverse)
+    {
+        if (style == ArrowHeadStyle.None)
+        {
+            return;
+        }
+
+        var dx = tip.X - adjacent.X;
+        var dy = tip.Y - adjacent.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+        if (length < 0.001)
+        {
+            return;
+        }
+
+        var ux = dx / length;
+        var uy = dy / length;
+        if (reverse)
+        {
+            ux *= -1;
+            uy *= -1;
+        }
+
+        var normalX = -uy;
+        var normalY = ux;
+        var baseDistance = size;
+        var wing = size * 0.52;
+        var baseCenter = new Point(tip.X - ux * baseDistance, tip.Y - uy * baseDistance);
+        var left = new Point(baseCenter.X + normalX * wing, baseCenter.Y + normalY * wing);
+        var right = new Point(baseCenter.X - normalX * wing, baseCenter.Y - normalY * wing);
+        var circleRadius = Math.Max(strokeWidth * 1.4, size * 0.28);
+
+        switch (style)
+        {
+            case ArrowHeadStyle.FilledTriangle:
+                builder.OpenElement(sequence, "polygon");
+                builder.AddAttribute(sequence + 1, "points", $"{CssNumber(tip.X)},{CssNumber(tip.Y)} {CssNumber(left.X)},{CssNumber(left.Y)} {CssNumber(right.X)},{CssNumber(right.Y)}");
+                builder.AddAttribute(sequence + 2, "fill", color);
+                builder.CloseElement();
+                break;
+            case ArrowHeadStyle.OpenTriangle:
+                builder.OpenElement(sequence, "polyline");
+                builder.AddAttribute(sequence + 1, "points", $"{CssNumber(left.X)},{CssNumber(left.Y)} {CssNumber(tip.X)},{CssNumber(tip.Y)} {CssNumber(right.X)},{CssNumber(right.Y)}");
+                builder.AddAttribute(sequence + 2, "fill", "none");
+                builder.AddAttribute(sequence + 3, "stroke", color);
+                builder.AddAttribute(sequence + 4, "stroke-width", CssNumber(Math.Max(strokeWidth, 1.5)));
+                builder.AddAttribute(sequence + 5, "stroke-linecap", "round");
+                builder.AddAttribute(sequence + 6, "stroke-linejoin", "round");
+                builder.CloseElement();
+                break;
+            case ArrowHeadStyle.FilledCircle:
+                builder.OpenElement(sequence, "circle");
+                builder.AddAttribute(sequence + 1, "cx", CssNumber(tip.X - ux * circleRadius * 0.2));
+                builder.AddAttribute(sequence + 2, "cy", CssNumber(tip.Y - uy * circleRadius * 0.2));
+                builder.AddAttribute(sequence + 3, "r", CssNumber(circleRadius));
+                builder.AddAttribute(sequence + 4, "fill", color);
+                builder.CloseElement();
+                break;
+            case ArrowHeadStyle.OpenCircle:
+                builder.OpenElement(sequence, "circle");
+                builder.AddAttribute(sequence + 1, "cx", CssNumber(tip.X - ux * circleRadius * 0.2));
+                builder.AddAttribute(sequence + 2, "cy", CssNumber(tip.Y - uy * circleRadius * 0.2));
+                builder.AddAttribute(sequence + 3, "r", CssNumber(circleRadius));
+                builder.AddAttribute(sequence + 4, "fill", "#ffffff");
+                builder.AddAttribute(sequence + 5, "stroke", color);
+                builder.AddAttribute(sequence + 6, "stroke-width", CssNumber(Math.Max(strokeWidth, 1.5)));
+                builder.CloseElement();
+                break;
+        }
+    }
+
+    private IEnumerable<ResizeHandleDefinition> GetResizeHandles(BoardElement element)
+    {
+        var left = element.X;
+        var centerX = element.X + (element.Width / 2);
+        var right = element.X + element.Width;
+        var top = element.Y;
+        var centerY = element.Y + (element.Height / 2);
+        var bottom = element.Y + element.Height;
+
+        yield return new ResizeHandleDefinition(ResizeHandle.NorthWest, new Point(left, top));
+        yield return new ResizeHandleDefinition(ResizeHandle.North, new Point(centerX, top));
+        yield return new ResizeHandleDefinition(ResizeHandle.NorthEast, new Point(right, top));
+        yield return new ResizeHandleDefinition(ResizeHandle.East, new Point(right, centerY));
+        yield return new ResizeHandleDefinition(ResizeHandle.SouthEast, new Point(right, bottom));
+        yield return new ResizeHandleDefinition(ResizeHandle.South, new Point(centerX, bottom));
+        yield return new ResizeHandleDefinition(ResizeHandle.SouthWest, new Point(left, bottom));
+        yield return new ResizeHandleDefinition(ResizeHandle.West, new Point(left, centerY));
+    }
+
+    private string GetResizeHandleStyle(ResizeHandleDefinition handle)
+    {
+        var size = ResizeHandleScreenSize / _zoom;
+        var left = handle.Center.X - (size / 2);
+        var top = handle.Center.Y - (size / 2);
+        return $"position: absolute; left: {Px(left)}; top: {Px(top)}; width: {Px(size)}; height: {Px(size)}; background: #ffffff; border: 2px solid #2563eb; border-radius: 999px; box-sizing: border-box; pointer-events: none;";
+    }
+
+    private ResizeHandle GetResizeHandleAtPoint(Point point)
+    {
+        if (SelectedElement is null || !CanResizeSelectedElement)
+        {
+            return ResizeHandle.None;
+        }
+
+        var hitSize = ResizeHandleHitScreenSize / _zoom;
+        var halfHitSize = hitSize / 2;
+
+        foreach (var handle in GetResizeHandles(SelectedElement))
+        {
+            if (Math.Abs(point.X - handle.Center.X) <= halfHitSize && Math.Abs(point.Y - handle.Center.Y) <= halfHitSize)
+            {
+                return handle.Handle;
+            }
+        }
+
+        return ResizeHandle.None;
+    }
+
+    private void ResizeSelectedElement(Point point)
+    {
+        if (SelectedElement is null || _activeResizeHandle == ResizeHandle.None)
+        {
+            return;
+        }
+
+        var pointerX = SanitizeCoordinate(point.X);
+        var pointerY = SanitizeCoordinate(point.Y);
+        var nextX = _resizeStartBounds.X;
+        var nextY = _resizeStartBounds.Y;
+        var nextWidth = _resizeStartBounds.Width;
+        var nextHeight = _resizeStartBounds.Height;
+        var minSize = MinimumRectangleSize;
+        var right = _resizeStartBounds.X + _resizeStartBounds.Width;
+        var bottom = _resizeStartBounds.Y + _resizeStartBounds.Height;
+
+        switch (_activeResizeHandle)
+        {
+            case ResizeHandle.NorthWest:
+                nextX = Math.Min(pointerX, right - minSize);
+                nextY = Math.Min(pointerY, bottom - minSize);
+                nextWidth = right - nextX;
+                nextHeight = bottom - nextY;
+                break;
+            case ResizeHandle.North:
+                nextY = Math.Min(pointerY, bottom - minSize);
+                nextHeight = bottom - nextY;
+                break;
+            case ResizeHandle.NorthEast:
+                nextY = Math.Min(pointerY, bottom - minSize);
+                nextWidth = Math.Max(minSize, pointerX - _resizeStartBounds.X);
+                nextHeight = bottom - nextY;
+                break;
+            case ResizeHandle.East:
+                nextWidth = Math.Max(minSize, pointerX - _resizeStartBounds.X);
+                break;
+            case ResizeHandle.SouthEast:
+                nextWidth = Math.Max(minSize, pointerX - _resizeStartBounds.X);
+                nextHeight = Math.Max(minSize, pointerY - _resizeStartBounds.Y);
+                break;
+            case ResizeHandle.South:
+                nextHeight = Math.Max(minSize, pointerY - _resizeStartBounds.Y);
+                break;
+            case ResizeHandle.SouthWest:
+                nextX = Math.Min(pointerX, right - minSize);
+                nextWidth = right - nextX;
+                nextHeight = Math.Max(minSize, pointerY - _resizeStartBounds.Y);
+                break;
+            case ResizeHandle.West:
+                nextX = Math.Min(pointerX, right - minSize);
+                nextWidth = right - nextX;
+                break;
+        }
+
+        nextWidth = Math.Max(minSize, SanitizeCoordinate(nextWidth));
+        nextHeight = Math.Max(minSize, SanitizeCoordinate(nextHeight));
+        nextX = SanitizeCoordinate(nextX);
+        nextY = SanitizeCoordinate(nextY);
+
+        if (Math.Abs(SelectedElement.X - nextX) > 0.1 ||
+            Math.Abs(SelectedElement.Y - nextY) > 0.1 ||
+            Math.Abs(SelectedElement.Width - nextWidth) > 0.1 ||
+            Math.Abs(SelectedElement.Height - nextHeight) > 0.1)
+        {
+            SelectedElement.X = nextX;
+            SelectedElement.Y = nextY;
+            SelectedElement.Width = nextWidth;
+            SelectedElement.Height = nextHeight;
+            _hasInteractionChanged = true;
+        }
+    }
+
+    private static string GetResizeCursor(ResizeHandle handle) => handle switch
+    {
+        ResizeHandle.North or ResizeHandle.South => "ns-resize",
+        ResizeHandle.East or ResizeHandle.West => "ew-resize",
+        ResizeHandle.NorthEast or ResizeHandle.SouthWest => "nesw-resize",
+        ResizeHandle.NorthWest or ResizeHandle.SouthEast => "nwse-resize",
+        _ => "grab"
     };
 }

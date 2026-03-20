@@ -5,6 +5,7 @@
 @inject UserService UserService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
+@inject IJSRuntime JS
 
 <PageTitle>Orim – Dashboard</PageTitle>
 
@@ -40,6 +41,17 @@
                                 <MudText Typo="Typo.h6" Style="font-weight: 600;">@board.Title</MudText>
                             </CardHeaderContent>
                             <CardHeaderActions>
+                                @if (board.OwnerId == _userId)
+                                {
+                                    <div @onclick:stopPropagation="true">
+                                        <MudTooltip Text="Board löschen" Arrow="true">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                                           Color="Color.Error"
+                                                           Size="Size.Small"
+                                                           OnClick="@(async () => await DeleteBoardFromOverviewAsync(board))" />
+                                        </MudTooltip>
+                                    </div>
+                                }
                                 <MudChip T="string" Size="Size.Small"
                                          Color="@GetVisibilityColor(board.Visibility)">
                                     @board.Visibility
@@ -112,6 +124,19 @@
         _createDialogVisible = false;
         _newBoardTitle = "";
         Navigation.NavigateTo($"/board/{board.Id}");
+    }
+
+    private async Task DeleteBoardFromOverviewAsync(Board board)
+    {
+        var confirmed = await JS.InvokeAsync<bool>("confirm", $"Board '{board.Title}' wirklich löschen?");
+        if (!confirmed)
+        {
+            return;
+        }
+
+        await BoardService.DeleteBoardAsync(board.Id);
+        _boards?.RemoveAll(candidate => candidate.Id == board.Id);
+        StateHasChanged();
     }
 
     private void OpenBoard(Guid boardId) => Navigation.NavigateTo($"/board/{boardId}");

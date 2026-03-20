@@ -5,52 +5,149 @@
     <MudText Typo="Typo.subtitle2" Class="mb-1" Style="font-weight: 700;">Eigenschaften</MudText>
     <MudText Typo="Typo.body2" Class="mb-3" Style="color: #667085;">Element bearbeiten</MudText>
 
-    <MudGrid Spacing="2">
-        <MudItem xs="6">
-            <MudNumericField Value="Element.X" Label="X" Variant="Variant.Outlined" Size="Size.Small"
-                             Margin="Margin.Dense" T="double"
-                             ValueChanged="@(v => { Element.X = v; OnValueChanged(); })" />
-        </MudItem>
-        <MudItem xs="6">
-            <MudNumericField Value="Element.Y" Label="Y" Variant="Variant.Outlined" Size="Size.Small"
-                             Margin="Margin.Dense" T="double"
-                             ValueChanged="@(v => { Element.Y = v; OnValueChanged(); })" />
-        </MudItem>
-        <MudItem xs="6">
-            <MudNumericField Value="Element.Width" Label="Breite" Variant="Variant.Outlined" Size="Size.Small"
-                             Margin="Margin.Dense" T="double"
-                             ValueChanged="@(v => { Element.Width = v; OnValueChanged(); })" />
-        </MudItem>
-        <MudItem xs="6">
-            <MudNumericField Value="Element.Height" Label="Höhe" Variant="Variant.Outlined" Size="Size.Small"
-                             Margin="Margin.Dense" T="double"
-                             ValueChanged="@(v => { Element.Height = v; OnValueChanged(); })" />
-        </MudItem>
-    </MudGrid>
+    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+        <div>
+            <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">X</label>
+            <input type="number" value="@Element.X.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                   @onchange="HandleXChange"
+                   style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
+        </div>
+        <div>
+            <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Y</label>
+            <input type="number" value="@Element.Y.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                   @onchange="HandleYChange"
+                   style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
+        </div>
+        <div>
+            <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Breite</label>
+            <input type="number" value="@Element.Width.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                   @onchange="HandleWidthChange"
+                   style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
+        </div>
+        <div>
+            <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Höhe</label>
+            <input type="number" value="@Element.Height.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                   @onchange="HandleHeightChange"
+                   style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
+        </div>
+    </div>
+
+    @if (SupportsLabel(Element))
+    {
+        <MudDivider Class="my-3" />
+        <div>
+            <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Label</label>
+            <textarea rows="4"
+                      value="@Element.Label"
+                      @oninput="HandleLabelTextInput"
+                      style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:8px; font-size:14px; box-sizing:border-box; resize:vertical; font-family:inherit; line-height:1.3;">@Element.Label</textarea>
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
+            <div>
+                <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Horizontal</label>
+                <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" Style="border-radius: 8px;">
+                    <MudTooltip Text="Links" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.FormatAlignLeft"
+                                       Color="@(Element.LabelHorizontalAlignment == HorizontalLabelAlignment.Left ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SetLabelHorizontalAlignment(HorizontalLabelAlignment.Left))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Zentriert" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.FormatAlignCenter"
+                                       Color="@(Element.LabelHorizontalAlignment == HorizontalLabelAlignment.Center ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SetLabelHorizontalAlignment(HorizontalLabelAlignment.Center))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Rechts" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.FormatAlignRight"
+                                       Color="@(Element.LabelHorizontalAlignment == HorizontalLabelAlignment.Right ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SetLabelHorizontalAlignment(HorizontalLabelAlignment.Right))" />
+                    </MudTooltip>
+                </MudButtonGroup>
+            </div>
+            <div>
+                <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Vertikal</label>
+                <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" Style="border-radius: 8px;">
+                    <MudTooltip Text="Oben" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.VerticalAlignTop"
+                                       Color="@(Element.LabelVerticalAlignment == VerticalLabelAlignment.Top ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SetLabelVerticalAlignment(VerticalLabelAlignment.Top))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Mitte" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.VerticalAlignCenter"
+                                       Color="@(Element.LabelVerticalAlignment == VerticalLabelAlignment.Middle ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SetLabelVerticalAlignment(VerticalLabelAlignment.Middle))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Unten" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.VerticalAlignBottom"
+                                       Color="@(Element.LabelVerticalAlignment == VerticalLabelAlignment.Bottom ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SetLabelVerticalAlignment(VerticalLabelAlignment.Bottom))" />
+                    </MudTooltip>
+                </MudButtonGroup>
+            </div>
+        </div>
+
+        <MudCheckBox Value="_labelAutoSize" Label="Schriftgröße automatisch" Dense="true" T="bool"
+                     ValueChanged="@((bool value) => HandleLabelAutoSizeChanged(value))" />
+
+        @if (!_labelAutoSize)
+        {
+            <div class="mt-2">
+                <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Schriftgröße</label>
+                <input type="number" min="1"
+                       value="@_labelFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+                       @onchange="HandleLabelFontSizeChange"
+                       style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
+            </div>
+        }
+    }
 
     @if (Element is ShapeElement shape)
     {
-        <MudDivider Class="my-3" />
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:8px;">
+            <div style="@GetColorSwatchStyle(ToCssColor(_fillColor, true))"></div>
+            <span style="font-size:12px; color:#667085;">@ToCssColor(_fillColor, true)</span>
+        </div>
         <MudColorPicker Value="_fillColor" Label="Füllung" Variant="Variant.Outlined"
-                        DisableAlpha="true" Class="mb-2"
-                        ValueChanged="@(c => { _fillColor = c; shape.FillColor = c.ToString(MudColorOutputFormats.Hex); OnValueChanged(); })" />
+                        Class="mb-2"
+                        ValueChanged="@(c => { _fillColor = c; shape.FillColor = ToCssColor(c, true); OnValueChanged(); })" />
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
+            <div style="@GetColorSwatchStyle(ToCssColor(_strokeColor))"></div>
+            <span style="font-size:12px; color:#667085;">@ToCssColor(_strokeColor)</span>
+        </div>
         <MudColorPicker Value="_strokeColor" Label="Rahmen" Variant="Variant.Outlined"
                         DisableAlpha="true" Class="mb-2"
-                        ValueChanged="@(c => { _strokeColor = c; shape.StrokeColor = c.ToString(MudColorOutputFormats.Hex); OnValueChanged(); })" />
-        <MudNumericField Value="shape.StrokeWidth" Label="Rahmenbreite" Variant="Variant.Outlined"
-                         Size="Size.Small" Margin="Margin.Dense" T="double"
-                         ValueChanged="@(v => { shape.StrokeWidth = v; OnValueChanged(); })" />
+                        ValueChanged="@(c => { _strokeColor = c; shape.StrokeColor = ToCssColor(c); OnValueChanged(); })" />
+        <MudNumericField @bind-Value="ShapeStrokeWidthValue" Label="Rahmenbreite" Variant="Variant.Outlined"
+                 Size="Size.Small" Margin="Margin.Dense" T="double" />
+        <MudSelect Value="shape.BorderLineStyle" Label="Linienstil" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" T="BorderLineStyle"
+                   ValueChanged="@(v => { shape.BorderLineStyle = v; OnValueChanged(); })">
+            @foreach (var option in _borderStyleOptions)
+            {
+                <MudSelectItem Value="option.Style">
+                    <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
+                        <svg width="56" height="14" viewBox="0 0 56 14" aria-hidden="true" focusable="false">
+                            <line x1="2" y1="7" x2="54" y2="7" stroke="#0f172a" stroke-width="2.5" stroke-dasharray="@option.PreviewDashArray" />
+                        </svg>
+                        <span>@option.Label</span>
+                    </div>
+                </MudSelectItem>
+            }
+        </MudSelect>
     }
     else if (Element is TextElement text)
     {
         <MudDivider Class="my-3" />
         <MudTextField Value="text.Text" Label="Text" Variant="Variant.Outlined"
                       ValueChanged="@((string v) => { text.Text = v; OnValueChanged(); })" />
-        <MudNumericField Value="text.FontSize" Label="Schriftgröße" Variant="Variant.Outlined"
-                         Size="Size.Small" Margin="Margin.Dense" T="double"
-                         ValueChanged="@(v => { text.FontSize = v; OnValueChanged(); })" />
+        <MudNumericField @bind-Value="TextFontSizeValue" Label="Schriftgröße" Variant="Variant.Outlined"
+                 Size="Size.Small" Margin="Margin.Dense" T="double" />
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:8px;">
+            <div style="@GetColorSwatchStyle(ToCssColor(_textColor))"></div>
+            <span style="font-size:12px; color:#667085;">@ToCssColor(_textColor)</span>
+        </div>
         <MudColorPicker Value="_textColor" Label="Farbe" Variant="Variant.Outlined" DisableAlpha="true"
-                        ValueChanged="@(c => { _textColor = c; text.Color = c.ToString(MudColorOutputFormats.Hex); OnValueChanged(); })" />
+                        ValueChanged="@(c => { _textColor = c; text.Color = ToCssColor(c); OnValueChanged(); })" />
         <div class="d-flex gap-2 mt-2">
             <MudCheckBox Value="text.IsBold" Label="Fett" Dense="true" T="bool"
                          ValueChanged="@(v => { text.IsBold = v; OnValueChanged(); })" />
@@ -61,17 +158,95 @@
     else if (Element is ArrowElement arrow)
     {
         <MudDivider Class="my-3" />
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:8px;">
+            <div style="@GetColorSwatchStyle(ToCssColor(_arrowColor))"></div>
+            <span style="font-size:12px; color:#667085;">@ToCssColor(_arrowColor)</span>
+        </div>
         <MudColorPicker Value="_arrowColor" Label="Farbe" Variant="Variant.Outlined" DisableAlpha="true"
-                        ValueChanged="@(c => { _arrowColor = c; arrow.StrokeColor = c.ToString(MudColorOutputFormats.Hex); OnValueChanged(); })" />
-        <MudNumericField Value="arrow.StrokeWidth" Label="Linienbreite" Variant="Variant.Outlined"
-                         Size="Size.Small" Margin="Margin.Dense" T="double"
-                         ValueChanged="@(v => { arrow.StrokeWidth = v; OnValueChanged(); })" />
+                        ValueChanged="@(c => { _arrowColor = c; arrow.StrokeColor = ToCssColor(c); OnValueChanged(); })" />
+        <MudNumericField @bind-Value="ArrowStrokeWidthValue" Label="Linienbreite" Variant="Variant.Outlined"
+                 Size="Size.Small" Margin="Margin.Dense" T="double" />
+        <MudSelect Value="arrow.LineStyle" Label="Linienmuster" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" T="ArrowLineStyle"
+                   ValueChanged="@(v => { arrow.LineStyle = v; OnValueChanged(); })">
+            @foreach (var option in _arrowStyleOptions)
+            {
+                <MudSelectItem Value="option.Style">@option.Label</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect Value="arrow.RouteStyle" Label="Routing" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" T="ArrowRouteStyle"
+                   ValueChanged="@(v => { arrow.RouteStyle = v; OnValueChanged(); })">
+            @foreach (var option in _routeStyleOptions)
+            {
+                <MudSelectItem Value="option.Style">@option.Label</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect Value="arrow.SourceHeadStyle" Label="Pfeilspitze Anfang" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" T="ArrowHeadStyle"
+                   ValueChanged="@(v => { arrow.SourceHeadStyle = v; OnValueChanged(); })">
+            @foreach (var option in _arrowHeadOptions)
+            {
+                <MudSelectItem Value="option.Style">
+                    <div title="@option.Label" aria-label="@option.Label" style="display:flex; align-items:center; justify-content:center; min-height:28px; font-size:20px; line-height:1; color:#0f172a;">
+                        @GetArrowHeadOptionSymbol(option.Style)
+                    </div>
+                </MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect Value="arrow.TargetHeadStyle" Label="Pfeilspitze Ende" Variant="Variant.Outlined"
+                   Margin="Margin.Dense" T="ArrowHeadStyle"
+                   ValueChanged="@(v => { arrow.TargetHeadStyle = v; OnValueChanged(); })">
+            @foreach (var option in _arrowHeadOptions)
+            {
+                <MudSelectItem Value="option.Style">
+                    <div title="@option.Label" aria-label="@option.Label" style="display:flex; align-items:center; justify-content:center; min-height:28px; font-size:20px; line-height:1; color:#0f172a;">
+                        @GetArrowHeadOptionSymbol(option.Style)
+                    </div>
+                </MudSelectItem>
+            }
+        </MudSelect>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <MudSelect Value="arrow.SourceDock" Label="Dock Start" Variant="Variant.Outlined"
+                       Margin="Margin.Dense" T="DockPoint"
+                       ValueChanged="@(v => { arrow.SourceDock = v; OnValueChanged(); })">
+                @foreach (var option in _dockPointOptions)
+                {
+                    <MudSelectItem Value="option.Dock">@option.Label</MudSelectItem>
+                }
+            </MudSelect>
+            <MudSelect Value="arrow.TargetDock" Label="Dock Ende" Variant="Variant.Outlined"
+                       Margin="Margin.Dense" T="DockPoint"
+                       ValueChanged="@(v => { arrow.TargetDock = v; OnValueChanged(); })">
+                @foreach (var option in _dockPointOptions)
+                {
+                    <MudSelectItem Value="option.Dock">@option.Label</MudSelectItem>
+                }
+            </MudSelect>
+        </div>
+    }
+    else if (Element is IconElement icon)
+    {
+        <MudDivider Class="my-3" />
+        <div style="display:flex; align-items:center; gap:10px; margin-bottom:8px; padding:10px; border:1px solid #e5e7eb; border-radius:8px; background:#fff;">
+            <span class="mdi @icon.IconName" style="font-size:28px; line-height:1; color:@icon.Color;"></span>
+            <span style="font-size:12px; color:#667085; overflow-wrap:anywhere;">@icon.IconName</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:8px;">
+            <div style="@GetColorSwatchStyle(ToCssColor(_iconColor))"></div>
+            <span style="font-size:12px; color:#667085;">@ToCssColor(_iconColor)</span>
+        </div>
+        <MudColorPicker Value="_iconColor" Label="Symbolfarbe" Variant="Variant.Outlined" DisableAlpha="true"
+                        ValueChanged="@(c => { _iconColor = c; icon.Color = ToCssColor(c); OnValueChanged(); })" />
     }
 
     <MudDivider Class="my-3" />
-    <MudNumericField Value="Element.ZIndex" Label="Z-Index" Variant="Variant.Outlined"
-                     Size="Size.Small" Margin="Margin.Dense" T="int"
-                     ValueChanged="@(v => { Element.ZIndex = v; OnValueChanged(); })" />
+    <div>
+        <label style="font-size:12px; color:#667085; display:block; margin-bottom:2px;">Z-Index</label>
+        <input type="number" value="@Element.ZIndex.ToString(System.Globalization.CultureInfo.InvariantCulture)"
+               @onchange="HandleZIndexChange"
+               style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
+    </div>
 </MudPaper>
 
 @code {
@@ -82,21 +257,221 @@
     private MudColor _strokeColor = new("#000000");
     private MudColor _textColor = new("#000000");
     private MudColor _arrowColor = new("#000000");
+    private MudColor _iconColor = new("#000000");
+    private double _shapeStrokeWidth;
+    private double _textFontSize;
+    private double _arrowStrokeWidth;
+    private double _labelFontSize;
+    private bool _labelAutoSize;
+    private readonly BorderStyleOption[] _borderStyleOptions =
+    [
+        new(BorderLineStyle.Solid, "Durchgezogen", string.Empty),
+        new(BorderLineStyle.Dashed, "Gestrichelt", "10 6"),
+        new(BorderLineStyle.Dotted, "Gepunktet", "2 5"),
+        new(BorderLineStyle.DashDot, "Strich-Punkt", "10 4 2 4"),
+        new(BorderLineStyle.LongDash, "Langer Strich", "16 6"),
+        new(BorderLineStyle.Double, "Doppelt", string.Empty)
+    ];
+    private readonly ArrowStyleOption[] _arrowStyleOptions =
+    [
+        new(ArrowLineStyle.Solid, "Durchgezogen"),
+        new(ArrowLineStyle.Dashed, "Gestrichelt"),
+        new(ArrowLineStyle.Dotted, "Gepunktet"),
+        new(ArrowLineStyle.DashDot, "Strich-Punkt"),
+        new(ArrowLineStyle.LongDash, "Langer Strich")
+    ];
+    private readonly ArrowHeadOption[] _arrowHeadOptions =
+    [
+        new(ArrowHeadStyle.None, "Keine"),
+        new(ArrowHeadStyle.FilledTriangle, "Dreieck gefüllt"),
+        new(ArrowHeadStyle.OpenTriangle, "Dreieck offen"),
+        new(ArrowHeadStyle.FilledCircle, "Kreis gefüllt"),
+        new(ArrowHeadStyle.OpenCircle, "Kreis offen")
+    ];
+    private readonly RouteStyleOption[] _routeStyleOptions =
+    [
+        new(ArrowRouteStyle.Straight, "Luftlinie"),
+        new(ArrowRouteStyle.Orthogonal, "Rechte Winkel")
+    ];
+    private readonly DockPointOption[] _dockPointOptions =
+    [
+        new(DockPoint.Top, "Oben"),
+        new(DockPoint.Right, "Rechts"),
+        new(DockPoint.Bottom, "Unten"),
+        new(DockPoint.Left, "Links")
+    ];
+
+    private sealed record BorderStyleOption(BorderLineStyle Style, string Label, string PreviewDashArray);
+    private sealed record ArrowStyleOption(ArrowLineStyle Style, string Label);
+    private sealed record ArrowHeadOption(ArrowHeadStyle Style, string Label);
+    private sealed record RouteStyleOption(ArrowRouteStyle Style, string Label);
+    private sealed record DockPointOption(DockPoint Dock, string Label);
 
     protected override void OnParametersSet()
     {
+        _labelAutoSize = Element.LabelFontSize is null;
+        _labelFontSize = Element.LabelFontSize ?? GetDefaultLabelFontSize(Element);
+
         if (Element is ShapeElement shape)
         {
             _fillColor = new MudColor(shape.FillColor);
             _strokeColor = new MudColor(shape.StrokeColor);
+            _shapeStrokeWidth = shape.StrokeWidth;
         }
         else if (Element is TextElement text)
         {
             _textColor = new MudColor(text.Color);
+            _textFontSize = text.FontSize;
         }
         else if (Element is ArrowElement arrow)
         {
             _arrowColor = new MudColor(arrow.StrokeColor);
+            _arrowStrokeWidth = arrow.StrokeWidth;
+        }
+        else if (Element is IconElement icon)
+        {
+            _iconColor = new MudColor(icon.Color);
+        }
+    }
+
+    private double ShapeStrokeWidthValue
+    {
+        get => _shapeStrokeWidth;
+        set
+        {
+            if (Math.Abs(_shapeStrokeWidth - value) < 0.0001)
+            {
+                return;
+            }
+
+            _shapeStrokeWidth = value;
+
+            if (Element is ShapeElement shape)
+            {
+                shape.StrokeWidth = value;
+                OnValueChanged();
+            }
+        }
+    }
+
+    private double TextFontSizeValue
+    {
+        get => _textFontSize;
+        set
+        {
+            if (Math.Abs(_textFontSize - value) < 0.0001)
+            {
+                return;
+            }
+
+            _textFontSize = value;
+
+            if (Element is TextElement text)
+            {
+                text.FontSize = value;
+                OnValueChanged();
+            }
+        }
+    }
+
+    private double ArrowStrokeWidthValue
+    {
+        get => _arrowStrokeWidth;
+        set
+        {
+            if (Math.Abs(_arrowStrokeWidth - value) < 0.0001)
+            {
+                return;
+            }
+
+            _arrowStrokeWidth = value;
+
+            if (Element is ArrowElement arrow)
+            {
+                arrow.StrokeWidth = value;
+                OnValueChanged();
+            }
+        }
+    }
+
+    private void HandleXChange(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
+        { Element.X = v; OnValueChanged(); }
+    }
+
+    private void HandleYChange(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
+        { Element.Y = v; OnValueChanged(); }
+    }
+
+    private void HandleWidthChange(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
+        { Element.Width = v; OnValueChanged(); }
+    }
+
+    private void HandleHeightChange(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
+        { Element.Height = v; OnValueChanged(); }
+    }
+
+    private void HandleZIndexChange(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
+        { Element.ZIndex = v; OnValueChanged(); }
+    }
+
+    private void HandleLabelChanged(string value)
+    {
+        Element.Label = value;
+        OnValueChanged();
+    }
+
+    private void HandleLabelTextInput(ChangeEventArgs e)
+    {
+        HandleLabelChanged(e.Value?.ToString() ?? string.Empty);
+    }
+
+    private void HandleLabelAutoSizeChanged(bool value)
+    {
+        _labelAutoSize = value;
+        Element.LabelFontSize = value ? null : Math.Max(1, _labelFontSize);
+        OnValueChanged();
+    }
+
+    private void SetLabelHorizontalAlignment(HorizontalLabelAlignment alignment)
+    {
+        if (Element.LabelHorizontalAlignment == alignment)
+        {
+            return;
+        }
+
+        Element.LabelHorizontalAlignment = alignment;
+        OnValueChanged();
+    }
+
+    private void SetLabelVerticalAlignment(VerticalLabelAlignment alignment)
+    {
+        if (Element.LabelVerticalAlignment == alignment)
+        {
+            return;
+        }
+
+        Element.LabelVerticalAlignment = alignment;
+        OnValueChanged();
+    }
+
+    private void HandleLabelFontSizeChange(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
+        {
+            _labelFontSize = Math.Max(1, v);
+            Element.LabelFontSize = _labelFontSize;
+            _labelAutoSize = false;
+            OnValueChanged();
         }
     }
 
@@ -104,4 +479,28 @@
     {
         await OnChanged.InvokeAsync();
     }
+
+    private static bool SupportsLabel(BoardElement element) => element is not TextElement and not StickyNoteElement;
+
+    private static double GetDefaultLabelFontSize(BoardElement element) =>
+        element is ArrowElement
+            ? 14
+            : Math.Clamp(Math.Min(Math.Max(element.Width, 1), Math.Max(element.Height, 1)) * 0.28, 10, 48);
+
+    private static string GetColorSwatchStyle(string color) =>
+        $"width: 18px; height: 18px; border-radius: 4px; border: 1px solid #b0bec5; background: {color}; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); flex: 0 0 auto;";
+
+    private static string GetArrowHeadOptionSymbol(ArrowHeadStyle style) => style switch
+    {
+        ArrowHeadStyle.FilledTriangle => "▲",
+        ArrowHeadStyle.OpenTriangle => "△",
+        ArrowHeadStyle.FilledCircle => "●",
+        ArrowHeadStyle.OpenCircle => "○",
+        _ => "-"
+    };
+
+    private static string ToCssColor(MudColor color, bool includeAlpha = false) =>
+        includeAlpha
+            ? color.ToString(MudColorOutputFormats.RGBA)
+            : color.ToString(MudColorOutputFormats.Hex);
 }
