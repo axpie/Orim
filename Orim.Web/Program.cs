@@ -39,11 +39,51 @@ using (var scope = app.Services.CreateScope())
 {
     var userService = scope.ServiceProvider.GetRequiredService<UserService>();
     var seedUsername = app.Configuration.GetValue<string>("SeedAdmin:Username") ?? "admin";
-    var seedPassword = app.Configuration.GetValue<string>("SeedAdmin:Password") ?? "Admin123!";
+    var seedPassword = app.Configuration.GetValue<string>("SeedAdmin:Password");
+    var resetPasswordOnStartup = app.Configuration.GetValue<bool>("SeedAdmin:ResetPasswordOnStartup");
     var existingAdmin = await userService.GetByUsernameAsync(seedUsername);
+
     if (existingAdmin is null)
     {
-        await userService.CreateUserAsync(seedUsername, seedPassword, UserRole.Admin);
+        if (string.IsNullOrWhiteSpace(seedPassword))
+        {
+            if (app.Environment.IsDevelopment())
+            {
+                app.Logger.LogWarning(
+                    "No admin user exists and SeedAdmin:Password is not configured. Configure a local secret or environment variable before first login.");
+            }
+            else
+            {
+                throw new InvalidOperationException(
+                    "No admin user exists and SeedAdmin:Password is not configured. Set SeedAdmin__Password in Azure App Service settings or via an Azure Key Vault reference before startup.");
+            }
+        }
+        else
+        {
+            await userService.CreateUserAsync(seedUsername, seedPassword, UserRole.Admin);
+            app.Logger.LogInformation(
+                "Seeded initial admin user '{Username}'. Remove SeedAdmin__Password from configuration after the first successful deployment.",
+                seedUsername);
+        }
+    }
+    else if (resetPasswordOnStartup)
+    {
+        if (string.IsNullOrWhiteSpace(seedPassword))
+        {
+            throw new InvalidOperationException(
+                "SeedAdmin:ResetPasswordOnStartup requires SeedAdmin:Password to be configured.");
+        }
+
+        await userService.SetPasswordAsync(existingAdmin.Id, seedPassword);
+        app.Logger.LogWarning(
+            "Admin password for '{Username}' was reset from configuration because SeedAdmin:ResetPasswordOnStartup is enabled. Disable this setting after rollout.",
+            seedUsername);
+    }
+    else if (!string.IsNullOrWhiteSpace(seedPassword))
+    {
+        app.Logger.LogInformation(
+            "SeedAdmin__Password is configured, but the admin user '{Username}' already exists. Set SeedAdmin:ResetPasswordOnStartup=true if you want startup to rotate the existing admin password.",
+            seedUsername);
     }
 }
 
