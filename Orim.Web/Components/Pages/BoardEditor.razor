@@ -23,8 +23,8 @@ else if (!_hasAccess)
 }
 else
 {
-    var propertiesPanelOpen = _selectedElement is not null && _canEdit;
-    var selectedElement = _selectedElement;
+    var propertiesPanelOpen = _selectedElements.Count == 1 && _canEdit;
+    var selectedElement = _selectedElements.Count == 1 ? _selectedElements[0] : null;
 
     <div style="display: flex; flex-direction: column; height: calc(100vh - 64px);">
         <MudPaper Elevation="1" Style="padding: 4px 16px; display: flex; align-items: center; gap: 8px; background: #fff; z-index: 10; border-bottom: 1px solid #e1e4e8;">
@@ -69,6 +69,57 @@ else
                     </MudTooltip>
                 </MudButtonGroup>
 
+                <MudTooltip Text="Rückgängig" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Undo"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   Disabled="@(!_commandStack.CanUndo)"
+                                   OnClick="@UndoAsync" />
+                </MudTooltip>
+
+                <MudTooltip Text="Wiederholen" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Redo"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   Disabled="@(!_commandStack.CanRedo)"
+                                   OnClick="@RedoAsync" />
+                </MudTooltip>
+
+                <MudDivider Vertical="true" FlexItem="true" />
+
+                <MudTooltip Text="Zoom verkleinern" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   OnClick="@ZoomOutAsync" />
+                </MudTooltip>
+
+                <input value="@_zoomDisplayValue"
+                       @onchange="HandleZoomInputChangedAsync"
+                       style="width:72px; height:32px; border:1px solid #d0d7de; border-radius:8px; padding:0 10px; font-size:14px; font-weight:600; color:#0f172a; text-align:right; background:white;"
+                       aria-label="Zoomstufe in Prozent" />
+
+                <MudTooltip Text="Zoom vergrößern" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   OnClick="@ZoomInAsync" />
+                </MudTooltip>
+
+                <MudTooltip Text="Alles einpassen" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.FitScreen"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   OnClick="@FitToContentAsync" />
+                </MudTooltip>
+
+                <MudTooltip Text="Bedienhilfe öffnen" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Info"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   OnClick="@OpenHelpDialog" />
+                </MudTooltip>
+
                 @if (_selectedElement is not null)
                 {
                     <MudTooltip Text="Ausgewähltes Element löschen" Arrow="true">
@@ -79,23 +130,43 @@ else
                     </MudTooltip>
                 }
 
+                @if (CanGroupSelection)
+                {
+                    <MudTooltip Text="Auswahl gruppieren" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.CreateNewFolder"
+                                       Color="Color.Primary"
+                                       Size="Size.Small"
+                                       OnClick="@GroupSelectedElementsAsync" />
+                    </MudTooltip>
+                }
+
+                @if (CanUngroupSelection)
+                {
+                    <MudTooltip Text="Gruppe auflösen" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.FolderOff"
+                                       Size="Size.Small"
+                                       OnClick="@UngroupSelectedElementsAsync" />
+                    </MudTooltip>
+                }
+
                 <MudDivider Vertical="true" FlexItem="true" />
             }
 
-            <MudMenu Size="Size.Small">
-                <ActivatorContent>
-                    <MudTooltip Text="Board exportieren" Arrow="true">
-                        <MudIconButton Icon="@Icons.Material.Filled.FileDownload" Size="Size.Small" />
-                    </MudTooltip>
-                </ActivatorContent>
-                <ChildContent>
-                    <MudMenuItem OnClick="@ExportJson">Export als JSON</MudMenuItem>
-                    @if (_board.OwnerId == _userId)
-                    {
-                        <MudMenuItem OnClick="@DeleteBoardAsync">Board löschen</MudMenuItem>
-                    }
-                </ChildContent>
-            </MudMenu>
+            <MudTooltip Text="Board als JSON exportieren" Arrow="true">
+                <MudIconButton Icon="@Icons.Material.Filled.FileDownload"
+                               Size="Size.Small"
+                               OnClick="@ExportJson" />
+            </MudTooltip>
+
+            @if (_board.OwnerId == _userId)
+            {
+                <MudTooltip Text="Board löschen" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.DeleteForever"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@DeleteBoardAsync" />
+                </MudTooltip>
+            }
         </MudPaper>
 
         <div style="display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden;">
@@ -106,8 +177,10 @@ else
                  tabindex="0">
                 <WhiteboardCanvas @ref="_canvas" Board="@_board" CanEdit="@_canEdit"
                                   CommandStack="@_commandStack"
-                                  OnBoardChanged="@SaveBoard"
+                                  OnBoardChanged="@HandleBoardChanged"
                                   OnSelectedElementChanged="@HandleSelectedElementChanged"
+                                  OnSelectedElementsChanged="@HandleSelectedElementsChanged"
+                                  OnZoomChanged="@HandleZoomChanged"
                                   OnToolChanged="@HandleToolChanged"
                                   PendingIconName="@_pendingIconName"
                                   SelectedTool="@_selectedTool" />
@@ -166,6 +239,46 @@ else
             <MudButton OnClick="@CloseIconPicker">Abbrechen</MudButton>
         </DialogActions>
     </MudDialog>
+
+    <MudDialog @bind-Visible="_helpDialogVisible" Options="_helpDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">Bedienhilfe</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Werkzeuge</MudText>
+            <ul style="margin:0 0 16px 18px; padding:0; color:#334155; line-height:1.5;">
+                <li>Auswahl: Elemente anklicken, verschieben und bearbeiten.</li>
+                <li>Formen: Rechteck, Kreis und Dreieck mit Klick und Ziehen aufziehen.</li>
+                <li>Pfeil: Von einem Andockpunkt zum anderen ziehen, um Elemente zu verbinden.</li>
+                <li>Symbol: Symbol wählen und danach per Klick auf dem Board platzieren.</li>
+            </ul>
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Auswahl und Gruppen</MudText>
+            <ul style="margin:0 0 16px 18px; padding:0; color:#334155; line-height:1.5;">
+                <li>Shift gedrückt halten und auf leerer Fläche ziehen: Selektionsrahmen aufziehen.</li>
+                <li>Cmd/Ctrl + Klick: Mehrere Elemente zur Auswahl hinzufügen oder entfernen.</li>
+                <li>Gruppierte Elemente werden gemeinsam ausgewählt und gemeinsam verschoben.</li>
+                <li>Größe ändern und Pfeil-Endpunkte ziehen funktioniert weiterhin bei Einzelauswahl.</li>
+                <li>Mit den +/- Buttons oder der Prozentanzeige oben kann die Zoomstufe direkt gesetzt werden.</li>
+            </ul>
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Shortcuts</MudText>
+            <ul style="margin:0 0 0 18px; padding:0; color:#334155; line-height:1.5;">
+                <li>Cmd/Ctrl + Z: Rückgängig</li>
+                <li>Cmd/Ctrl + Shift + Z oder Cmd/Ctrl + Y: Wiederholen</li>
+                <li>Cmd/Ctrl + A: Alles auswählen</li>
+                <li>Cmd/Ctrl + C: Auswahl kopieren</li>
+                <li>Cmd/Ctrl + X: Auswahl ausschneiden</li>
+                <li>Cmd/Ctrl + V: Auswahl einfügen</li>
+                <li>Cmd/Ctrl + G: Auswahl gruppieren</li>
+                <li>Cmd/Ctrl + Shift + G: Gruppe auflösen</li>
+                <li>Entf oder Backspace: Auswahl löschen</li>
+            </ul>
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CloseHelpDialog">Schließen</MudButton>
+        </DialogActions>
+    </MudDialog>
 }
 
 @code {
@@ -179,16 +292,25 @@ else
     private readonly CommandStack _commandStack = new();
     private WhiteboardCanvas? _canvas;
     private BoardElement? _selectedElement;
+    private List<BoardElement> _selectedElements = [];
     private ElementReference _editorSurface;
     private bool _iconPickerVisible;
+    private bool _helpDialogVisible;
     private bool _isLoadingIcons;
     private string _iconSearch = string.Empty;
     private string? _iconLoadError;
     private string? _pendingIconName;
-    private BoardElement? _clipboardElement;
+    private List<BoardElement> _clipboardElements = [];
     private int _pasteSequence;
+    private string _lastCommittedBoardSnapshot = string.Empty;
+    private int _zoomPercentage = 100;
+    private string _zoomDisplayValue = "100%";
+    private bool CanGroupSelection => _selectedElements.Count(element => element is not ArrowElement) > 1;
+    private bool CanUngroupSelection => _selectedElements.Any(element => element.GroupId is not null);
+
     private List<string> _materialIcons = [];
     private readonly DialogOptions _iconDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true };
+    private readonly DialogOptions _helpDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
     private static List<string>? _cachedMaterialIcons;
 
     private IReadOnlyList<string> FilteredMaterialIcons => _materialIcons
@@ -212,6 +334,8 @@ else
 
         _hasAccess = BoardService.HasAccess(_board, _userId);
         _canEdit = BoardService.HasAccess(_board, _userId, BoardRole.Editor);
+        _commandStack.Clear();
+        _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -238,6 +362,66 @@ else
         {
             _selectedTool = Tool.Select;
         }
+    }
+
+    private void OpenHelpDialog()
+    {
+        _helpDialogVisible = true;
+    }
+
+    private void CloseHelpDialog()
+    {
+        _helpDialogVisible = false;
+    }
+
+    private async Task ZoomInAsync()
+    {
+        if (_canvas is null)
+        {
+            return;
+        }
+
+        await _canvas.ZoomInAsync();
+    }
+
+    private async Task ZoomOutAsync()
+    {
+        if (_canvas is null)
+        {
+            return;
+        }
+
+        await _canvas.ZoomOutAsync();
+    }
+
+    private async Task HandleZoomInputChangedAsync(ChangeEventArgs args)
+    {
+        if (_canvas is null)
+        {
+            return;
+        }
+
+        var rawValue = args.Value?.ToString()?.Trim() ?? string.Empty;
+        var numericValue = new string(rawValue.Where(char.IsDigit).ToArray());
+        if (!int.TryParse(numericValue, out var percentage))
+        {
+            _zoomDisplayValue = $"{_zoomPercentage}%";
+            StateHasChanged();
+            return;
+        }
+
+        percentage = Math.Clamp(percentage, 20, 350);
+        await _canvas.SetZoomPercentageAsync(percentage);
+    }
+
+    private async Task FitToContentAsync()
+    {
+        if (_canvas is null)
+        {
+            return;
+        }
+
+        await _canvas.FitToContentAsync();
     }
 
     private async Task EnsureMaterialIconsLoadedAsync()
@@ -296,6 +480,14 @@ else
         return Task.CompletedTask;
     }
 
+    private Task HandleZoomChanged(int percentage)
+    {
+        _zoomPercentage = percentage;
+        _zoomDisplayValue = $"{percentage}%";
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
         if (_board is null || !_canEdit) return;
@@ -307,6 +499,18 @@ else
         {
             switch (key)
             {
+                case "z" when e.ShiftKey:
+                    await RedoAsync();
+                    return;
+                case "z":
+                    await UndoAsync();
+                    return;
+                case "y":
+                    await RedoAsync();
+                    return;
+                case "a":
+                    await SelectAllElementsAsync();
+                    return;
                 case "c":
                     CopySelectedElement();
                     return;
@@ -315,6 +519,12 @@ else
                     return;
                 case "v":
                     await PasteClipboardElementAsync();
+                    return;
+                case "g" when e.ShiftKey:
+                    await UngroupSelectedElementsAsync();
+                    return;
+                case "g":
+                    await GroupSelectedElementsAsync();
                     return;
             }
         }
@@ -332,14 +542,22 @@ else
 
     private async Task DeleteSelectedElementAsync()
     {
-        if (_board is null || !_canEdit || _selectedElement is null)
+        if (_board is null || !_canEdit || _selectedElements.Count == 0)
         {
             return;
         }
 
-        var cmd = new RemoveElementCommand(_selectedElement.Id);
-        _commandStack.Execute(_board, cmd);
+        foreach (var elementId in _selectedElements.Select(element => element.Id).Distinct().ToList())
+        {
+            if (_board.Elements.Any(element => element.Id == elementId))
+            {
+                var cmd = new RemoveElementCommand(elementId);
+                cmd.Execute(_board);
+            }
+        }
+
         _selectedElement = null;
+        _selectedElements = [];
         _canvas?.ClearSelection();
         await SaveBoard();
         StateHasChanged();
@@ -347,18 +565,21 @@ else
 
     private void CopySelectedElement()
     {
-        if (_selectedElement is null)
+        if (_selectedElements.Count == 0)
         {
             return;
         }
 
-        _clipboardElement = CloneElement(_selectedElement);
+        _clipboardElements = _selectedElements
+            .OrderBy(element => element.ZIndex)
+            .Select(CloneElement)
+            .ToList();
         _pasteSequence = 0;
     }
 
     private async Task CutSelectedElementAsync()
     {
-        if (_selectedElement is null)
+        if (_selectedElements.Count == 0)
         {
             return;
         }
@@ -369,16 +590,68 @@ else
 
     private async Task PasteClipboardElementAsync()
     {
-        if (_board is null || _clipboardElement is null)
+        if (_board is null || _clipboardElements.Count == 0)
         {
             return;
         }
 
         _pasteSequence++;
-        var pastedElement = CloneForPaste(_clipboardElement, _board.Elements.Count, _pasteSequence);
-        _board.Elements.Add(pastedElement);
-        _selectedElement = pastedElement;
-        await _canvas?.SelectElementAsync(pastedElement)!;
+        var pastedElements = CloneForPaste(_clipboardElements, _board.Elements.Count, _pasteSequence);
+        _board.Elements.AddRange(pastedElements);
+        _selectedElements = pastedElements;
+        _selectedElement = pastedElements.LastOrDefault();
+        if (_canvas is not null)
+        {
+            await _canvas.SelectElementsAsync(pastedElements);
+        }
+
+        await SaveBoard();
+        StateHasChanged();
+    }
+
+    private async Task SelectAllElementsAsync()
+    {
+        if (_board is null || _board.Elements.Count == 0 || _canvas is null)
+        {
+            return;
+        }
+
+        var selectableElements = _board.Elements.OrderBy(element => element.ZIndex).ToList();
+        _selectedElements = selectableElements;
+        _selectedElement = selectableElements.LastOrDefault();
+        await _canvas.SelectElementsAsync(selectableElements);
+        StateHasChanged();
+    }
+
+    private async Task GroupSelectedElementsAsync()
+    {
+        if (_board is null || !CanGroupSelection)
+        {
+            return;
+        }
+
+        var groupId = Guid.NewGuid();
+        foreach (var element in _selectedElements.Where(element => element is not ArrowElement))
+        {
+            element.GroupId = groupId;
+        }
+
+        await SaveBoard();
+        StateHasChanged();
+    }
+
+    private async Task UngroupSelectedElementsAsync()
+    {
+        if (_board is null || !CanUngroupSelection)
+        {
+            return;
+        }
+
+        foreach (var element in _selectedElements)
+        {
+            element.GroupId = null;
+        }
+
         await SaveBoard();
         StateHasChanged();
     }
@@ -400,10 +673,64 @@ else
         Navigation.NavigateTo("/");
     }
 
-    private async Task SaveBoard()
+    private async Task UndoAsync()
+    {
+        if (_board is null || !_commandStack.CanUndo)
+        {
+            return;
+        }
+
+        _commandStack.Undo(_board);
+        await PersistBoardStateAsync();
+    }
+
+    private async Task RedoAsync()
+    {
+        if (_board is null || !_commandStack.CanRedo)
+        {
+            return;
+        }
+
+        _commandStack.Redo(_board);
+        await PersistBoardStateAsync();
+    }
+
+    private Task HandleBoardChanged() => SaveBoard();
+
+    private async Task SaveBoard(bool recordHistory = true)
     {
         if (_board is null) return;
+
+        var currentSnapshot = CaptureBoardSnapshot(_board);
+        var historyRecorded = false;
+        if (recordHistory && currentSnapshot != _lastCommittedBoardSnapshot)
+        {
+            _commandStack.Execute(_board, new BoardSnapshotCommand(_lastCommittedBoardSnapshot, currentSnapshot));
+            currentSnapshot = CaptureBoardSnapshot(_board);
+            historyRecorded = true;
+        }
+
+        _lastCommittedBoardSnapshot = currentSnapshot;
+
+        if (historyRecorded)
+        {
+            await SyncSelectionToBoardAsync();
+        }
+
         await BoardService.UpdateBoardAsync(_board);
+    }
+
+    private async Task PersistBoardStateAsync()
+    {
+        if (_board is null)
+        {
+            return;
+        }
+
+        _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
+        await SyncSelectionToBoardAsync();
+        await SaveBoard(recordHistory: false);
+        StateHasChanged();
     }
 
     private void GoBack() => Navigation.NavigateTo("/");
@@ -429,9 +756,47 @@ else
         StateHasChanged();
     }
 
+    private async Task SyncSelectionToBoardAsync()
+    {
+        if (_board is null)
+        {
+            return;
+        }
+
+        var selectedIds = _selectedElements.Select(element => element.Id).ToHashSet();
+        var nextSelection = _board.Elements
+            .Where(element => selectedIds.Contains(element.Id))
+            .OrderBy(element => element.ZIndex)
+            .ToList();
+
+        _selectedElements = nextSelection;
+        _selectedElement = nextSelection.LastOrDefault();
+
+        if (_canvas is not null)
+        {
+            await _canvas.SelectElementsAsync(nextSelection);
+        }
+    }
+
+    private static string CaptureBoardSnapshot(Board board)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(board, new System.Text.Json.JsonSerializerOptions
+        {
+            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+        });
+    }
+
     private Task HandleSelectedElementChanged(BoardElement? element)
     {
         _selectedElement = element;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleSelectedElementsChanged(IReadOnlyList<BoardElement> elements)
+    {
+        _selectedElements = elements.ToList();
+        _selectedElement = _selectedElements.LastOrDefault();
         StateHasChanged();
         return Task.CompletedTask;
     }
@@ -446,20 +811,69 @@ else
         _ => throw new InvalidOperationException($"Unsupported element type '{element.GetType().Name}'.")
     };
 
-    private static BoardElement CloneForPaste(BoardElement source, int zIndex, int pasteSequence)
+    private static List<BoardElement> CloneForPaste(IReadOnlyList<BoardElement> sources, int startingZIndex, int pasteSequence)
     {
-        var clone = CloneElement(source);
-        clone.Id = Guid.NewGuid();
-        clone.ZIndex = zIndex;
+        var clones = sources.Select(CloneElement).ToList();
+        var idMap = new Dictionary<Guid, Guid>();
+        var groupMap = new Dictionary<Guid, Guid>();
 
-        if (clone is not ArrowElement)
+        for (var index = 0; index < sources.Count; index++)
         {
-            var offset = 24 * pasteSequence;
-            clone.X += offset;
-            clone.Y += offset;
+            var source = sources[index];
+            var clone = clones[index];
+            var newId = Guid.NewGuid();
+            idMap[source.Id] = newId;
+            clone.Id = newId;
+            clone.ZIndex = startingZIndex + index;
+
+            if (source.GroupId is Guid groupId)
+            {
+                if (!groupMap.TryGetValue(groupId, out var newGroupId))
+                {
+                    newGroupId = Guid.NewGuid();
+                    groupMap[groupId] = newGroupId;
+                }
+
+                clone.GroupId = newGroupId;
+            }
+
+            if (clone is not ArrowElement)
+            {
+                var offset = 24 * pasteSequence;
+                clone.X += offset;
+                clone.Y += offset;
+            }
+            else if (clone is ArrowElement arrowClone)
+            {
+                var offset = 24 * pasteSequence;
+                if (arrowClone.SourceElementId is null)
+                {
+                    arrowClone.SourceX += offset;
+                    arrowClone.SourceY += offset;
+                }
+
+                if (arrowClone.TargetElementId is null)
+                {
+                    arrowClone.TargetX += offset;
+                    arrowClone.TargetY += offset;
+                }
+            }
         }
 
-        return clone;
+        foreach (var arrow in clones.OfType<ArrowElement>())
+        {
+            if (arrow.SourceElementId is Guid sourceId && idMap.TryGetValue(sourceId, out var mappedSourceId))
+            {
+                arrow.SourceElementId = mappedSourceId;
+            }
+
+            if (arrow.TargetElementId is Guid targetId && idMap.TryGetValue(targetId, out var mappedTargetId))
+            {
+                arrow.TargetElementId = mappedTargetId;
+            }
+        }
+
+        return clones;
     }
 
     private static ShapeElement CloneShape(ShapeElement shape)
@@ -498,6 +912,10 @@ else
         {
             SourceElementId = arrow.SourceElementId,
             TargetElementId = arrow.TargetElementId,
+            SourceX = arrow.SourceX,
+            SourceY = arrow.SourceY,
+            TargetX = arrow.TargetX,
+            TargetY = arrow.TargetY,
             SourceDock = arrow.SourceDock,
             TargetDock = arrow.TargetDock,
             StrokeColor = arrow.StrokeColor,
@@ -539,6 +957,7 @@ else
 
     private static void CopySharedElementProperties(BoardElement source, BoardElement target)
     {
+        target.GroupId = source.GroupId;
         target.X = source.X;
         target.Y = source.Y;
         target.Width = source.Width;

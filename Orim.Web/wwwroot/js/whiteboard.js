@@ -59,6 +59,19 @@ window.orimWhiteboard = {
         };
     },
 
+    getElementSize: function (elementId) {
+        const element = document.getElementById(elementId);
+        if (!element) {
+            return { width: 0, height: 0 };
+        }
+
+        const rect = element.getBoundingClientRect();
+        return {
+            width: Number.isFinite(rect.width) ? rect.width : 0,
+            height: Number.isFinite(rect.height) ? rect.height : 0
+        };
+    },
+
     clientToSvg: function (clientX, clientY) {
         const svg = document.getElementById('whiteboard-svg');
         if (!svg) {

@@ -10,6 +10,7 @@ namespace Orim.Core.Models;
 public abstract class BoardElement
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid? GroupId { get; set; }
     public double X { get; set; }
     public double Y { get; set; }
     public double Width { get; set; }
@@ -75,6 +76,10 @@ public class ArrowElement : BoardElement
 {
     public Guid? SourceElementId { get; set; }
     public Guid? TargetElementId { get; set; }
+    public double? SourceX { get; set; }
+    public double? SourceY { get; set; }
+    public double? TargetX { get; set; }
+    public double? TargetY { get; set; }
     public DockPoint SourceDock { get; set; } = DockPoint.Right;
     public DockPoint TargetDock { get; set; } = DockPoint.Left;
     public string StrokeColor { get; set; } = "#000000";

@@ -1,4 +1,6 @@
 using Orim.Core.Models;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Orim.Core.Services;
 
@@ -132,6 +134,46 @@ public class UpdateElementCommand : IBoardCommand
         var idx = board.Elements.FindIndex(e => e.Id == _newState.Id);
         if (idx >= 0)
             board.Elements[idx] = _oldState;
+    }
+}
+
+public class BoardSnapshotCommand : IBoardCommand
+{
+    private static readonly JsonSerializerOptions SnapshotSerializerOptions = new()
+    {
+        Converters = { new JsonStringEnumConverter() }
+    };
+
+    private readonly string _beforeSnapshotJson;
+    private readonly string _afterSnapshotJson;
+
+    public BoardSnapshotCommand(string beforeSnapshotJson, string afterSnapshotJson)
+    {
+        _beforeSnapshotJson = beforeSnapshotJson;
+        _afterSnapshotJson = afterSnapshotJson;
+    }
+
+    public void Execute(Board board) => ApplySnapshot(board, _afterSnapshotJson);
+
+    public void Undo(Board board) => ApplySnapshot(board, _beforeSnapshotJson);
+
+    private static void ApplySnapshot(Board board, string snapshotJson)
+    {
+        var snapshot = JsonSerializer.Deserialize<Board>(snapshotJson, SnapshotSerializerOptions);
+        if (snapshot is null)
+        {
+            return;
+        }
+
+        board.Id = snapshot.Id;
+        board.Title = snapshot.Title;
+        board.OwnerId = snapshot.OwnerId;
+        board.Visibility = snapshot.Visibility;
+        board.ShareLinkToken = snapshot.ShareLinkToken;
+        board.Members = snapshot.Members;
+        board.Elements = snapshot.Elements;
+        board.CreatedAt = snapshot.CreatedAt;
+        board.UpdatedAt = snapshot.UpdatedAt;
     }
 }
 
