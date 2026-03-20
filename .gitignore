@@ -14,3 +14,5 @@ data/
 ## OS
 .DS_Store
 Thumbs.db
+/Orim.Web/appsettings.Development.json
+/Orim.Web/Properties/PublishProfiles/orim - Zip Deploy.pubxml

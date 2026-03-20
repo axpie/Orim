@@ -24,7 +24,6 @@ else if (!_hasAccess)
 }
 else
 {
-    var propertiesPanelOpen = _selectedElements.Count == 1 && _canEdit;
     var selectedElement = _selectedElements.Count == 1 ? _selectedElements[0] : null;
 
     <div style="display: flex; flex-direction: column; height: calc(100vh - 64px);">
@@ -33,6 +32,15 @@ else
                 <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@GoBack" Size="Size.Small" />
             </MudTooltip>
             <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">@_board.Title</MudText>
+            @if (_board.OwnerId == _userId)
+            {
+                <MudTooltip Text="@Localizer["RenameBoard"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   OnClick="@OpenRenameBoardDialog" />
+                </MudTooltip>
+            }
             <MudSpacer />
 
             @if (_canEdit)
@@ -187,10 +195,11 @@ else
                                   SelectedTool="@_selectedTool" />
             </div>
 
-            @if (propertiesPanelOpen)
+            @if (_canEdit)
             {
-                <ElementPropertiesPanel @key="selectedElement!.Id"
-                                        Element="@(selectedElement!)"
+                <ElementPropertiesPanel @key="@(selectedElement?.Id ?? Guid.Empty)"
+                                        Element="@selectedElement"
+                                        SelectionCount="@_selectedElements.Count"
                                         OnChanged="@OnElementPropertyChanged" />
             }
         </div>
@@ -281,6 +290,22 @@ else
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CloseHelpDialog">@Localizer["Close"]</MudButton>
         </DialogActions>
     </MudDialog>
+
+    <MudDialog @bind-Visible="_renameDialogVisible" Options="_helpDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">@Localizer["RenameBoardTitle"]</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudTextField @bind-Value="_renameBoardTitle"
+                          Label="@Localizer["BoardName"]"
+                          Variant="Variant.Outlined"
+                          Required="true" />
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@CloseRenameBoardDialog">@Localizer["Cancel"]</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ConfirmRenameBoardAsync">@Localizer["Save"]</MudButton>
+        </DialogActions>
+    </MudDialog>
 }
 
 @code {
@@ -298,6 +323,7 @@ else
     private ElementReference _editorSurface;
     private bool _iconPickerVisible;
     private bool _helpDialogVisible;
+    private bool _renameDialogVisible;
     private bool _isLoadingIcons;
     private string _iconSearch = string.Empty;
     private string? _iconLoadError;
@@ -307,6 +333,7 @@ else
     private string _lastCommittedBoardSnapshot = string.Empty;
     private int _zoomPercentage = 100;
     private string _zoomDisplayValue = "100%";
+    private string _renameBoardTitle = string.Empty;
     private bool CanGroupSelection => _selectedElements.Count(element => element is not ArrowElement) > 1;
     private bool CanUngroupSelection => _selectedElements.Any(element => element.GroupId is not null);
 
@@ -374,6 +401,36 @@ else
     private void CloseHelpDialog()
     {
         _helpDialogVisible = false;
+    }
+
+    private void OpenRenameBoardDialog()
+    {
+        if (_board is null || _board.OwnerId != _userId)
+        {
+            return;
+        }
+
+        _renameBoardTitle = _board.Title;
+        _renameDialogVisible = true;
+    }
+
+    private void CloseRenameBoardDialog()
+    {
+        _renameDialogVisible = false;
+        _renameBoardTitle = string.Empty;
+    }
+
+    private async Task ConfirmRenameBoardAsync()
+    {
+        if (_board is null || _board.OwnerId != _userId || string.IsNullOrWhiteSpace(_renameBoardTitle))
+        {
+            return;
+        }
+
+        _board.Title = _renameBoardTitle.Trim();
+        await BoardService.UpdateBoardAsync(_board);
+        _renameDialogVisible = false;
+        StateHasChanged();
     }
 
     private async Task ZoomInAsync()

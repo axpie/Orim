@@ -45,6 +45,14 @@
                                 @if (board.OwnerId == _userId)
                                 {
                                     <div @onclick:stopPropagation="true">
+                                        <MudTooltip Text="@Localizer["RenameBoard"]" Arrow="true">
+                                            <MudIconButton Icon="@Icons.Material.Filled.Edit"
+                                                           Color="Color.Default"
+                                                           Size="Size.Small"
+                                                           OnClick="@(() => OpenRenameBoardDialog(board))" />
+                                        </MudTooltip>
+                                    </div>
+                                    <div @onclick:stopPropagation="true">
                                         <MudTooltip Text="@Localizer["DeleteBoard"]" Arrow="true">
                                             <MudIconButton Icon="@Icons.Material.Filled.Delete"
                                                            Color="Color.Error"
@@ -91,13 +99,32 @@
     </DialogActions>
 </MudDialog>
 
+<MudDialog @bind-Visible="_renameDialogVisible">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@Localizer["RenameBoardTitle"]</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="_renameBoardTitle"
+                      Label="@Localizer["BoardName"]"
+                      Variant="Variant.Outlined"
+                      Required="true" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@CloseRenameBoardDialog">@Localizer["Cancel"]</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ConfirmRenameBoardAsync">@Localizer["Save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
     private List<Board>? _boards;
     private Guid _userId;
     private string _username = "";
     private bool _createDialogVisible;
+    private bool _renameDialogVisible;
     private string _newBoardTitle = "";
+    private string _renameBoardTitle = "";
     private BoardVisibility _newBoardVisibility = BoardVisibility.Private;
+    private Board? _boardBeingRenamed;
 
     protected override async Task OnInitializedAsync()
     {
@@ -113,6 +140,20 @@
 
     private void CreateBoard() => _createDialogVisible = true;
 
+    private void OpenRenameBoardDialog(Board board)
+    {
+        _boardBeingRenamed = board;
+        _renameBoardTitle = board.Title;
+        _renameDialogVisible = true;
+    }
+
+    private void CloseRenameBoardDialog()
+    {
+        _renameDialogVisible = false;
+        _renameBoardTitle = string.Empty;
+        _boardBeingRenamed = null;
+    }
+
     private async Task ConfirmCreateBoard()
     {
         if (string.IsNullOrWhiteSpace(_newBoardTitle)) return;
@@ -125,6 +166,19 @@
         _createDialogVisible = false;
         _newBoardTitle = "";
         Navigation.NavigateTo($"/board/{board.Id}");
+    }
+
+    private async Task ConfirmRenameBoardAsync()
+    {
+        if (_boardBeingRenamed is null || string.IsNullOrWhiteSpace(_renameBoardTitle))
+        {
+            return;
+        }
+
+        _boardBeingRenamed.Title = _renameBoardTitle.Trim();
+        await BoardService.UpdateBoardAsync(_boardBeingRenamed);
+        CloseRenameBoardDialog();
+        StateHasChanged();
     }
 
     private async Task DeleteBoardFromOverviewAsync(Board board)

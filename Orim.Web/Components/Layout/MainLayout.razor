@@ -10,8 +10,11 @@
 
 <MudLayout>
     <MudAppBar Elevation="1" Style="background-color: #0d1117; color: white;">
-        <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
-                       OnClick="@ToggleDrawer" />
+        @if (!IsBoardEditorRoute)
+        {
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                           OnClick="@ToggleDrawer" />
+        }
         <MudText Typo="Typo.h6" Class="ml-2" Style="font-weight: 700; letter-spacing: -0.5px;">
             Orim
         </MudText>
@@ -35,23 +38,26 @@
         </AuthorizeView>
     </MudAppBar>
 
-    <MudDrawer @bind-Open="_drawerOpen" Elevation="2" Variant="DrawerVariant.Mini"
-               Style="background-color: #161b22; color: #c9d1d9;">
-        <MudNavMenu Color="Color.Primary">
-            <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard"
-                        Style="color: #c9d1d9;">
-                @Localizer["Dashboard"]
-            </MudNavLink>
-            <AuthorizeView Roles="Admin">
-                <Authorized>
-                    <MudNavLink Href="/admin/users" Icon="@Icons.Material.Filled.People"
-                                Style="color: #c9d1d9;">
-                        @Localizer["Users"]
-                    </MudNavLink>
-                </Authorized>
-            </AuthorizeView>
-        </MudNavMenu>
-    </MudDrawer>
+    @if (!IsBoardEditorRoute)
+    {
+        <MudDrawer @bind-Open="_drawerOpen" Elevation="2" Variant="DrawerVariant.Mini"
+                   Style="background-color: #161b22; color: #c9d1d9;">
+            <MudNavMenu Color="Color.Primary">
+                <MudNavLink Href="/" Match="NavLinkMatch.All" Icon="@Icons.Material.Filled.Dashboard"
+                            Style="color: #c9d1d9;">
+                    @Localizer["Dashboard"]
+                </MudNavLink>
+                <AuthorizeView Roles="Admin">
+                    <Authorized>
+                        <MudNavLink Href="/admin/users" Icon="@Icons.Material.Filled.People"
+                                    Style="color: #c9d1d9;">
+                            @Localizer["Users"]
+                        </MudNavLink>
+                    </Authorized>
+                </AuthorizeView>
+            </MudNavMenu>
+        </MudDrawer>
+    }
 
     <MudMainContent Class="pt-16" Style="min-height: 100vh; background-color: #f6f8fa;">
         @Body
@@ -61,6 +67,7 @@
 @code {
     private bool _drawerOpen = true;
     private string _currentLang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    private bool IsBoardEditorRoute => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("board/", StringComparison.OrdinalIgnoreCase);
 
     [Inject] private NavigationManager Navigation { get; set; } = default!;
 

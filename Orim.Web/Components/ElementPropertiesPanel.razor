@@ -3,7 +3,15 @@
 
 <MudPaper Elevation="0" Style="width: 360px; min-width: 360px; height: 100%; border-radius: 0; border-left: 1px solid #d8dee9; padding: 20px; background: #fbfcfe; overflow-y: auto; box-sizing: border-box;">
     <MudText Typo="Typo.subtitle2" Class="mb-1" Style="font-weight: 700;">Eigenschaften</MudText>
-    <MudText Typo="Typo.body2" Class="mb-3" Style="color: #667085;">Element bearbeiten</MudText>
+    @if (Element is null)
+    {
+        <MudText Typo="Typo.body2" Class="mb-3" Style="color: #667085;">
+            @(SelectionCount > 1 ? "Mehrfachauswahl aktiv. Bitte genau ein Element auswählen, um Eigenschaften zu bearbeiten." : "Kein Element ausgewählt. Wähle ein Element aus, um seine Eigenschaften zu bearbeiten.")
+        </MudText>
+    }
+    else
+    {
+        <MudText Typo="Typo.body2" Class="mb-3" Style="color: #667085;">Element bearbeiten</MudText>
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
         <div>
@@ -247,10 +255,12 @@
                @onchange="HandleZIndexChange"
                style="width:100%; border:1px solid #b0bec5; border-radius:4px; padding:6px 8px; font-size:14px; box-sizing:border-box;" />
     </div>
+    }
 </MudPaper>
 
 @code {
-    [Parameter, EditorRequired] public BoardElement Element { get; set; } = default!;
+    [Parameter] public BoardElement? Element { get; set; }
+    [Parameter] public int SelectionCount { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
 
     private MudColor _fillColor = new("#FFFFFF");
@@ -309,6 +319,11 @@
 
     protected override void OnParametersSet()
     {
+        if (Element is null)
+        {
+            return;
+        }
+
         _labelAutoSize = Element.LabelFontSize is null;
         _labelFontSize = Element.LabelFontSize ?? GetDefaultLabelFontSize(Element);
 
@@ -396,36 +411,42 @@
 
     private void HandleXChange(ChangeEventArgs e)
     {
+        if (Element is null) return;
         if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
         { Element.X = v; OnValueChanged(); }
     }
 
     private void HandleYChange(ChangeEventArgs e)
     {
+        if (Element is null) return;
         if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
         { Element.Y = v; OnValueChanged(); }
     }
 
     private void HandleWidthChange(ChangeEventArgs e)
     {
+        if (Element is null) return;
         if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
         { Element.Width = v; OnValueChanged(); }
     }
 
     private void HandleHeightChange(ChangeEventArgs e)
     {
+        if (Element is null) return;
         if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
         { Element.Height = v; OnValueChanged(); }
     }
 
     private void HandleZIndexChange(ChangeEventArgs e)
     {
+        if (Element is null) return;
         if (int.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
         { Element.ZIndex = v; OnValueChanged(); }
     }
 
     private void HandleLabelChanged(string value)
     {
+        if (Element is null) return;
         Element.Label = value;
         OnValueChanged();
     }
@@ -437,6 +458,7 @@
 
     private void HandleLabelAutoSizeChanged(bool value)
     {
+        if (Element is null) return;
         _labelAutoSize = value;
         Element.LabelFontSize = value ? null : Math.Max(1, _labelFontSize);
         OnValueChanged();
@@ -444,6 +466,7 @@
 
     private void SetLabelHorizontalAlignment(HorizontalLabelAlignment alignment)
     {
+        if (Element is null) return;
         if (Element.LabelHorizontalAlignment == alignment)
         {
             return;
@@ -455,6 +478,7 @@
 
     private void SetLabelVerticalAlignment(VerticalLabelAlignment alignment)
     {
+        if (Element is null) return;
         if (Element.LabelVerticalAlignment == alignment)
         {
             return;
@@ -466,6 +490,7 @@
 
     private void HandleLabelFontSizeChange(ChangeEventArgs e)
     {
+        if (Element is null) return;
         if (double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var v))
         {
             _labelFontSize = Math.Max(1, v);
@@ -480,7 +505,7 @@
         await OnChanged.InvokeAsync();
     }
 
-    private static bool SupportsLabel(BoardElement element) => element is not TextElement and not StickyNoteElement;
+    private static bool SupportsLabel(BoardElement? element) => element is not null && element is not TextElement and not StickyNoteElement;
 
     private static double GetDefaultLabelFontSize(BoardElement element) =>
         element is ArrowElement

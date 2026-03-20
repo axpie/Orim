@@ -126,4 +126,6 @@
   <data name="ShortcutDelete" xml:space="preserve"><value>Entf oder Backspace: Auswahl löschen</value></data>
   <data name="Close" xml:space="preserve"><value>Schließen</value></data>
   <data name="MaterialIconsLoadError" xml:space="preserve"><value>Die lokal eingebetteten MaterialDesignIcons konnten nicht geladen werden.</value></data>
+  <data name="RenameBoard" xml:space="preserve"><value>Board umbenennen</value></data>
+  <data name="RenameBoardTitle" xml:space="preserve"><value>Board umbenennen</value></data>
 </root>
