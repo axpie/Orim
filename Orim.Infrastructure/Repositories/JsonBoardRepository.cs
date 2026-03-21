@@ -20,9 +20,9 @@ public partial class JsonBoardRepository : IBoardRepository
     [GeneratedRegex(@"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$")]
     private static partial Regex GuidRegex();
 
-    public JsonBoardRepository(string dataPath)
+    public JsonBoardRepository(string dataPath, string directoryName = "boards")
     {
-        _boardsPath = Path.Combine(dataPath, "boards");
+        _boardsPath = Path.Combine(dataPath, directoryName);
         Directory.CreateDirectory(_boardsPath);
     }
 

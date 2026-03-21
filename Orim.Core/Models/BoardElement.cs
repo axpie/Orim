@@ -5,7 +5,6 @@ namespace Orim.Core.Models;
 [JsonDerivedType(typeof(ShapeElement), "shape")]
 [JsonDerivedType(typeof(TextElement), "text")]
 [JsonDerivedType(typeof(ArrowElement), "arrow")]
-[JsonDerivedType(typeof(StickyNoteElement), "stickyNote")]
 [JsonDerivedType(typeof(IconElement), "icon")]
 public abstract class BoardElement
 {
@@ -121,13 +120,6 @@ public enum DockPoint
     Left,
     Right,
     Center
-}
-
-public class StickyNoteElement : BoardElement
-{
-    public string Text { get; set; } = string.Empty;
-    public string BackgroundColor { get; set; } = "#FFEB3B";
-    public double FontSize { get; set; } = 14;
 }
 
 public class IconElement : BoardElement

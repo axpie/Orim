@@ -72,7 +72,6 @@ Unterstützte Elemente:
 - **Shapes:** Rechteck, Ellipse, Dreieck (mit Füll- und Rahmenfarbe, Größe und Position)
 - **Texte:** Freipositionierbares Textfeld (Schriftgröße, Farbe, Fettdruck, Kursiv)
 - **Verbindungen (Arrows):** Verbindungspfeile zwischen zwei Elementen (gerade Linie mit Pfeilspitze, Farbe wählbar). Jedes Element verfügt über definierte Dock-Punkte (oben, unten, links, rechts, Mittelpunkt), an denen Pfeile angehängt werden können. Bei der Bewegung eines Elements bleiben die angehängten Pfeile automatisch mit den Dock-Punkten verbunden und werden entsprechend nachgezogen.
-- **Sticky Notes:** Datenmodell und Komponente anlegen, UI aber über Feature-Flag deaktiviert (für spätere Aktivierung vorbereitet)
 
 Interaktionen:
 - Elemente per Drag-and-Drop verschieben
@@ -96,7 +95,6 @@ Interaktionen:
 ## Extensibility (Vorbereitung für spätere Erweiterungen)
 
 - **Echtzeit-Kollaboration (SignalR):** Alle Board-State-Änderungen laufen über einen abstrakten `IBoardStateNotifier`-Service. Aktuell ist die Implementierung ein No-Op. Später kann SignalR eingehängt werden, ohne die UI zu ändern.
-- **Sticky Notes:** Feature-Flag in `appsettings.json`: `Features:StickyNotes: false`
 
 ---
 
@@ -126,7 +124,6 @@ Interaktionen:
 ## Nicht im Scope (aktuell)
 
 - Echtzeit-Kollaboration (kommt später via SignalR)
-- Sticky Notes UI (kommt später)
 - E-Mail-Benachrichtigungen
 - Mobile Unterstützung
 - Docker

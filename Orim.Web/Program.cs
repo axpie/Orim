@@ -15,11 +15,17 @@ var dataPath = builder.Configuration.GetValue<string>("DataPath") ?? "data";
 if (!Path.IsPathRooted(dataPath))
     dataPath = Path.Combine(builder.Environment.ContentRootPath, dataPath);
 
+#if DEBUG
+const bool useDebugStorage = true;
+#else
+const bool useDebugStorage = false;
+#endif
+
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddMudServices();
-builder.Services.AddOrimInfrastructure(dataPath);
+builder.Services.AddOrimInfrastructure(dataPath, useDebugStorage);
 builder.Services.AddScoped<ThemeManager>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

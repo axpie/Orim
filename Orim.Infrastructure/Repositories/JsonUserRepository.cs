@@ -16,9 +16,9 @@ public class JsonUserRepository : IUserRepository
         Converters = { new JsonStringEnumConverter() }
     };
 
-    public JsonUserRepository(string dataPath)
+    public JsonUserRepository(string dataPath, string fileName = "users.json")
     {
-        _filePath = Path.Combine(dataPath, "users.json");
+        _filePath = Path.Combine(dataPath, fileName);
         Directory.CreateDirectory(dataPath);
         if (!File.Exists(_filePath))
             File.WriteAllText(_filePath, "[]");

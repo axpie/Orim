@@ -8,10 +8,13 @@ namespace Orim.Infrastructure;
 
 public static class DependencyInjection
 {
-    public static IServiceCollection AddOrimInfrastructure(this IServiceCollection services, string dataPath)
+    public static IServiceCollection AddOrimInfrastructure(this IServiceCollection services, string dataPath, bool useDebugStorage = false)
     {
-        services.AddSingleton<IUserRepository>(new JsonUserRepository(dataPath));
-        services.AddSingleton<IBoardRepository>(new JsonBoardRepository(dataPath));
+        var userFileName = useDebugStorage ? "user_debug.json" : "users.json";
+        var boardDirectoryName = useDebugStorage ? "boards_debug" : "boards";
+
+        services.AddSingleton<IUserRepository>(new JsonUserRepository(dataPath, userFileName));
+        services.AddSingleton<IBoardRepository>(new JsonBoardRepository(dataPath, boardDirectoryName));
         services.AddSingleton<IBoardStateNotifier, NoOpBoardStateNotifier>();
         services.AddScoped<UserService>();
         services.AddScoped<BoardService>();

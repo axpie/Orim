@@ -865,7 +865,6 @@ else
         ShapeElement shape => CloneShape(shape),
         TextElement text => CloneText(text),
         ArrowElement arrow => CloneArrow(arrow),
-        StickyNoteElement sticky => CloneSticky(sticky),
         IconElement icon => CloneIcon(icon),
         _ => throw new InvalidOperationException($"Unsupported element type '{element.GetType().Name}'.")
     };
@@ -986,19 +985,6 @@ else
         };
 
         CopySharedElementProperties(arrow, clone);
-        return clone;
-    }
-
-    private static StickyNoteElement CloneSticky(StickyNoteElement sticky)
-    {
-        var clone = new StickyNoteElement
-        {
-            Text = sticky.Text,
-            BackgroundColor = sticky.BackgroundColor,
-            FontSize = sticky.FontSize
-        };
-
-        CopySharedElementProperties(sticky, clone);
         return clone;
     }
 

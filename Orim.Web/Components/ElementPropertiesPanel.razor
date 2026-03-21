@@ -505,7 +505,7 @@
         await OnChanged.InvokeAsync();
     }
 
-    private static bool SupportsLabel(BoardElement? element) => element is not null && element is not TextElement and not StickyNoteElement;
+    private static bool SupportsLabel(BoardElement? element) => element is not null && element is not TextElement;
 
     private static double GetDefaultLabelFontSize(BoardElement element) =>
         element is ArrowElement

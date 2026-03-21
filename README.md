@@ -41,6 +41,11 @@ Standard-URLs in der Entwicklung:
 
 Standardmäßig speichert die Anwendung ihre Daten unter `Orim.Web/data`.
 
+Im Debug-Build werden getrennte Dateien verwendet:
+
+- `data/user_debug.json`: Benutzerkonten
+- `data/boards_debug/*.json`: Whiteboards
+
 Relevante Dateien:
 
 - `data/users.json`: Benutzerkonten
@@ -57,7 +62,6 @@ Wichtige Einstellungen:
 - `DataPath`: Speicherort für JSON-Daten
 - `SeedAdmin:Username`: Benutzername des initialen Admins, Standard ist `admin`
 - `SeedAdmin:ResetPasswordOnStartup`: Erzwingt auf Wunsch ein Passwort-Reset des vorhandenen Admins beim Start
-- `Features:StickyNotes`: reserviertes Feature-Flag
 
 ## Admin-Seed-Passwort einrichten
 
