@@ -87,6 +87,7 @@ public class ArrowElement : BoardElement
     public ArrowHeadStyle SourceHeadStyle { get; set; } = ArrowHeadStyle.None;
     public ArrowHeadStyle TargetHeadStyle { get; set; } = ArrowHeadStyle.FilledTriangle;
     public ArrowRouteStyle RouteStyle { get; set; } = ArrowRouteStyle.Straight;
+    public double? OrthogonalMiddleCoordinate { get; set; }
 }
 
 public enum ArrowLineStyle

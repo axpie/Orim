@@ -80,6 +80,11 @@
             {
                 <div style="@GetArrowEndpointHandleStyle(handle)"></div>
             }
+
+            @if (GetArrowMiddleSegmentHandle(selectedArrow) is ArrowMiddleSegmentHandleDefinition middleHandle)
+            {
+                <div style="@GetArrowMiddleSegmentHandleStyle(middleHandle)"></div>
+            }
         }
     </div>
 </div>
@@ -135,7 +140,9 @@
     private ShapeElement? _draftShape;
     private ArrowDraft? _draftArrow;
     private ArrowEndpointDrag? _arrowEndpointDrag;
+    private ArrowMiddleSegmentDrag? _arrowMiddleSegmentDrag;
     private ArrowEndpointHandleDefinition? _hoverArrowEndpointHandle;
+    private ArrowMiddleSegmentHandleDefinition? _hoverArrowMiddleSegmentHandle;
     private double _zoom = 1;
     private bool _hasInitializedViewport;
     private ResizeHandle _activeResizeHandle;
@@ -153,6 +160,8 @@
     private record struct ArrowRenderData(IReadOnlyList<Point> Points, Point LabelPoint);
     private record struct ArrowEndpointHandleDefinition(bool IsSource, Point Center, bool IsActive);
     private record struct ArrowEndpointDrag(Guid ArrowId, bool IsSource, Guid? FixedElementId, Point FixedPoint, DockPoint FixedDock, Guid? HoverElementId, DockPoint? HoverDock, Point Pointer);
+    private record struct ArrowMiddleSegmentHandleDefinition(bool IsVertical, Point Start, Point End, Point Center, bool IsActive);
+    private record struct ArrowMiddleSegmentDrag(Guid ArrowId, bool IsVertical, double PointerOffset, double InitialCoordinate, double CurrentCoordinate);
     private record struct AlignmentGuide(bool IsVertical, double Coordinate, double Start, double End);
     private record struct AlignmentMatch(bool IsVertical, double Coordinate, double Start, double End, double Delta, double Distance);
     private record struct ResizeAlignmentMatch(bool IsVertical, double AppliedDelta, double Distance);
@@ -464,6 +473,22 @@
 
                 return;
             }
+
+            var middleHandle = GetArrowMiddleSegmentHandleAtPoint(selectedArrow, worldPoint);
+            if (middleHandle is not null)
+            {
+                var coordinate = middleHandle.Value.IsVertical ? middleHandle.Value.Center.X : middleHandle.Value.Center.Y;
+                var pointerCoordinate = middleHandle.Value.IsVertical ? worldPoint.X : worldPoint.Y;
+                _arrowMiddleSegmentDrag = new ArrowMiddleSegmentDrag(
+                    selectedArrow.Id,
+                    middleHandle.Value.IsVertical,
+                    pointerCoordinate - coordinate,
+                    coordinate,
+                    coordinate);
+                _hoverArrowMiddleSegmentHandle = middleHandle;
+                _hasInteractionChanged = false;
+                return;
+            }
         }
 
         var clicked = HitTest(worldPoint);
@@ -558,6 +583,9 @@
             _hoverArrowEndpointHandle = CanEdit && SelectedTool == BoardEditor.Tool.Select && _selectedElements.Count == 1 && SelectedElement is ArrowElement selectedArrow
                 ? GetArrowEndpointHandleAtPoint(selectedArrow, worldPoint)
                 : null;
+            _hoverArrowMiddleSegmentHandle = CanEdit && SelectedTool == BoardEditor.Tool.Select && _selectedElements.Count == 1 && SelectedElement is ArrowElement selectedArrowForMiddle
+                ? GetArrowMiddleSegmentHandleAtPoint(selectedArrowForMiddle, worldPoint)
+                : null;
         }
 
         if (_isResizingSelection && SelectedElement is not null)
@@ -578,6 +606,28 @@
                 HoverDock = nextTarget?.DockPoint,
                 Pointer = nextPointer
             };
+            return;
+        }
+
+        if (_arrowMiddleSegmentDrag is not null)
+        {
+            if (Board is null)
+            {
+                return;
+            }
+
+            var arrow = Board.Elements.OfType<ArrowElement>().FirstOrDefault(candidate => candidate.Id == _arrowMiddleSegmentDrag.Value.ArrowId);
+            if (arrow is null)
+            {
+                return;
+            }
+
+            var pointerCoordinate = _arrowMiddleSegmentDrag.Value.IsVertical ? worldPoint.X : worldPoint.Y;
+            var nextCoordinate = pointerCoordinate - _arrowMiddleSegmentDrag.Value.PointerOffset;
+            arrow.OrthogonalMiddleCoordinate = nextCoordinate;
+            _arrowMiddleSegmentDrag = _arrowMiddleSegmentDrag.Value with { CurrentCoordinate = nextCoordinate };
+            _hasInteractionChanged = Math.Abs(nextCoordinate - _arrowMiddleSegmentDrag.Value.InitialCoordinate) > 0.1;
+            _hoverArrowMiddleSegmentHandle = GetArrowMiddleSegmentHandle(arrow);
             return;
         }
 
@@ -771,6 +821,7 @@
         _clearSelectionOnPanRelease = false;
         _panExceededClickThreshold = false;
         _hoverArrowEndpointHandle = null;
+        _hoverArrowMiddleSegmentHandle = null;
         ClearAlignmentGuides();
 
         if (_isResizingSelection)
@@ -831,6 +882,17 @@
             }
 
             _arrowEndpointDrag = null;
+        }
+
+        if (_arrowMiddleSegmentDrag is not null)
+        {
+            if (_hasInteractionChanged)
+            {
+                _hasInteractionChanged = false;
+                await OnBoardChanged.InvokeAsync();
+            }
+
+            _arrowMiddleSegmentDrag = null;
         }
 
         if (_isDrawingRectangle)
@@ -1511,7 +1573,9 @@
         _ when _isResizingSelection => GetResizeCursor(_activeResizeHandle),
         BoardEditor.Tool.Rectangle or BoardEditor.Tool.Circle or BoardEditor.Tool.Triangle => "crosshair",
         BoardEditor.Tool.Arrow => "crosshair",
+        _ when _arrowMiddleSegmentDrag is not null => _arrowMiddleSegmentDrag.Value.IsVertical ? "ew-resize" : "ns-resize",
         _ when _arrowEndpointDrag is not null || _hoverArrowEndpointHandle is not null => "pointer",
+        _ when _hoverArrowMiddleSegmentHandle is not null => _hoverArrowMiddleSegmentHandle.Value.IsVertical ? "ew-resize" : "ns-resize",
         _ when _hoverResizeHandle != ResizeHandle.None => GetResizeCursor(_hoverResizeHandle),
         _ when _isDraggingSelection => "grabbing",
         _ => "grab"
@@ -2046,6 +2110,21 @@
         yield return new ArrowEndpointHandleDefinition(false, renderData.Value.Points[^1], _arrowEndpointDrag is not null && _arrowEndpointDrag.Value.ArrowId == arrow.Id && !_arrowEndpointDrag.Value.IsSource);
     }
 
+    private ArrowMiddleSegmentHandleDefinition? GetArrowMiddleSegmentHandle(ArrowElement arrow)
+    {
+        if (!TryResolveOrthogonalMiddleSegment(arrow, out var isVertical, out var start, out var end, out _))
+        {
+            return null;
+        }
+
+        return new ArrowMiddleSegmentHandleDefinition(
+            isVertical,
+            start,
+            end,
+            new Point((start.X + end.X) / 2, (start.Y + end.Y) / 2),
+            _arrowMiddleSegmentDrag is not null && _arrowMiddleSegmentDrag.Value.ArrowId == arrow.Id);
+    }
+
     private string GetArrowEndpointHandleStyle(ArrowEndpointHandleDefinition handle)
     {
         var isHovered = _hoverArrowEndpointHandle is not null &&
@@ -2060,6 +2139,21 @@
         return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(size)}; height:{Px(size)}; border-radius:999px; background:{background}; border:2px solid {border}; box-sizing:border-box; pointer-events:none; box-shadow:0 0 0 {Px(2 / _zoom)} {GetSelectionTint(0.18)};";
     }
 
+    private string GetArrowMiddleSegmentHandleStyle(ArrowMiddleSegmentHandleDefinition handle)
+    {
+        var isHovered = _hoverArrowMiddleSegmentHandle is not null &&
+            _hoverArrowMiddleSegmentHandle.Value.IsVertical == handle.IsVertical &&
+            Math.Abs(_hoverArrowMiddleSegmentHandle.Value.Center.X - handle.Center.X) < 0.1 &&
+            Math.Abs(_hoverArrowMiddleSegmentHandle.Value.Center.Y - handle.Center.Y) < 0.1;
+        var thickness = (handle.IsActive || isHovered ? 12 : 8) / _zoom;
+        var length = Math.Max(handle.IsVertical ? Math.Abs(handle.End.Y - handle.Start.Y) : Math.Abs(handle.End.X - handle.Start.X), 18 / _zoom);
+        var left = handle.IsVertical ? handle.Center.X - thickness / 2 : handle.Center.X - length / 2;
+        var top = handle.IsVertical ? handle.Center.Y - length / 2 : handle.Center.Y - thickness / 2;
+        var width = handle.IsVertical ? thickness : length;
+        var height = handle.IsVertical ? length : thickness;
+        return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(width)}; height:{Px(height)}; border-radius:{Px(Math.Max(thickness, 6 / _zoom))}; background:{GetSelectionTint(handle.IsActive || isHovered ? 0.28 : 0.18)}; border:{Px(2 / _zoom)} solid {GetSelectionColor()}; box-sizing:border-box; pointer-events:none;";
+    }
+
     private ArrowEndpointHandleDefinition? GetArrowEndpointHandleAtPoint(ArrowElement arrow, Point point)
     {
         foreach (var handle in GetArrowEndpointHandles(arrow))
@@ -2072,6 +2166,19 @@
         }
 
         return null;
+    }
+
+    private ArrowMiddleSegmentHandleDefinition? GetArrowMiddleSegmentHandleAtPoint(ArrowElement arrow, Point point)
+    {
+        var handle = GetArrowMiddleSegmentHandle(arrow);
+        if (handle is null)
+        {
+            return null;
+        }
+
+        var hitTolerance = 14 / _zoom;
+        var distance = PointToLineDistance(point, handle.Value.Start, handle.Value.End);
+        return distance <= hitTolerance ? handle : null;
     }
 
     private string GetDockHandleStyle(DockHandleDefinition handle)
@@ -2127,7 +2234,7 @@
             return null;
         }
 
-        var points = BuildArrowPath(sourceEndpoint.Value.Point, sourceEndpoint.Value.Dock, targetEndpoint.Value.Point, targetEndpoint.Value.Dock, arrow.RouteStyle);
+        var points = BuildArrowPath(sourceEndpoint.Value.Point, sourceEndpoint.Value.Dock, targetEndpoint.Value.Point, targetEndpoint.Value.Dock, arrow.RouteStyle, arrow.OrthogonalMiddleCoordinate);
         return new ArrowRenderData(points, GetPointAlongPolyline(points, 0.5));
     }
 
@@ -2159,13 +2266,13 @@
         }
 
         var points = drag.IsSource
-            ? BuildArrowPath(movingPoint, movingDock, fixedPoint, drag.FixedDock, arrow.RouteStyle)
-            : BuildArrowPath(fixedPoint, drag.FixedDock, movingPoint, movingDock, arrow.RouteStyle);
+            ? BuildArrowPath(movingPoint, movingDock, fixedPoint, drag.FixedDock, arrow.RouteStyle, arrow.OrthogonalMiddleCoordinate)
+            : BuildArrowPath(fixedPoint, drag.FixedDock, movingPoint, movingDock, arrow.RouteStyle, arrow.OrthogonalMiddleCoordinate);
 
         return new ArrowRenderData(points, GetPointAlongPolyline(points, 0.5));
     }
 
-    private static List<Point> BuildArrowPath(Point start, DockPoint sourceDock, Point end, DockPoint targetDock, ArrowRouteStyle routeStyle)
+    private static List<Point> BuildArrowPath(Point start, DockPoint sourceDock, Point end, DockPoint targetDock, ArrowRouteStyle routeStyle, double? orthogonalMiddleCoordinate = null)
     {
         if (routeStyle == ArrowRouteStyle.Straight)
         {
@@ -2181,13 +2288,13 @@
 
         if (sourceHorizontal && targetHorizontal)
         {
-            var middleX = (startStub.X + endStub.X) / 2;
+            var middleX = orthogonalMiddleCoordinate ?? (startStub.X + endStub.X) / 2;
             points.Add(new Point(middleX, startStub.Y));
             points.Add(new Point(middleX, endStub.Y));
         }
         else if (!sourceHorizontal && !targetHorizontal)
         {
-            var middleY = (startStub.Y + endStub.Y) / 2;
+            var middleY = orthogonalMiddleCoordinate ?? (startStub.Y + endStub.Y) / 2;
             points.Add(new Point(startStub.X, middleY));
             points.Add(new Point(endStub.X, middleY));
         }
@@ -2294,6 +2401,52 @@
         }
 
         return Board.Elements.OfType<ArrowElement>().FirstOrDefault(arrow => arrow.Id == arrowId)?.RouteStyle ?? ArrowRouteStyle.Straight;
+    }
+
+    private bool TryResolveOrthogonalMiddleSegment(ArrowElement arrow, out bool isVertical, out Point start, out Point end, out double coordinate)
+    {
+        isVertical = false;
+        start = default;
+        end = default;
+        coordinate = 0;
+
+        if (arrow.RouteStyle != ArrowRouteStyle.Orthogonal)
+        {
+            return false;
+        }
+
+        var sourceEndpoint = ResolveArrowEndpoint(arrow, true);
+        var targetEndpoint = ResolveArrowEndpoint(arrow, false);
+        if (sourceEndpoint is null || targetEndpoint is null)
+        {
+            return false;
+        }
+
+        const double stub = 24;
+        var startStub = OffsetPoint(sourceEndpoint.Value.Point, sourceEndpoint.Value.Dock, stub);
+        var endStub = OffsetPoint(targetEndpoint.Value.Point, targetEndpoint.Value.Dock, stub);
+        var sourceHorizontal = sourceEndpoint.Value.Dock is DockPoint.Left or DockPoint.Right;
+        var targetHorizontal = targetEndpoint.Value.Dock is DockPoint.Left or DockPoint.Right;
+
+        if (sourceHorizontal && targetHorizontal)
+        {
+            coordinate = arrow.OrthogonalMiddleCoordinate ?? (startStub.X + endStub.X) / 2;
+            start = new Point(coordinate, startStub.Y);
+            end = new Point(coordinate, endStub.Y);
+            isVertical = true;
+            return Math.Abs(start.Y - end.Y) > 0.1;
+        }
+
+        if (!sourceHorizontal && !targetHorizontal)
+        {
+            coordinate = arrow.OrthogonalMiddleCoordinate ?? (startStub.Y + endStub.Y) / 2;
+            start = new Point(startStub.X, coordinate);
+            end = new Point(endStub.X, coordinate);
+            isVertical = false;
+            return Math.Abs(start.X - end.X) > 0.1;
+        }
+
+        return false;
     }
 
     private static Point SnapPointToMagneticAngle(Point origin, Point point, double stepDegrees, double thresholdDegrees)
