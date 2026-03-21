@@ -190,6 +190,8 @@
         StateHasChanged();
     }
 
+    public void ForceRerender() => StateHasChanged();
+
     public async Task SelectElementAsync(BoardElement? element)
     {
         await SetSelectionAsync(element is null ? [] : ResolveSelectionScope(element));

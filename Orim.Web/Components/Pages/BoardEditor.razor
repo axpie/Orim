@@ -161,6 +161,16 @@ else
                 <MudDivider Vertical="true" FlexItem="true" />
             }
 
+            @if (_canEdit)
+            {
+                <MudTooltip Text="@Localizer["DiagramAssistant"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.AutoAwesome"
+                                   Size="Size.Small"
+                                   Color="@(_chatPanelOpen ? Color.Primary : Color.Default)"
+                                   OnClick="@ToggleChatPanel" />
+                </MudTooltip>
+            }
+
             <MudTooltip Text="@Localizer["ExportBoardJson"]" Arrow="true">
                 <MudIconButton Icon="@Icons.Material.Filled.FileDownload"
                                Size="Size.Small"
@@ -193,6 +203,11 @@ else
                                   OnToolChanged="@HandleToolChanged"
                                   PendingIconName="@_pendingIconName"
                                   SelectedTool="@_selectedTool" />
+
+                <ChatAssistantPanel Board="@_board"
+                                    IsOpen="@_chatPanelOpen"
+                                    OnClose="@CloseChatPanel"
+                                    OnBoardChanged="@HandleChatBoardChangedAsync" />
             </div>
 
             @if (_canEdit)
@@ -324,6 +339,7 @@ else
     private bool _iconPickerVisible;
     private bool _helpDialogVisible;
     private bool _renameDialogVisible;
+    private bool _chatPanelOpen;
     private bool _isLoadingIcons;
     private string _iconSearch = string.Empty;
     private string? _iconLoadError;
@@ -391,6 +407,19 @@ else
         {
             _selectedTool = Tool.Select;
         }
+    }
+
+    private void ToggleChatPanel() => _chatPanelOpen = !_chatPanelOpen;
+
+    private void CloseChatPanel() => _chatPanelOpen = false;
+
+    private async Task HandleChatBoardChangedAsync()
+    {
+        if (_board is null) return;
+        _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
+        await BoardService.UpdateBoardAsync(_board);
+        _canvas?.ForceRerender();
+        StateHasChanged();
     }
 
     private void OpenHelpDialog()

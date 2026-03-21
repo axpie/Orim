@@ -132,4 +132,8 @@
   <data name="MaterialIconsLoadError" xml:space="preserve"><value>Die lokal eingebetteten MaterialDesignIcons konnten nicht geladen werden.</value></data>
   <data name="RenameBoard" xml:space="preserve"><value>Board umbenennen</value></data>
   <data name="RenameBoardTitle" xml:space="preserve"><value>Board umbenennen</value></data>
+  <data name="DiagramAssistant" xml:space="preserve"><value>Diagramm-Assistent</value></data>
+  <data name="ChatAssistantWelcome" xml:space="preserve"><value>Beschreibe ein Diagramm und ich erstelle es für dich auf dem Whiteboard. Z.B. "Erstelle eine Softwarearchitektur mit Mediator-Pattern".</value></data>
+  <data name="ChatAssistantNotConfigured" xml:space="preserve"><value>Der KI-Assistent ist nicht konfiguriert. Bitte konfiguriere AzureOpenAI in den Einstellungen.</value></data>
+  <data name="ChatInputPlaceholder" xml:space="preserve"><value>Diagramm beschreiben…</value></data>
 </root>

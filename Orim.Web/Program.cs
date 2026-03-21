@@ -27,6 +27,7 @@ builder.Services.AddRazorComponents()
 builder.Services.AddMudServices();
 builder.Services.AddOrimInfrastructure(dataPath, useDebugStorage);
 builder.Services.AddScoped<ThemeManager>();
+builder.Services.AddSingleton<DiagramAssistantService>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
