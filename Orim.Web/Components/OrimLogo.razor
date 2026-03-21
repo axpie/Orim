@@ -1,0 +1,13 @@
+<div class="orim-logo @Class" aria-label="Orim">
+    <img class="orim-logo__mark" src="@MarkSource" alt="" />
+    @if (ShowWordmark)
+    {
+        <span class="orim-logo__wordmark">Orim</span>
+    }
+</div>
+
+@code {
+    [Parameter] public string Class { get; set; } = string.Empty;
+    [Parameter] public bool ShowWordmark { get; set; } = true;
+    [Parameter] public string MarkSource { get; set; } = "/branding/orim-icon-outline.svg";
+}

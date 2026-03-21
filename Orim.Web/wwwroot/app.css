@@ -198,9 +198,83 @@ h1:focus {
     font-weight: 700;
 }
 
+.orim-brand-link {
+    display: inline-flex;
+    align-items: center;
+    margin-left: 0.5rem;
+    color: inherit;
+    text-decoration: none;
+}
+
+.orim-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.8rem;
+}
+
+.orim-logo__mark {
+    display: block;
+    width: 2.35rem;
+    height: 2.35rem;
+    flex: 0 0 auto;
+}
+
+.orim-logo__wordmark {
+    color: var(--orim-brand);
+    font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
+    font-size: 1.55rem;
+    font-weight: 700;
+    letter-spacing: -0.04em;
+    line-height: 1;
+}
+
+.orim-logo--appbar .orim-logo__wordmark {
+    color: #ffffff;
+    font-size: 1.45rem;
+}
+
+.orim-logo--appbar .orim-logo__mark {
+    width: 2rem;
+    height: 2rem;
+}
+
+.orim-logo--login {
+    justify-content: center;
+    margin-bottom: 0.55rem;
+}
+
+.orim-logo--login .orim-logo__mark {
+    width: 2.8rem;
+    height: 2.8rem;
+}
+
+.orim-logo--login .orim-logo__wordmark {
+    font-size: 2.2rem;
+}
+
+.orim-logo--shared .orim-logo__wordmark {
+    color: var(--orim-shell-appbar-text);
+    font-size: 1.3rem;
+}
+
+.orim-logo--shared .orim-logo__mark {
+    width: 1.85rem;
+    height: 1.85rem;
+}
+
+.orim-login-brand-block {
+    width: 100%;
+    text-align: center;
+}
+
 html[data-orim-theme='synthwave'] .orim-brand {
     font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif;
     letter-spacing: 0.08em !important;
+    text-transform: uppercase;
+    text-shadow: 0 0 22px rgba(255, 79, 216, 0.28);
+}
+
+html[data-orim-theme='synthwave'] .orim-logo__wordmark {
     text-transform: uppercase;
     text-shadow: 0 0 22px rgba(255, 79, 216, 0.28);
 }
