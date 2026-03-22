@@ -1085,12 +1085,7 @@ else
     private async Task ExportJson()
     {
         if (_board is null) return;
-        var json = System.Text.Json.JsonSerializer.Serialize(_board, new System.Text.Json.JsonSerializerOptions
-        {
-            WriteIndented = true,
-            PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
-            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
-        });
+        var json = System.Text.Json.JsonSerializer.Serialize(_board, Orim.Core.OrimJsonOptions.Indented);
         var bytes = System.Text.Encoding.UTF8.GetBytes(json);
         var base64 = Convert.ToBase64String(bytes);
         await JS.InvokeVoidAsync("orimWhiteboard.downloadFile",
@@ -1134,10 +1129,7 @@ else
 
     private static string CaptureBoardSnapshot(Board board)
     {
-        return System.Text.Json.JsonSerializer.Serialize(board, new System.Text.Json.JsonSerializerOptions
-        {
-            Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
-        });
+        return System.Text.Json.JsonSerializer.Serialize(board, Orim.Core.OrimJsonOptions.Default);
     }
 
     private Task HandleSelectedElementChanged(BoardElement? element)

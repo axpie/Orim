@@ -20,6 +20,12 @@ public class UserService
 
     public async Task<User> CreateUserAsync(string username, string password, UserRole role)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+
+        if (username.Length > 100)
+            throw new ArgumentException("Username must not exceed 100 characters.", nameof(username));
+
         var existing = await _userRepository.GetByUsernameAsync(username);
         if (existing is not null)
             throw new InvalidOperationException($"User '{username}' already exists.");
@@ -42,6 +48,8 @@ public class UserService
 
     public async Task SetPasswordAsync(Guid userId, string newPassword)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
+
         var user = await _userRepository.GetByIdAsync(userId)
                    ?? throw new InvalidOperationException("User not found.");
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword, workFactor: 12);

@@ -14,6 +14,11 @@ public class BoardService
 
     public async Task<Board> CreateBoardAsync(string title, Guid ownerId, string ownerUsername)
     {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+
+        if (title.Length > 200)
+            throw new ArgumentException("Board title must not exceed 200 characters.", nameof(title));
+
         var board = new Board
         {
             Title = title,

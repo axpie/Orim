@@ -2,6 +2,7 @@ using System.Text.Json;
 using Azure;
 using Azure.AI.OpenAI;
 using OpenAI.Chat;
+using Orim.Core;
 using Orim.Core.Models;
 
 namespace Orim.Web.Services;
@@ -11,19 +12,6 @@ public sealed class DiagramAssistantService
     private readonly ChatClient? _chatClient;
     private readonly ILogger<DiagramAssistantService> _logger;
     private readonly bool _isConfigured;
-
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
-    };
-
-    private static readonly JsonSerializerOptions PromptJsonOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
-    };
 
     public DiagramAssistantService(IConfiguration configuration, ILogger<DiagramAssistantService> logger)
     {
@@ -148,7 +136,7 @@ public sealed class DiagramAssistantService
     private static string BuildSystemPrompt(Board board)
     {
         var boardSummary = BuildBoardSummary(board);
-        var boardJson = JsonSerializer.Serialize(board, PromptJsonOptions);
+        var boardJson = JsonSerializer.Serialize(board, OrimJsonOptions.Indented);
         var existingElementsSummary = board.Elements.Count > 0
             ? $"The board currently has {board.Elements.Count} elements."
             : "The board is currently empty.";
@@ -438,7 +426,7 @@ public sealed class DiagramAssistantService
         events.Add(new DiagramAssistantEvent
         {
             Type = EventType.ElementAdded,
-            Content = JsonSerializer.Serialize(element, JsonOptions)
+            Content = JsonSerializer.Serialize(element, OrimJsonOptions.Default)
         });
 
         return ($"Shape created with ID: {element.Id}", events);
@@ -505,7 +493,7 @@ public sealed class DiagramAssistantService
         events.Add(new DiagramAssistantEvent
         {
             Type = EventType.ElementAdded,
-            Content = JsonSerializer.Serialize(arrow, JsonOptions)
+            Content = JsonSerializer.Serialize(arrow, OrimJsonOptions.Default)
         });
 
         return ($"Arrow created with ID: {arrow.Id}", events);
@@ -545,7 +533,7 @@ public sealed class DiagramAssistantService
         events.Add(new DiagramAssistantEvent
         {
             Type = EventType.ElementUpdated,
-            Content = JsonSerializer.Serialize(element, JsonOptions)
+            Content = JsonSerializer.Serialize(element, OrimJsonOptions.Default)
         });
 
         return ($"Element updated: {element.Id}", events);
@@ -825,7 +813,7 @@ public sealed class DiagramAssistantService
         events.Add(new DiagramAssistantEvent
         {
             Type = EventType.ElementAdded,
-            Content = JsonSerializer.Serialize(icon, JsonOptions)
+            Content = JsonSerializer.Serialize(icon, OrimJsonOptions.Default)
         });
 
         return ($"Icon created with ID: {icon.Id}", events);

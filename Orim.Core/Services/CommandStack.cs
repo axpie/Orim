@@ -1,6 +1,5 @@
-using Orim.Core.Models;
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using Orim.Core.Models;
 
 namespace Orim.Core.Services;
 
@@ -45,11 +44,6 @@ public class RemoveElementCommand : IBoardCommand
 
 public class BoardSnapshotCommand : IBoardCommand
 {
-    private static readonly JsonSerializerOptions SnapshotSerializerOptions = new()
-    {
-        Converters = { new JsonStringEnumConverter() }
-    };
-
     private readonly string _beforeSnapshotJson;
     private readonly string _afterSnapshotJson;
 
@@ -65,7 +59,7 @@ public class BoardSnapshotCommand : IBoardCommand
 
     private static void ApplySnapshot(Board board, string snapshotJson)
     {
-        var snapshot = JsonSerializer.Deserialize<Board>(snapshotJson, SnapshotSerializerOptions);
+        var snapshot = JsonSerializer.Deserialize<Board>(snapshotJson, OrimJsonOptions.Default);
         if (snapshot is null)
         {
             return;

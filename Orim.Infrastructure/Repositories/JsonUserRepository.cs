@@ -1,5 +1,5 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
+using Orim.Core;
 using Orim.Core.Interfaces;
 using Orim.Core.Models;
 
@@ -9,12 +9,6 @@ public class JsonUserRepository : IUserRepository
 {
     private readonly string _filePath;
     private readonly SemaphoreSlim _lock = new(1, 1);
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() }
-    };
 
     public JsonUserRepository(string dataPath, string fileName = "users.json")
     {
@@ -27,12 +21,12 @@ public class JsonUserRepository : IUserRepository
     private async Task<List<User>> ReadAllAsync()
     {
         var json = await File.ReadAllTextAsync(_filePath);
-        return JsonSerializer.Deserialize<List<User>>(json, JsonOptions) ?? [];
+        return JsonSerializer.Deserialize<List<User>>(json, OrimJsonOptions.Indented) ?? [];
     }
 
     private async Task WriteAllAsync(List<User> users)
     {
-        var json = JsonSerializer.Serialize(users, JsonOptions);
+        var json = JsonSerializer.Serialize(users, OrimJsonOptions.Indented);
         await File.WriteAllTextAsync(_filePath, json);
     }
 

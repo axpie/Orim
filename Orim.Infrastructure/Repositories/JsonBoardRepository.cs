@@ -1,6 +1,6 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
+using Orim.Core;
 using Orim.Core.Interfaces;
 using Orim.Core.Models;
 
@@ -10,12 +10,6 @@ public partial class JsonBoardRepository : IBoardRepository
 {
     private readonly string _boardsPath;
     private readonly SemaphoreSlim _lock = new(1, 1);
-    private static readonly JsonSerializerOptions JsonOptions = new()
-    {
-        WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        Converters = { new JsonStringEnumConverter() }
-    };
 
     [GeneratedRegex(@"^[0-9a-fA-F]{8}-([0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12}$")]
     private static partial Regex GuidRegex();
@@ -47,7 +41,7 @@ public partial class JsonBoardRepository : IBoardRepository
             foreach (var file in Directory.GetFiles(_boardsPath, "*.json"))
             {
                 var json = await File.ReadAllTextAsync(file);
-                var board = JsonSerializer.Deserialize<Board>(json, JsonOptions);
+                var board = JsonSerializer.Deserialize<Board>(json, OrimJsonOptions.Indented);
                 if (board is not null)
                     boards.Add(board);
             }
@@ -64,7 +58,7 @@ public partial class JsonBoardRepository : IBoardRepository
             var path = GetBoardFilePath(id);
             if (!File.Exists(path)) return null;
             var json = await File.ReadAllTextAsync(path);
-            return JsonSerializer.Deserialize<Board>(json, JsonOptions);
+            return JsonSerializer.Deserialize<Board>(json, OrimJsonOptions.Indented);
         }
         finally { _lock.Release(); }
     }
@@ -75,7 +69,7 @@ public partial class JsonBoardRepository : IBoardRepository
         try
         {
             var path = GetBoardFilePath(entity.Id);
-            var json = JsonSerializer.Serialize(entity, JsonOptions);
+            var json = JsonSerializer.Serialize(entity, OrimJsonOptions.Indented);
             await File.WriteAllTextAsync(path, json);
         }
         finally { _lock.Release(); }
