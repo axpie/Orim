@@ -132,5 +132,23 @@ window.orimWhiteboard = {
 
     getWindowWidth: function () {
         return window.innerWidth;
+    },
+
+    getViewportProfile: function () {
+        const viewportWidth = window.visualViewport?.width ?? window.innerWidth ?? document.documentElement?.clientWidth ?? 0;
+        const viewportHeight = window.visualViewport?.height ?? window.innerHeight ?? document.documentElement?.clientHeight ?? 0;
+        const maxTouchPoints = navigator.maxTouchPoints || 0;
+        const platform = navigator.platform || '';
+        const userAgent = navigator.userAgent || '';
+        const isAppleTouchDevice = /iPad|iPhone|iPod/.test(userAgent) || (platform === 'MacIntel' && maxTouchPoints > 1);
+        const hasCoarsePointer = window.matchMedia?.('(pointer: coarse)').matches === true;
+        const hasTouch = 'ontouchstart' in window || maxTouchPoints > 0;
+        const isCompact = viewportWidth <= 768 || isAppleTouchDevice || (hasTouch && hasCoarsePointer);
+
+        return {
+            width: viewportWidth,
+            height: viewportHeight,
+            isCompact: isCompact
+        };
     }
 };

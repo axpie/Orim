@@ -189,6 +189,7 @@ h1:focus {
 
 .orim-main-content {
     min-height: 100vh;
+    min-height: 100dvh;
     background: var(--orim-shell-main);
     color: var(--orim-body-text);
     transition: background 0.25s ease, color 0.25s ease;
@@ -299,6 +300,7 @@ html[data-orim-theme='synthwave'] .orim-logo__wordmark {
     align-items: center;
     justify-content: center;
     min-height: 100vh;
+    min-height: 100dvh;
     padding: 24px;
     background: var(--orim-login-background);
 }
@@ -342,6 +344,45 @@ html[data-orim-theme='synthwave'] .orim-logo__wordmark {
     color: var(--orim-board-toolbar-text) !important;
     border-bottom: 1px solid var(--orim-board-toolbar-border);
     backdrop-filter: blur(18px);
+}
+
+.orim-board-editor--compact .orim-board-toolbar-mobile {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow: hidden;
+    padding-left: max(12px, env(safe-area-inset-left));
+    padding-right: max(12px, env(safe-area-inset-right));
+}
+
+.orim-board-editor--compact .orim-mobile-zoom-controls {
+    display: flex;
+    bottom: max(16px, env(safe-area-inset-bottom));
+}
+
+.orim-board-editor--compact .orim-properties-drawer,
+.orim-board-editor--compact .orim-chat-panel {
+    width: auto;
+    left: 8px;
+    right: 8px;
+    top: auto;
+    bottom: 0;
+    border-radius: 12px 12px 0 0;
+}
+
+.orim-board-editor--compact .orim-properties-drawer {
+    transform: translateY(100%);
+}
+
+.orim-board-editor--compact .orim-properties-drawer.open {
+    transform: translateY(0);
+}
+
+.orim-board-editor--compact .orim-chat-panel.dock-left-of-properties {
+    right: 8px;
+}
+
+.orim-board-editor--compact .orim-color-swatch-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
 }
 
 .orim-board-zoom-input {
@@ -860,6 +901,23 @@ svg .board-element:hover {
 
     .orim-color-swatch-grid {
         grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .orim-board-toolbar-desktop {
+        display: none !important;
+    }
+
+    .orim-board-toolbar-mobile {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow: hidden;
+    }
+
+    .orim-mobile-zoom-controls {
+        display: flex;
+        bottom: max(16px, env(safe-area-inset-bottom));
     }
 }
 

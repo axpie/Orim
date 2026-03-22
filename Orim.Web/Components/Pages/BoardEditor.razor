@@ -26,8 +26,10 @@ else
 {
     var selectedElement = _selectedElements.Count == 1 ? _selectedElements[0] : null;
 
-    <div style="display: flex; flex-direction: column; height: calc(100vh - 64px);">
+    <div class="@GetBoardEditorClassName()" style="display: flex; flex-direction: column; height: calc(100vh - 64px); height: calc(100dvh - 64px);">
         @* === Desktop Toolbar === *@
+        @if (!_useCompactLayout)
+        {
         <MudPaper Elevation="1" Class="orim-board-toolbar orim-board-toolbar-desktop">
             <MudTooltip Text="@Localizer["BackToOverview"]" Arrow="true">
                 <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@GoBack" Size="Size.Small" />
@@ -202,8 +204,11 @@ else
                                OnClick="@ExportJson" />
             </MudTooltip>
         </MudPaper>
+        }
 
         @* === Mobile Toolbar === *@
+        @if (_useCompactLayout)
+        {
         <MudPaper Elevation="1" Class="orim-board-toolbar orim-board-toolbar-mobile">
             <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@GoBack" Size="Size.Small" />
             <MudText Typo="Typo.subtitle2" Style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px;">@_board.Title</MudText>
@@ -268,6 +273,7 @@ else
                                OnClick="@OpenMobilePropertiesDialog" />
             }
         </MudPaper>
+        }
 
         @* === Mobile Floating Zoom Controls === *@
 
@@ -306,6 +312,8 @@ else
                                             OnChanged="@OnElementPropertyChanged" />
                 }
 
+                @if (_useCompactLayout)
+                {
                 <div class="orim-mobile-zoom-controls">
                     <MudIconButton Icon="@Icons.Material.Filled.Remove"
                                    Size="Size.Small"
@@ -321,6 +329,7 @@ else
                                    Color="Color.Default"
                                    OnClick="@FitToContentAsync" />
                 </div>
+                }
             </div>
         </div>
     </div>
@@ -504,6 +513,7 @@ else
     private int _zoomPercentage = 100;
     private string _zoomDisplayValue = "100%";
     private string _renameBoardTitle = string.Empty;
+    private bool _useCompactLayout;
     private bool CanGroupSelection => _selectedElements.Count(element => element is not ArrowElement) > 1;
     private bool CanUngroupSelection => _selectedElements.Any(element => element.GroupId is not null);
     private double CanvasFitRightInset => (_propertiesPanelOpen ? 388d : 0d) + (_chatPanelOpen ? 388d : 0d);
@@ -513,6 +523,8 @@ else
     private readonly DialogOptions _helpDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
     private readonly DialogOptions _mobilePropertiesDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
     private static List<string>? _cachedMaterialIcons;
+
+    private record struct ViewportProfile(double Width, double Height, bool IsCompact);
 
     private IReadOnlyList<string> FilteredMaterialIcons => _materialIcons
         .Where(icon => string.IsNullOrWhiteSpace(_iconSearch) || icon.Contains(_iconSearch.Trim(), StringComparison.OrdinalIgnoreCase))
@@ -545,14 +557,20 @@ else
         if (firstRender && _board is not null && _hasAccess)
         {
             await _editorSurface.FocusAsync();
-            var width = await JS.InvokeAsync<int>("orimWhiteboard.getWindowWidth");
-            if (width > 768)
+            var viewport = await JS.InvokeAsync<ViewportProfile>("orimWhiteboard.getViewportProfile");
+            _useCompactLayout = viewport.IsCompact;
+            if (!_useCompactLayout)
             {
                 _propertiesPanelOpen = true;
-                StateHasChanged();
             }
+
+            StateHasChanged();
         }
     }
+
+    private string GetBoardEditorClassName() => _useCompactLayout
+        ? "orim-board-editor orim-board-editor--compact"
+        : "orim-board-editor";
 
     private void SelectTool(Tool tool) => _selectedTool = tool;
 
