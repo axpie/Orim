@@ -170,6 +170,16 @@ else
 
             @if (_canEdit)
             {
+                @if (_selectedElement is not null)
+                {
+                    <MudTooltip Text="@(_formatTransferActive ? "Formatübertragung abbrechen" : "Format übertragen")" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.FormatPaint"
+                                       Size="Size.Small"
+                                       Color="@(_formatTransferActive ? Color.Primary : Color.Default)"
+                                       OnClick="@ToggleFormatTransfer" />
+                    </MudTooltip>
+                }
+
                 <MudTooltip Text="@Localizer["Properties"]" Arrow="true">
                     <MudIconButton Icon="@Icons.Material.Filled.Tune"
                                    Size="Size.Small"
@@ -210,6 +220,7 @@ else
                  tabindex="0">
                 <WhiteboardCanvas @ref="_canvas" Board="@_board" CanEdit="@_canEdit"
                                   CommandStack="@_commandStack"
+                                  FitRightInset="@CanvasFitRightInset"
                                   OnBoardChanged="@HandleBoardChanged"
                                   OnSelectedElementChanged="@HandleSelectedElementChanged"
                                   OnSelectedElementsChanged="@HandleSelectedElementsChanged"
@@ -227,6 +238,7 @@ else
                 @if (_canEdit)
                 {
                     <ElementPropertiesPanel @key="@(selectedElement?.Id ?? Guid.Empty)"
+                                            Board="@_board"
                                             Element="@selectedElement"
                                             SelectionCount="@_selectedElements.Count"
                                             IsOpen="@_propertiesPanelOpen"
@@ -376,6 +388,8 @@ else
     private bool _chatPanelOpen;
     private bool _propertiesPanelOpen = true;
     private bool _boardLabelOutlineEnabled = true;
+    private bool _formatTransferActive;
+    private Guid? _formatTransferSourceId;
     private bool _isLoadingIcons;
     private string _iconSearch = string.Empty;
     private string? _iconLoadError;
@@ -388,6 +402,7 @@ else
     private string _renameBoardTitle = string.Empty;
     private bool CanGroupSelection => _selectedElements.Count(element => element is not ArrowElement) > 1;
     private bool CanUngroupSelection => _selectedElements.Any(element => element.GroupId is not null);
+    private double CanvasFitRightInset => (_propertiesPanelOpen ? 388d : 0d) + (_chatPanelOpen ? 388d : 0d);
 
     private List<string> _materialIcons = [];
     private readonly DialogOptions _iconDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true };
@@ -429,6 +444,27 @@ else
     }
 
     private void SelectTool(Tool tool) => _selectedTool = tool;
+
+    private void ToggleFormatTransfer()
+    {
+        if (_selectedElement is null)
+        {
+            _formatTransferActive = false;
+            _formatTransferSourceId = null;
+            return;
+        }
+
+        if (_formatTransferActive)
+        {
+            _formatTransferActive = false;
+            _formatTransferSourceId = null;
+            return;
+        }
+
+        _formatTransferSourceId = _selectedElement.Id;
+        _formatTransferActive = true;
+        SelectTool(Tool.Select);
+    }
 
     private async Task OpenIconPickerAsync()
     {
@@ -717,6 +753,12 @@ else
 
         foreach (var elementId in _selectedElements.Select(element => element.Id).Distinct().ToList())
         {
+            if (_formatTransferSourceId == elementId)
+            {
+                _formatTransferActive = false;
+                _formatTransferSourceId = null;
+            }
+
             if (_board.Elements.Any(element => element.Id == elementId))
             {
                 var cmd = new RemoveElementCommand(elementId);
@@ -968,12 +1010,76 @@ else
         return Task.CompletedTask;
     }
 
-    private Task HandleSelectedElementsChanged(IReadOnlyList<BoardElement> elements)
+    private async Task HandleSelectedElementsChanged(IReadOnlyList<BoardElement> elements)
     {
         _selectedElements = elements.ToList();
         _selectedElement = _selectedElements.LastOrDefault();
+
+        if (_formatTransferActive && _selectedElements.Count == 1 && _selectedElement is not null)
+        {
+            await TryApplyFormatTransferAsync(_selectedElement);
+        }
+
         StateHasChanged();
-        return Task.CompletedTask;
+    }
+
+    private async Task TryApplyFormatTransferAsync(BoardElement target)
+    {
+        if (_board is null || !_canEdit || _formatTransferSourceId is null || _formatTransferSourceId == target.Id)
+        {
+            return;
+        }
+
+        var source = _board.Elements.FirstOrDefault(element => element.Id == _formatTransferSourceId.Value);
+        if (source is null)
+        {
+            _formatTransferActive = false;
+            _formatTransferSourceId = null;
+            return;
+        }
+
+        ApplyFormat(source, target);
+        _formatTransferActive = false;
+        _formatTransferSourceId = null;
+        await SaveBoard();
+        _canvas?.ForceRerender();
+    }
+
+    private static void ApplyFormat(BoardElement source, BoardElement target)
+    {
+        target.LabelFontSize = source.LabelFontSize;
+        target.LabelHorizontalAlignment = source.LabelHorizontalAlignment;
+        target.LabelVerticalAlignment = source.LabelVerticalAlignment;
+
+        switch (source)
+        {
+            case ShapeElement sourceShape when target is ShapeElement targetShape:
+                targetShape.FillColor = sourceShape.FillColor;
+                targetShape.StrokeColor = sourceShape.StrokeColor;
+                targetShape.StrokeWidth = sourceShape.StrokeWidth;
+                targetShape.BorderLineStyle = sourceShape.BorderLineStyle;
+                break;
+
+            case TextElement sourceText when target is TextElement targetText:
+                targetText.Color = sourceText.Color;
+                targetText.FontSize = sourceText.FontSize;
+                targetText.IsBold = sourceText.IsBold;
+                targetText.IsItalic = sourceText.IsItalic;
+                break;
+
+            case ArrowElement sourceArrow when target is ArrowElement targetArrow:
+                targetArrow.StrokeColor = sourceArrow.StrokeColor;
+                targetArrow.StrokeWidth = sourceArrow.StrokeWidth;
+                targetArrow.LineStyle = sourceArrow.LineStyle;
+                targetArrow.SourceHeadStyle = sourceArrow.SourceHeadStyle;
+                targetArrow.TargetHeadStyle = sourceArrow.TargetHeadStyle;
+                targetArrow.RouteStyle = sourceArrow.RouteStyle;
+                break;
+
+            case IconElement sourceIcon when target is IconElement targetIcon:
+                targetIcon.Color = sourceIcon.Color;
+                break;
+        }
     }
 
     private static BoardElement CloneElement(BoardElement element) => element switch

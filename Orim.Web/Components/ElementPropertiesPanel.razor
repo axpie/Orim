@@ -125,20 +125,18 @@
 
     @if (Element is ShapeElement shape)
     {
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:8px;">
-            <div style="@GetColorSwatchStyle(ToCssColor(_fillColor, true))"></div>
-            <span class="orim-properties-color-code">@ToCssColor(_fillColor, true)</span>
-        </div>
-        <MudColorPicker Value="_fillColor" Label="Füllung" Variant="Variant.Outlined"
-                        Class="mb-2"
-                        ValueChanged="@(c => { _fillColor = c; shape.FillColor = ToCssColor(c, true); OnValueChanged(); })" />
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px;">
-            <div style="@GetColorSwatchStyle(ToCssColor(_strokeColor))"></div>
-            <span class="orim-properties-color-code">@ToCssColor(_strokeColor)</span>
-        </div>
-        <MudColorPicker Value="_strokeColor" Label="Rahmen" Variant="Variant.Outlined"
-                        DisableAlpha="true" Class="mb-2"
-                        ValueChanged="@(c => { _strokeColor = c; shape.StrokeColor = ToCssColor(c); OnValueChanged(); })" />
+        <label class="orim-properties-label">Füllung</label>
+        <button type="button" class="orim-properties-color-trigger mb-2"
+                @onclick='@(() => OpenColorDialog(ColorFieldTarget.ShapeFill, "Füllung", shape.FillColor))'>
+            <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(shape.FillColor))"></span>
+            <span>Farbe auswählen</span>
+        </button>
+        <label class="orim-properties-label">Rahmen</label>
+        <button type="button" class="orim-properties-color-trigger mb-2"
+                @onclick='@(() => OpenColorDialog(ColorFieldTarget.ShapeStroke, "Rahmen", shape.StrokeColor))'>
+            <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(shape.StrokeColor))"></span>
+            <span>Farbe auswählen</span>
+        </button>
         <MudNumericField @bind-Value="ShapeStrokeWidthValue" Label="Rahmenbreite" Variant="Variant.Outlined"
                  Size="Size.Small" Margin="Margin.Dense" T="double" />
         <MudSelect Value="shape.BorderLineStyle" Label="Linienstil" Variant="Variant.Outlined"
@@ -164,12 +162,12 @@
                       ValueChanged="@((string v) => { text.Text = v; OnValueChanged(); })" />
         <MudNumericField @bind-Value="TextFontSizeValue" Label="Schriftgröße" Variant="Variant.Outlined"
                  Size="Size.Small" Margin="Margin.Dense" T="double" />
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:8px;">
-            <div style="@GetColorSwatchStyle(ToCssColor(_textColor))"></div>
-            <span class="orim-properties-color-code">@ToCssColor(_textColor)</span>
-        </div>
-        <MudColorPicker Value="_textColor" Label="Farbe" Variant="Variant.Outlined" DisableAlpha="true"
-                        ValueChanged="@(c => { _textColor = c; text.Color = ToCssColor(c); OnValueChanged(); })" />
+        <label class="orim-properties-label">Farbe</label>
+        <button type="button" class="orim-properties-color-trigger mb-2"
+                @onclick='@(() => OpenColorDialog(ColorFieldTarget.Text, "Textfarbe", text.Color))'>
+            <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(text.Color))"></span>
+            <span>Farbe auswählen</span>
+        </button>
         <div class="d-flex gap-2 mt-2">
             <MudCheckBox Value="text.IsBold" Label="Fett" Dense="true" T="bool"
                          ValueChanged="@(v => { text.IsBold = v; OnValueChanged(); })" />
@@ -180,12 +178,12 @@
     else if (Element is ArrowElement arrow)
     {
         <MudDivider Class="my-3" />
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:8px;">
-            <div style="@GetColorSwatchStyle(ToCssColor(_arrowColor))"></div>
-            <span class="orim-properties-color-code">@ToCssColor(_arrowColor)</span>
-        </div>
-        <MudColorPicker Value="_arrowColor" Label="Farbe" Variant="Variant.Outlined" DisableAlpha="true"
-                        ValueChanged="@(c => { _arrowColor = c; arrow.StrokeColor = ToCssColor(c); OnValueChanged(); })" />
+        <label class="orim-properties-label">Farbe</label>
+        <button type="button" class="orim-properties-color-trigger mb-2"
+                @onclick='@(() => OpenColorDialog(ColorFieldTarget.Arrow, "Linienfarbe", arrow.StrokeColor))'>
+            <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(arrow.StrokeColor))"></span>
+            <span>Farbe auswählen</span>
+        </button>
         <MudNumericField @bind-Value="ArrowStrokeWidthValue" Label="Linienbreite" Variant="Variant.Outlined"
                  Size="Size.Small" Margin="Margin.Dense" T="double" />
         <MudSelect Value="arrow.LineStyle" Label="Linienmuster" Variant="Variant.Outlined"
@@ -254,12 +252,12 @@
             <span class="mdi @icon.IconName" style="font-size:28px; line-height:1; color:@icon.Color;"></span>
             <span class="orim-properties-muted-text" style="font-size:12px; overflow-wrap:anywhere;">@icon.IconName</span>
         </div>
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:6px; margin-top:8px;">
-            <div style="@GetColorSwatchStyle(ToCssColor(_iconColor))"></div>
-            <span class="orim-properties-color-code">@ToCssColor(_iconColor)</span>
-        </div>
-        <MudColorPicker Value="_iconColor" Label="Symbolfarbe" Variant="Variant.Outlined" DisableAlpha="true"
-                        ValueChanged="@(c => { _iconColor = c; icon.Color = ToCssColor(c); OnValueChanged(); })" />
+        <label class="orim-properties-label">Symbolfarbe</label>
+        <button type="button" class="orim-properties-color-trigger mb-2"
+                @onclick='@(() => OpenColorDialog(ColorFieldTarget.Icon, "Symbolfarbe", icon.Color))'>
+            <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(icon.Color))"></span>
+            <span>Farbe auswählen</span>
+        </button>
     }
 
     <MudDivider Class="my-3" />
@@ -273,8 +271,71 @@
     </div>
 </div>
 
+<MudDialog @bind-Visible="_colorDialogVisible" Options="_colorDialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@_colorDialogTitle</MudText>
+    </TitleContent>
+    <DialogContent>
+        <div class="orim-color-dialog-preview" style="@GetDialogPreviewStyle(_colorDialogHex)"></div>
+
+        <div class="orim-color-dialog-inputs">
+            <div>
+                <label class="orim-properties-label">HTML</label>
+                <input type="color"
+                       value="@_colorDialogHex"
+                       @oninput="HandleHtmlColorInput"
+                       class="orim-properties-color-html-input" />
+            </div>
+            <div>
+                <label class="orim-properties-label">HEX</label>
+                <input type="text"
+                       value="@_colorDialogHexInput"
+                       @oninput="HandleHexColorInput"
+                       class="orim-properties-input" />
+            </div>
+        </div>
+
+        @if (VisibleRecentColors.Count > 0)
+        {
+            <MudDivider Class="my-3" />
+            <label class="orim-properties-label">Zuletzt verwendet</label>
+            <div class="orim-color-swatch-grid">
+                @foreach (var recentColor in VisibleRecentColors)
+                {
+                    <button type="button"
+                            class="orim-color-swatch-button"
+                            title="@recentColor"
+                            @onclick='@(() => SetDialogColor(recentColor))'>
+                        <span class="orim-color-swatch" style="@GetColorChipStyle(recentColor)"></span>
+                    </button>
+                }
+            </div>
+        }
+
+        <MudDivider Class="my-3" />
+        <label class="orim-properties-label">Eigene Farben</label>
+        <div class="orim-color-swatch-grid">
+            @foreach (var customColor in VisibleCustomColors)
+            {
+                <button type="button"
+                        class="orim-color-swatch-button"
+                        title="@customColor"
+                        @onclick='@(() => SetDialogColor(customColor))'>
+                    <span class="orim-color-swatch" style="@GetColorChipStyle(customColor)"></span>
+                </button>
+            }
+        </div>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CloseColorDialog">@Localizer["Cancel"]</MudButton>
+        <MudButton OnClick="AddDialogColorToCustomColorsAsync">Zu eigenen Farben</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="ApplyColorDialogAsync">@Localizer["Save"]</MudButton>
+    </DialogActions>
+</MudDialog>
+
 @code {
     [Parameter] public BoardElement? Element { get; set; }
+    [Parameter] public Board? Board { get; set; }
     [Parameter] public int SelectionCount { get; set; }
     [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
@@ -294,6 +355,26 @@
     private string _labelEditBaseline = string.Empty;
     private bool _isEditingLabel;
     private bool _labelAutoSize;
+    private bool _colorDialogVisible;
+    private string _colorDialogTitle = "Farbe";
+    private string _colorDialogHex = "#000000";
+    private string _colorDialogHexInput = "#000000";
+    private ColorFieldTarget _activeColorField;
+    private static readonly string[] FallbackCustomColors =
+    [
+        "#0F172A",
+        "#334155",
+        "#64748B",
+        "#E2E8F0",
+        "#FFFFFF",
+        "#DC2626",
+        "#EA580C",
+        "#CA8A04",
+        "#16A34A",
+        "#0891B2",
+        "#2563EB",
+        "#7C3AED"
+    ];
     private readonly BorderStyleOption[] _borderStyleOptions =
     [
         new(BorderLineStyle.Solid, "Durchgezogen", string.Empty),
@@ -337,6 +418,30 @@
     private sealed record ArrowHeadOption(ArrowHeadStyle Style, string Label);
     private sealed record RouteStyleOption(ArrowRouteStyle Style, string Label);
     private sealed record DockPointOption(DockPoint Dock, string Label);
+    private readonly DialogOptions _colorDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.ExtraSmall, CloseButton = true };
+
+    private enum ColorFieldTarget
+    {
+        None,
+        ShapeFill,
+        ShapeStroke,
+        Text,
+        Arrow,
+        Icon
+    }
+
+    private IReadOnlyList<string> VisibleCustomColors =>
+        ((IEnumerable<string>)(Board?.CustomColors is { Count: > 0 } ? Board.CustomColors : FallbackCustomColors))
+            .Select(ToHexColor)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+    private IReadOnlyList<string> VisibleRecentColors =>
+        (Board?.RecentColors ?? [])
+            .Select(ToHexColor)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(10)
+            .ToList();
 
     protected override void OnParametersSet()
     {
@@ -560,6 +665,112 @@
         await OnChanged.InvokeAsync();
     }
 
+    private void OpenColorDialog(ColorFieldTarget target, string title, string currentColor)
+    {
+        _activeColorField = target;
+        _colorDialogTitle = title;
+        SetDialogColor(currentColor);
+        _colorDialogVisible = true;
+    }
+
+    private void CloseColorDialog()
+    {
+        _colorDialogVisible = false;
+        _activeColorField = ColorFieldTarget.None;
+    }
+
+    private void HandleHtmlColorInput(ChangeEventArgs e)
+    {
+        SetDialogColor(e.Value?.ToString());
+    }
+
+    private void HandleHexColorInput(ChangeEventArgs e)
+    {
+        _colorDialogHexInput = (e.Value?.ToString() ?? string.Empty).Trim().ToUpperInvariant();
+
+        if (TryNormalizeHexColor(_colorDialogHexInput, out var normalized))
+        {
+            _colorDialogHex = normalized;
+        }
+    }
+
+    private void SetDialogColor(string? color)
+    {
+        _colorDialogHex = ToHexColor(color);
+        _colorDialogHexInput = _colorDialogHex;
+    }
+
+    private async Task AddDialogColorToCustomColorsAsync()
+    {
+        if (Board is null)
+        {
+            return;
+        }
+
+        var normalized = ToHexColor(_colorDialogHex);
+        Board.CustomColors ??= [];
+
+        Board.CustomColors.RemoveAll(color => string.Equals(ToHexColor(color), normalized, StringComparison.OrdinalIgnoreCase));
+        Board.CustomColors.Insert(0, normalized);
+        Board.CustomColors = Board.CustomColors.Take(18).ToList();
+
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task ApplyColorDialogAsync()
+    {
+        if (Element is null)
+        {
+            return;
+        }
+
+        var normalized = ToHexColor(_colorDialogHex);
+
+        switch (_activeColorField)
+        {
+            case ColorFieldTarget.ShapeFill when Element is ShapeElement shape:
+                _fillColor = new MudColor(normalized);
+                shape.FillColor = normalized;
+                break;
+            case ColorFieldTarget.ShapeStroke when Element is ShapeElement shape:
+                _strokeColor = new MudColor(normalized);
+                shape.StrokeColor = normalized;
+                break;
+            case ColorFieldTarget.Text when Element is TextElement text:
+                _textColor = new MudColor(normalized);
+                text.Color = normalized;
+                break;
+            case ColorFieldTarget.Arrow when Element is ArrowElement arrow:
+                _arrowColor = new MudColor(normalized);
+                arrow.StrokeColor = normalized;
+                break;
+            case ColorFieldTarget.Icon when Element is IconElement icon:
+                _iconColor = new MudColor(normalized);
+                icon.Color = normalized;
+                break;
+            default:
+                return;
+        }
+
+        RememberRecentColor(normalized);
+        CloseColorDialog();
+        await OnChanged.InvokeAsync();
+    }
+
+    private void RememberRecentColor(string color)
+    {
+        if (Board is null)
+        {
+            return;
+        }
+
+        var normalized = ToHexColor(color);
+        Board.RecentColors ??= [];
+        Board.RecentColors.RemoveAll(item => string.Equals(ToHexColor(item), normalized, StringComparison.OrdinalIgnoreCase));
+        Board.RecentColors.Insert(0, normalized);
+        Board.RecentColors = Board.RecentColors.Take(10).ToList();
+    }
+
     private static bool SupportsLabel(BoardElement? element) => element is not null && element is not TextElement;
 
     private static double GetDefaultLabelFontSize(BoardElement element) =>
@@ -567,8 +778,11 @@
             ? 14
             : Math.Clamp(Math.Min(Math.Max(element.Width, 1), Math.Max(element.Height, 1)) * 0.28, 10, 48);
 
-    private static string GetColorSwatchStyle(string color) =>
-        $"width: 18px; height: 18px; border-radius: 4px; border: 1px solid var(--orim-properties-input-border); background: {color}; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); flex: 0 0 auto;";
+    private static string GetColorChipStyle(string color) =>
+        $"width: 24px; height: 24px; border-radius: 8px; border: 1px solid var(--orim-properties-input-border); background: {color}; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); flex: 0 0 auto;";
+
+    private static string GetDialogPreviewStyle(string color) =>
+        $"width: 100%; height: 72px; border-radius: 12px; border: 1px solid var(--orim-properties-input-border); background: {color}; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); margin-bottom: 16px;";
 
     private static string GetArrowHeadOptionSymbol(ArrowHeadStyle style) => style switch
     {
@@ -583,4 +797,34 @@
         includeAlpha
             ? color.ToString(MudColorOutputFormats.RGBA)
             : color.ToString(MudColorOutputFormats.Hex);
+
+    private static string ToHexColor(string? color)
+    {
+        if (TryNormalizeHexColor(color, out var normalized))
+        {
+            return normalized;
+        }
+
+        return "#000000";
+    }
+
+    private static bool TryNormalizeHexColor(string? color, out string normalized)
+    {
+        normalized = "#000000";
+
+        if (string.IsNullOrWhiteSpace(color))
+        {
+            return false;
+        }
+
+        try
+        {
+            normalized = new MudColor(color.Trim()).ToString(MudColorOutputFormats.Hex).ToUpperInvariant();
+            return normalized.Length == 7 && normalized.StartsWith('#');
+        }
+        catch
+        {
+            return false;
+        }
+    }
 }

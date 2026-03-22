@@ -490,6 +490,83 @@ html[data-orim-theme='synthwave'] .orim-logo__wordmark {
     color: var(--orim-properties-muted);
 }
 
+.orim-properties-color-trigger {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border: 1px solid var(--orim-properties-input-border);
+    border-radius: 10px;
+    padding: 8px 10px;
+    background: var(--orim-properties-input-bg);
+    color: var(--orim-properties-input-text);
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.orim-properties-color-trigger:hover {
+    border-color: var(--orim-brand);
+    transform: translateY(-1px);
+}
+
+.orim-properties-color-chip {
+    display: inline-flex;
+}
+
+.orim-color-dialog-preview {
+    width: 100%;
+}
+
+.orim-color-dialog-inputs {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    gap: 12px;
+    align-items: end;
+}
+
+.orim-properties-color-html-input {
+    width: 100%;
+    height: 42px;
+    padding: 4px;
+    border: 1px solid var(--orim-properties-input-border);
+    border-radius: 10px;
+    background: var(--orim-properties-input-bg);
+    box-sizing: border-box;
+    cursor: pointer;
+}
+
+.orim-color-swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.orim-color-swatch-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--orim-properties-input-border);
+    border-radius: 10px;
+    padding: 6px;
+    background: var(--orim-properties-input-bg);
+    cursor: pointer;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.orim-color-swatch-button:hover {
+    border-color: var(--orim-brand);
+    transform: translateY(-1px);
+}
+
+.orim-color-swatch {
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    border: 1px solid rgba(15, 23, 42, 0.16);
+    box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35);
+}
+
 .orim-properties-symbol-option {
     display: flex;
     align-items: center;
@@ -680,5 +757,9 @@ svg .board-element:hover {
 
     .orim-chat-panel.dock-left-of-properties {
         right: 8px;
+    }
+
+    .orim-color-swatch-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
     }
 }

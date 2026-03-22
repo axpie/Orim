@@ -116,6 +116,7 @@
     [Parameter] public EventCallback<int> OnZoomChanged { get; set; }
     [Parameter] public string? PendingIconName { get; set; }
     [Parameter] public BoardEditor.Tool SelectedTool { get; set; }
+    [Parameter] public double FitRightInset { get; set; }
 
     public BoardElement? SelectedElement => _selectedElements.LastOrDefault();
 
@@ -752,14 +753,28 @@
         const double margin = 64;
         var contentWidth = Math.Max(bounds.Value.Width, 1);
         var contentHeight = Math.Max(bounds.Value.Height, 1);
-        var availableWidth = Math.Max(_surfaceSize.Width - margin * 2, 1);
-        var availableHeight = Math.Max(_surfaceSize.Height - margin * 2, 1);
+        var viewportLeft = margin;
+        var viewportTop = margin;
+        var viewportRight = Math.Max(_surfaceSize.Width - GetEffectiveFitRightInset() - margin, viewportLeft + 1);
+        var viewportBottom = Math.Max(_surfaceSize.Height - margin, viewportTop + 1);
+        var availableWidth = Math.Max(viewportRight - viewportLeft, 1);
+        var availableHeight = Math.Max(viewportBottom - viewportTop, 1);
         var fittedZoom = Math.Min(availableWidth / contentWidth, availableHeight / contentHeight);
 
         _zoom = Math.Clamp(fittedZoom, MinZoom, MaxZoom);
         _cameraOffset = new Point(
-            (_surfaceSize.Width - contentWidth * _zoom) / 2 - bounds.Value.Left * _zoom,
-            (_surfaceSize.Height - contentHeight * _zoom) / 2 - bounds.Value.Top * _zoom);
+            viewportLeft + (availableWidth - contentWidth * _zoom) / 2 - bounds.Value.Left * _zoom,
+            viewportTop + (availableHeight - contentHeight * _zoom) / 2 - bounds.Value.Top * _zoom);
+    }
+
+    private double GetEffectiveFitRightInset()
+    {
+        if (_surfaceSize.Width <= 900)
+        {
+            return 0;
+        }
+
+        return Math.Clamp(FitRightInset, 0, Math.Max(_surfaceSize.Width - 1, 0));
     }
 
     private SelectionBounds? GetContentBounds()
