@@ -1,43 +1,4 @@
 window.orimWhiteboard = {
-    _mdiIconsPromise: null,
-
-    exportPng: function (svgId) {
-        const svg = document.getElementById(svgId);
-        if (!svg) return;
-
-        const svgData = new XMLSerializer().serializeToString(svg);
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d');
-        const img = new Image();
-
-        const svgBlob = new Blob([svgData], { type: 'image/svg+xml;charset=utf-8' });
-        const url = URL.createObjectURL(svgBlob);
-
-        img.onload = function () {
-            canvas.width = img.width || 1200;
-            canvas.height = img.height || 800;
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.drawImage(img, 0, 0);
-            URL.revokeObjectURL(url);
-
-            canvas.toBlob(function (blob) {
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = 'whiteboard.png';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-            }, 'image/png');
-        };
-        img.src = url;
-    },
-
-    getSvgContent: function (svgId) {
-        const svg = document.getElementById(svgId);
-        if (!svg) return '';
-        return new XMLSerializer().serializeToString(svg);
-    },
 
     clientToElement: function (elementId, clientX, clientY) {
         const element = document.getElementById(elementId);
@@ -102,25 +63,6 @@ window.orimWhiteboard = {
         }
     },
 
-    clientToSvg: function (clientX, clientY) {
-        const svg = document.getElementById('whiteboard-svg');
-        if (!svg) {
-            return { x: clientX, y: clientY };
-        }
-
-        const point = svg.createSVGPoint();
-        point.x = clientX;
-        point.y = clientY;
-
-        const ctm = svg.getScreenCTM();
-        if (!ctm) {
-            return { x: clientX, y: clientY };
-        }
-
-        const svgPoint = point.matrixTransform(ctm.inverse());
-        return { x: svgPoint.x, y: svgPoint.y };
-    },
-
     downloadFile: function (filename, contentType, base64) {
         const byteCharacters = atob(base64);
         const byteNumbers = new Array(byteCharacters.length);
@@ -137,20 +79,6 @@ window.orimWhiteboard = {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-    },
-
-    getMaterialDesignIcons: async function () {
-        if (!window.orimWhiteboard._mdiIconsPromise) {
-            window.orimWhiteboard._mdiIconsPromise = fetch('/data/materialdesignicons.json')
-                .then(response => {
-                    if (!response.ok) {
-                        throw new Error('mdi-json-load-failed');
-                    }
-                    return response.json();
-                });
-        }
-
-        return await window.orimWhiteboard._mdiIconsPromise;
     },
 
     _touchState: null,

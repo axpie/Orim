@@ -98,12 +98,4 @@ public partial class JsonBoardRepository : IBoardRepository
         var boards = await GetAllAsync();
         return boards.FirstOrDefault(b => b.ShareLinkToken == token);
     }
-
-    public async Task<List<Board>> GetBoardsForUserAsync(Guid userId)
-    {
-        var boards = await GetAllAsync();
-        return boards.Where(b =>
-            b.OwnerId == userId || b.Members.Any(m => m.UserId == userId)
-        ).ToList();
-    }
 }
