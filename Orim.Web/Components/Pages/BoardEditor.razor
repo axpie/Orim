@@ -200,16 +200,6 @@ else
                                Size="Size.Small"
                                OnClick="@ExportJson" />
             </MudTooltip>
-
-            @if (_board.OwnerId == _userId)
-            {
-                <MudTooltip Text="@Localizer["DeleteBoard"]" Arrow="true">
-                    <MudIconButton Icon="@Icons.Material.Filled.DeleteForever"
-                                   Color="Color.Error"
-                                   Size="Size.Small"
-                                   OnClick="@DeleteBoardAsync" />
-                </MudTooltip>
-            }
         </MudPaper>
 
         <div style="display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden;">
