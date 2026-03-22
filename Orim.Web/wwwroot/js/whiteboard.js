@@ -80,6 +80,28 @@ window.orimWhiteboard = {
         element.scrollTop = element.scrollHeight;
     },
 
+    pickScreenColor: async function () {
+        if (typeof window.EyeDropper !== 'function') {
+            return { supported: false, canceled: false, color: null };
+        }
+
+        try {
+            const eyeDropper = new window.EyeDropper();
+            const result = await eyeDropper.open();
+            return {
+                supported: true,
+                canceled: false,
+                color: result?.sRGBHex || null
+            };
+        } catch (error) {
+            if (error?.name === 'AbortError') {
+                return { supported: true, canceled: true, color: null };
+            }
+
+            throw error;
+        }
+    },
+
     clientToSvg: function (clientX, clientY) {
         const svg = document.getElementById('whiteboard-svg');
         if (!svg) {

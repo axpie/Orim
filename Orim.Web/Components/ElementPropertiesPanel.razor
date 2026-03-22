@@ -1,5 +1,6 @@
 @using MudBlazor.Utilities
 @using Orim.Web.Components.Pages
+@inject IJSRuntime JS
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 
 <div class="orim-properties-drawer @(IsOpen ? "open" : "")"
@@ -126,17 +127,43 @@
     @if (Element is ShapeElement shape)
     {
         <label class="orim-properties-label">Füllung</label>
-        <button type="button" class="orim-properties-color-trigger mb-2"
-                @onclick='@(() => OpenColorDialog(ColorFieldTarget.ShapeFill, "Füllung", shape.FillColor))'>
-            <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(shape.FillColor))"></span>
-            <span>Farbe auswählen</span>
-        </button>
+        <div class="orim-color-button-group mb-2">
+            <button type="button" class="orim-properties-color-trigger"
+                    @onclick='@(() => OpenColorDialog(ColorFieldTarget.ShapeFill, "Füllung", shape.FillColor))'>
+                <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(shape.FillColor))"></span>
+                <span>Farbe auswählen</span>
+            </button>
+            <button type="button"
+                    class="orim-properties-color-icon-button"
+                    title="Pipette"
+                    aria-label="Pipette"
+                    @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.ShapeFill))'>
+                <span class="mdi mdi-eyedropper"></span>
+            </button>
+        </div>
+        @if (ShouldShowColorStatus(ColorFieldTarget.ShapeFill))
+        {
+            <div class="orim-properties-color-status">@_colorPickerStatusMessage</div>
+        }
         <label class="orim-properties-label">Rahmen</label>
-        <button type="button" class="orim-properties-color-trigger mb-2"
-                @onclick='@(() => OpenColorDialog(ColorFieldTarget.ShapeStroke, "Rahmen", shape.StrokeColor))'>
-            <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(shape.StrokeColor))"></span>
-            <span>Farbe auswählen</span>
-        </button>
+        <div class="orim-color-button-group mb-2">
+            <button type="button" class="orim-properties-color-trigger"
+                    @onclick='@(() => OpenColorDialog(ColorFieldTarget.ShapeStroke, "Rahmen", shape.StrokeColor))'>
+                <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(shape.StrokeColor))"></span>
+                <span>Farbe auswählen</span>
+            </button>
+            <button type="button"
+                    class="orim-properties-color-icon-button"
+                    title="Pipette"
+                    aria-label="Pipette"
+                    @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.ShapeStroke))'>
+                <span class="mdi mdi-eyedropper"></span>
+            </button>
+        </div>
+        @if (ShouldShowColorStatus(ColorFieldTarget.ShapeStroke))
+        {
+            <div class="orim-properties-color-status">@_colorPickerStatusMessage</div>
+        }
         <MudNumericField @bind-Value="ShapeStrokeWidthValue" Label="Rahmenbreite" Variant="Variant.Outlined"
                  Size="Size.Small" Margin="Margin.Dense" T="double" />
         <MudSelect Value="shape.BorderLineStyle" Label="Linienstil" Variant="Variant.Outlined"
@@ -163,11 +190,24 @@
         <MudNumericField @bind-Value="TextFontSizeValue" Label="Schriftgröße" Variant="Variant.Outlined"
                  Size="Size.Small" Margin="Margin.Dense" T="double" />
         <label class="orim-properties-label">Farbe</label>
-        <button type="button" class="orim-properties-color-trigger mb-2"
-                @onclick='@(() => OpenColorDialog(ColorFieldTarget.Text, "Textfarbe", text.Color))'>
-            <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(text.Color))"></span>
-            <span>Farbe auswählen</span>
-        </button>
+        <div class="orim-color-button-group mb-2">
+            <button type="button" class="orim-properties-color-trigger"
+                    @onclick='@(() => OpenColorDialog(ColorFieldTarget.Text, "Textfarbe", text.Color))'>
+                <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(text.Color))"></span>
+                <span>Farbe auswählen</span>
+            </button>
+            <button type="button"
+                    class="orim-properties-color-icon-button"
+                    title="Pipette"
+                    aria-label="Pipette"
+                    @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.Text))'>
+                <span class="mdi mdi-eyedropper"></span>
+            </button>
+        </div>
+        @if (ShouldShowColorStatus(ColorFieldTarget.Text))
+        {
+            <div class="orim-properties-color-status">@_colorPickerStatusMessage</div>
+        }
         <div class="d-flex gap-2 mt-2">
             <MudCheckBox Value="text.IsBold" Label="Fett" Dense="true" T="bool"
                          ValueChanged="@(v => { text.IsBold = v; OnValueChanged(); })" />
@@ -179,11 +219,24 @@
     {
         <MudDivider Class="my-3" />
         <label class="orim-properties-label">Farbe</label>
-        <button type="button" class="orim-properties-color-trigger mb-2"
-                @onclick='@(() => OpenColorDialog(ColorFieldTarget.Arrow, "Linienfarbe", arrow.StrokeColor))'>
-            <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(arrow.StrokeColor))"></span>
-            <span>Farbe auswählen</span>
-        </button>
+        <div class="orim-color-button-group mb-2">
+            <button type="button" class="orim-properties-color-trigger"
+                    @onclick='@(() => OpenColorDialog(ColorFieldTarget.Arrow, "Linienfarbe", arrow.StrokeColor))'>
+                <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(arrow.StrokeColor))"></span>
+                <span>Farbe auswählen</span>
+            </button>
+            <button type="button"
+                    class="orim-properties-color-icon-button"
+                    title="Pipette"
+                    aria-label="Pipette"
+                    @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.Arrow))'>
+                <span class="mdi mdi-eyedropper"></span>
+            </button>
+        </div>
+        @if (ShouldShowColorStatus(ColorFieldTarget.Arrow))
+        {
+            <div class="orim-properties-color-status">@_colorPickerStatusMessage</div>
+        }
         <MudNumericField @bind-Value="ArrowStrokeWidthValue" Label="Linienbreite" Variant="Variant.Outlined"
                  Size="Size.Small" Margin="Margin.Dense" T="double" />
         <MudSelect Value="arrow.LineStyle" Label="Linienmuster" Variant="Variant.Outlined"
@@ -253,11 +306,24 @@
             <span class="orim-properties-muted-text" style="font-size:12px; overflow-wrap:anywhere;">@icon.IconName</span>
         </div>
         <label class="orim-properties-label">Symbolfarbe</label>
-        <button type="button" class="orim-properties-color-trigger mb-2"
-                @onclick='@(() => OpenColorDialog(ColorFieldTarget.Icon, "Symbolfarbe", icon.Color))'>
-            <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(icon.Color))"></span>
-            <span>Farbe auswählen</span>
-        </button>
+        <div class="orim-color-button-group mb-2">
+            <button type="button" class="orim-properties-color-trigger"
+                    @onclick='@(() => OpenColorDialog(ColorFieldTarget.Icon, "Symbolfarbe", icon.Color))'>
+                <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(icon.Color))"></span>
+                <span>Farbe auswählen</span>
+            </button>
+            <button type="button"
+                    class="orim-properties-color-icon-button"
+                    title="Pipette"
+                    aria-label="Pipette"
+                    @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.Icon))'>
+                <span class="mdi mdi-eyedropper"></span>
+            </button>
+        </div>
+        @if (ShouldShowColorStatus(ColorFieldTarget.Icon))
+        {
+            <div class="orim-properties-color-status">@_colorPickerStatusMessage</div>
+        }
     }
 
     <MudDivider Class="my-3" />
@@ -359,6 +425,8 @@
     private string _colorDialogTitle = "Farbe";
     private string _colorDialogHex = "#000000";
     private string _colorDialogHexInput = "#000000";
+    private string? _colorPickerStatusMessage;
+    private ColorFieldTarget _colorPickerStatusField;
     private ColorFieldTarget _activeColorField;
     private static readonly string[] FallbackCustomColors =
     [
@@ -418,6 +486,7 @@
     private sealed record ArrowHeadOption(ArrowHeadStyle Style, string Label);
     private sealed record RouteStyleOption(ArrowRouteStyle Style, string Label);
     private sealed record DockPointOption(DockPoint Dock, string Label);
+    private sealed record EyeDropperResult(bool Supported, bool Canceled, string? Color);
     private readonly DialogOptions _colorDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.ExtraSmall, CloseButton = true };
 
     private enum ColorFieldTarget
@@ -669,6 +738,7 @@
     {
         _activeColorField = target;
         _colorDialogTitle = title;
+        ClearColorStatus();
         SetDialogColor(currentColor);
         _colorDialogVisible = true;
     }
@@ -726,35 +796,97 @@
 
         var normalized = ToHexColor(_colorDialogHex);
 
-        switch (_activeColorField)
+        if (!TryApplyColor(_activeColorField, normalized))
+        {
+            return;
+        }
+
+        RememberRecentColor(normalized);
+        ClearColorStatus();
+        CloseColorDialog();
+        await OnChanged.InvokeAsync();
+    }
+
+    private async Task HandleInlineEyeDropperAsync(ColorFieldTarget target)
+    {
+        try
+        {
+            var result = await JS.InvokeAsync<EyeDropperResult>("orimWhiteboard.pickScreenColor");
+
+            if (!result.Supported)
+            {
+                SetColorStatus(target, "Die Pipette wird von diesem Browser nicht unterstützt.");
+                return;
+            }
+
+            if (result.Canceled)
+            {
+                ClearColorStatus();
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(result.Color) && TryApplyColor(target, result.Color))
+            {
+                RememberRecentColor(result.Color);
+                ClearColorStatus();
+                await OnChanged.InvokeAsync();
+            }
+        }
+        catch
+        {
+            SetColorStatus(target, "Die Pipette konnte nicht gestartet werden.");
+        }
+    }
+
+    private bool TryApplyColor(ColorFieldTarget target, string color)
+    {
+        if (Element is null)
+        {
+            return false;
+        }
+
+        var normalized = ToHexColor(color);
+
+        switch (target)
         {
             case ColorFieldTarget.ShapeFill when Element is ShapeElement shape:
                 _fillColor = new MudColor(normalized);
                 shape.FillColor = normalized;
-                break;
+                return true;
             case ColorFieldTarget.ShapeStroke when Element is ShapeElement shape:
                 _strokeColor = new MudColor(normalized);
                 shape.StrokeColor = normalized;
-                break;
+                return true;
             case ColorFieldTarget.Text when Element is TextElement text:
                 _textColor = new MudColor(normalized);
                 text.Color = normalized;
-                break;
+                return true;
             case ColorFieldTarget.Arrow when Element is ArrowElement arrow:
                 _arrowColor = new MudColor(normalized);
                 arrow.StrokeColor = normalized;
-                break;
+                return true;
             case ColorFieldTarget.Icon when Element is IconElement icon:
                 _iconColor = new MudColor(normalized);
                 icon.Color = normalized;
-                break;
+                return true;
             default:
-                return;
+                return false;
         }
+    }
 
-        RememberRecentColor(normalized);
-        CloseColorDialog();
-        await OnChanged.InvokeAsync();
+    private bool ShouldShowColorStatus(ColorFieldTarget target) =>
+        !string.IsNullOrWhiteSpace(_colorPickerStatusMessage) && _colorPickerStatusField == target;
+
+    private void SetColorStatus(ColorFieldTarget target, string message)
+    {
+        _colorPickerStatusField = target;
+        _colorPickerStatusMessage = message;
+    }
+
+    private void ClearColorStatus()
+    {
+        _colorPickerStatusField = ColorFieldTarget.None;
+        _colorPickerStatusMessage = null;
     }
 
     private void RememberRecentColor(string color)
