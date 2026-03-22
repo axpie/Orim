@@ -1,8 +1,20 @@
 @using MudBlazor.Utilities
 @using Orim.Web.Components.Pages
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 
-<MudPaper Elevation="0" Class="orim-properties-panel">
-    <MudText Typo="Typo.subtitle2" Class="mb-1" Style="font-weight: 700;">Eigenschaften</MudText>
+<div class="orim-properties-drawer @(IsOpen ? "open" : "")"
+    @onmousedown:stopPropagation="true"
+    @onclick:stopPropagation="true"
+    @onkeydown:stopPropagation="true">
+    <div class="orim-properties-drawer-header">
+        <MudIcon Icon="@Icons.Material.Filled.Tune" Size="Size.Small" />
+        <MudText Typo="Typo.subtitle2" Style="font-weight: 600; flex: 1;">@Localizer["Properties"]</MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.Close"
+                       Size="Size.Small"
+                       OnClick="@Close" />
+    </div>
+
+    <div class="orim-properties-drawer-body">
     @if (Element is null)
     {
         <MudText Typo="Typo.body2" Class="mb-3 orim-properties-muted-text">
@@ -46,9 +58,11 @@
         <div>
             <label class="orim-properties-label">Label</label>
             <textarea rows="4"
-                      value="@Element.Label"
-                      @oninput="HandleLabelTextInput"
-                      class="orim-properties-textarea">@Element.Label</textarea>
+                      value="@_labelDraft"
+                      @oninput="HandleLabelInputAsync"
+                      @onfocus="HandleLabelFocus"
+                      @onblur="HandleLabelBlurAsync"
+                      class="orim-properties-textarea"></textarea>
         </div>
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
@@ -256,12 +270,16 @@
                class="orim-properties-input" />
     </div>
     }
-</MudPaper>
+    </div>
+</div>
 
 @code {
     [Parameter] public BoardElement? Element { get; set; }
     [Parameter] public int SelectionCount { get; set; }
+    [Parameter] public bool IsOpen { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
+    [Parameter] public EventCallback OnPreviewChanged { get; set; }
+    [Parameter] public EventCallback OnClose { get; set; }
 
     private MudColor _fillColor = new("#FFFFFF");
     private MudColor _strokeColor = new("#000000");
@@ -272,6 +290,9 @@
     private double _textFontSize;
     private double _arrowStrokeWidth;
     private double _labelFontSize;
+    private string _labelDraft = string.Empty;
+    private string _labelEditBaseline = string.Empty;
+    private bool _isEditingLabel;
     private bool _labelAutoSize;
     private readonly BorderStyleOption[] _borderStyleOptions =
     [
@@ -300,8 +321,8 @@
     ];
     private readonly RouteStyleOption[] _routeStyleOptions =
     [
-        new(ArrowRouteStyle.Straight, "Luftlinie"),
-        new(ArrowRouteStyle.Orthogonal, "Rechte Winkel")
+        new(ArrowRouteStyle.Orthogonal, "Rechte Winkel"),
+        new(ArrowRouteStyle.Straight, "Luftlinie")
     ];
     private readonly DockPointOption[] _dockPointOptions =
     [
@@ -327,6 +348,11 @@
         _labelAutoSize = Element.LabelFontSize is null;
         _labelFontSize = Element.LabelFontSize ?? GetDefaultLabelFontSize(Element);
 
+        if (!_isEditingLabel)
+        {
+            _labelDraft = Element.Label;
+        }
+
         if (Element is ShapeElement shape)
         {
             _fillColor = new MudColor(shape.FillColor);
@@ -348,6 +374,8 @@
             _iconColor = new MudColor(icon.Color);
         }
     }
+
+    private Task Close() => OnClose.InvokeAsync();
 
     private double ShapeStrokeWidthValue
     {
@@ -451,9 +479,36 @@
         OnValueChanged();
     }
 
-    private void HandleLabelTextInput(ChangeEventArgs e)
+    private async Task HandleLabelInputAsync(ChangeEventArgs e)
     {
-        HandleLabelChanged(e.Value?.ToString() ?? string.Empty);
+        _labelDraft = e.Value?.ToString() ?? string.Empty;
+
+        if (Element is null)
+        {
+            return;
+        }
+
+        Element.Label = _labelDraft;
+        await OnPreviewChanged.InvokeAsync();
+    }
+
+    private void HandleLabelFocus(FocusEventArgs _)
+    {
+        _isEditingLabel = true;
+        _labelEditBaseline = Element?.Label ?? string.Empty;
+    }
+
+    private Task HandleLabelBlurAsync(FocusEventArgs _)
+    {
+        _isEditingLabel = false;
+        var nextLabel = _labelDraft ?? string.Empty;
+
+        if (!string.Equals(_labelEditBaseline, nextLabel, StringComparison.Ordinal))
+        {
+            HandleLabelChanged(nextLabel);
+        }
+
+        return Task.CompletedTask;
     }
 
     private void HandleLabelAutoSizeChanged(bool value)

@@ -4,6 +4,7 @@ public class Board
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Title { get; set; } = string.Empty;
+    public bool LabelOutlineEnabled { get; set; } = true;
     public Guid OwnerId { get; set; }
     public BoardVisibility Visibility { get; set; } = BoardVisibility.Private;
     public string? ShareLinkToken { get; set; }

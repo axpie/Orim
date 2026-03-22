@@ -408,15 +408,50 @@ html[data-orim-theme='synthwave'] .orim-logo__wordmark {
 }
 
 .orim-properties-panel {
-    width: 360px;
-    min-width: 360px;
-    height: 100%;
-    border-radius: 0 !important;
-    border-left: 1px solid var(--orim-properties-panel-border);
-    padding: 20px;
-    background: var(--orim-properties-panel-bg) !important;
+    background: transparent;
+}
+
+.orim-properties-drawer {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    bottom: 8px;
+    width: 380px;
+    max-width: calc(100vw - 32px);
+    display: flex;
+    flex-direction: column;
+    background: var(--orim-properties-panel-bg);
+    border: 1px solid var(--orim-properties-panel-border);
+    border-radius: 12px;
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.15);
+    z-index: 100;
+    opacity: 0;
+    transform: translateX(100%);
+    pointer-events: none;
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    overflow: hidden;
+}
+
+.orim-properties-drawer.open {
+    opacity: 1;
+    transform: translateX(0);
+    pointer-events: auto;
+}
+
+.orim-properties-drawer-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 16px;
+    border-bottom: 1px solid var(--orim-properties-panel-border);
     color: var(--orim-body-text);
+}
+
+.orim-properties-drawer-body {
+    flex: 1;
     overflow-y: auto;
+    padding: 16px;
+    color: var(--orim-body-text);
     box-sizing: border-box;
 }
 
@@ -510,6 +545,10 @@ svg .board-element:hover {
     opacity: 1;
     transform: translateX(0);
     pointer-events: auto;
+}
+
+.orim-chat-panel.dock-left-of-properties {
+    right: 396px;
 }
 
 .orim-chat-header {
@@ -621,4 +660,25 @@ svg .board-element:hover {
 @keyframes orimTypingBounce {
     0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
     30% { transform: translateY(-6px); opacity: 1; }
+}
+
+@media (max-width: 900px) {
+    .orim-properties-drawer,
+    .orim-chat-panel {
+        width: auto;
+        left: 8px;
+        right: 8px;
+    }
+
+    .orim-properties-drawer {
+        transform: translateY(100%);
+    }
+
+    .orim-properties-drawer.open {
+        transform: translateY(0);
+    }
+
+    .orim-chat-panel.dock-left-of-properties {
+        right: 8px;
+    }
 }

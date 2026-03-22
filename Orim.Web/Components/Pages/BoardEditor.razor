@@ -129,6 +129,13 @@ else
                                    OnClick="@OpenHelpDialog" />
                 </MudTooltip>
 
+                <MudTooltip Text="@Localizer["BoardSettings"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   OnClick="@OpenBoardSettingsDialog" />
+                </MudTooltip>
+
                 @if (_selectedElement is not null)
                 {
                     <MudTooltip Text="@Localizer["DeleteSelectedElement"]" Arrow="true">
@@ -163,6 +170,13 @@ else
 
             @if (_canEdit)
             {
+                <MudTooltip Text="@Localizer["Properties"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Tune"
+                                   Size="Size.Small"
+                                   Color="@(_propertiesPanelOpen ? Color.Primary : Color.Default)"
+                                   OnClick="@TogglePropertiesPanel" />
+                </MudTooltip>
+
                 <MudTooltip Text="@Localizer["DiagramAssistant"]" Arrow="true">
                     <MudIconButton Icon="@Icons.Material.Filled.AutoAwesome"
                                    Size="Size.Small"
@@ -206,17 +220,21 @@ else
 
                 <ChatAssistantPanel Board="@_board"
                                     IsOpen="@_chatPanelOpen"
+                                    DockLeftOfProperties="@(_chatPanelOpen && _propertiesPanelOpen)"
                                     OnClose="@CloseChatPanel"
                                     OnBoardChanged="@HandleChatBoardChangedAsync" />
-            </div>
 
-            @if (_canEdit)
-            {
-                <ElementPropertiesPanel @key="@(selectedElement?.Id ?? Guid.Empty)"
-                                        Element="@selectedElement"
-                                        SelectionCount="@_selectedElements.Count"
-                                        OnChanged="@OnElementPropertyChanged" />
-            }
+                @if (_canEdit)
+                {
+                    <ElementPropertiesPanel @key="@(selectedElement?.Id ?? Guid.Empty)"
+                                            Element="@selectedElement"
+                                            SelectionCount="@_selectedElements.Count"
+                                            IsOpen="@_propertiesPanelOpen"
+                                            OnClose="@ClosePropertiesPanel"
+                                            OnPreviewChanged="@OnElementPropertyPreviewChanged"
+                                            OnChanged="@OnElementPropertyChanged" />
+                }
+            </div>
         </div>
     </div>
 
@@ -321,6 +339,21 @@ else
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ConfirmRenameBoardAsync">@Localizer["Save"]</MudButton>
         </DialogActions>
     </MudDialog>
+
+    <MudDialog @bind-Visible="_boardSettingsDialogVisible" Options="_helpDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">@Localizer["BoardSettings"]</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudCheckBox @bind-Value="_boardLabelOutlineEnabled"
+                         T="bool"
+                         Label="@Localizer["LabelOutlineEnabled"]" />
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@CloseBoardSettingsDialog">@Localizer["Cancel"]</MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ConfirmBoardSettingsAsync">@Localizer["Save"]</MudButton>
+        </DialogActions>
+    </MudDialog>
 }
 
 @code {
@@ -339,7 +372,10 @@ else
     private bool _iconPickerVisible;
     private bool _helpDialogVisible;
     private bool _renameDialogVisible;
+    private bool _boardSettingsDialogVisible;
     private bool _chatPanelOpen;
+    private bool _propertiesPanelOpen = true;
+    private bool _boardLabelOutlineEnabled = true;
     private bool _isLoadingIcons;
     private string _iconSearch = string.Empty;
     private string? _iconLoadError;
@@ -379,6 +415,7 @@ else
 
         _hasAccess = BoardService.HasAccess(_board, _userId);
         _canEdit = BoardService.HasAccess(_board, _userId, BoardRole.Editor);
+        _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
         _commandStack.Clear();
         _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
     }
@@ -413,18 +450,61 @@ else
 
     private void CloseChatPanel() => _chatPanelOpen = false;
 
+    private void TogglePropertiesPanel() => _propertiesPanelOpen = !_propertiesPanelOpen;
+
+    private void ClosePropertiesPanel() => _propertiesPanelOpen = false;
+
     private async Task HandleChatBoardChangedAsync()
     {
         if (_board is null) return;
         _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
         await BoardService.UpdateBoardAsync(_board);
-        _canvas?.ForceRerender();
+        if (_canvas is not null)
+        {
+            _canvas.ForceRerender();
+            await _canvas.FitToContentAsync();
+        }
         StateHasChanged();
     }
 
     private void OpenHelpDialog()
     {
         _helpDialogVisible = true;
+    }
+
+    private void OpenBoardSettingsDialog()
+    {
+        if (_board is null)
+        {
+            return;
+        }
+
+        _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
+        _boardSettingsDialogVisible = true;
+    }
+
+    private void CloseBoardSettingsDialog()
+    {
+        _boardSettingsDialogVisible = false;
+        if (_board is not null)
+        {
+            _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
+        }
+    }
+
+    private async Task ConfirmBoardSettingsAsync()
+    {
+        if (_board is null)
+        {
+            return;
+        }
+
+        _board.LabelOutlineEnabled = _boardLabelOutlineEnabled;
+        _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
+        _boardSettingsDialogVisible = false;
+        await BoardService.UpdateBoardAsync(_board);
+        _canvas?.ForceRerender();
+        StateHasChanged();
     }
 
     private void CloseHelpDialog()
@@ -842,6 +922,13 @@ else
     {
         await SaveBoard();
         StateHasChanged();
+    }
+
+    private Task OnElementPropertyPreviewChanged()
+    {
+        _canvas?.ForceRerender();
+        StateHasChanged();
+        return Task.CompletedTask;
     }
 
     private async Task SyncSelectionToBoardAsync()

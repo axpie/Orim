@@ -18,6 +18,13 @@ public sealed class DiagramAssistantService
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
 
+    private static readonly JsonSerializerOptions PromptJsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        WriteIndented = true,
+        Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
+    };
+
     public DiagramAssistantService(IConfiguration configuration, ILogger<DiagramAssistantService> logger)
     {
         _logger = logger;
@@ -140,25 +147,38 @@ public sealed class DiagramAssistantService
 
     private static string BuildSystemPrompt(Board board)
     {
+        var boardSummary = BuildBoardSummary(board);
+        var boardJson = JsonSerializer.Serialize(board, PromptJsonOptions);
         var existingElementsSummary = board.Elements.Count > 0
             ? $"The board currently has {board.Elements.Count} elements."
             : "The board is currently empty.";
 
         return $"""
             You are a diagram assistant for the Orim whiteboard application.
-            Your job is to create diagrams on the whiteboard by calling the provided tools.
+            Your job is to interpret and modify diagrams on the whiteboard by calling the provided tools.
             
             {existingElementsSummary}
+            {boardSummary}
+
+            ## Current Board JSON
+            ```json
+            {boardJson}
+            ```
             
             ## Available Tools
             You can create shapes (rectangles, ellipses, triangles), arrows between elements, and icon elements.
-            Use these tools to build diagrams that the user describes.
+            You can also update or remove existing elements.
+            Use these tools to build, interpret, and modify the board that the user describes.
             
             ## Guidelines
+            - Always inspect the current board JSON before deciding whether to modify an existing diagram or create a new one.
+            - Reuse and update existing elements when the user's request is an edit to the current board.
+            - Only clear the board when the user explicitly asks for a fresh diagram or a full replacement.
             - Position elements logically on the canvas with good spacing (use coordinates like 100-1500 for x, 100-1000 for y).
             - Use a grid-like layout with consistent spacing (e.g., 200px between elements).
             - Use meaningful labels on shapes to describe components.
             - Connect related elements with arrows.
+            - Use orthogonal arrow routing by default. Only use straight routing when the user explicitly requests it.
             - Use colors to distinguish different types of components:
               - Primary components: #6e40c9 (purple) fill with white text
               - Secondary components: #238636 (green) fill
@@ -172,6 +192,21 @@ public sealed class DiagramAssistantService
             - Respond in the same language the user writes in.
             - After creating the diagram, briefly explain what you created.
             """;
+    }
+
+    private static string BuildBoardSummary(Board board)
+    {
+        if (board.Elements.Count == 0)
+        {
+            return "The current board has no elements.";
+        }
+
+        var shapeCount = board.Elements.OfType<ShapeElement>().Count();
+        var arrowCount = board.Elements.OfType<ArrowElement>().Count();
+        var iconCount = board.Elements.OfType<IconElement>().Count();
+        var textCount = board.Elements.OfType<TextElement>().Count();
+
+        return $"Element counts: {shapeCount} shapes, {arrowCount} arrows, {iconCount} icons, {textCount} text elements.";
     }
 
     private static List<ChatTool> BuildToolDefinitions()
@@ -205,7 +240,7 @@ public sealed class DiagramAssistantService
 
             ChatTool.CreateFunctionTool(
                 "add_arrow",
-                "Add an arrow connecting two elements on the whiteboard. Use element IDs returned from add_shape.",
+                "Add an arrow connecting two elements on the whiteboard. Use orthogonal routing unless the user explicitly wants a straight line.",
                 BinaryData.FromString("""
                 {
                     "type": "object",
@@ -228,7 +263,7 @@ public sealed class DiagramAssistantService
                         "routeStyle": {
                             "type": "string",
                             "enum": ["Straight", "Orthogonal"],
-                            "description": "Arrow routing style."
+                            "description": "Arrow routing style. Prefer Orthogonal by default."
                         },
                         "lineStyle": {
                             "type": "string",
@@ -247,6 +282,67 @@ public sealed class DiagramAssistantService
                         }
                     },
                     "required": ["sourceElementId", "targetElementId"]
+                }
+                """)),
+
+            ChatTool.CreateFunctionTool(
+                "update_element",
+                "Update an existing element on the board using its element ID. Use this to modify the current diagram instead of recreating it.",
+                BinaryData.FromString("""
+                {
+                    "type": "object",
+                    "properties": {
+                        "elementId": { "type": "string", "description": "ID of the element to update (GUID)." },
+                        "x": { "type": "number" },
+                        "y": { "type": "number" },
+                        "width": { "type": "number" },
+                        "height": { "type": "number" },
+                        "zIndex": { "type": "integer" },
+                        "rotation": { "type": "number" },
+                        "label": { "type": "string" },
+                        "labelFontSize": { "type": ["number", "null"] },
+                        "labelHorizontalAlignment": { "type": "string", "enum": ["Left", "Center", "Right"] },
+                        "labelVerticalAlignment": { "type": "string", "enum": ["Top", "Middle", "Bottom"] },
+                        "shapeType": { "type": "string", "enum": ["Rectangle", "Ellipse", "Triangle"] },
+                        "fillColor": { "type": "string" },
+                        "strokeColor": { "type": "string" },
+                        "strokeWidth": { "type": "number" },
+                        "borderLineStyle": { "type": "string", "enum": ["Solid", "Dashed", "Dotted", "DashDot", "LongDash", "Double"] },
+                        "text": { "type": "string" },
+                        "fontSize": { "type": "number" },
+                        "color": { "type": "string" },
+                        "isBold": { "type": "boolean" },
+                        "isItalic": { "type": "boolean" },
+                        "iconName": { "type": "string" },
+                        "sourceElementId": { "type": ["string", "null"] },
+                        "targetElementId": { "type": ["string", "null"] },
+                        "sourceX": { "type": ["number", "null"] },
+                        "sourceY": { "type": ["number", "null"] },
+                        "targetX": { "type": ["number", "null"] },
+                        "targetY": { "type": ["number", "null"] },
+                        "sourceDock": { "type": "string", "enum": ["Top", "Bottom", "Left", "Right", "Center"] },
+                        "targetDock": { "type": "string", "enum": ["Top", "Bottom", "Left", "Right", "Center"] },
+                        "routeStyle": { "type": "string", "enum": ["Straight", "Orthogonal"] },
+                        "lineStyle": { "type": "string", "enum": ["Solid", "Dashed", "Dotted", "DashDot", "LongDash"] },
+                        "targetHeadStyle": { "type": "string", "enum": ["None", "FilledTriangle", "OpenTriangle", "FilledCircle", "OpenCircle"] },
+                        "sourceHeadStyle": { "type": "string", "enum": ["None", "FilledTriangle", "OpenTriangle", "FilledCircle", "OpenCircle"] },
+                        "orthogonalMiddleCoordinate": { "type": ["number", "null"] }
+                    },
+                    "required": ["elementId"]
+                }
+                """)),
+
+            ChatTool.CreateFunctionTool(
+                "remove_element",
+                "Remove an existing element from the board by ID. When removing a non-arrow element, connected arrows can be removed as well.",
+                BinaryData.FromString("""
+                {
+                    "type": "object",
+                    "properties": {
+                        "elementId": { "type": "string", "description": "ID of the element to remove (GUID)." },
+                        "removeConnectedArrows": { "type": "boolean", "description": "When true, also removes arrows connected to the element. Defaults to true." }
+                    },
+                    "required": ["elementId"]
                 }
                 """)),
 
@@ -297,6 +393,10 @@ public sealed class DiagramAssistantService
                     return ExecuteAddShape(argumentsJson, board, events);
                 case "add_arrow":
                     return ExecuteAddArrow(argumentsJson, board, events);
+                case "update_element":
+                    return ExecuteUpdateElement(argumentsJson, board, events);
+                case "remove_element":
+                    return ExecuteRemoveElement(argumentsJson, board, events);
                 case "add_icon":
                     return ExecuteAddIcon(argumentsJson, board, events);
                 case "clear_board":
@@ -370,8 +470,8 @@ public sealed class DiagramAssistantService
             : DockPoint.Left;
 
         var routeStyle = root.TryGetProperty("routeStyle", out var rsProp)
-            ? Enum.TryParse<ArrowRouteStyle>(rsProp.GetString(), true, out var rs) ? rs : ArrowRouteStyle.Straight
-            : ArrowRouteStyle.Straight;
+            ? Enum.TryParse<ArrowRouteStyle>(rsProp.GetString(), true, out var rs) ? rs : ArrowRouteStyle.Orthogonal
+            : ArrowRouteStyle.Orthogonal;
 
         var lineStyle = root.TryGetProperty("lineStyle", out var lsProp)
             ? Enum.TryParse<ArrowLineStyle>(lsProp.GetString(), true, out var ls) ? ls : ArrowLineStyle.Solid
@@ -409,6 +509,298 @@ public sealed class DiagramAssistantService
         });
 
         return ($"Arrow created with ID: {arrow.Id}", events);
+    }
+
+    private static (string, List<DiagramAssistantEvent>) ExecuteUpdateElement(
+        string argsJson, Board board, List<DiagramAssistantEvent> events)
+    {
+        using var doc = JsonDocument.Parse(argsJson);
+        var root = doc.RootElement;
+
+        var elementId = Guid.Parse(root.GetProperty("elementId").GetString()!);
+        var element = board.Elements.FirstOrDefault(candidate => candidate.Id == elementId);
+        if (element is null)
+        {
+            return ("Error: Element not found on the board.", events);
+        }
+
+        ApplyCommonElementUpdates(element, root);
+
+        switch (element)
+        {
+            case ShapeElement shape:
+                ApplyShapeUpdates(shape, root);
+                break;
+            case TextElement text:
+                ApplyTextUpdates(text, root);
+                break;
+            case ArrowElement arrow:
+                ApplyArrowUpdates(arrow, root);
+                break;
+            case IconElement icon:
+                ApplyIconUpdates(icon, root);
+                break;
+        }
+
+        events.Add(new DiagramAssistantEvent
+        {
+            Type = EventType.ElementUpdated,
+            Content = JsonSerializer.Serialize(element, JsonOptions)
+        });
+
+        return ($"Element updated: {element.Id}", events);
+    }
+
+    private static (string, List<DiagramAssistantEvent>) ExecuteRemoveElement(
+        string argsJson, Board board, List<DiagramAssistantEvent> events)
+    {
+        using var doc = JsonDocument.Parse(argsJson);
+        var root = doc.RootElement;
+
+        var elementId = Guid.Parse(root.GetProperty("elementId").GetString()!);
+        var removeConnectedArrows = !root.TryGetProperty("removeConnectedArrows", out var removeProp) || removeProp.GetBoolean();
+
+        var targetElement = board.Elements.FirstOrDefault(candidate => candidate.Id == elementId);
+        if (targetElement is null)
+        {
+            return ("Error: Element not found on the board.", events);
+        }
+
+        var removedCount = 0;
+        if (targetElement is not ArrowElement && removeConnectedArrows)
+        {
+            removedCount += board.Elements.RemoveAll(candidate => candidate is ArrowElement arrow &&
+                (arrow.SourceElementId == elementId || arrow.TargetElementId == elementId));
+        }
+
+        if (board.Elements.Remove(targetElement))
+        {
+            removedCount++;
+        }
+
+        events.Add(new DiagramAssistantEvent
+        {
+            Type = EventType.ElementRemoved,
+            Content = $"Removed {removedCount} element(s)."
+        });
+
+        return ($"Removed {removedCount} element(s).", events);
+    }
+
+    private static void ApplyCommonElementUpdates(BoardElement element, JsonElement root)
+    {
+        if (root.TryGetProperty("x", out var xProp))
+        {
+            element.X = xProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("y", out var yProp))
+        {
+            element.Y = yProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("width", out var widthProp))
+        {
+            element.Width = widthProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("height", out var heightProp))
+        {
+            element.Height = heightProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("zIndex", out var zIndexProp))
+        {
+            element.ZIndex = zIndexProp.GetInt32();
+        }
+
+        if (root.TryGetProperty("rotation", out var rotationProp))
+        {
+            element.Rotation = rotationProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("label", out var labelProp))
+        {
+            element.Label = labelProp.GetString() ?? string.Empty;
+        }
+
+        if (root.TryGetProperty("labelFontSize", out var labelFontSizeProp))
+        {
+            element.LabelFontSize = labelFontSizeProp.ValueKind == JsonValueKind.Null ? null : labelFontSizeProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("labelHorizontalAlignment", out var horizontalProp) &&
+            Enum.TryParse<HorizontalLabelAlignment>(horizontalProp.GetString(), true, out var horizontalAlignment))
+        {
+            element.LabelHorizontalAlignment = horizontalAlignment;
+        }
+
+        if (root.TryGetProperty("labelVerticalAlignment", out var verticalProp) &&
+            Enum.TryParse<VerticalLabelAlignment>(verticalProp.GetString(), true, out var verticalAlignment))
+        {
+            element.LabelVerticalAlignment = verticalAlignment;
+        }
+    }
+
+    private static void ApplyShapeUpdates(ShapeElement shape, JsonElement root)
+    {
+        if (root.TryGetProperty("shapeType", out var shapeTypeProp) &&
+            Enum.TryParse<ShapeType>(shapeTypeProp.GetString(), true, out var shapeType))
+        {
+            shape.ShapeType = shapeType;
+        }
+
+        if (root.TryGetProperty("fillColor", out var fillColorProp))
+        {
+            shape.FillColor = fillColorProp.GetString() ?? shape.FillColor;
+        }
+
+        if (root.TryGetProperty("strokeColor", out var strokeColorProp))
+        {
+            shape.StrokeColor = strokeColorProp.GetString() ?? shape.StrokeColor;
+        }
+
+        if (root.TryGetProperty("strokeWidth", out var strokeWidthProp))
+        {
+            shape.StrokeWidth = strokeWidthProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("borderLineStyle", out var borderStyleProp) &&
+            Enum.TryParse<BorderLineStyle>(borderStyleProp.GetString(), true, out var borderStyle))
+        {
+            shape.BorderLineStyle = borderStyle;
+        }
+    }
+
+    private static void ApplyTextUpdates(TextElement text, JsonElement root)
+    {
+        if (root.TryGetProperty("text", out var textProp))
+        {
+            text.Text = textProp.GetString() ?? string.Empty;
+        }
+
+        if (root.TryGetProperty("fontSize", out var fontSizeProp))
+        {
+            text.FontSize = fontSizeProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("color", out var colorProp))
+        {
+            text.Color = colorProp.GetString() ?? text.Color;
+        }
+
+        if (root.TryGetProperty("isBold", out var isBoldProp))
+        {
+            text.IsBold = isBoldProp.GetBoolean();
+        }
+
+        if (root.TryGetProperty("isItalic", out var isItalicProp))
+        {
+            text.IsItalic = isItalicProp.GetBoolean();
+        }
+    }
+
+    private static void ApplyArrowUpdates(ArrowElement arrow, JsonElement root)
+    {
+        if (root.TryGetProperty("sourceElementId", out var sourceElementIdProp))
+        {
+            arrow.SourceElementId = sourceElementIdProp.ValueKind == JsonValueKind.Null
+                ? null
+                : Guid.Parse(sourceElementIdProp.GetString()!);
+        }
+
+        if (root.TryGetProperty("targetElementId", out var targetElementIdProp))
+        {
+            arrow.TargetElementId = targetElementIdProp.ValueKind == JsonValueKind.Null
+                ? null
+                : Guid.Parse(targetElementIdProp.GetString()!);
+        }
+
+        if (root.TryGetProperty("sourceX", out var sourceXProp))
+        {
+            arrow.SourceX = sourceXProp.ValueKind == JsonValueKind.Null ? null : sourceXProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("sourceY", out var sourceYProp))
+        {
+            arrow.SourceY = sourceYProp.ValueKind == JsonValueKind.Null ? null : sourceYProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("targetX", out var targetXProp))
+        {
+            arrow.TargetX = targetXProp.ValueKind == JsonValueKind.Null ? null : targetXProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("targetY", out var targetYProp))
+        {
+            arrow.TargetY = targetYProp.ValueKind == JsonValueKind.Null ? null : targetYProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("sourceDock", out var sourceDockProp) &&
+            Enum.TryParse<DockPoint>(sourceDockProp.GetString(), true, out var sourceDock))
+        {
+            arrow.SourceDock = sourceDock;
+        }
+
+        if (root.TryGetProperty("targetDock", out var targetDockProp) &&
+            Enum.TryParse<DockPoint>(targetDockProp.GetString(), true, out var targetDock))
+        {
+            arrow.TargetDock = targetDock;
+        }
+
+        if (root.TryGetProperty("strokeColor", out var strokeColorProp))
+        {
+            arrow.StrokeColor = strokeColorProp.GetString() ?? arrow.StrokeColor;
+        }
+
+        if (root.TryGetProperty("strokeWidth", out var strokeWidthProp))
+        {
+            arrow.StrokeWidth = strokeWidthProp.GetDouble();
+        }
+
+        if (root.TryGetProperty("routeStyle", out var routeStyleProp) &&
+            Enum.TryParse<ArrowRouteStyle>(routeStyleProp.GetString(), true, out var routeStyle))
+        {
+            arrow.RouteStyle = routeStyle;
+        }
+
+        if (root.TryGetProperty("lineStyle", out var lineStyleProp) &&
+            Enum.TryParse<ArrowLineStyle>(lineStyleProp.GetString(), true, out var lineStyle))
+        {
+            arrow.LineStyle = lineStyle;
+        }
+
+        if (root.TryGetProperty("targetHeadStyle", out var targetHeadStyleProp) &&
+            Enum.TryParse<ArrowHeadStyle>(targetHeadStyleProp.GetString(), true, out var targetHeadStyle))
+        {
+            arrow.TargetHeadStyle = targetHeadStyle;
+        }
+
+        if (root.TryGetProperty("sourceHeadStyle", out var sourceHeadStyleProp) &&
+            Enum.TryParse<ArrowHeadStyle>(sourceHeadStyleProp.GetString(), true, out var sourceHeadStyle))
+        {
+            arrow.SourceHeadStyle = sourceHeadStyle;
+        }
+
+        if (root.TryGetProperty("orthogonalMiddleCoordinate", out var orthogonalMiddleCoordinateProp))
+        {
+            arrow.OrthogonalMiddleCoordinate = orthogonalMiddleCoordinateProp.ValueKind == JsonValueKind.Null
+                ? null
+                : orthogonalMiddleCoordinateProp.GetDouble();
+        }
+    }
+
+    private static void ApplyIconUpdates(IconElement icon, JsonElement root)
+    {
+        if (root.TryGetProperty("iconName", out var iconNameProp))
+        {
+            icon.IconName = iconNameProp.GetString() ?? icon.IconName;
+        }
+
+        if (root.TryGetProperty("color", out var colorProp))
+        {
+            icon.Color = colorProp.GetString() ?? icon.Color;
+        }
     }
 
     private static (string, List<DiagramAssistantEvent>) ExecuteAddIcon(
@@ -472,6 +864,8 @@ public enum EventType
 {
     Message,
     ElementAdded,
+    ElementUpdated,
+    ElementRemoved,
     BoardCleared,
     Error
 }

@@ -72,6 +72,14 @@ window.orimWhiteboard = {
         };
     },
 
+    scrollElementToBottom: function (element) {
+        if (!element) {
+            return;
+        }
+
+        element.scrollTop = element.scrollHeight;
+    },
+
     clientToSvg: function (clientX, clientY) {
         const svg = document.getElementById('whiteboard-svg');
         if (!svg) {

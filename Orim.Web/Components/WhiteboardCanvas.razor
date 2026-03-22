@@ -97,6 +97,7 @@
     private const double ZoomStep = 1.1;
     private const double ResizeHandleScreenSize = 10;
     private const double ResizeHandleHitScreenSize = 16;
+    private const double MinimumAutoLabelFontSize = 8;
     private const double MinimumLabelFontSize = 10;
     private const double MaximumLabelFontSize = 48;
     private const double ClickPanThreshold = 3;
@@ -165,6 +166,7 @@
     private record struct AlignmentGuide(bool IsVertical, double Coordinate, double Start, double End);
     private record struct AlignmentMatch(bool IsVertical, double Coordinate, double Start, double End, double Delta, double Distance);
     private record struct ResizeAlignmentMatch(bool IsVertical, double AppliedDelta, double Distance);
+    private record struct RgbColor(byte R, byte G, byte B);
 
     private enum ResizeHandle
     {
@@ -638,7 +640,7 @@
             var nextTarget = suppressSnap ? null : GetDockHandleAtPoint(worldPoint, _draftArrow.Value.SourceElementId);
             var nextPointer = suppressSnap
                 ? worldPoint
-                : nextTarget?.Center ?? GetStraightArrowMagnetPoint(_draftArrow.Value.SourcePoint, worldPoint, ArrowRouteStyle.Straight);
+                : nextTarget?.Center ?? GetStraightArrowMagnetPoint(_draftArrow.Value.SourcePoint, worldPoint, ArrowRouteStyle.Orthogonal);
             _draftArrow = _draftArrow.Value with
             {
                 TargetElementId = nextTarget?.ElementId,
@@ -950,6 +952,7 @@
                     TargetDock = _draftArrow.Value.TargetDock ?? ResolveFreeDock(_draftArrow.Value.SourcePoint, _draftArrow.Value.Pointer),
                     StrokeColor = GetDefaultStrokeColor(),
                     StrokeWidth = 2,
+                    RouteStyle = ArrowRouteStyle.Orthogonal,
                     ZIndex = Board.Elements.Count
                 };
 
@@ -1724,7 +1727,7 @@
         if (!string.IsNullOrWhiteSpace(shape.Label))
         {
             builder.OpenElement(30, "div");
-            builder.AddAttribute(31, "style", GetElementLabelStyle(shape, shape.StrokeColor));
+            builder.AddAttribute(31, "style", GetElementLabelStyle(shape, shape.StrokeColor, shape.FillColor));
             builder.AddContent(32, shape.Label);
             builder.CloseElement();
         }
@@ -1818,7 +1821,8 @@
 
     private RenderFragment RenderText(TextElement text) => builder =>
     {
-        var style = $"position: absolute; left: {Px(text.X)}; top: {Px(text.Y)}; width: {Px(text.Width)}; min-height: {Px(Math.Max(text.Height, text.FontSize + 8))}; color: {text.Color}; font-size: {Px(text.FontSize)}; font-weight: {(text.IsBold ? "700" : "400")}; font-style: {(text.IsItalic ? "italic" : "normal")}; white-space: pre-wrap;";
+        var minHeight = Math.Max(text.Height, text.FontSize + 8);
+        var style = $"position: absolute; left: {Px(text.X)}; top: {Px(text.Y)}; width: {Px(text.Width)}; min-height: {Px(minHeight)}; color: {text.Color}; font-size: {Px(text.FontSize)}; font-weight: {(text.IsBold ? "700" : "400")}; font-style: {(text.IsItalic ? "italic" : "normal")}; line-height: 1.15; white-space: pre-wrap; overflow-wrap: anywhere; text-shadow: {GetTextShadow(text.Color, GetBoardSurfaceColor())};";
         builder.OpenElement(0, "div");
         builder.AddAttribute(1, "style", style);
         builder.AddContent(2, text.Text);
@@ -1840,7 +1844,7 @@
         if (!string.IsNullOrWhiteSpace(icon.Label))
         {
             builder.OpenElement(5, "div");
-            builder.AddAttribute(6, "style", GetElementLabelStyle(icon, icon.Color));
+            builder.AddAttribute(6, "style", GetElementLabelStyle(icon, icon.Color, GetBoardSurfaceColor()));
             builder.AddContent(7, icon.Label);
             builder.CloseElement();
         }
@@ -1903,7 +1907,7 @@
             }
         }
 
-        var points = BuildArrowPath(start, draft.SourceDock, end, ResolvePreviewTargetDock(draft, start, end), ArrowRouteStyle.Straight);
+        var points = BuildArrowPath(start, draft.SourceDock, end, ResolvePreviewTargetDock(draft, start, end), ArrowRouteStyle.Orthogonal);
         RenderArrowVisual(
             builder,
             points,
@@ -1984,8 +1988,8 @@
         {
             var totalLength = GetPolylineLength(points);
             var labelWidth = Math.Min(Math.Max(totalLength * 0.35, 70), 220);
-            var labelHeight = Math.Max(labelFontSize * 3, 32);
-            var labelStyle = $"position: absolute; left: {Px(labelPoint.X - labelWidth / 2)}; top: {Px(labelPoint.Y - labelHeight / 2)}; width: {Px(labelWidth)}; min-height: {Px(labelHeight)}; display:flex; align-items:{GetCssAlignItems(verticalAlignment)}; justify-content:{GetCssJustifyContent(horizontalAlignment)}; text-align:{GetCssTextAlign(horizontalAlignment)}; color: {effectiveColor}; font-size: {Px(labelFontSize)}; line-height: 1.15; pointer-events: none; white-space: pre-wrap; overflow-wrap: anywhere; box-sizing:border-box; background: transparent; border-radius: 10px; padding: 4px 8px;";
+            var labelHeight = Math.Max(labelFontSize * 3.2, 36);
+            var labelStyle = $"position: absolute; left: {Px(labelPoint.X - labelWidth / 2)}; top: {Px(labelPoint.Y - labelHeight / 2)}; width: {Px(labelWidth)}; min-height: {Px(labelHeight)}; display:flex; align-items:{GetCssAlignItems(verticalAlignment)}; justify-content:{GetCssJustifyContent(horizontalAlignment)}; text-align:{GetCssTextAlign(horizontalAlignment)}; color: {effectiveColor}; font-size: {Px(labelFontSize)}; line-height: 1.15; pointer-events: none; white-space: pre-wrap; overflow-wrap: anywhere; box-sizing:border-box; background: transparent; border-radius: 10px; padding: 4px 8px; text-shadow: {GetTextShadow(effectiveColor, GetBoardSurfaceColor())};";
             builder.OpenElement(2, "div");
             builder.AddAttribute(3, "style", labelStyle);
             builder.AddContent(4, label);
@@ -2028,10 +2032,10 @@
         }
     }
 
-    private string GetElementLabelStyle(BoardElement element, string color)
+    private string GetElementLabelStyle(BoardElement element, string color, string backgroundColor)
     {
         var padding = Math.Max(8 / _zoom, 4);
-        return $"position: absolute; inset: 0; display: flex; align-items: {GetCssAlignItems(element.LabelVerticalAlignment)}; justify-content: {GetCssJustifyContent(element.LabelHorizontalAlignment)}; padding: {Px(padding)}; box-sizing: border-box; text-align: {GetCssTextAlign(element.LabelHorizontalAlignment)}; color: {color}; font-size: {Px(GetResolvedLabelFontSize(element))}; line-height: 1.15; white-space: pre-wrap; overflow-wrap: anywhere; pointer-events: none;";
+        return $"position: absolute; inset: 0; display: flex; align-items: {GetCssAlignItems(element.LabelVerticalAlignment)}; justify-content: {GetCssJustifyContent(element.LabelHorizontalAlignment)}; padding: {Px(padding)}; box-sizing: border-box; text-align: {GetCssTextAlign(element.LabelHorizontalAlignment)}; color: {color}; font-size: {Px(GetResolvedLabelFontSize(element))}; line-height: 1.15; white-space: pre-wrap; overflow-wrap: anywhere; overflow: hidden; pointer-events: none; text-shadow: {GetTextShadow(color, backgroundColor)};";
     }
 
     private double GetResolvedLabelFontSize(BoardElement element)
@@ -2049,12 +2053,171 @@
             {
                 var points = BuildArrowPath(sourceEndpoint.Value.Point, sourceEndpoint.Value.Dock, targetEndpoint.Value.Point, targetEndpoint.Value.Dock, arrow.RouteStyle);
                 var length = GetPolylineLength(points);
-                return Math.Clamp(length * 0.08, MinimumLabelFontSize, 24);
+                var availableWidth = Math.Min(Math.Max(length * 0.35, 70), 220) - 16;
+                var availableHeight = Math.Max(Math.Min(length * 0.16, 72), 28);
+                var preferredSize = Math.Clamp(length * 0.07, MinimumAutoLabelFontSize, 24);
+                return EstimateFittingFontSize(arrow.Label, availableWidth, availableHeight, preferredSize, 24);
             }
         }
 
+        var availableWidthForText = Math.Max(element.Width - 16, 12);
+        var availableHeightForText = Math.Max(element.Height - 16, 12);
         var basis = Math.Min(Math.Max(element.Width, 1), Math.Max(element.Height, 1));
-        return Math.Clamp(basis * 0.28, MinimumLabelFontSize, MaximumLabelFontSize);
+        var preferredElementSize = Math.Clamp(basis * 0.22, MinimumAutoLabelFontSize, MaximumLabelFontSize);
+        return EstimateFittingFontSize(element.Label, availableWidthForText, availableHeightForText, preferredElementSize, MaximumLabelFontSize);
+    }
+
+    private static double EstimateFittingFontSize(string? text, double availableWidth, double availableHeight, double preferredSize, double maximumSize)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return Math.Clamp(preferredSize, MinimumAutoLabelFontSize, maximumSize);
+        }
+
+        var maxSize = Math.Clamp(preferredSize, MinimumAutoLabelFontSize, maximumSize);
+        var minSize = Math.Min(MinimumLabelFontSize, maxSize);
+
+        for (var candidate = maxSize; candidate >= MinimumAutoLabelFontSize; candidate -= 0.5)
+        {
+            if (DoesTextFit(text, availableWidth, availableHeight, candidate))
+            {
+                return candidate;
+            }
+        }
+
+        return minSize;
+    }
+
+    private static bool DoesTextFit(string text, double availableWidth, double availableHeight, double fontSize)
+    {
+        if (availableWidth <= 0 || availableHeight <= 0 || fontSize <= 0)
+        {
+            return false;
+        }
+
+        const double averageCharacterWidthFactor = 0.58;
+        const double lineHeightFactor = 1.15;
+        var charactersPerLine = Math.Max((int)Math.Floor(availableWidth / (fontSize * averageCharacterWidthFactor)), 1);
+        var totalLines = 0;
+
+        foreach (var paragraph in text.Replace("\r", string.Empty).Split('\n'))
+        {
+            if (paragraph.Length == 0)
+            {
+                totalLines++;
+                continue;
+            }
+
+            totalLines += (int)Math.Ceiling(paragraph.Length / (double)charactersPerLine);
+        }
+
+        var requiredHeight = totalLines * fontSize * lineHeightFactor;
+        return requiredHeight <= availableHeight;
+    }
+
+    private string GetTextShadow(string textColor, string backgroundColor)
+    {
+        if (!(Board?.LabelOutlineEnabled ?? true))
+        {
+            return "none";
+        }
+
+        var outlineColor = GetOutlineColor(textColor, backgroundColor);
+        return $"0 0 0.35px {outlineColor}, 0.45px 0 0 {outlineColor}, -0.45px 0 0 {outlineColor}, 0 0.45px 0 {outlineColor}, 0 -0.45px 0 {outlineColor}";
+    }
+
+    private static string GetOutlineColor(string textColor, string backgroundColor)
+    {
+        var useWhite = true;
+
+        if (TryParseCssColor(textColor, out var parsedTextColor) && TryParseCssColor(backgroundColor, out var parsedBackgroundColor))
+        {
+            var whiteScore = Math.Min(GetContrastRatio(new RgbColor(255, 255, 255), parsedTextColor), GetContrastRatio(new RgbColor(255, 255, 255), parsedBackgroundColor));
+            var blackScore = Math.Min(GetContrastRatio(new RgbColor(0, 0, 0), parsedTextColor), GetContrastRatio(new RgbColor(0, 0, 0), parsedBackgroundColor));
+            useWhite = whiteScore >= blackScore;
+        }
+        else if (TryParseCssColor(textColor, out parsedTextColor))
+        {
+            useWhite = GetRelativeLuminance(parsedTextColor) < 0.45;
+        }
+
+        return useWhite ? "rgba(255,255,255,0.92)" : "rgba(0,0,0,0.82)";
+    }
+
+    private static bool TryParseCssColor(string color, out RgbColor parsed)
+    {
+        parsed = default;
+        if (string.IsNullOrWhiteSpace(color))
+        {
+            return false;
+        }
+
+        var value = color.Trim();
+        if (value.StartsWith('#'))
+        {
+            var hex = value[1..];
+            if (hex.Length == 3)
+            {
+                hex = string.Concat(hex.Select(ch => new string(ch, 2)));
+            }
+
+            if (hex.Length >= 6 &&
+                byte.TryParse(hex[..2], System.Globalization.NumberStyles.HexNumber, null, out var red) &&
+                byte.TryParse(hex[2..4], System.Globalization.NumberStyles.HexNumber, null, out var green) &&
+                byte.TryParse(hex[4..6], System.Globalization.NumberStyles.HexNumber, null, out var blue))
+            {
+                parsed = new RgbColor(red, green, blue);
+                return true;
+            }
+
+            return false;
+        }
+
+        if (value.StartsWith("rgb", StringComparison.OrdinalIgnoreCase))
+        {
+            var start = value.IndexOf('(');
+            var end = value.LastIndexOf(')');
+            if (start < 0 || end <= start)
+            {
+                return false;
+            }
+
+            var parts = value[(start + 1)..end].Split(',');
+            if (parts.Length < 3)
+            {
+                return false;
+            }
+
+            if (byte.TryParse(parts[0].Trim(), out var red) &&
+                byte.TryParse(parts[1].Trim(), out var green) &&
+                byte.TryParse(parts[2].Trim(), out var blue))
+            {
+                parsed = new RgbColor(red, green, blue);
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static double GetContrastRatio(RgbColor first, RgbColor second)
+    {
+        var luminance1 = GetRelativeLuminance(first);
+        var luminance2 = GetRelativeLuminance(second);
+        var lighter = Math.Max(luminance1, luminance2);
+        var darker = Math.Min(luminance1, luminance2);
+        return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    private static double GetRelativeLuminance(RgbColor color)
+    {
+        static double Channel(byte value)
+        {
+            var normalized = value / 255d;
+            return normalized <= 0.03928 ? normalized / 12.92 : Math.Pow((normalized + 0.055) / 1.055, 2.4);
+        }
+
+        return 0.2126 * Channel(color.R) + 0.7152 * Channel(color.G) + 0.0722 * Channel(color.B);
     }
 
     private static string GetCssTextAlign(HorizontalLabelAlignment alignment) => alignment switch
@@ -2399,10 +2562,10 @@
     {
         if (Board is null)
         {
-            return ArrowRouteStyle.Straight;
+            return ArrowRouteStyle.Orthogonal;
         }
 
-        return Board.Elements.OfType<ArrowElement>().FirstOrDefault(arrow => arrow.Id == arrowId)?.RouteStyle ?? ArrowRouteStyle.Straight;
+        return Board.Elements.OfType<ArrowElement>().FirstOrDefault(arrow => arrow.Id == arrowId)?.RouteStyle ?? ArrowRouteStyle.Orthogonal;
     }
 
     private bool TryResolveOrthogonalMiddleSegment(ArrowElement arrow, out bool isVertical, out Point start, out Point end, out double coordinate)

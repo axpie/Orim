@@ -1,8 +1,12 @@
 @using Orim.Web.Services
 @inject DiagramAssistantService AssistantService
+@inject IJSRuntime JS
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 
-<div class="orim-chat-panel @(_isOpen ? "open" : "")">
+<div class="orim-chat-panel @(_isOpen ? "open" : "") @(DockLeftOfProperties ? "dock-left-of-properties" : "")"
+    @onmousedown:stopPropagation="true"
+    @onclick:stopPropagation="true"
+    @onkeydown:stopPropagation="true">
     <div class="orim-chat-header">
         <MudIcon Icon="@Icons.Material.Filled.AutoAwesome" Size="Size.Small" />
         <MudText Typo="Typo.subtitle2" Style="font-weight: 600; flex: 1;">@Localizer["DiagramAssistant"]</MudText>
@@ -83,6 +87,7 @@
 @code {
     [Parameter] public Board? Board { get; set; }
     [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public bool DockLeftOfProperties { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnBoardChanged { get; set; }
 
@@ -91,10 +96,27 @@
     private bool _isProcessing;
     private readonly List<ChatDisplayMessage> _messages = [];
     private ElementReference _messagesContainer;
+    private bool _shouldScrollToBottom;
 
     protected override void OnParametersSet()
     {
         _isOpen = IsOpen;
+
+        if (_isOpen && (_messages.Count > 0 || _isProcessing))
+        {
+            _shouldScrollToBottom = true;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_shouldScrollToBottom || !_isOpen)
+        {
+            return;
+        }
+
+        _shouldScrollToBottom = false;
+        await JS.InvokeVoidAsync("orimWhiteboard.scrollElementToBottom", _messagesContainer);
     }
 
     private async Task Close()
@@ -120,6 +142,7 @@
         _userInput = "";
         _messages.Add(new ChatDisplayMessage("user", userMessage));
         _isProcessing = true;
+        _shouldScrollToBottom = true;
         StateHasChanged();
 
         var history = _messages
@@ -129,6 +152,7 @@
 
         var responseText = "";
         var elementCount = 0;
+        var boardChanged = false;
 
         try
         {
@@ -138,12 +162,30 @@
                 {
                     case EventType.ElementAdded:
                         elementCount++;
+                        boardChanged = true;
                         _messages.Add(new ChatDisplayMessage("assistant", $"Element #{elementCount} added", isToolAction: true));
+                        _shouldScrollToBottom = true;
+                        StateHasChanged();
+                        break;
+
+                    case EventType.ElementUpdated:
+                        boardChanged = true;
+                        _messages.Add(new ChatDisplayMessage("assistant", "Element updated", isToolAction: true));
+                        _shouldScrollToBottom = true;
+                        StateHasChanged();
+                        break;
+
+                    case EventType.ElementRemoved:
+                        boardChanged = true;
+                        _messages.Add(new ChatDisplayMessage("assistant", "Element removed", isToolAction: true));
+                        _shouldScrollToBottom = true;
                         StateHasChanged();
                         break;
 
                     case EventType.BoardCleared:
+                        boardChanged = true;
                         _messages.Add(new ChatDisplayMessage("assistant", "Board cleared", isToolAction: true));
+                        _shouldScrollToBottom = true;
                         StateHasChanged();
                         break;
 
@@ -153,6 +195,7 @@
 
                     case EventType.Error:
                         _messages.Add(new ChatDisplayMessage("assistant", $"⚠ {evt.Content}"));
+                        _shouldScrollToBottom = true;
                         StateHasChanged();
                         break;
                 }
@@ -161,19 +204,22 @@
         catch (Exception ex)
         {
             _messages.Add(new ChatDisplayMessage("assistant", $"⚠ Error: {ex.Message}"));
+            _shouldScrollToBottom = true;
         }
 
         if (!string.IsNullOrWhiteSpace(responseText))
         {
             _messages.Add(new ChatDisplayMessage("assistant", responseText));
+            _shouldScrollToBottom = true;
         }
 
-        if (elementCount > 0)
+        if (boardChanged)
         {
             await OnBoardChanged.InvokeAsync();
         }
 
         _isProcessing = false;
+        _shouldScrollToBottom = true;
         StateHasChanged();
     }
 

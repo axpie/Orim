@@ -16,7 +16,7 @@
       </xsd:complexType>
     </xsd:element>
   </xsd:schema>
-  <data name="AppTitle" xml:space="preserve"><value>Orim – Kollaboratives Whiteboard</value></data>
+  <data name="AppTitle" xml:space="preserve"><value>ORIM – Kollaboratives Whiteboard</value></data>
   <data name="Login" xml:space="preserve"><value>Anmelden</value></data>
   <data name="Logout" xml:space="preserve"><value>Abmelden</value></data>
   <data name="Theme" xml:space="preserve"><value>Theme</value></data>
@@ -60,6 +60,7 @@
   <data name="NewUser" xml:space="preserve"><value>Neuer Benutzer</value></data>
   <data name="UserManagement" xml:space="preserve"><value>Benutzerverwaltung</value></data>
   <data name="BoardSettings" xml:space="preserve"><value>Board-Einstellungen</value></data>
+  <data name="LabelOutlineEnabled" xml:space="preserve"><value>Label-Kontur anzeigen</value></data>
   <data name="ShareLink" xml:space="preserve"><value>Share-Link</value></data>
   <data name="GenerateShareLink" xml:space="preserve"><value>Neuen Share-Link generieren</value></data>
   <data name="Properties" xml:space="preserve"><value>Eigenschaften</value></data>
