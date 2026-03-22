@@ -27,7 +27,8 @@ else
     var selectedElement = _selectedElements.Count == 1 ? _selectedElements[0] : null;
 
     <div style="display: flex; flex-direction: column; height: calc(100vh - 64px);">
-        <MudPaper Elevation="1" Class="orim-board-toolbar">
+        @* === Desktop Toolbar === *@
+        <MudPaper Elevation="1" Class="orim-board-toolbar orim-board-toolbar-desktop">
             <MudTooltip Text="@Localizer["BackToOverview"]" Arrow="true">
                 <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@GoBack" Size="Size.Small" />
             </MudTooltip>
@@ -202,6 +203,74 @@ else
             </MudTooltip>
         </MudPaper>
 
+        @* === Mobile Toolbar === *@
+        <MudPaper Elevation="1" Class="orim-board-toolbar orim-board-toolbar-mobile">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@GoBack" Size="Size.Small" />
+            <MudText Typo="Typo.subtitle2" Style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px;">@_board.Title</MudText>
+            <MudSpacer />
+
+            @if (_canEdit)
+            {
+                @* Select *@
+                <MudTooltip Text="@Localizer["SelectToolTooltip"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.NearMe"
+                                   Size="Size.Small"
+                                   Color="@(_selectedTool == Tool.Select ? Color.Primary : Color.Default)"
+                                   OnClick="@(() => SelectTool(Tool.Select))" />
+                </MudTooltip>
+
+                @* Shapes popover *@
+                <MudMenu Icon="@GetMobileShapeIcon()" Size="Size.Small"
+                         Color="@(IsShapeTool(_selectedTool) ? Color.Primary : Color.Default)"
+                         Dense="true">
+                    <MudMenuItem Icon="@Icons.Material.Filled.Rectangle"
+                                 OnClick="@(() => SelectTool(Tool.Rectangle))">@Localizer["DrawRectangleTooltip"]</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.PanoramaFishEye"
+                                 OnClick="@(() => SelectTool(Tool.Circle))">@Localizer["DrawCircleTooltip"]</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.ChangeHistory"
+                                 OnClick="@(() => SelectTool(Tool.Triangle))">@Localizer["DrawTriangleTooltip"]</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.AddReaction"
+                                 OnClick="@OpenIconPickerAsync">@Localizer["InsertIconTooltip"]</MudMenuItem>
+                </MudMenu>
+
+                @* Arrow *@
+                <MudTooltip Text="@Localizer["ConnectArrowTooltip"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.NorthEast"
+                                   Size="Size.Small"
+                                   Color="@(_selectedTool == Tool.Arrow ? Color.Primary : Color.Default)"
+                                   OnClick="@(() => SelectTool(Tool.Arrow))" />
+                </MudTooltip>
+
+                @* Undo *@
+                <MudIconButton Icon="@Icons.Material.Filled.Undo"
+                               Size="Size.Small"
+                               Disabled="@(!_commandStack.CanUndo)"
+                               OnClick="@UndoAsync" />
+
+                @* Delete *@
+                @if (_selectedElement is not null)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                   Color="Color.Error"
+                                   Size="Size.Small"
+                                   OnClick="@DeleteSelectedElementAsync" />
+                }
+
+                @* Board Settings *@
+                <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                               Size="Size.Small"
+                               OnClick="@OpenBoardSettingsDialog" />
+
+                @* Element Properties — opens mobile dialog *@
+                <MudIconButton Icon="@Icons.Material.Filled.Tune"
+                               Size="Size.Small"
+                               Color="@(_selectedElement is not null ? Color.Primary : Color.Default)"
+                               OnClick="@OpenMobilePropertiesDialog" />
+            }
+        </MudPaper>
+
+        @* === Mobile Floating Zoom Controls === *@
+
         <div style="display: flex; flex: 1; min-height: 0; min-width: 0; overflow: hidden;">
             <div @ref="_editorSurface"
                  style="flex: 1; min-width: 0; min-height: 0; overflow: hidden; position: relative; outline: none;"
@@ -216,6 +285,7 @@ else
                                   OnSelectedElementsChanged="@HandleSelectedElementsChanged"
                                   OnZoomChanged="@HandleZoomChanged"
                                   OnToolChanged="@HandleToolChanged"
+                                  OnElementDoubleTapped="@OnCanvasElementDoubleTapped"
                                   PendingIconName="@_pendingIconName"
                                   SelectedTool="@_selectedTool" />
 
@@ -236,6 +306,22 @@ else
                                             OnPreviewChanged="@OnElementPropertyPreviewChanged"
                                             OnChanged="@OnElementPropertyChanged" />
                 }
+
+                <div class="orim-mobile-zoom-controls">
+                    <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   OnClick="@ZoomOutAsync" />
+                    <span class="orim-mobile-zoom-label">@_zoomDisplayValue</span>
+                    <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   OnClick="@ZoomInAsync" />
+                    <MudIconButton Icon="@Icons.Material.Filled.FitScreen"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   OnClick="@FitToContentAsync" />
+                </div>
             </div>
         </div>
     </div>
@@ -356,6 +442,34 @@ else
             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ConfirmBoardSettingsAsync">@Localizer["Save"]</MudButton>
         </DialogActions>
     </MudDialog>
+
+    @* === Mobile Properties Dialog === *@
+    <MudDialog @bind-Visible="_mobilePropertiesDialogVisible" Options="_mobilePropertiesDialogOptions">
+        <TitleContent>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <MudIcon Icon="@Icons.Material.Filled.Tune" Size="Size.Small" />
+                <MudText Typo="Typo.h6">@Localizer["Properties"]</MudText>
+            </div>
+        </TitleContent>
+        <DialogContent>
+            @if (_board is not null && _canEdit)
+            {
+                var dlgSelectedElement = _selectedElements.Count == 1 ? _selectedElements[0] : null;
+                <ElementPropertiesPanel @key="@(dlgSelectedElement?.Id ?? Guid.Empty)"
+                                        Board="@_board"
+                                        Element="@dlgSelectedElement"
+                                        SelectionCount="@_selectedElements.Count"
+                                        IsOpen="true"
+                                        DialogMode="true"
+                                        OnClose="@CloseMobilePropertiesDialog"
+                                        OnPreviewChanged="@OnElementPropertyPreviewChanged"
+                                        OnChanged="@OnMobilePropertyChanged" />
+            }
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CloseMobilePropertiesDialog">@Localizer["Close"]</MudButton>
+        </DialogActions>
+    </MudDialog>
 }
 
 @code {
@@ -375,8 +489,9 @@ else
     private bool _helpDialogVisible;
     private bool _renameDialogVisible;
     private bool _boardSettingsDialogVisible;
+    private bool _mobilePropertiesDialogVisible;
     private bool _chatPanelOpen;
-    private bool _propertiesPanelOpen = true;
+    private bool _propertiesPanelOpen = false;
     private bool _boardLabelOutlineEnabled = true;
     private bool _formatTransferActive;
     private Guid? _formatTransferSourceId;
@@ -397,6 +512,7 @@ else
     private List<string> _materialIcons = [];
     private readonly DialogOptions _iconDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true };
     private readonly DialogOptions _helpDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
+    private readonly DialogOptions _mobilePropertiesDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
     private static List<string>? _cachedMaterialIcons;
 
     private IReadOnlyList<string> FilteredMaterialIcons => _materialIcons
@@ -430,6 +546,12 @@ else
         if (firstRender && _board is not null && _hasAccess)
         {
             await _editorSurface.FocusAsync();
+            var width = await JS.InvokeAsync<int>("orimWhiteboard.getWindowWidth");
+            if (width > 768)
+            {
+                _propertiesPanelOpen = true;
+                StateHasChanged();
+            }
         }
     }
 
@@ -508,6 +630,32 @@ else
         _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
         _boardSettingsDialogVisible = true;
     }
+
+    private void OpenMobilePropertiesDialog() => _mobilePropertiesDialogVisible = true;
+
+    private void CloseMobilePropertiesDialog() => _mobilePropertiesDialogVisible = false;
+
+    private void OnCanvasElementDoubleTapped()
+    {
+        if (_selectedElement is not null && _canEdit)
+            OpenMobilePropertiesDialog();
+    }
+
+    private async Task OnMobilePropertyChanged()
+    {
+        await SaveBoard();
+        StateHasChanged();
+    }
+
+    private string GetMobileShapeIcon() => _selectedTool switch
+    {
+        Tool.Circle => Icons.Material.Filled.PanoramaFishEye,
+        Tool.Triangle => Icons.Material.Filled.ChangeHistory,
+        _ => Icons.Material.Filled.Rectangle
+    };
+
+    private static bool IsShapeTool(Tool tool) =>
+        tool is Tool.Rectangle or Tool.Circle or Tool.Triangle;
 
     private void CloseBoardSettingsDialog()
     {

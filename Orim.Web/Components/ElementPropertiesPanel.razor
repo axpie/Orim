@@ -3,10 +3,12 @@
 @inject IJSRuntime JS
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 
-<div class="orim-properties-drawer @(IsOpen ? "open" : "")"
+<div class="@_panelCssClass"
     @onmousedown:stopPropagation="true"
     @onclick:stopPropagation="true"
     @onkeydown:stopPropagation="true">
+    @if (!DialogMode)
+    {
     <div class="orim-properties-drawer-header">
         <MudIcon Icon="@Icons.Material.Filled.Tune" Size="Size.Small" />
         <MudText Typo="Typo.subtitle2" Style="font-weight: 600; flex: 1;">@Localizer["Properties"]</MudText>
@@ -14,6 +16,7 @@
                        Size="Size.Small"
                        OnClick="@Close" />
     </div>
+    }
 
     <div class="orim-properties-drawer-body">
     @if (Element is null)
@@ -133,6 +136,8 @@
                 <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(shape.FillColor))"></span>
                 <span>Farbe auswählen</span>
             </button>
+            @if (!DialogMode)
+            {
             <button type="button"
                     class="orim-properties-color-icon-button"
                     title="Pipette"
@@ -140,6 +145,7 @@
                     @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.ShapeFill))'>
                 <span class="mdi mdi-eyedropper"></span>
             </button>
+            }
         </div>
         @if (ShouldShowColorStatus(ColorFieldTarget.ShapeFill))
         {
@@ -152,6 +158,8 @@
                 <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(shape.StrokeColor))"></span>
                 <span>Farbe auswählen</span>
             </button>
+            @if (!DialogMode)
+            {
             <button type="button"
                     class="orim-properties-color-icon-button"
                     title="Pipette"
@@ -159,6 +167,7 @@
                     @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.ShapeStroke))'>
                 <span class="mdi mdi-eyedropper"></span>
             </button>
+            }
         </div>
         @if (ShouldShowColorStatus(ColorFieldTarget.ShapeStroke))
         {
@@ -196,6 +205,8 @@
                 <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(text.Color))"></span>
                 <span>Farbe auswählen</span>
             </button>
+            @if (!DialogMode)
+            {
             <button type="button"
                     class="orim-properties-color-icon-button"
                     title="Pipette"
@@ -203,6 +214,7 @@
                     @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.Text))'>
                 <span class="mdi mdi-eyedropper"></span>
             </button>
+            }
         </div>
         @if (ShouldShowColorStatus(ColorFieldTarget.Text))
         {
@@ -225,6 +237,8 @@
                 <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(arrow.StrokeColor))"></span>
                 <span>Farbe auswählen</span>
             </button>
+            @if (!DialogMode)
+            {
             <button type="button"
                     class="orim-properties-color-icon-button"
                     title="Pipette"
@@ -232,6 +246,7 @@
                     @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.Arrow))'>
                 <span class="mdi mdi-eyedropper"></span>
             </button>
+            }
         </div>
         @if (ShouldShowColorStatus(ColorFieldTarget.Arrow))
         {
@@ -312,6 +327,8 @@
                 <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(icon.Color))"></span>
                 <span>Farbe auswählen</span>
             </button>
+            @if (!DialogMode)
+            {
             <button type="button"
                     class="orim-properties-color-icon-button"
                     title="Pipette"
@@ -319,6 +336,7 @@
                     @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.Icon))'>
                 <span class="mdi mdi-eyedropper"></span>
             </button>
+            }
         </div>
         @if (ShouldShowColorStatus(ColorFieldTarget.Icon))
         {
@@ -404,6 +422,7 @@
     [Parameter] public Board? Board { get; set; }
     [Parameter] public int SelectionCount { get; set; }
     [Parameter] public bool IsOpen { get; set; }
+    [Parameter] public bool DialogMode { get; set; }
     [Parameter] public EventCallback OnChanged { get; set; }
     [Parameter] public EventCallback OnPreviewChanged { get; set; }
     [Parameter] public EventCallback OnClose { get; set; }
@@ -428,6 +447,8 @@
     private string? _colorPickerStatusMessage;
     private ColorFieldTarget _colorPickerStatusField;
     private ColorFieldTarget _activeColorField;
+    private string _panelCssClass => DialogMode ? "orim-properties-dialog-body" : (IsOpen ? "orim-properties-drawer open" : "orim-properties-drawer");
+
     private static readonly string[] FallbackCustomColors =
     [
         "#0F172A",

@@ -1,6 +1,7 @@
 @using Microsoft.AspNetCore.Components.Rendering
 @using Orim.Web.Components.Pages
 @using Orim.Web.Services
+@implements IAsyncDisposable
 @inject IJSRuntime JS
 @inject ThemeManager ThemeManager
 
@@ -114,6 +115,7 @@
     [Parameter] public EventCallback<IReadOnlyList<BoardElement>> OnSelectedElementsChanged { get; set; }
     [Parameter] public EventCallback<BoardEditor.Tool> OnToolChanged { get; set; }
     [Parameter] public EventCallback<int> OnZoomChanged { get; set; }
+    [Parameter] public EventCallback OnElementDoubleTapped { get; set; }
     [Parameter] public string? PendingIconName { get; set; }
     [Parameter] public BoardEditor.Tool SelectedTool { get; set; }
     [Parameter] public double FitRightInset { get; set; }
@@ -147,6 +149,10 @@
     private ArrowMiddleSegmentHandleDefinition? _hoverArrowMiddleSegmentHandle;
     private double _zoom = 1;
     private bool _hasInitializedViewport;
+    private DotNetObjectReference<WhiteboardCanvas>? _selfRef;
+    private Point _lastTouchWorldPoint;
+    private DateTime _lastTapTime = DateTime.MinValue;
+    private Guid? _lastTapElementId;
     private ResizeHandle _activeResizeHandle;
     private ResizeHandle _hoverResizeHandle;
     private ElementBounds _resizeStartBounds;
@@ -233,6 +239,12 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            _selfRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("orimWhiteboard.registerTouchHandler", SurfaceId, _selfRef);
+        }
+
         if (!_hasInitializedViewport && Board is not null)
         {
             await EnsureSurfaceSizeAsync();
@@ -244,6 +256,16 @@
                 StateHasChanged();
             }
         }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("orimWhiteboard.disposeTouchHandler");
+        }
+        catch (JSDisconnectedException) { }
+        _selfRef?.Dispose();
     }
 
     private async Task SetSelectionAsync(IEnumerable<BoardElement> elements)
@@ -715,6 +737,326 @@
         var worldPoint = ScreenToWorld(screenPoint);
         var factor = e.DeltaY < 0 ? ZoomStep : 1 / ZoomStep;
         await ApplyZoomAsync(_zoom * factor, screenPoint, worldPoint);
+    }
+
+    [JSInvokable]
+    public async Task OnTouchStartFromJs(double clientX, double clientY)
+    {
+        var screenPoint = await GetScreenPointerFromCoordsAsync(clientX, clientY);
+        var worldPoint = ScreenToWorld(screenPoint);
+        _lastTouchWorldPoint = worldPoint;
+        ClearAlignmentGuides();
+
+        if (CanEdit && TryGetShapeTypeFromTool(SelectedTool, out var shapeType))
+        {
+            await SetSelectionAsync([]);
+            _isDrawingRectangle = true;
+            _hasInteractionChanged = false;
+            _drawStart = worldPoint;
+            _draftShape = new ShapeElement
+            {
+                X = SanitizeCoordinate(worldPoint.X),
+                Y = SanitizeCoordinate(worldPoint.Y),
+                Width = 0,
+                Height = 0,
+                ShapeType = shapeType,
+                FillColor = GetDefaultShapeFillColor(),
+                StrokeColor = GetDefaultStrokeColor(),
+                StrokeWidth = 2
+            };
+            StateHasChanged();
+            return;
+        }
+
+        if (CanEdit && SelectedTool == BoardEditor.Tool.Icon && !string.IsNullOrWhiteSpace(PendingIconName) && Board is not null)
+        {
+            var iconSize = 96d;
+            var icon = new IconElement
+            {
+                X = SanitizeCoordinate(worldPoint.X - (iconSize / 2)),
+                Y = SanitizeCoordinate(worldPoint.Y - (iconSize / 2)),
+                Width = iconSize,
+                Height = iconSize,
+                IconName = PendingIconName,
+                Color = GetDefaultIconColor(),
+                ZIndex = Board.Elements.Count
+            };
+
+            Board.Elements.Add(icon);
+            await SetSelectionAsync([icon]);
+            await OnBoardChanged.InvokeAsync();
+            await OnToolChanged.InvokeAsync(BoardEditor.Tool.Select);
+            StateHasChanged();
+            return;
+        }
+
+        if (CanEdit && SelectedTool == BoardEditor.Tool.Arrow)
+        {
+            var anchor = GetDockHandleAtPoint(worldPoint);
+            _draftArrow = anchor is not null
+                ? new ArrowDraft(anchor.Value.ElementId, anchor.Value.Center, anchor.Value.DockPoint, null, null, worldPoint)
+                : new ArrowDraft(null, worldPoint, ResolveFreeDock(worldPoint, worldPoint), null, null, worldPoint);
+            _hasInteractionChanged = false;
+            await SetSelectionAsync([]);
+            StateHasChanged();
+            return;
+        }
+
+        if (CanEdit && SelectedTool == BoardEditor.Tool.Select && CanResizeSelectedElement)
+        {
+            var resizeHandle = GetResizeHandleAtPoint(worldPoint);
+            if (resizeHandle != ResizeHandle.None && SelectedElement is not null)
+            {
+                _activeResizeHandle = resizeHandle;
+                _hoverResizeHandle = resizeHandle;
+                _isResizingSelection = true;
+                _hasInteractionChanged = false;
+                _resizeStartBounds = new ElementBounds(SelectedElement.X, SelectedElement.Y, SelectedElement.Width, SelectedElement.Height);
+                StateHasChanged();
+                return;
+            }
+        }
+
+        if (CanEdit && SelectedTool == BoardEditor.Tool.Select && _selectedElements.Count == 1 && SelectedElement is ArrowElement selectedArrowTouch)
+        {
+            var endpointHandle = GetArrowEndpointHandleAtPoint(selectedArrowTouch, worldPoint);
+            if (endpointHandle is not null)
+            {
+                var fixedEndpoint = endpointHandle.Value.IsSource
+                    ? ResolveArrowEndpoint(selectedArrowTouch, false)
+                    : ResolveArrowEndpoint(selectedArrowTouch, true);
+
+                if (fixedEndpoint is not null)
+                {
+                    _arrowEndpointDrag = new ArrowEndpointDrag(
+                        selectedArrowTouch.Id,
+                        endpointHandle.Value.IsSource,
+                        fixedEndpoint.Value.ElementId,
+                        fixedEndpoint.Value.Point,
+                        fixedEndpoint.Value.Dock,
+                        null,
+                        null,
+                        endpointHandle.Value.Center);
+                    StateHasChanged();
+                    return;
+                }
+            }
+
+            var middleHandle = GetArrowMiddleSegmentHandleAtPoint(selectedArrowTouch, worldPoint);
+            if (middleHandle is not null)
+            {
+                var coordinate = middleHandle.Value.IsVertical ? middleHandle.Value.Center.X : middleHandle.Value.Center.Y;
+                var pointerCoordinate = middleHandle.Value.IsVertical ? worldPoint.X : worldPoint.Y;
+                _arrowMiddleSegmentDrag = new ArrowMiddleSegmentDrag(
+                    selectedArrowTouch.Id,
+                    middleHandle.Value.IsVertical,
+                    pointerCoordinate - coordinate,
+                    coordinate,
+                    coordinate);
+                _hoverArrowMiddleSegmentHandle = middleHandle;
+                _hasInteractionChanged = false;
+                StateHasChanged();
+                return;
+            }
+        }
+
+        var clicked = HitTest(worldPoint);
+
+        var tapNow = DateTime.UtcNow;
+        if (clicked is not null && clicked.Id == _lastTapElementId && (tapNow - _lastTapTime).TotalMilliseconds < 350)
+        {
+            _lastTapTime = DateTime.MinValue;
+            _lastTapElementId = null;
+            await OnElementDoubleTapped.InvokeAsync();
+        }
+        else
+        {
+            _lastTapTime = tapNow;
+            _lastTapElementId = clicked?.Id;
+        }
+
+        if (clicked is not null)
+        {
+            var selectionScope = ResolveSelectionScope(clicked);
+            if (!IsSelected(clicked) && !IsSelectionEquivalent(selectionScope))
+            {
+                await SetSelectionAsync(selectionScope);
+            }
+        }
+
+        if (!CanEdit || SelectedTool != BoardEditor.Tool.Select)
+        {
+            if (clicked is null)
+            {
+                _isPanning = true;
+                _panStartScreen = screenPoint;
+                _panPointerOrigin = screenPoint;
+                _clearSelectionOnPanRelease = true;
+                _panExceededClickThreshold = false;
+            }
+            StateHasChanged();
+            return;
+        }
+
+        if (clicked is null)
+        {
+            _isPanning = true;
+            _panStartScreen = screenPoint;
+            _panPointerOrigin = screenPoint;
+            _clearSelectionOnPanRelease = true;
+            _panExceededClickThreshold = false;
+            StateHasChanged();
+            return;
+        }
+
+        if (clicked is ArrowElement)
+        {
+            StateHasChanged();
+            return;
+        }
+
+        _dragStartPositions.Clear();
+        foreach (var element in _selectedElements.Where(element => element is not ArrowElement))
+        {
+            _dragStartPositions[element.Id] = new Point(element.X, element.Y);
+        }
+
+        if (_dragStartPositions.Count > 0)
+        {
+            _isDraggingSelection = true;
+            _hasInteractionChanged = false;
+            _dragStartPointer = worldPoint;
+        }
+
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnTouchMoveFromJs(double clientX, double clientY)
+    {
+        var screenPoint = await GetScreenPointerFromCoordsAsync(clientX, clientY);
+
+        if (_isPanning && !_isDraggingSelection && !_isResizingSelection)
+        {
+            var dx = screenPoint.X - _panStartScreen.X;
+            var dy = screenPoint.Y - _panStartScreen.Y;
+            var totalDx = screenPoint.X - _panPointerOrigin.X;
+            var totalDy = screenPoint.Y - _panPointerOrigin.Y;
+            if (!_panExceededClickThreshold && Math.Sqrt(totalDx * totalDx + totalDy * totalDy) > ClickPanThreshold)
+            {
+                _panExceededClickThreshold = true;
+            }
+
+            _cameraOffset = new Point(_cameraOffset.X + dx, _cameraOffset.Y + dy);
+            _panStartScreen = screenPoint;
+            StateHasChanged();
+            return;
+        }
+
+        var worldPoint = ScreenToWorld(screenPoint);
+        _lastTouchWorldPoint = worldPoint;
+
+        if (_isResizingSelection && SelectedElement is not null)
+        {
+            ResizeSelectedElement(worldPoint, true);
+            StateHasChanged();
+            return;
+        }
+
+        if (_arrowEndpointDrag is not null)
+        {
+            var nextTarget = GetDockHandleAtPoint(worldPoint);
+            var nextPointer = nextTarget?.Center ?? GetStraightArrowMagnetPoint(_arrowEndpointDrag.Value.FixedPoint, worldPoint, GetArrowRouteStyle(_arrowEndpointDrag.Value.ArrowId));
+            _arrowEndpointDrag = _arrowEndpointDrag.Value with
+            {
+                HoverElementId = nextTarget?.ElementId,
+                HoverDock = nextTarget?.DockPoint,
+                Pointer = nextPointer
+            };
+            StateHasChanged();
+            return;
+        }
+
+        if (_arrowMiddleSegmentDrag is not null)
+        {
+            if (Board is not null)
+            {
+                var arrow = Board.Elements.OfType<ArrowElement>().FirstOrDefault(candidate => candidate.Id == _arrowMiddleSegmentDrag.Value.ArrowId);
+                if (arrow is not null)
+                {
+                    var pointerCoordinate = _arrowMiddleSegmentDrag.Value.IsVertical ? worldPoint.X : worldPoint.Y;
+                    var nextCoordinate = pointerCoordinate - _arrowMiddleSegmentDrag.Value.PointerOffset;
+                    arrow.OrthogonalMiddleCoordinate = nextCoordinate;
+                    _arrowMiddleSegmentDrag = _arrowMiddleSegmentDrag.Value with { CurrentCoordinate = nextCoordinate };
+                    _hasInteractionChanged = Math.Abs(nextCoordinate - _arrowMiddleSegmentDrag.Value.InitialCoordinate) > 0.1;
+                    _hoverArrowMiddleSegmentHandle = GetArrowMiddleSegmentHandle(arrow);
+                }
+            }
+            StateHasChanged();
+            return;
+        }
+
+        if (_draftArrow is not null)
+        {
+            var nextTarget = GetDockHandleAtPoint(worldPoint, _draftArrow.Value.SourceElementId);
+            var nextPointer = nextTarget?.Center ?? GetStraightArrowMagnetPoint(_draftArrow.Value.SourcePoint, worldPoint, ArrowRouteStyle.Orthogonal);
+            _draftArrow = _draftArrow.Value with
+            {
+                TargetElementId = nextTarget?.ElementId,
+                TargetDock = nextTarget?.DockPoint,
+                Pointer = nextPointer
+            };
+            StateHasChanged();
+            return;
+        }
+
+        if (_isDraggingSelection && _dragStartPositions.Count > 0)
+        {
+            var deltaX = worldPoint.X - _dragStartPointer.X;
+            var deltaY = worldPoint.Y - _dragStartPointer.Y;
+
+            var snappedDrag = GetSnappedSelectionDelta(deltaX, deltaY);
+            deltaX = snappedDrag.DeltaX;
+            deltaY = snappedDrag.DeltaY;
+            SetAlignmentGuides(snappedDrag.Guides);
+
+            foreach (var element in _selectedElements.Where(element => _dragStartPositions.ContainsKey(element.Id)))
+            {
+                var startPosition = _dragStartPositions[element.Id];
+                var nextX = startPosition.X + deltaX;
+                var nextY = startPosition.Y + deltaY;
+
+                if (Math.Abs(element.X - nextX) > 0.1 || Math.Abs(element.Y - nextY) > 0.1)
+                {
+                    element.X = nextX;
+                    element.Y = nextY;
+                    _hasInteractionChanged = true;
+                }
+            }
+
+            StateHasChanged();
+            return;
+        }
+
+        if (_isDrawingRectangle && _draftShape is not null)
+        {
+            UpdateDraftRectangle(worldPoint);
+            StateHasChanged();
+        }
+    }
+
+    [JSInvokable]
+    public async Task OnTouchEndFromJs()
+    {
+        await FinalizeInteractionAsync(_lastTouchWorldPoint);
+        StateHasChanged();
+    }
+
+    private async Task<Point> GetScreenPointerFromCoordsAsync(double clientX, double clientY)
+    {
+        var pointer = await JS.InvokeAsync<RelativePointer>("orimWhiteboard.clientToElement", SurfaceId, clientX, clientY);
+        _surfaceSize = new Size(SanitizeCoordinate(pointer.Width), SanitizeCoordinate(pointer.Height));
+        return ClampToSurface(new Point(SanitizeCoordinate(pointer.X), SanitizeCoordinate(pointer.Y)));
     }
 
     private async Task ApplyZoomAsync(double nextZoom, Point screenAnchor, Point? worldAnchor = null)

@@ -151,5 +151,58 @@ window.orimWhiteboard = {
         }
 
         return await window.orimWhiteboard._mdiIconsPromise;
+    },
+
+    _touchState: null,
+
+    registerTouchHandler: function (elementId, dotNetRef) {
+        const el = document.getElementById(elementId);
+        if (!el) return;
+
+        const state = { dotNetRef, activeTouchId: null };
+        window.orimWhiteboard._touchState = state;
+
+        el.addEventListener('touchstart', function (e) {
+            if (e.touches.length !== 1) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            state.activeTouchId = touch.identifier;
+            dotNetRef.invokeMethodAsync('OnTouchStartFromJs', touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        el.addEventListener('touchmove', function (e) {
+            if (state.activeTouchId === null) return;
+            e.preventDefault();
+            let touch = null;
+            for (let i = 0; i < e.touches.length; i++) {
+                if (e.touches[i].identifier === state.activeTouchId) {
+                    touch = e.touches[i];
+                    break;
+                }
+            }
+            if (!touch) return;
+            dotNetRef.invokeMethodAsync('OnTouchMoveFromJs', touch.clientX, touch.clientY);
+        }, { passive: false });
+
+        el.addEventListener('touchend', function (e) {
+            if (state.activeTouchId === null) return;
+            e.preventDefault();
+            state.activeTouchId = null;
+            dotNetRef.invokeMethodAsync('OnTouchEndFromJs');
+        }, { passive: false });
+
+        el.addEventListener('touchcancel', function (e) {
+            if (state.activeTouchId === null) return;
+            state.activeTouchId = null;
+            dotNetRef.invokeMethodAsync('OnTouchEndFromJs');
+        }, { passive: false });
+    },
+
+    disposeTouchHandler: function () {
+        window.orimWhiteboard._touchState = null;
+    },
+
+    getWindowWidth: function () {
+        return window.innerWidth;
     }
 };

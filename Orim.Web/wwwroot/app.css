@@ -456,6 +456,16 @@ html[data-orim-theme='synthwave'] .orim-logo__wordmark {
     box-sizing: border-box;
 }
 
+/* When ElementPropertiesPanel is embedded inside a MudDialog */
+.orim-properties-dialog-body {
+    color: var(--orim-body-text);
+}
+
+.orim-properties-dialog-body .orim-properties-drawer-body {
+    padding: 0;
+    overflow-y: visible;
+}
+
 .orim-properties-muted-text {
     color: var(--orim-properties-muted) !important;
 }
@@ -778,7 +788,82 @@ svg .board-element:hover {
     30% { transform: translateY(-6px); opacity: 1; }
 }
 
-@media (max-width: 900px) {
+/* Mobile zoom overlay */
+.orim-mobile-zoom-controls {
+    display: none;
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 50;
+    align-items: center;
+    gap: 2px;
+    padding: 4px 8px;
+    border-radius: 24px;
+    background: var(--orim-board-toolbar-bg);
+    border: 1px solid var(--orim-board-toolbar-border);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
+    backdrop-filter: blur(18px);
+    pointer-events: auto;
+}
+
+.orim-mobile-zoom-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--orim-board-toolbar-text);
+    min-width: 44px;
+    text-align: center;
+    user-select: none;
+}
+
+/* Desktop/Mobile toolbar visibility */
+.orim-board-toolbar-mobile {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .orim-board-toolbar-desktop {
+        display: none !important;
+    }
+
+    .orim-board-toolbar-mobile {
+        display: flex;
+        flex-wrap: nowrap;
+        overflow: hidden;
+    }
+
+    .orim-mobile-zoom-controls {
+        display: flex;
+    }
+
+    .orim-properties-drawer,
+    .orim-chat-panel {
+        width: auto;
+        left: 8px;
+        right: 8px;
+        top: auto;
+        bottom: 0;
+        border-radius: 12px 12px 0 0;
+    }
+
+    .orim-properties-drawer {
+        transform: translateY(100%);
+    }
+
+    .orim-properties-drawer.open {
+        transform: translateY(0);
+    }
+
+    .orim-chat-panel.dock-left-of-properties {
+        right: 8px;
+    }
+
+    .orim-color-swatch-grid {
+        grid-template-columns: repeat(5, minmax(0, 1fr));
+    }
+}
+
+@media (min-width: 769px) and (max-width: 900px) {
     .orim-properties-drawer,
     .orim-chat-panel {
         width: auto;
