@@ -137,4 +137,6 @@
   <data name="ChatAssistantWelcome" xml:space="preserve"><value>Describe a diagram and I'll create it on the whiteboard for you. E.g. "Create a software architecture with mediator pattern".</value></data>
   <data name="ChatAssistantNotConfigured" xml:space="preserve"><value>The AI assistant is not configured. Please configure AzureOpenAI in settings.</value></data>
   <data name="ChatInputPlaceholder" xml:space="preserve"><value>Describe a diagram…</value></data>
+  <data name="CanvasError" xml:space="preserve"><value>An error occurred in the canvas.</value></data>
+  <data name="Retry" xml:space="preserve"><value>Retry</value></data>
 </root>

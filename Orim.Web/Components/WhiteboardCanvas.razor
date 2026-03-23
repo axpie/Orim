@@ -18,9 +18,11 @@
     <div style="@GetWorldStyle()">
         @if (Board is not null)
         {
-            @foreach (var element in Board.Elements.OrderBy(e => e.ZIndex))
+            @foreach (var element in _sortedElements)
             {
-                @RenderElement(element)
+                <div @key="element.Id">
+                    @RenderElement(element)
+                </div>
             }
         }
 
@@ -149,6 +151,7 @@
     private double _zoom = 1;
     private bool _hasInitializedViewport;
     private DotNetObjectReference<WhiteboardCanvas>? _selfRef;
+    private SurfaceRect _surfaceRect;
     private Point _lastTouchWorldPoint;
     private DateTime _lastTapTime = DateTime.MinValue;
     private Guid? _lastTapElementId;
@@ -159,6 +162,7 @@
     private record struct Point(double X, double Y);
     private record struct Size(double Width, double Height);
     private record struct RelativePointer(double X, double Y, double Width, double Height);
+    private record struct SurfaceRect(double Left, double Top, double Width, double Height);
     private record struct ElementBounds(double X, double Y, double Width, double Height);
     private record struct SelectionBounds(double Left, double Top, double Width, double Height);
     private record struct ResizeHandleDefinition(ResizeHandle Handle, Point Center);
@@ -187,10 +191,26 @@
         West
     }
 
+    private IReadOnlyList<BoardElement> _sortedElements = [];
+    private IReadOnlyList<BoardElement> _cachedSelectedNonArrow = [];
+
+    private void InvalidateElementOrder()
+    {
+        _sortedElements = Board is not null
+            ? Board.Elements.OrderBy(e => e.ZIndex).ToList()
+            : [];
+    }
+
+    private void InvalidateSelectionCache()
+    {
+        _cachedSelectedNonArrow = _selectedElements
+            .Where(e => e is not ArrowElement)
+            .OrderBy(e => e.ZIndex).ToList();
+    }
+
     private bool CanResizeSelectedElement => _selectedElements.Count == 1 && SelectedElement is not ArrowElement;
 
-    private IReadOnlyList<BoardElement> GetSelectedNonArrowElements() =>
-        _selectedElements.Where(element => element is not ArrowElement).OrderBy(element => element.ZIndex).ToList();
+    private IReadOnlyList<BoardElement> GetSelectedNonArrowElements() => _cachedSelectedNonArrow;
 
     public void ClearSelection()
     {
@@ -198,7 +218,12 @@
         StateHasChanged();
     }
 
-    public void ForceRerender() => StateHasChanged();
+    public void ForceRerender()
+    {
+        InvalidateElementOrder();
+        InvalidateSelectionCache();
+        StateHasChanged();
+    }
 
     public async Task SelectElementAsync(BoardElement? element)
     {
@@ -234,6 +259,12 @@
         ApplyFitToContent();
         await NotifyZoomChangedAsync();
         StateHasChanged();
+    }
+
+    protected override void OnParametersSet()
+    {
+        InvalidateElementOrder();
+        InvalidateSelectionCache();
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)

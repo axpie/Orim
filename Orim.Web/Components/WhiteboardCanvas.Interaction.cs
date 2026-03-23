@@ -11,15 +11,28 @@ public partial class WhiteboardCanvas
     {
         _selectedElements.Clear();
         _selectedElements.AddRange(elements.DistinctBy(element => element.Id));
+        InvalidateSelectionCache();
         await OnSelectedElementChanged.InvokeAsync(SelectedElement);
         await OnSelectedElementsChanged.InvokeAsync(_selectedElements.ToList());
     }
 
     private async Task<Point> GetScreenPointerAsync(MouseEventArgs e)
     {
-        var pointer = await JS.InvokeAsync<RelativePointer>("orimWhiteboard.clientToElement", SurfaceId, e.ClientX, e.ClientY);
-        _surfaceSize = new Size(SanitizeCoordinate(pointer.Width), SanitizeCoordinate(pointer.Height));
-        return ClampToSurface(new Point(SanitizeCoordinate(pointer.X), SanitizeCoordinate(pointer.Y)));
+        await RefreshSurfaceRectAsync();
+        return GetScreenPointer(e);
+    }
+
+    private Point GetScreenPointer(MouseEventArgs e)
+    {
+        var x = SanitizeCoordinate(e.ClientX - _surfaceRect.Left);
+        var y = SanitizeCoordinate(e.ClientY - _surfaceRect.Top);
+        return ClampToSurface(new Point(x, y));
+    }
+
+    private async Task RefreshSurfaceRectAsync()
+    {
+        _surfaceRect = await JS.InvokeAsync<SurfaceRect>("orimWhiteboard.getElementRect", SurfaceId);
+        _surfaceSize = new Size(SanitizeCoordinate(_surfaceRect.Width), SanitizeCoordinate(_surfaceRect.Height));
     }
 
     private async Task EnsureSurfaceSizeAsync()
@@ -29,8 +42,7 @@ public partial class WhiteboardCanvas
             return;
         }
 
-        var size = await JS.InvokeAsync<Size>("orimWhiteboard.getElementSize", SurfaceId);
-        _surfaceSize = new Size(SanitizeCoordinate(size.Width), SanitizeCoordinate(size.Height));
+        await RefreshSurfaceRectAsync();
     }
 
     private Point ScreenToWorld(Point point) => new(
@@ -44,7 +56,8 @@ public partial class WhiteboardCanvas
             return;
         }
 
-        var screenPoint = await GetScreenPointerAsync(e);
+        await RefreshSurfaceRectAsync();
+        var screenPoint = GetScreenPointer(e);
         var suppressSnap = e.CtrlKey || e.MetaKey;
         ClearAlignmentGuides();
 
@@ -95,6 +108,7 @@ public partial class WhiteboardCanvas
             };
 
             Board.Elements.Add(icon);
+            InvalidateElementOrder();
             await SetSelectionAsync([icon]);
             await OnBoardChanged.InvokeAsync();
             await OnToolChanged.InvokeAsync(BoardEditor.Tool.Select);
@@ -236,7 +250,7 @@ public partial class WhiteboardCanvas
 
     private async Task OnSurfaceMouseMove(MouseEventArgs e)
     {
-        var screenPoint = await GetScreenPointerAsync(e);
+        var screenPoint = GetScreenPointer(e);
         var suppressSnap = e.CtrlKey || e.MetaKey;
 
         if (_isPanning)
@@ -375,7 +389,7 @@ public partial class WhiteboardCanvas
 
     private async Task OnSurfaceMouseUp(MouseEventArgs e)
     {
-        var worldPoint = ScreenToWorld(await GetScreenPointerAsync(e));
+        var worldPoint = ScreenToWorld(GetScreenPointer(e));
         await FinalizeInteractionAsync(worldPoint);
     }
 
@@ -386,7 +400,8 @@ public partial class WhiteboardCanvas
 
     private async Task OnSurfaceWheel(WheelEventArgs e)
     {
-        var screenPoint = await GetScreenPointerAsync(new MouseEventArgs { ClientX = e.ClientX, ClientY = e.ClientY });
+        await RefreshSurfaceRectAsync();
+        var screenPoint = GetScreenPointerFromCoords(e.ClientX, e.ClientY);
         var worldPoint = ScreenToWorld(screenPoint);
         var factor = e.DeltaY < 0 ? ZoomStep : 1 / ZoomStep;
         await ApplyZoomAsync(_zoom * factor, screenPoint, worldPoint);
@@ -395,7 +410,8 @@ public partial class WhiteboardCanvas
     [JSInvokable]
     public async Task OnTouchStartFromJs(double clientX, double clientY)
     {
-        var screenPoint = await GetScreenPointerFromCoordsAsync(clientX, clientY);
+        await RefreshSurfaceRectAsync();
+        var screenPoint = GetScreenPointerFromCoords(clientX, clientY);
         var worldPoint = ScreenToWorld(screenPoint);
         _lastTouchWorldPoint = worldPoint;
         ClearAlignmentGuides();
@@ -436,6 +452,7 @@ public partial class WhiteboardCanvas
             };
 
             Board.Elements.Add(icon);
+            InvalidateElementOrder();
             await SetSelectionAsync([icon]);
             await OnBoardChanged.InvokeAsync();
             await OnToolChanged.InvokeAsync(BoardEditor.Tool.Select);
@@ -587,7 +604,7 @@ public partial class WhiteboardCanvas
     [JSInvokable]
     public async Task OnTouchMoveFromJs(double clientX, double clientY)
     {
-        var screenPoint = await GetScreenPointerFromCoordsAsync(clientX, clientY);
+        var screenPoint = GetScreenPointerFromCoords(clientX, clientY);
 
         if (_isPanning && !_isDraggingSelection && !_isResizingSelection)
         {
@@ -705,11 +722,11 @@ public partial class WhiteboardCanvas
         StateHasChanged();
     }
 
-    private async Task<Point> GetScreenPointerFromCoordsAsync(double clientX, double clientY)
+    private Point GetScreenPointerFromCoords(double clientX, double clientY)
     {
-        var pointer = await JS.InvokeAsync<RelativePointer>("orimWhiteboard.clientToElement", SurfaceId, clientX, clientY);
-        _surfaceSize = new Size(SanitizeCoordinate(pointer.Width), SanitizeCoordinate(pointer.Height));
-        return ClampToSurface(new Point(SanitizeCoordinate(pointer.X), SanitizeCoordinate(pointer.Y)));
+        var x = SanitizeCoordinate(clientX - _surfaceRect.Left);
+        var y = SanitizeCoordinate(clientY - _surfaceRect.Top);
+        return ClampToSurface(new Point(x, y));
     }
 
     private async Task ApplyZoomAsync(double nextZoom, Point screenAnchor, Point? worldAnchor = null)
@@ -830,6 +847,7 @@ public partial class WhiteboardCanvas
 
     private async Task FinalizeInteractionAsync(Point? pointer)
     {
+        InvalidateElementOrder();
         var shouldClearSelection = _isPanning && _clearSelectionOnPanRelease && !_panExceededClickThreshold && pointer is not null;
         _isPanning = false;
         _clearSelectionOnPanRelease = false;

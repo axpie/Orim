@@ -79,6 +79,7 @@ public class BoardSnapshotCommand : IBoardCommand
 
 public class CommandStack
 {
+    private const int MaxUndoHistory = 50;
     private readonly Stack<IBoardCommand> _undoStack = new();
     private readonly Stack<IBoardCommand> _redoStack = new();
 
@@ -87,6 +88,11 @@ public class CommandStack
         command.Execute(board);
         _undoStack.Push(command);
         _redoStack.Clear();
+
+        while (_undoStack.Count > MaxUndoHistory)
+        {
+            TrimOldestUndo();
+        }
     }
 
     public bool CanUndo => _undoStack.Count > 0;
@@ -112,5 +118,18 @@ public class CommandStack
     {
         _undoStack.Clear();
         _redoStack.Clear();
+    }
+
+    private void TrimOldestUndo()
+    {
+        if (_undoStack.Count == 0) return;
+
+        var items = _undoStack.ToArray();
+        _undoStack.Clear();
+        // items[0] is the newest (top of stack), items[^1] is the oldest
+        for (var i = items.Length - 2; i >= 0; i--)
+        {
+            _undoStack.Push(items[i]);
+        }
     }
 }

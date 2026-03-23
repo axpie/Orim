@@ -33,6 +33,21 @@ window.orimWhiteboard = {
         };
     },
 
+    getElementRect: function (elementId) {
+        const element = document.getElementById(elementId);
+        if (!element) {
+            return { left: 0, top: 0, width: 0, height: 0 };
+        }
+
+        const rect = element.getBoundingClientRect();
+        return {
+            left: Number.isFinite(rect.left) ? rect.left : 0,
+            top: Number.isFinite(rect.top) ? rect.top : 0,
+            width: Number.isFinite(rect.width) ? rect.width : 0,
+            height: Number.isFinite(rect.height) ? rect.height : 0
+        };
+    },
+
     scrollElementToBottom: function (element) {
         if (!element) {
             return;

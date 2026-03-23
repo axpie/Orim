@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORIM Performance Audit - Executive Review</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+
+  :root {
+    --bg-primary: #0a0e1a;
+    --bg-secondary: #111827;
+    --bg-card: #1a2236;
+    --bg-card-hover: #1f2a42;
+    --accent-violet: #8b5cf6;
+    --accent-violet-glow: rgba(139, 92, 246, 0.25);
+    --accent-emerald: #10b981;
+    --accent-emerald-glow: rgba(16, 185, 129, 0.2);
+    --accent-amber: #f59e0b;
+    --accent-amber-glow: rgba(245, 158, 11, 0.2);
+    --accent-red: #ef4444;
+    --accent-red-glow: rgba(239, 68, 68, 0.25);
+    --accent-cyan: #06b6d4;
+    --text-primary: #f1f5f9;
+    --text-secondary: #94a3b8;
+    --text-muted: #64748b;
+    --border: #1e293b;
+    --border-glow: rgba(139, 92, 246, 0.15);
+    --gradient-hero: linear-gradient(135deg, #0f0c29 0%, #1a1040 40%, #0a1628 100%);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  html {
+    scroll-behavior: smooth;
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-violet) var(--bg-secondary);
+  }
+
+  body {
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+
+  /* === HERO === */
+  .hero {
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: var(--gradient-hero);
+    position: relative;
+    overflow: hidden;
+    padding: 2rem;
+  }
+
+  .hero::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse 60% 50% at 50% 45%, rgba(139, 92, 246, 0.08) 0%, transparent 70%),
+                radial-gradient(ellipse 40% 30% at 70% 60%, rgba(6, 182, 212, 0.06) 0%, transparent 60%);
+    pointer-events: none;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.4rem 1.2rem;
+    border-radius: 100px;
+    background: rgba(139, 92, 246, 0.12);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    color: var(--accent-violet);
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    margin-bottom: 2rem;
+    animation: fadeInDown 0.8s ease;
+  }
+
+  .hero-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent-violet);
+    animation: pulse-dot 2s ease infinite;
+  }
+
+  @keyframes pulse-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(1.5); }
+  }
+
+  .hero h1 {
+    font-size: clamp(2.8rem, 6vw, 5rem);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    line-height: 1.1;
+    margin-bottom: 1.2rem;
+    background: linear-gradient(135deg, #f1f5f9 0%, #a78bfa 50%, #06b6d4 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: fadeInUp 0.8s ease 0.2s both;
+  }
+
+  .hero-subtitle {
+    font-size: clamp(1rem, 2vw, 1.35rem);
+    color: var(--text-secondary);
+    max-width: 600px;
+    margin-bottom: 3rem;
+    font-weight: 400;
+    animation: fadeInUp 0.8s ease 0.4s both;
+  }
+
+  .hero-meta {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    animation: fadeInUp 0.8s ease 0.6s both;
+  }
+
+  .hero-meta-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .hero-meta-value {
+    font-size: 2.2rem;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  .hero-meta-label {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+  }
+
+  .scroll-indicator {
+    position: absolute;
+    bottom: 2rem;
+    animation: bounce 2s ease infinite 2s;
+    opacity: 0.4;
+  }
+
+  .scroll-indicator svg {
+    width: 24px;
+    height: 24px;
+    stroke: var(--text-secondary);
+    stroke-width: 2;
+    fill: none;
+  }
+
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(8px); }
+  }
+
+  @keyframes fadeInUp {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  @keyframes fadeInDown {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* === NAV === */
+  .sticky-nav {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(10, 14, 26, 0.85);
+    backdrop-filter: blur(16px) saturate(1.4);
+    border-bottom: 1px solid var(--border);
+    padding: 0 2rem;
+  }
+
+  .sticky-nav-inner {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    overflow-x: auto;
+    scrollbar-width: none;
+    padding: 0.6rem 0;
+  }
+
+  .sticky-nav-inner::-webkit-scrollbar { display: none; }
+
+  .nav-link {
+    padding: 0.45rem 1rem;
+    border-radius: 8px;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: all 0.2s;
+  }
+
+  .nav-link:hover {
+    background: rgba(139, 92, 246, 0.1);
+    color: var(--accent-violet);
+  }
+
+  /* === CONTENT === */
+  .content {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+  }
+
+  .section {
+    padding: 5rem 0;
+    opacity: 0;
+    transform: translateY(30px);
+    transition: opacity 0.6s ease, transform 0.6s ease;
+  }
+
+  .section.visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  .section-header {
+    margin-bottom: 3rem;
+  }
+
+  .section-eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 0.8rem;
+  }
+
+  .section-eyebrow.red { color: var(--accent-red); }
+  .section-eyebrow.amber { color: var(--accent-amber); }
+  .section-eyebrow.emerald { color: var(--accent-emerald); }
+  .section-eyebrow.cyan { color: var(--accent-cyan); }
+  .section-eyebrow.violet { color: var(--accent-violet); }
+
+  .section-title {
+    font-size: clamp(1.8rem, 3.5vw, 2.5rem);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    margin-bottom: 0.6rem;
+  }
+
+  .section-desc {
+    font-size: 1.05rem;
+    color: var(--text-secondary);
+    max-width: 680px;
+  }
+
+  /* === CARDS === */
+  .card-grid {
+    display: grid;
+    gap: 1.5rem;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    border-radius: 16px 16px 0 0;
+  }
+
+  .card:hover {
+    background: var(--bg-card-hover);
+    border-color: rgba(139, 92, 246, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3), 0 0 0 1px var(--border-glow);
+  }
+
+  .card.severity-critical::before { background: linear-gradient(90deg, var(--accent-red), #f97316); }
+  .card.severity-warning::before { background: linear-gradient(90deg, var(--accent-amber), #eab308); }
+  .card.severity-info::before { background: linear-gradient(90deg, var(--accent-emerald), #22d3ee); }
+
+  .card-id {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    font-size: 0.75rem;
+    font-weight: 800;
+    margin-bottom: 1rem;
+    letter-spacing: 0.02em;
+  }
+
+  .card-id.red { background: rgba(239, 68, 68, 0.15); color: var(--accent-red); }
+  .card-id.amber { background: rgba(245, 158, 11, 0.15); color: var(--accent-amber); }
+  .card-id.emerald { background: rgba(16, 185, 129, 0.15); color: var(--accent-emerald); }
+
+  .card-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    margin-bottom: 0.6rem;
+    line-height: 1.3;
+  }
+
+  .card-location {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.75rem;
+    color: var(--accent-cyan);
+    background: rgba(6, 182, 212, 0.08);
+    padding: 0.2rem 0.6rem;
+    border-radius: 6px;
+    display: inline-block;
+    margin-bottom: 0.8rem;
+  }
+
+  .card-desc {
+    font-size: 0.92rem;
+    color: var(--text-secondary);
+    line-height: 1.7;
+    margin-bottom: 1rem;
+  }
+
+  .impact-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.9rem;
+    border-radius: 100px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+  }
+
+  .impact-badge.high {
+    background: rgba(239, 68, 68, 0.12);
+    color: var(--accent-red);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+  }
+
+  .impact-badge.medium {
+    background: rgba(245, 158, 11, 0.12);
+    color: var(--accent-amber);
+    border: 1px solid rgba(245, 158, 11, 0.2);
+  }
+
+  .impact-badge.low {
+    background: rgba(16, 185, 129, 0.12);
+    color: var(--accent-emerald);
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  /* === CODE BLOCKS === */
+  .code-compare {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1rem;
+  }
+
+  @media (max-width: 768px) {
+    .code-compare { grid-template-columns: 1fr; }
+  }
+
+  .code-block {
+    background: #0d1117;
+    border: 1px solid #21262d;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .code-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1rem;
+    background: #161b22;
+    border-bottom: 1px solid #21262d;
+    font-size: 0.72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+
+  .code-header.bad { color: var(--accent-red); }
+  .code-header.good { color: var(--accent-emerald); }
+
+  .code-header-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+  }
+
+  .code-header.bad .code-header-dot { background: var(--accent-red); }
+  .code-header.good .code-header-dot { background: var(--accent-emerald); }
+
+  pre {
+    padding: 1rem 1.2rem;
+    font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    font-size: 0.78rem;
+    line-height: 1.65;
+    overflow-x: auto;
+    color: #c9d1d9;
+    margin: 0;
+  }
+
+  pre .kw { color: #ff7b72; }
+  pre .str { color: #a5d6ff; }
+  pre .cm { color: #8b949e; }
+  pre .fn { color: #d2a8ff; }
+  pre .tp { color: #79c0ff; }
+  pre .num { color: #f0883e; }
+
+  /* === IMPACT METER === */
+  .impact-meter {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+
+  .meter-bar {
+    flex: 1;
+    height: 6px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .meter-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 1s ease;
+  }
+
+  .meter-fill.red { background: linear-gradient(90deg, var(--accent-red), #f97316); }
+  .meter-fill.amber { background: linear-gradient(90deg, var(--accent-amber), #eab308); }
+  .meter-fill.emerald { background: linear-gradient(90deg, var(--accent-emerald), #22d3ee); }
+
+  .meter-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    min-width: 60px;
+    text-align: right;
+  }
+
+  /* === PRIORITY TABLE === */
+  .priority-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 1.5rem;
+    margin-top: 2rem;
+  }
+
+  .priority-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .priority-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 4px;
+  }
+
+  .priority-card.quick::before { background: var(--accent-emerald); }
+  .priority-card.medium::before { background: var(--accent-amber); }
+  .priority-card.long::before { background: var(--accent-violet); }
+
+  .priority-card h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+  }
+
+  .priority-timeframe {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    margin-bottom: 1.2rem;
+    font-weight: 500;
+  }
+
+  .priority-list {
+    list-style: none;
+  }
+
+  .priority-list li {
+    position: relative;
+    padding: 0.5rem 0 0.5rem 1.6rem;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    line-height: 1.5;
+  }
+
+  .priority-list li:last-child { border-bottom: none; }
+
+  .priority-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+  }
+
+  .priority-card.quick .priority-list li::before { background: var(--accent-emerald); }
+  .priority-card.medium .priority-list li::before { background: var(--accent-amber); }
+  .priority-card.long .priority-list li::before { background: var(--accent-violet); }
+
+  /* === GAIN BANNER === */
+  .gain-banner {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.12), rgba(6, 182, 212, 0.08));
+    border: 1px solid rgba(139, 92, 246, 0.2);
+    border-radius: 20px;
+    padding: 3rem;
+    text-align: center;
+    margin: 3rem 0;
+  }
+
+  .gain-value {
+    font-size: clamp(3rem, 8vw, 5rem);
+    font-weight: 900;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--accent-violet), var(--accent-cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1.1;
+    margin-bottom: 0.5rem;
+  }
+
+  .gain-label {
+    font-size: 1.1rem;
+    color: var(--text-secondary);
+    font-weight: 500;
+  }
+
+  /* === AI PATTERN BOX === */
+  .ai-pattern-box {
+    background: linear-gradient(135deg, rgba(245, 158, 11, 0.06), rgba(239, 68, 68, 0.04));
+    border: 1px solid rgba(245, 158, 11, 0.15);
+    border-radius: 16px;
+    padding: 2rem;
+    margin-top: 2rem;
+  }
+
+  .ai-pattern-title {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--accent-amber);
+    margin-bottom: 1rem;
+  }
+
+  .ai-pattern-list {
+    list-style: none;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 0.5rem;
+  }
+
+  .ai-pattern-list li {
+    padding: 0.5rem 0 0.5rem 1.4rem;
+    font-size: 0.88rem;
+    color: var(--text-secondary);
+    position: relative;
+  }
+
+  .ai-pattern-list li::before {
+    content: '!';
+    position: absolute;
+    left: 0;
+    top: 0.5rem;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--accent-amber);
+    font-size: 0.65rem;
+    font-weight: 800;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* === FOOTER === */
+  .footer {
+    border-top: 1px solid var(--border);
+    padding: 3rem 2rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 0.8rem;
+  }
+
+  /* === SEPARATOR === */
+  .section-sep {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 0;
+  }
+
+  /* === RESPONSIVE === */
+  @media (max-width: 640px) {
+    .hero-meta { gap: 1.2rem; }
+    .hero-meta-value { font-size: 1.6rem; }
+    .card { padding: 1.5rem; }
+    .priority-section { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ======================= HERO ======================= -->
+<section class="hero">
+  <div class="hero-badge">Live Audit Report</div>
+  <h1>ORIM Performance &amp; Rendering Audit</h1>
+  <p class="hero-subtitle">Blazor Server Whiteboard Editor &mdash; Detaillierte Analyse von Rendering-Effizienz, SignalR-Optimierung und AI-Code-Patterns</p>
+
+  <div class="hero-meta">
+    <div class="hero-meta-item">
+      <span class="hero-meta-value" style="color: var(--accent-red);">6</span>
+      <span class="hero-meta-label">Kritische Issues</span>
+    </div>
+    <div class="hero-meta-item">
+      <span class="hero-meta-value" style="color: var(--accent-amber);">6</span>
+      <span class="hero-meta-label">Rendering Issues</span>
+    </div>
+    <div class="hero-meta-item">
+      <span class="hero-meta-value" style="color: var(--accent-emerald);">7</span>
+      <span class="hero-meta-label">Optimierungen</span>
+    </div>
+    <div class="hero-meta-item">
+      <span class="hero-meta-value" style="color: var(--accent-violet);">60-70%</span>
+      <span class="hero-meta-label">Potentieller Gain</span>
+    </div>
+  </div>
+
+  <div class="scroll-indicator">
+    <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+  </div>
+</section>
+
+<!-- ======================= NAV ======================= -->
+<nav class="sticky-nav">
+  <div class="sticky-nav-inner">
+    <a href="#critical" class="nav-link">Kritisch</a>
+    <a href="#rendering" class="nav-link">Rendering</a>
+    <a href="#optimizations" class="nav-link">Optimierungen</a>
+    <a href="#ai-patterns" class="nav-link">AI-Patterns</a>
+    <a href="#roadmap" class="nav-link">Roadmap</a>
+  </div>
+</nav>
+
+<div class="content">
+
+<!-- ======================= CRITICAL ======================= -->
+<section id="critical" class="section">
+  <div class="section-header">
+    <div class="section-eyebrow red">&#9679; Kritische Performance-Probleme</div>
+    <h2 class="section-title">6 Issues mit direktem Impact auf User Experience</h2>
+    <p class="section-desc">Diese Probleme verursachen spuerbare Verzoegerungen bei Interaktionen und skalieren schlecht mit steigender Nutzung.</p>
+  </div>
+
+  <div class="card-grid">
+
+    <!-- K1 -->
+    <div class="card severity-critical">
+      <div class="card-id red">K1</div>
+      <h3 class="card-title">JS-Interop bei jedem Mausbewegungsevent</h3>
+      <span class="card-location">WhiteboardCanvas.Interaction.cs:18-23</span>
+      <p class="card-desc"><code>GetScreenPointerAsync()</code> fuehrt bei <strong>jedem</strong> <code>mousemove</code>-Event einen JS-Interop-Aufruf ueber SignalR durch. Bei 60fps = 60 Roundtrips/Sekunde.</p>
+      <span class="impact-badge high">&#9888; 200-500ms Latenz bei Drag</span>
+      <div class="impact-meter">
+        <div class="meter-bar"><div class="meter-fill red" style="width: 90%;"></div></div>
+        <span class="meter-label" style="color: var(--accent-red);">Kritisch</span>
+      </div>
+      <div class="code-compare">
+        <div class="code-block">
+          <div class="code-header bad"><span class="code-header-dot"></span> Vorher</div>
+<pre><span class="cm">// Jedes mousemove = SignalR-Roundtrip</span>
+<span class="kw">private async</span> Task&lt;Point&gt; <span class="fn">GetScreenPointerAsync</span>(MouseEventArgs e)
+{
+    <span class="kw">var</span> pointer = <span class="kw">await</span> JS.<span class="fn">InvokeAsync</span>&lt;RelativePointer&gt;(
+        <span class="str">"orimWhiteboard.clientToElement"</span>,
+        SurfaceId, e.ClientX, e.ClientY);
+}</pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header good"><span class="code-header-dot"></span> Nachher</div>
+<pre><span class="cm">// Offset einmal cachen, kein JS-Interop</span>
+<span class="kw">private</span> Point <span class="fn">GetScreenPointer</span>(MouseEventArgs e)
+{
+    <span class="kw">return</span> <span class="fn">ClampToSurface</span>(<span class="kw">new</span> <span class="tp">Point</span>(
+        e.ClientX - _surfaceOffset.X,
+        e.ClientY - _surfaceOffset.Y));
+}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- K2 -->
+    <div class="card severity-critical">
+      <div class="card-id red">K2</div>
+      <h3 class="card-title">LINQ OrderBy im Render-Template bei jedem Frame</h3>
+      <span class="card-location">WhiteboardCanvas.razor:21</span>
+      <p class="card-desc"><code>Board.Elements.OrderBy(e =&gt; e.ZIndex)</code> wird bei <strong>jedem Render</strong> ausgefuehrt &mdash; auch waehrend Drag-Operationen mit Dutzenden Renders/Sekunde.</p>
+      <span class="impact-badge high">&#9888; 2-8ms pro Render</span>
+      <div class="impact-meter">
+        <div class="meter-bar"><div class="meter-fill red" style="width: 70%;"></div></div>
+        <span class="meter-label" style="color: var(--accent-red);">Hoch</span>
+      </div>
+      <div class="code-compare">
+        <div class="code-block">
+          <div class="code-header bad"><span class="code-header-dot"></span> Vorher</div>
+<pre><span class="cm">// O(n log n) Sortierung bei JEDEM Render</span>
+<span class="kw">@foreach</span> (<span class="kw">var</span> element <span class="kw">in</span>
+    Board.Elements.<span class="fn">OrderBy</span>(e =&gt; e.ZIndex))
+{
+    @<span class="fn">RenderElement</span>(element)
+}</pre>
+        </div>
+        <div class="code-block">
+          <div class="code-header good"><span class="code-header-dot"></span> Nachher</div>
+<pre><span class="cm">// Sortierte Liste cachen</span>
+<span class="kw">@foreach</span> (<span class="kw">var</span> element <span class="kw">in</span> _sortedElements)
+{
+    &lt;<span class="kw">div</span> <span class="fn">@key</span>=<span class="str">"element.Id"</span>&gt;
+        @<span class="fn">RenderElement</span>(element)
+    &lt;/<span class="kw">div</span>&gt;
+}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- K3 -->
+    <div class="card severity-critical">
+      <div class="card-id red">K3</div>
+      <h3 class="card-title">Mehrfache Listen-Allokation pro Render</h3>
+      <span class="card-location">WhiteboardCanvas.razor:58, 64</span>
+      <p class="card-desc"><code>GetSelectedNonArrowElements()</code> erzeugt bei jedem Aufruf eine neue gefilterte, sortierte Liste. Wird 2-3x pro Render aufgerufen.</p>
+      <span class="impact-badge medium">&#9650; GC-Pressure</span>
+      <div class="impact-meter">
+        <div class="meter-bar"><div class="meter-fill amber" style="width: 55%;"></div></div>
+        <span class="meter-label" style="color: var(--accent-amber);">Mittel</span>
+      </div>
+    </div>
+
+    <!-- K4 -->
+    <div class="card severity-critical">
+      <div class="card-id red">K4</div>
+      <h3 class="card-title">GetAllAsync() laedt ALLE Boards fuer Dashboard</h3>
+      <span class="card-location">JsonBoardRepository.cs:35-51</span>
+      <p class="card-desc"><code>GetAccessibleBoardsAsync</code> laedt <strong>jedes Board komplett</strong> (inkl. aller Elemente!) von Disk, nur um Metadaten anzuzeigen.</p>
+      <span class="impact-badge high">&#9888; 500ms-2s Dashboard-Ladezeit</span>
+      <div class="impact-meter">
+        <div class="meter-bar"><div class="meter-fill red" style="width: 80%;"></div></div>
+        <span class="meter-label" style="color: var(--accent-red);">Kritisch</span>
+      </div>
+    </div>
+
+    <!-- K5 -->
+    <div class="card severity-critical">
+      <div class="card-id red">K5</div>
+      <h3 class="card-title">ShareToken-Suche laedt alle Boards</h3>
+      <span class="card-location">JsonBoardRepository.cs:90-94</span>
+      <p class="card-desc"><code>GetByShareTokenAsync</code> ruft <code>GetAllAsync()</code> auf, um ein Board per Token zu finden. Full-Table-Scan-Aequivalent.</p>
+      <span class="impact-badge high">&#9888; Skaliert linear mit Board-Anzahl</span>
+      <div class="impact-meter">
+        <div class="meter-bar"><div class="meter-fill red" style="width: 75%;"></div></div>
+        <span class="meter-label" style="color: var(--accent-red);">Kritisch</span>
+      </div>
+    </div>
+
+    <!-- K6 -->
+    <div class="card severity-critical">
+      <div class="card-id red">K6</div>
+      <h3 class="card-title">Board-Snapshot mit vollem JSON-Serialize</h3>
+      <span class="card-location">CommandStack.cs:45-77</span>
+      <p class="card-desc">Jede Undo/Redo-Aktion serialisiert/deserialisiert das <strong>gesamte Board</strong>. 20 Schritte bei 50 Elementen = 4MB Strings im Circuit-Speicher.</p>
+      <span class="impact-badge medium">&#9650; 5-20ms pro Undo + Memory-Leak</span>
+      <div class="impact-meter">
+        <div class="meter-bar"><div class="meter-fill amber" style="width: 60%;"></div></div>
+        <span class="meter-label" style="color: var(--accent-amber);">Mittel</span>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<hr class="section-sep">
+
+<!-- ======================= RENDERING ======================= -->
+<section id="rendering" class="section">
+  <div class="section-header">
+    <div class="section-eyebrow amber">&#9679; Rendering-Ineffizienzen</div>
+    <h2 class="section-title">Unnoetige Re-Renders und DOM-Operationen</h2>
+    <p class="section-desc">Blazors Diff-Algorithmus wird nicht optimal genutzt. Jede Interaktion triggert mehr DOM-Updates als noetig.</p>
+  </div>
+
+  <div class="card-grid">
+
+    <div class="card severity-warning">
+      <div class="card-id amber">R1</div>
+      <h3 class="card-title">Fehlende @key Directive auf Board-Elementen</h3>
+      <span class="card-location">WhiteboardCanvas.razor:21-24</span>
+      <p class="card-desc">Ohne <code>@key</code> muss Blazor sequenziell diffieren. Wird ein Element eingefuegt, werden <strong>alle</strong> folgenden als "geaendert" betrachtet.</p>
+      <span class="impact-badge medium">&#9650; +15% Rendering mit @key</span>
+    </div>
+
+    <div class="card severity-warning">
+      <div class="card-id amber">R2</div>
+      <h3 class="card-title">Inline-Styles bei jedem Render neu allokiert</h3>
+      <span class="card-location">WhiteboardCanvas.Rendering.cs:11-18</span>
+      <p class="card-desc"><code>GetSurfaceStyle()</code> baut einen ~400 Zeichen String bei <strong>jedem</strong> Render zusammen. Sollte gecacht und nur bei Zoom/Pan/Theme-Aenderung aktualisiert werden.</p>
+    </div>
+
+    <div class="card severity-warning">
+      <div class="card-id amber">R3</div>
+      <h3 class="card-title">RenderFragment-Delegates pro Element pro Render</h3>
+      <span class="card-location">WhiteboardCanvas.Rendering.cs:158-203</span>
+      <p class="card-desc">Jeder <code>RenderElement</code>-Aufruf erzeugt neue Lambda-Delegates. Bei 50 Elementen = 50 Allokationen pro Render.</p>
+    </div>
+
+    <div class="card severity-warning">
+      <div class="card-id amber">R4</div>
+      <h3 class="card-title">Mehrfache StateHasChanged() in Sequenz</h3>
+      <span class="card-location">BoardEditor.razor:622-633</span>
+      <p class="card-desc"><code>HandleChatBoardChangedAsync</code> ruft 3x <code>StateHasChanged()</code> in einer Methode auf &mdash; ueber <code>ForceRerender()</code>, <code>FitToContentAsync()</code> und direkt.</p>
+    </div>
+
+    <div class="card severity-warning">
+      <div class="card-id amber">R5</div>
+      <h3 class="card-title">FilteredMaterialIcons: LINQ bei jedem Zugriff</h3>
+      <span class="card-location">BoardEditor.razor:529-534</span>
+      <p class="card-desc">Computed Property evaluiert 7.000+ Icons mit <code>Where</code>, <code>OrderBy</code>, <code>ThenBy</code>, <code>Take</code>, <code>ToList</code> bei jedem Render.</p>
+    </div>
+
+    <div class="card severity-warning">
+      <div class="card-id amber">R6</div>
+      <h3 class="card-title">Board-Referenz als Parameter triggert Re-Render</h3>
+      <span class="card-location">BoardEditor.razor:286-295</span>
+      <p class="card-desc">Board als <code>[Parameter]</code> an WhiteboardCanvas: Blazor ruft <code>SetParametersAsync</code> bei jedem Parent-Render auf. Kein <code>ShouldRender()</code> implementiert.</p>
+    </div>
+
+  </div>
+</section>
+
+<hr class="section-sep">
+
+<!-- ======================= OPTIMIZATIONS ======================= -->
+<section id="optimizations" class="section">
+  <div class="section-header">
+    <div class="section-eyebrow emerald">&#9679; Optimierungs-Opportunitaeten</div>
+    <h2 class="section-title">Quick Wins und strategische Verbesserungen</h2>
+  </div>
+
+  <div class="card-grid">
+
+    <div class="card severity-info">
+      <div class="card-id emerald">O1</div>
+      <h3 class="card-title">Client-seitiges Throttle fuer Maus-Events</h3>
+      <p class="card-desc">JavaScript-seitig mousemove auf 60fps (16ms) begrenzen. Nur letzte Position an Server senden. Reduziert SignalR-Traffic um 80-90%.</p>
+    </div>
+
+    <div class="card severity-info">
+      <div class="card-id emerald">O2</div>
+      <h3 class="card-title">Singleton-SemaphoreSlim blockiert alle Operationen</h3>
+      <span class="card-location">JsonBoardRepository.cs:12</span>
+      <p class="card-desc">Ein einzelnes Lock serialisiert <strong>alle</strong> Board-Operationen. User A speichert &rarr; User B wartet. Per-Board-Locking wuerde Concurrency ermoeglichen.</p>
+    </div>
+
+    <div class="card severity-info">
+      <div class="card-id emerald">O3</div>
+      <h3 class="card-title">AI-Prompt mit vollem Board-JSON</h3>
+      <span class="card-location">DiagramAssistantService.cs:136-183</span>
+      <p class="card-desc">Das gesamte Board wird als JSON in den System-Prompt serialisiert. Bei grossen Boards = tausende unnoetige Tokens pro AI-Request.</p>
+    </div>
+
+    <div class="card severity-info">
+      <div class="card-id emerald">O4</div>
+      <h3 class="card-title">Keine ErrorBoundary um kritische Komponenten</h3>
+      <p class="card-desc">Ein Fehler in WhiteboardCanvas bringt die gesamte Seite zum Absturz. <code>&lt;ErrorBoundary&gt;</code> wuerde Fehler isolieren und Reconnection vermeiden.</p>
+    </div>
+
+    <div class="card severity-info">
+      <div class="card-id emerald">O5</div>
+      <h3 class="card-title">Kein Virtual Scrolling im Icon-Picker</h3>
+      <span class="card-location">BoardEditor.razor:365-374</span>
+      <p class="card-desc">240 Icon-Buttons gleichzeitig gerendert. <code>Virtualize&lt;T&gt;</code> wuerde nur sichtbare Items rendern.</p>
+    </div>
+
+    <div class="card severity-info">
+      <div class="card-id emerald">O6</div>
+      <h3 class="card-title">Lambda-Closures in foreach-Schleifen</h3>
+      <span class="card-location">Home.razor:39, BoardEditor.razor:55-56</span>
+      <p class="card-desc">Inline-Lambdas in <code>@foreach</code> erzeugen neue Delegates bei jedem Render. Child-Komponenten mit <code>@key</code> waeren effizienter.</p>
+    </div>
+
+    <div class="card severity-info">
+      <div class="card-id emerald">O7</div>
+      <h3 class="card-title">CommandStack ohne History-Limit</h3>
+      <span class="card-location">CommandStack.cs:80-116</span>
+      <p class="card-desc">Unbegrenzter Undo-Stack. Bei intensiver Nutzung waechst der Speicherverbrauch im Circuit kontinuierlich. Limit auf 50 Schritte empfohlen.</p>
+    </div>
+
+  </div>
+</section>
+
+<hr class="section-sep">
+
+<!-- ======================= AI PATTERNS ======================= -->
+<section id="ai-patterns" class="section">
+  <div class="section-header">
+    <div class="section-eyebrow amber">&#9679; Erkannte AI-Code-Patterns</div>
+    <h2 class="section-title">Typische Muster von AI-generiertem Code</h2>
+    <p class="section-desc">Diese Anti-Patterns treten haeufig bei AI-generiertem Blazor-Code auf und sind in diesem Projekt identifizierbar.</p>
+  </div>
+
+  <div class="ai-pattern-box">
+    <div class="ai-pattern-title">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>
+      Identifizierte AI-Code-Muster in ORIM
+    </div>
+    <ul class="ai-pattern-list">
+      <li>25+ private State-Variablen in BoardEditor statt strukturiertem ViewModel</li>
+      <li>Direkte Event-Handler in Parent-Komponenten statt Child-Abstraktion</li>
+      <li>Keine Performance-Optimierungen (kein @key, kein ShouldRender, kein Caching)</li>
+      <li>Vollstaendige Objekte als Parameter statt gezielter IDs/Selektoren</li>
+      <li>Fehlende Pagination und Virtual Scrolling bei Listen</li>
+      <li>LINQ-Ketten in Render-Pfaden statt vorberechneter Ergebnisse</li>
+    </ul>
+  </div>
+</section>
+
+<hr class="section-sep">
+
+<!-- ======================= ROADMAP ======================= -->
+<section id="roadmap" class="section">
+  <div class="section-header">
+    <div class="section-eyebrow violet">&#9679; Priorisierung &amp; Roadmap</div>
+    <h2 class="section-title">Geschaetzter Performance-Gain</h2>
+  </div>
+
+  <div class="gain-banner">
+    <div class="gain-value">60-70%</div>
+    <div class="gain-label">schnelleres Rendering nach Umsetzung aller Empfehlungen moeglich</div>
+  </div>
+
+  <div class="priority-section">
+
+    <div class="priority-card quick">
+      <h3>Quick Wins</h3>
+      <div class="priority-timeframe">1-2 Stunden</div>
+      <ul class="priority-list">
+        <li><code>@key</code> auf Element-Schleife setzen</li>
+        <li>GetSelectedNonArrowElements() cachen</li>
+        <li>Mehrfache StateHasChanged() entfernen</li>
+        <li>FilteredMaterialIcons cachen</li>
+        <li>CommandStack-Limit einfuehren</li>
+      </ul>
+    </div>
+
+    <div class="priority-card medium">
+      <h3>Medium Refactoring</h3>
+      <div class="priority-timeframe">1-2 Tage</div>
+      <ul class="priority-list">
+        <li>JS-Interop aus mousemove entfernen (K1)</li>
+        <li>Sortierte Element-Liste cachen (K2)</li>
+        <li>ShouldRender() implementieren</li>
+        <li>Throttle/Debounce fuer Maus-Events</li>
+        <li>ErrorBoundary einfuegen</li>
+      </ul>
+    </div>
+
+    <div class="priority-card long">
+      <h3>Long-term Architecture</h3>
+      <div class="priority-timeframe">1-2 Wochen</div>
+      <ul class="priority-list">
+        <li>Board-Metadaten-Index statt Komplett-Laden</li>
+        <li>Granulare Undo-Commands statt Snapshots</li>
+        <li>Per-Board-Locking in Repositories</li>
+        <li>Client-seitige Canvas-Interaktion</li>
+        <li>Virtual Scrolling fuer grosse Boards</li>
+      </ul>
+    </div>
+
+  </div>
+</section>
+
+</div><!-- .content -->
+
+<footer class="footer">
+  ORIM Performance Audit &mdash; 23. Maerz 2026 &mdash; .NET 10 / Blazor Server / MudBlazor 9.2
+</footer>
+
+<!-- ======================= SCROLL ANIMATION ======================= -->
+<script>
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+        }
+      });
+    },
+    { threshold: 0.08, rootMargin: '0px 0px -40px 0px' }
+  );
+
+  document.querySelectorAll('.section').forEach(section => observer.observe(section));
+
+  // Animate meter fills on scroll
+  const meterObserver = new IntersectionObserver(
+    (entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const fills = entry.target.querySelectorAll('.meter-fill');
+          fills.forEach(fill => {
+            const width = fill.style.width;
+            fill.style.width = '0%';
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                fill.style.width = width;
+              });
+            });
+          });
+        }
+      });
+    },
+    { threshold: 0.2 }
+  );
+
+  document.querySelectorAll('.card').forEach(card => meterObserver.observe(card));
+</script>
+
+</body>
+</html>

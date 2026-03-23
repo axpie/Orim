@@ -283,16 +283,28 @@ else
                  @onmousedown="FocusEditorSurfaceAsync"
                  @onkeydown="HandleKeyDown"
                  tabindex="0">
-                <WhiteboardCanvas @ref="_canvas" Board="@_board" CanEdit="@_canEdit"
-                                  FitRightInset="@CanvasFitRightInset"
-                                  OnBoardChanged="@HandleBoardChanged"
-                                  OnSelectedElementChanged="@HandleSelectedElementChanged"
-                                  OnSelectedElementsChanged="@HandleSelectedElementsChanged"
-                                  OnZoomChanged="@HandleZoomChanged"
-                                  OnToolChanged="@HandleToolChanged"
-                                  OnElementDoubleTapped="@OnCanvasElementDoubleTapped"
-                                  PendingIconName="@_pendingIconName"
-                                  SelectedTool="@_selectedTool" />
+                <ErrorBoundary @ref="_canvasErrorBoundary">
+                    <ChildContent>
+                        <WhiteboardCanvas @ref="_canvas" Board="@_board" CanEdit="@_canEdit"
+                                          FitRightInset="@CanvasFitRightInset"
+                                          OnBoardChanged="@HandleBoardChanged"
+                                          OnSelectedElementChanged="@HandleSelectedElementChanged"
+                                          OnSelectedElementsChanged="@HandleSelectedElementsChanged"
+                                          OnZoomChanged="@HandleZoomChanged"
+                                          OnToolChanged="@HandleToolChanged"
+                                          OnElementDoubleTapped="@OnCanvasElementDoubleTapped"
+                                          PendingIconName="@_pendingIconName"
+                                          SelectedTool="@_selectedTool" />
+                    </ChildContent>
+                    <ErrorContent>
+                        <MudAlert Severity="Severity.Error" Class="ma-4">
+                            @Localizer["CanvasError"]
+                            <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="@RecoverFromCanvasError">
+                                @Localizer["Retry"]
+                            </MudButton>
+                        </MudAlert>
+                    </ErrorContent>
+                </ErrorBoundary>
 
                 <ChatAssistantPanel Board="@_board"
                                     IsOpen="@_chatPanelOpen"
@@ -490,6 +502,7 @@ else
     private Tool _selectedTool = Tool.Select;
     private readonly CommandStack _commandStack = new();
     private WhiteboardCanvas? _canvas;
+    private ErrorBoundary? _canvasErrorBoundary;
     private BoardElement? _selectedElement;
     private List<BoardElement> _selectedElements = [];
     private ElementReference _editorSurface;
@@ -526,12 +539,27 @@ else
 
     private record struct ViewportProfile(double Width, double Height, bool IsCompact);
 
-    private IReadOnlyList<string> FilteredMaterialIcons => _materialIcons
-        .Where(icon => string.IsNullOrWhiteSpace(_iconSearch) || icon.Contains(_iconSearch.Trim(), StringComparison.OrdinalIgnoreCase))
-        .OrderBy(icon => icon.StartsWith($"mdi-{_iconSearch.Trim()}", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-        .ThenBy(icon => icon)
-        .Take(240)
-        .ToList();
+    private IReadOnlyList<string> _filteredMaterialIconsCache = [];
+    private string _lastIconSearchValue = "\0";
+
+    private IReadOnlyList<string> FilteredMaterialIcons
+    {
+        get
+        {
+            if (_iconSearch == _lastIconSearchValue)
+                return _filteredMaterialIconsCache;
+
+            _lastIconSearchValue = _iconSearch;
+            var search = (_iconSearch ?? string.Empty).Trim();
+            _filteredMaterialIconsCache = _materialIcons
+                .Where(icon => string.IsNullOrWhiteSpace(search) || icon.Contains(search, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(icon => icon.StartsWith($"mdi-{search}", StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                .ThenBy(icon => icon)
+                .Take(240)
+                .ToList();
+            return _filteredMaterialIconsCache;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -615,6 +643,8 @@ else
 
     private void CloseChatPanel() => _chatPanelOpen = false;
 
+    private void RecoverFromCanvasError() => _canvasErrorBoundary?.Recover();
+
     private void TogglePropertiesPanel() => _propertiesPanelOpen = !_propertiesPanelOpen;
 
     private void ClosePropertiesPanel() => _propertiesPanelOpen = false;
@@ -629,7 +659,6 @@ else
             _canvas.ForceRerender();
             await _canvas.FitToContentAsync();
         }
-        StateHasChanged();
     }
 
     private void OpenHelpDialog()

@@ -69,7 +69,7 @@
                         </MudCardHeader>
                         <MudCardContent>
                             <MudText Typo="Typo.body2" Color="Color.Secondary">
-                                @string.Format(Localizer["ElementsMembersSummary"], board.Elements.Count, board.Members.Count)
+                                @string.Format(Localizer["ElementsMembersSummary"], board.ElementCount, board.Members.Count)
                             </MudText>
                             <MudText Typo="Typo.caption" Color="Color.Secondary">
                                 @Localizer["UpdatedAt"]: @board.UpdatedAt.ToString("g")
@@ -116,7 +116,7 @@
 </MudDialog>
 
 @code {
-    private List<Board>? _boards;
+    private List<BoardSummary>? _boards;
     private Guid _userId;
     private string _username = "";
     private bool _createDialogVisible;
@@ -124,7 +124,7 @@
     private string _newBoardTitle = "";
     private string _renameBoardTitle = "";
     private BoardVisibility _newBoardVisibility = BoardVisibility.Private;
-    private Board? _boardBeingRenamed;
+    private BoardSummary? _boardBeingRenamed;
 
     protected override async Task OnInitializedAsync()
     {
@@ -134,13 +134,13 @@
         {
             _userId = Guid.Parse(user.FindFirst(ClaimTypes.NameIdentifier)!.Value);
             _username = user.Identity.Name ?? "";
-            _boards = await BoardService.GetAccessibleBoardsAsync(_userId);
+            _boards = await BoardService.GetAccessibleBoardSummariesAsync(_userId);
         }
     }
 
     private void CreateBoard() => _createDialogVisible = true;
 
-    private void OpenRenameBoardDialog(Board board)
+    private void OpenRenameBoardDialog(BoardSummary board)
     {
         _boardBeingRenamed = board;
         _renameBoardTitle = board.Title;
@@ -175,13 +175,21 @@
             return;
         }
 
-        _boardBeingRenamed.Title = _renameBoardTitle.Trim();
-        await BoardService.UpdateBoardAsync(_boardBeingRenamed);
+        var board = await BoardService.GetBoardAsync(_boardBeingRenamed.Id);
+        if (board is null)
+        {
+            CloseRenameBoardDialog();
+            return;
+        }
+
+        board.Title = _renameBoardTitle.Trim();
+        await BoardService.UpdateBoardAsync(board);
+        _boardBeingRenamed.Title = board.Title;
         CloseRenameBoardDialog();
         StateHasChanged();
     }
 
-    private async Task DeleteBoardFromOverviewAsync(Board board)
+    private async Task DeleteBoardFromOverviewAsync(BoardSummary board)
     {
         var confirmed = await JS.InvokeAsync<bool>("confirm", string.Format(Localizer["DeleteBoardConfirmation"], board.Title));
         if (!confirmed)

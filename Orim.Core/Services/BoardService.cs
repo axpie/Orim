@@ -36,10 +36,10 @@ public class BoardService
 
     public Task<Board?> GetBoardByShareTokenAsync(string token) => _boardRepository.GetByShareTokenAsync(token);
 
-    public async Task<List<Board>> GetAccessibleBoardsAsync(Guid userId)
+    public async Task<List<BoardSummary>> GetAccessibleBoardSummariesAsync(Guid userId)
     {
-        var all = await _boardRepository.GetAllAsync();
-        return all.Where(b =>
+        var summaries = await _boardRepository.GetBoardSummariesAsync();
+        return summaries.Where(b =>
             b.OwnerId == userId ||
             b.Visibility == BoardVisibility.Public ||
             b.Members.Any(m => m.UserId == userId)
@@ -75,4 +75,21 @@ public class BoardService
         return member.Role <= minimumRole; // Owner=0 < Editor=1 < Viewer=2
     }
 
+    public bool HasAccess(BoardSummary summary, Guid? userId, BoardRole minimumRole = BoardRole.Viewer)
+    {
+        if (summary.Visibility == BoardVisibility.Shared)
+            return true;
+
+        if (userId is null)
+            return false;
+
+        if (summary.Visibility == BoardVisibility.Public && minimumRole == BoardRole.Viewer)
+            return true;
+
+        var member = summary.Members.FirstOrDefault(m => m.UserId == userId.Value);
+        if (member is null)
+            return false;
+
+        return member.Role <= minimumRole;
+    }
 }
