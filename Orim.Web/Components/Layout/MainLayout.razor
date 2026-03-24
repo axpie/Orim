@@ -18,6 +18,24 @@
                 <OrimLogo Class="orim-logo--appbar" />
             </a>
             <MudSpacer />
+            @if (IsSharedRoute)
+            {
+                <MudMenu Icon="@Icons.Material.Filled.Palette" Color="Color.Inherit"
+                         AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
+                    <MudMenuItem Disabled="true">
+                        @Localizer["Theme"]
+                    </MudMenuItem>
+                    <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Light)" OnClick="@(() => SetThemeAsync(ThemePreset.Light))">
+                        @Localizer["ThemeLight"]
+                    </MudMenuItem>
+                    <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Dark)" OnClick="@(() => SetThemeAsync(ThemePreset.Dark))">
+                        @Localizer["ThemeDark"]
+                    </MudMenuItem>
+                    <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Synthwave)" OnClick="@(() => SetThemeAsync(ThemePreset.Synthwave))">
+                        @Localizer["ThemeSynthwave"]
+                    </MudMenuItem>
+                </MudMenu>
+            }
             <AuthorizeView>
                 <Authorized>
                     <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit"
@@ -80,7 +98,16 @@
 @code {
     private bool _drawerOpen = true;
     private string _currentLang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
-    private bool IsBoardEditorRoute => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("board/", StringComparison.OrdinalIgnoreCase);
+    private bool IsBoardEditorRoute
+    {
+        get
+        {
+            var relativePath = Navigation.ToBaseRelativePath(Navigation.Uri);
+            return relativePath.StartsWith("board/", StringComparison.OrdinalIgnoreCase)
+                || relativePath.StartsWith("shared/", StringComparison.OrdinalIgnoreCase);
+        }
+    }
+    private bool IsSharedRoute => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("shared/", StringComparison.OrdinalIgnoreCase);
 
     [Inject] private NavigationManager Navigation { get; set; } = default!;
 

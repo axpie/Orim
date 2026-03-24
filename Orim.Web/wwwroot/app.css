@@ -360,11 +360,21 @@ html[data-orim-theme='synthwave'] .orim-logo__wordmark {
 .orim-shared-name-input .mud-input-label,
 .orim-shared-name-input .mud-input-slot,
 .orim-shared-name-input input {
-    color: var(--orim-shared-header-text) !important;
+    color: var(--orim-board-input-text) !important;
 }
 
 .orim-shared-name-input .mud-input-outlined-border {
-    border-color: color-mix(in srgb, var(--orim-shared-header-text) 28%, transparent) !important;
+    border-color: var(--orim-board-input-border) !important;
+}
+
+.orim-shared-name-input .mud-input-control,
+.orim-shared-name-input .mud-input-control > .mud-input-control-input-container,
+.orim-shared-name-input .mud-input-outlined {
+    background: var(--orim-board-input-bg) !important;
+}
+
+.orim-shared-name-input .mud-input-label {
+    opacity: 1 !important;
 }
 
 .orim-shared-header-action {
