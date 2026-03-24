@@ -200,7 +200,8 @@ public class BoardService
 
     public bool HasAccess(Board board, Guid? userId, BoardRole minimumRole = BoardRole.Viewer)
     {
-        if (board.Visibility == BoardVisibility.Shared)
+        // Shared visibility grants viewer-only access (share-link read mode)
+        if (board.Visibility == BoardVisibility.Shared && minimumRole == BoardRole.Viewer)
             return true;
 
         if (userId is null)
@@ -218,7 +219,8 @@ public class BoardService
 
     public bool HasAccess(BoardSummary summary, Guid? userId, BoardRole minimumRole = BoardRole.Viewer)
     {
-        if (summary.Visibility == BoardVisibility.Shared)
+        // Shared visibility grants viewer-only access (share-link read mode)
+        if (summary.Visibility == BoardVisibility.Shared && minimumRole == BoardRole.Viewer)
             return true;
 
         if (userId is null)

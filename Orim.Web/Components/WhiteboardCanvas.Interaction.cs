@@ -189,7 +189,8 @@ public partial class WhiteboardCanvas
         var isAdditiveSelection = e.CtrlKey || e.MetaKey;
         var shouldStartMarqueeSelection = e.ShiftKey && clicked is null;
 
-        if (clicked is not null)
+        // Selection is only allowed in edit mode
+        if (CanEdit && clicked is not null)
         {
             var selectionScope = ResolveSelectionScope(clicked);
             if (isAdditiveSelection)
@@ -205,6 +206,15 @@ public partial class WhiteboardCanvas
 
         if (!CanEdit || SelectedTool != BoardEditor.Tool.Select)
         {
+            // Panning is always allowed (read-only viewers, shared boards)
+            if (clicked is null)
+            {
+                _isPanning = true;
+                _panStartScreen = screenPoint;
+                _panPointerOrigin = screenPoint;
+                _clearSelectionOnPanRelease = false;
+                _panExceededClickThreshold = false;
+            }
             return;
         }
 
