@@ -6,6 +6,9 @@
 @inject ThemeManager ThemeManager
 
 <div id="whiteboard-surface"
+     role="group"
+     aria-label="@AriaLabel"
+     aria-description="@AriaDescription"
      style="@GetSurfaceStyle()"
      @onmousedown="OnSurfaceMouseDown"
      @onmousemove="OnSurfaceMouseMove"
@@ -110,6 +113,8 @@
     private const double StraightArrowAngleSnapThresholdDegrees = 5;
 
     [Parameter] public Board? Board { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? AriaDescription { get; set; }
     [Parameter] public bool CanEdit { get; set; }
     [Parameter] public EventCallback OnBoardChanged { get; set; }
     [Parameter] public EventCallback<BoardElement?> OnSelectedElementChanged { get; set; }

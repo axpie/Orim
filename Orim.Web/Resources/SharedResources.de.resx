@@ -139,4 +139,95 @@
   <data name="ChatInputPlaceholder" xml:space="preserve"><value>Diagramm beschreiben…</value></data>
   <data name="CanvasError" xml:space="preserve"><value>Im Canvas ist ein Fehler aufgetreten.</value></data>
   <data name="Retry" xml:space="preserve"><value>Erneut versuchen</value></data>
+  <data name="QuickStartTitle" xml:space="preserve"><value>Schnell starten</value></data>
+  <data name="QuickStartDescription" xml:space="preserve"><value>Starte mit einer Vorlage, importiere ein bestehendes Board oder beginne auf leerer Flaeche.</value></data>
+  <data name="UseTemplate" xml:space="preserve"><value>Vorlage verwenden</value></data>
+  <data name="Template" xml:space="preserve"><value>Vorlage</value></data>
+  <data name="ImportBoardJson" xml:space="preserve"><value>Board-JSON importieren</value></data>
+  <data name="NoBoardsHeadline" xml:space="preserve"><value>Erstelle dein erstes Board ohne Huerden</value></data>
+  <data name="DashboardEmptyStateTemplateTip" xml:space="preserve"><value>Waehle eine Vorlage, damit du nicht bei Null anfangen musst.</value></data>
+  <data name="DashboardEmptyStateImportTip" xml:space="preserve"><value>Importiere ein JSON-Backup, um direkt weiterzuarbeiten.</value></data>
+  <data name="DashboardEmptyStateShareTip" xml:space="preserve"><value>Im Editor kannst du spaeter Freigaben und Mitglieder verwalten.</value></data>
+  <data name="ImportBoardInvalidJson" xml:space="preserve"><value>Die ausgewaehlte Datei ist kein gueltiges Orim-Board-JSON.</value></data>
+  <data name="ImportBoardReadError" xml:space="preserve"><value>Die ausgewaehlte Datei konnte nicht gelesen werden.</value></data>
+  <data name="TemplateBlankTitle" xml:space="preserve"><value>Leeres Board</value></data>
+  <data name="TemplateBlankDescription" xml:space="preserve"><value>Starte mit einer leeren Flaeche fuer deine eigene Struktur.</value></data>
+  <data name="TemplateProcessTitle" xml:space="preserve"><value>Prozessdiagramm</value></data>
+  <data name="TemplateProcessDescription" xml:space="preserve"><value>Ideal fuer Ablaeufe, Verantwortungen und Uebergaben.</value></data>
+  <data name="TemplateOrgChartTitle" xml:space="preserve"><value>Organigramm</value></data>
+  <data name="TemplateOrgChartDescription" xml:space="preserve"><value>Stelle Berichtslinien, Teams und Verantwortungen dar.</value></data>
+  <data name="TemplateSwimlaneTitle" xml:space="preserve"><value>Swimlane</value></data>
+  <data name="TemplateSwimlaneDescription" xml:space="preserve"><value>Strukturiere Arbeit ueber Teams oder Prozessbahnen hinweg.</value></data>
+  <data name="TemplateDecisionTreeTitle" xml:space="preserve"><value>Entscheidungsbaum</value></data>
+  <data name="TemplateDecisionTreeDescription" xml:space="preserve"><value>Visualisiere Verzweigungen und Entscheidungen.</value></data>
+  <data name="TemplateWorkshopTitle" xml:space="preserve"><value>Workshop-Board</value></data>
+  <data name="TemplateWorkshopDescription" xml:space="preserve"><value>Sammle Ziele, Ideen, Risiken und Verantwortliche an einem Ort.</value></data>
+  <data name="ShareAndAccess" xml:space="preserve"><value>Freigabe und Zugriff</value></data>
+  <data name="FormatTransferCancel" xml:space="preserve"><value>Formatuebertragung abbrechen</value></data>
+  <data name="FormatTransferStart" xml:space="preserve"><value>Format uebertragen</value></data>
+  <data name="BoardCanvasRegionLabel" xml:space="preserve"><value>Board-Canvas</value></data>
+  <data name="BoardCanvasRegionDescription" xml:space="preserve"><value>Waehle ueber die Toolbar ein Werkzeug. Mit den Pfeiltasten bewegst du ausgewaehlte Elemente, mit Entf loeschst du sie und mit den Strg-Shortcuts nutzt du Rueckgaengig, Wiederholen, Kopieren, Einfuegen, Gruppieren und Alles auswaehlen.</value></data>
+  <data name="BoardOnboardingTitle" xml:space="preserve"><value>Dein Board ist bereit</value></data>
+  <data name="BoardOnboardingDescription" xml:space="preserve"><value>Setze mit einem Werkzeug dein erstes Element und oeffne danach Freigabe oder Import, um mit dem Team weiterzuarbeiten.</value></data>
+  <data name="BoardOnboardingTipDraw" xml:space="preserve"><value>Starte mit Rechteck, Kreis, Pfeil, Text oder Symbol aus der Toolbar.</value></data>
+  <data name="BoardOnboardingTipShare" xml:space="preserve"><value>Oeffne die Freigabe, um Mitglieder hinzuzufuegen, Sichtbarkeit zu aendern oder einen Share-Link zu kopieren.</value></data>
+  <data name="BoardOnboardingTipImport" xml:space="preserve"><value>Der Import kann das aktuelle Board ersetzen und legt vorher einen Wiederherstellungspunkt an.</value></data>
+  <data name="BoardSettingsDescription" xml:space="preserve"><value>Verwalte Sichtbarkeit, Mitgliederzugriffe, Importe und Wiederherstellungspunkte an einer Stelle.</value></data>
+  <data name="GeneralBoardSettings" xml:space="preserve"><value>Allgemeine Einstellungen</value></data>
+  <data name="VisibilityExplanation" xml:space="preserve"><value>Private Boards sind nur fuer Mitglieder sichtbar. Oeffentliche Boards sind fuer alle sichtbar. Geteilte Boards verwenden einen eigenen Share-Link.</value></data>
+  <data name="ShareLinkExplanation" xml:space="preserve"><value>Erzeuge einen eigenen Link fuer geteilte Boards und kopiere ihn fuer externen Zugriff.</value></data>
+  <data name="CopyShareLink" xml:space="preserve"><value>Share-Link kopieren</value></data>
+  <data name="MembersDescription" xml:space="preserve"><value>Owner verwalten Zugriffe. Editoren duerfen Inhalte aendern, Viewer koennen das Board nur ansehen.</value></data>
+  <data name="Owner" xml:space="preserve"><value>Owner</value></data>
+  <data name="Editor" xml:space="preserve"><value>Editor</value></data>
+  <data name="Viewer" xml:space="preserve"><value>Viewer</value></data>
+  <data name="AddMember" xml:space="preserve"><value>Mitglied hinzufuegen</value></data>
+  <data name="ImportReplaceBoardDescription" xml:space="preserve"><value>Ersetze den aktuellen Board-Inhalt aus einer JSON-Datei. Orim legt vor dem Import automatisch einen Sicherungs-Snapshot an.</value></data>
+  <data name="ImportReplaceBoard" xml:space="preserve"><value>Board aus JSON ersetzen</value></data>
+  <data name="Snapshots" xml:space="preserve"><value>Snapshots</value></data>
+  <data name="SnapshotsDescription" xml:space="preserve"><value>Speichere benannte Wiederherstellungspunkte und stelle fruehere Board-Staende bei Bedarf wieder her.</value></data>
+  <data name="SnapshotName" xml:space="preserve"><value>Snapshot-Name</value></data>
+  <data name="CreateSnapshot" xml:space="preserve"><value>Snapshot erstellen</value></data>
+  <data name="SnapshotMetadata" xml:space="preserve"><value>von {0} · {1}</value></data>
+  <data name="RestoreSnapshot" xml:space="preserve"><value>Snapshot wiederherstellen</value></data>
+  <data name="NoSnapshots" xml:space="preserve"><value>Noch keine Snapshots vorhanden.</value></data>
+  <data name="BoardSettingsOwnerOnly" xml:space="preserve"><value>Nur der Board-Owner kann Mitglieder, Freigaben, Importe und Snapshots verwalten.</value></data>
+  <data name="BoardLoadedAnnouncement" xml:space="preserve"><value>Board {0} geladen.</value></data>
+  <data name="ToolSelectedAnnouncement" xml:space="preserve"><value>Werkzeug ausgewaehlt: {0}.</value></data>
+  <data name="BoardSettingsSavedAnnouncement" xml:space="preserve"><value>Board-Einstellungen gespeichert.</value></data>
+  <data name="SelectionDeletedAnnouncement" xml:space="preserve"><value>Ausgewaehlte Elemente geloescht.</value></data>
+  <data name="SelectionCountAnnouncement" xml:space="preserve"><value>{0} Elemente ausgewaehlt.</value></data>
+  <data name="SelectionSingleAnnouncement" xml:space="preserve"><value>Ausgewaehlt: {0}.</value></data>
+  <data name="SelectionClearedAnnouncement" xml:space="preserve"><value>Auswahl aufgehoben.</value></data>
+  <data name="BoardMemberAdded" xml:space="preserve"><value>{0} wurde zum Board-Entwurf hinzugefuegt.</value></data>
+  <data name="BoardMemberRemoved" xml:space="preserve"><value>Mitglied aus dem Board-Entwurf entfernt.</value></data>
+  <data name="AutomaticImportBackupSnapshot" xml:space="preserve"><value>Automatische Sicherung vor Import</value></data>
+  <data name="ImportReplaceSuccess" xml:space="preserve"><value>Der Board-Inhalt wurde durch die importierte Datei ersetzt.</value></data>
+  <data name="AutomaticRestoreBackupSnapshot" xml:space="preserve"><value>Automatische Sicherung vor Wiederherstellung</value></data>
+  <data name="SnapshotCreated" xml:space="preserve"><value>Snapshot {0} erstellt.</value></data>
+  <data name="SnapshotRestored" xml:space="preserve"><value>Snapshot wiederhergestellt.</value></data>
+  <data name="BoardCanvasUpdatedAnnouncement" xml:space="preserve"><value>Board-Canvas aktualisiert.</value></data>
+  <data name="SelectionMovedAnnouncement" xml:space="preserve"><value>Auswahl verschoben.</value></data>
+  <data name="BoardElement" xml:space="preserve"><value>Board-Element</value></data>
+  <data name="MultiSelectionPropertiesHint" xml:space="preserve"><value>Mehrere Elemente sind ausgewaehlt. Bitte waehle genau ein Element aus, um Eigenschaften zu bearbeiten.</value></data>
+  <data name="NoElementSelectedHint" xml:space="preserve"><value>Kein Element ausgewaehlt. Waehle ein Element aus, um seine Eigenschaften zu bearbeiten.</value></data>
+  <data name="EditElement" xml:space="preserve"><value>Element bearbeiten</value></data>
+  <data name="Label" xml:space="preserve"><value>Label</value></data>
+  <data name="Horizontal" xml:space="preserve"><value>Horizontal</value></data>
+  <data name="Vertical" xml:space="preserve"><value>Vertikal</value></data>
+  <data name="Left" xml:space="preserve"><value>Links</value></data>
+  <data name="Centered" xml:space="preserve"><value>Zentriert</value></data>
+  <data name="Right" xml:space="preserve"><value>Rechts</value></data>
+  <data name="Top" xml:space="preserve"><value>Oben</value></data>
+  <data name="Middle" xml:space="preserve"><value>Mitte</value></data>
+  <data name="Bottom" xml:space="preserve"><value>Unten</value></data>
+  <data name="AutoFontSize" xml:space="preserve"><value>Schriftgroesse automatisch</value></data>
+  <data name="ChooseColor" xml:space="preserve"><value>Farbe auswaehlen</value></data>
+  <data name="Eyedropper" xml:space="preserve"><value>Pipette</value></data>
+  <data name="BorderWidth" xml:space="preserve"><value>Rahmenbreite</value></data>
+  <data name="LineStyle" xml:space="preserve"><value>Linienstil</value></data>
+  <data name="Color" xml:space="preserve"><value>Farbe</value></data>
+  <data name="TextColor" xml:space="preserve"><value>Textfarbe</value></data>
+  <data name="ShareLinkGenerated" xml:space="preserve"><value>Share-Link erzeugt.</value></data>
+  <data name="ShareLinkCopied" xml:space="preserve"><value>Share-Link kopiert.</value></data>
 </root>

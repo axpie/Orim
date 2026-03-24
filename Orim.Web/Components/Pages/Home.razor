@@ -1,8 +1,11 @@
-﻿@page "/"
+@page "/"
 @attribute [Authorize]
 @rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Forms
+@using Orim.Core.Models
+@using Orim.Core.Services
 @inject BoardService BoardService
-@inject UserService UserService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JS
@@ -19,15 +22,70 @@
         </MudButton>
     </div>
 
+    <MudPaper Class="pa-5 mb-6 orim-quick-start-panel" Elevation="1">
+        <div class="d-flex flex-wrap justify-space-between align-center" style="gap: 16px;">
+            <div>
+                <MudText Typo="Typo.h6" Style="font-weight: 700;">@Localizer["QuickStartTitle"]</MudText>
+                <MudText Typo="Typo.body2" Class="orim-board-muted-text">@Localizer["QuickStartDescription"]</MudText>
+            </div>
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" HtmlTag="label">
+                @Localizer["ImportBoardJson"]
+                <InputFile OnChange="@HandleImportBoardAsync" accept=".json,application/json" style="display:none" />
+            </MudButton>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_importError))
+        {
+            <MudAlert Severity="Severity.Error" Dense="true" Class="mt-4">@_importError</MudAlert>
+        }
+
+        <MudGrid Class="mt-2">
+            @foreach (var template in _templates)
+            {
+                <MudItem xs="12" sm="6" md="4" lg="2">
+                    <MudCard Class="orim-template-card" Elevation="0">
+                        <MudCardContent>
+                            <div class="d-flex align-center mb-2" style="gap: 8px;">
+                                <MudIcon Icon="@GetTemplateIcon(template)" Color="Color.Primary" />
+                                <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">@Localizer[template.TitleResourceKey]</MudText>
+                            </div>
+                            <MudText Typo="Typo.body2" Class="orim-board-muted-text">@Localizer[template.DescriptionResourceKey]</MudText>
+                        </MudCardContent>
+                        <MudCardActions>
+                            <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => CreateBoardFromTemplate(template))">
+                                @Localizer["UseTemplate"]
+                            </MudButton>
+                        </MudCardActions>
+                    </MudCard>
+                </MudItem>
+            }
+        </MudGrid>
+    </MudPaper>
+
     @if (_boards is null)
     {
         <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
     }
     else if (_boards.Count == 0)
     {
-        <MudAlert Severity="Severity.Info">
-            @Localizer["NoBoards"]
-        </MudAlert>
+        <MudPaper Class="pa-6 orim-empty-state" Elevation="1">
+            <MudText Typo="Typo.h5" Style="font-weight: 700;">@Localizer["NoBoardsHeadline"]</MudText>
+            <MudText Typo="Typo.body1" Class="mt-2 orim-board-muted-text">@Localizer["NoBoards"]</MudText>
+            <ul class="orim-empty-state-list">
+                <li>@Localizer["DashboardEmptyStateTemplateTip"]</li>
+                <li>@Localizer["DashboardEmptyStateImportTip"]</li>
+                <li>@Localizer["DashboardEmptyStateShareTip"]</li>
+            </ul>
+            <div class="d-flex flex-wrap mt-4" style="gap: 12px;">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="@CreateBoard">
+                    @Localizer["NewBoard"]
+                </MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" HtmlTag="label">
+                    @Localizer["ImportBoardJson"]
+                    <InputFile OnChange="@HandleImportBoardAsync" accept=".json,application/json" style="display:none" />
+                </MudButton>
+            </div>
+        </MudPaper>
     }
     else
     {
@@ -88,13 +146,19 @@
     </TitleContent>
     <DialogContent>
         <MudTextField @bind-Value="_newBoardTitle" Label="@Localizer["BoardName"]" Variant="Variant.Outlined" Required="true" />
+        <MudSelect T="string" @bind-Value="_selectedTemplateId" Label="@Localizer["Template"]" Variant="Variant.Outlined" Class="mt-4">
+            @foreach (var template in _templates)
+            {
+                <MudSelectItem T="string" Value="@template.Id">@Localizer[template.TitleResourceKey]</MudSelectItem>
+            }
+        </MudSelect>
         <MudSelect @bind-Value="_newBoardVisibility" Label="@Localizer["Visibility"]" Variant="Variant.Outlined" Class="mt-4">
             <MudSelectItem Value="BoardVisibility.Private">@Localizer["Private"]</MudSelectItem>
             <MudSelectItem Value="BoardVisibility.Public">@Localizer["Public"]</MudSelectItem>
         </MudSelect>
     </DialogContent>
     <DialogActions>
-        <MudButton OnClick="@(() => _createDialogVisible = false)">@Localizer["Cancel"]</MudButton>
+        <MudButton OnClick="@CloseCreateBoardDialog">@Localizer["Cancel"]</MudButton>
         <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@ConfirmCreateBoard">@Localizer["Create"]</MudButton>
     </DialogActions>
 </MudDialog>
@@ -117,17 +181,22 @@
 
 @code {
     private List<BoardSummary>? _boards;
+    private List<BoardTemplateDefinition> _templates = [];
     private Guid _userId;
     private string _username = "";
     private bool _createDialogVisible;
     private bool _renameDialogVisible;
     private string _newBoardTitle = "";
     private string _renameBoardTitle = "";
+    private string _selectedTemplateId = BoardTemplateCatalog.BlankTemplateId;
+    private string? _importError;
     private BoardVisibility _newBoardVisibility = BoardVisibility.Private;
     private BoardSummary? _boardBeingRenamed;
 
     protected override async Task OnInitializedAsync()
     {
+        _templates = BoardService.GetTemplates().ToList();
+
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
         if (user.Identity?.IsAuthenticated == true)
@@ -138,7 +207,26 @@
         }
     }
 
-    private void CreateBoard() => _createDialogVisible = true;
+    private void CreateBoard() => OpenCreateBoardDialog(BoardTemplateCatalog.BlankTemplateId, string.Empty);
+
+    private void CreateBoardFromTemplate(BoardTemplateDefinition template) =>
+        OpenCreateBoardDialog(template.Id, Localizer[template.TitleResourceKey]);
+
+    private void OpenCreateBoardDialog(string templateId, string title)
+    {
+        _selectedTemplateId = templateId;
+        _newBoardTitle = title;
+        _newBoardVisibility = BoardVisibility.Private;
+        _importError = null;
+        _createDialogVisible = true;
+    }
+
+    private void CloseCreateBoardDialog()
+    {
+        _createDialogVisible = false;
+        _newBoardTitle = string.Empty;
+        _selectedTemplateId = BoardTemplateCatalog.BlankTemplateId;
+    }
 
     private void OpenRenameBoardDialog(BoardSummary board)
     {
@@ -156,16 +244,60 @@
 
     private async Task ConfirmCreateBoard()
     {
-        if (string.IsNullOrWhiteSpace(_newBoardTitle)) return;
-        var board = await BoardService.CreateBoardAsync(_newBoardTitle.Trim(), _userId, _username);
+        if (string.IsNullOrWhiteSpace(_newBoardTitle))
+        {
+            return;
+        }
+
+        var board = await BoardService.CreateBoardAsync(_newBoardTitle.Trim(), _userId, _username, _selectedTemplateId);
         if (_newBoardVisibility != BoardVisibility.Private)
         {
             board.Visibility = _newBoardVisibility;
             await BoardService.UpdateBoardAsync(board);
         }
-        _createDialogVisible = false;
-        _newBoardTitle = "";
+
+        CloseCreateBoardDialog();
         Navigation.NavigateTo($"/board/{board.Id}");
+    }
+
+    private async Task HandleImportBoardAsync(InputFileChangeEventArgs args)
+    {
+        _importError = null;
+
+        var file = args.File;
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await using var stream = file.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
+            var importedBoard = await System.Text.Json.JsonSerializer.DeserializeAsync<Board>(stream, Orim.Core.OrimJsonOptions.Default);
+            if (importedBoard is null)
+            {
+                throw new InvalidDataException("Board import payload was empty.");
+            }
+
+            var title = string.IsNullOrWhiteSpace(importedBoard.Title)
+                ? Path.GetFileNameWithoutExtension(file.Name)
+                : importedBoard.Title.Trim();
+
+            var board = await BoardService.CreateBoardFromImportAsync(importedBoard, title, _userId, _username);
+            Navigation.NavigateTo($"/board/{board.Id}");
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            _importError = Localizer["ImportBoardInvalidJson"];
+        }
+        catch (InvalidDataException)
+        {
+            _importError = Localizer["ImportBoardInvalidJson"];
+        }
+        catch (IOException)
+        {
+            _importError = Localizer["ImportBoardReadError"];
+        }
     }
 
     private async Task ConfirmRenameBoardAsync()
@@ -203,6 +335,16 @@
     }
 
     private void OpenBoard(Guid boardId) => Navigation.NavigateTo($"/board/{boardId}");
+
+    private static string GetTemplateIcon(BoardTemplateDefinition template) => template.Id switch
+    {
+        BoardTemplateCatalog.ProcessTemplateId => Icons.Material.Filled.AltRoute,
+        BoardTemplateCatalog.OrgChartTemplateId => Icons.Material.Filled.AccountTree,
+        BoardTemplateCatalog.SwimlaneTemplateId => Icons.Material.Filled.ViewWeek,
+        BoardTemplateCatalog.DecisionTreeTemplateId => Icons.Material.Filled.Schema,
+        BoardTemplateCatalog.WorkshopTemplateId => Icons.Material.Filled.DynamicFeed,
+        _ => Icons.Material.Filled.Dashboard
+    };
 
     private Color GetVisibilityColor(BoardVisibility v) => v switch
     {
