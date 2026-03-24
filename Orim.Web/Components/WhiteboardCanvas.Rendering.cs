@@ -36,68 +36,25 @@ public partial class WhiteboardCanvas
         return wrapped < 0 ? wrapped + step : wrapped;
     }
 
-    private string GetBoardSurfaceColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#10192A",
-        ThemePreset.Synthwave => "#160A29",
-        _ => "#FFFFFF"
-    };
+    private ThemeBoardDefaults GetBoardThemeDefaults() => ThemeManager.CurrentDefinition.BoardDefaults;
 
-    private string GetBoardGridColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "rgba(148, 163, 184, 0.16)",
-        ThemePreset.Synthwave => "rgba(53, 242, 255, 0.16)",
-        _ => "#EEF2F7"
-    };
+    private string GetBoardSurfaceColor() => GetBoardThemeDefaults().SurfaceColor;
 
-    private string GetDefaultShapeFillColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#18253B",
-        ThemePreset.Synthwave => "#261145",
-        _ => "#FFFFFF"
-    };
+    private string GetBoardGridColor() => GetBoardThemeDefaults().GridColor;
 
-    private string GetDefaultStrokeColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#E5EEF9",
-        ThemePreset.Synthwave => "#35F2FF",
-        _ => "#0F172A"
-    };
+    private string GetDefaultShapeFillColor() => GetBoardThemeDefaults().ShapeFillColor;
 
-    private string GetDefaultIconColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#E5EEF9",
-        ThemePreset.Synthwave => "#FFF0FF",
-        _ => "#0F172A"
-    };
+    private string GetDefaultStrokeColor() => GetBoardThemeDefaults().StrokeColor;
 
-    private string GetSelectionColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#8B5CF6",
-        ThemePreset.Synthwave => "#FF4FD8",
-        _ => "#2563EB"
-    };
+    private string GetDefaultIconColor() => GetBoardThemeDefaults().IconColor;
 
-    private string GetSelectionTint(double opacity) => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => $"rgba(139, 92, 246, {CssNumber(opacity)})",
-        ThemePreset.Synthwave => $"rgba(255, 79, 216, {CssNumber(opacity)})",
-        _ => $"rgba(37, 99, 235, {CssNumber(opacity)})"
-    };
+    private string GetSelectionColor() => GetBoardThemeDefaults().SelectionColor;
 
-    private string GetHandleSurfaceColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#10192A",
-        ThemePreset.Synthwave => "#160A29",
-        _ => "#FFFFFF"
-    };
+    private string GetSelectionTint(double opacity) => $"rgba({GetBoardThemeDefaults().SelectionTintRgb}, {CssNumber(opacity)})";
 
-    private string GetDockTargetColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#22C55E",
-        ThemePreset.Synthwave => "#35F2FF",
-        _ => "#0F766E"
-    };
+    private string GetHandleSurfaceColor() => GetBoardThemeDefaults().HandleSurfaceColor;
+
+    private string GetDockTargetColor() => GetBoardThemeDefaults().DockTargetColor;
 
     private string GetSelectionFrameStyle()
     {

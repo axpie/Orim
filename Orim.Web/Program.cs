@@ -27,6 +27,11 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddMudServices();
 builder.Services.AddOrimInfrastructure(dataPath, useDebugStorage);
+builder.Services.AddSingleton(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<ThemeCatalogService>>();
+    return new ThemeCatalogService(Path.Combine(dataPath, "themes"), logger);
+});
 builder.Services.AddScoped<ThemeManager>();
 builder.Services.AddSingleton<DiagramAssistantService>();
 

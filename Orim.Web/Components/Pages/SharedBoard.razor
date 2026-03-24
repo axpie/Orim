@@ -7,7 +7,6 @@
 @inject BoardPresenceService BoardPresenceService
 @inject IJSRuntime JS
 @inject IWebHostEnvironment Environment
-@inject ThemeManager ThemeManager
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 @using Orim.Web.Services
 
@@ -969,16 +968,6 @@ else
         await SaveBoardAsync();
         StateHasChanged();
     }
-
-    private async Task SetThemeAsync(ThemePreset preset)
-    {
-        await ThemeManager.SetThemeAsync(preset, JS);
-        StateHasChanged();
-    }
-
-    private string GetThemeIcon(ThemePreset preset) => ThemeManager.CurrentPreset == preset
-        ? Icons.Material.Filled.RadioButtonChecked
-        : Icons.Material.Filled.RadioButtonUnchecked;
 
     private async Task StartPresenceHeartbeatAsync()
     {

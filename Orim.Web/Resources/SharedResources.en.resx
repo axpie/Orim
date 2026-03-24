@@ -27,6 +27,7 @@
   <data name="MyBoards" xml:space="preserve"><value>My Boards</value></data>
   <data name="NewBoard" xml:space="preserve"><value>New Board</value></data>
   <data name="Users" xml:space="preserve"><value>Users</value></data>
+  <data name="OrimSettings" xml:space="preserve"><value>ORIM Settings</value></data>
   <data name="Settings" xml:space="preserve"><value>Settings</value></data>
   <data name="Username" xml:space="preserve"><value>Username</value></data>
   <data name="Password" xml:space="preserve"><value>Password</value></data>
@@ -241,4 +242,24 @@
   <data name="TemplateDecisionTreeDescription" xml:space="preserve"><value>Visualize branches, approvals, and follow-up paths.</value></data>
   <data name="TemplateWorkshopTitle" xml:space="preserve"><value>Workshop board</value></data>
   <data name="TemplateWorkshopDescription" xml:space="preserve"><value>Use common clusters for goals, ideas, risks, and next steps.</value></data>
+  <data name="ThemeManagement" xml:space="preserve"><value>Theme management</value></data>
+  <data name="ThemeManagementDescription" xml:space="preserve"><value>Manage the themes available in ORIM, upload or download JSON files, and enable the variants that should be offered to users.</value></data>
+  <data name="UploadThemeJson" xml:space="preserve"><value>Upload theme JSON</value></data>
+  <data name="ThemeUploadReplaceHint" xml:space="preserve"><value>Uploading a JSON file creates a new theme or replaces an existing editable theme with the same key.</value></data>
+  <data name="ThemeImmutableHint" xml:space="preserve"><value>The default light theme is protected: it can be downloaded, but it cannot be changed or deleted.</value></data>
+  <data name="ThemeName" xml:space="preserve"><value>Theme name</value></data>
+  <data name="ThemeKey" xml:space="preserve"><value>Theme key</value></data>
+  <data name="ThemeMode" xml:space="preserve"><value>Mode</value></data>
+  <data name="ThemeAvailability" xml:space="preserve"><value>Available</value></data>
+  <data name="ThemeProtection" xml:space="preserve"><value>Protection</value></data>
+  <data name="CurrentTheme" xml:space="preserve"><value>Current</value></data>
+  <data name="DownloadThemeJson" xml:space="preserve"><value>Download theme JSON</value></data>
+  <data name="DeleteTheme" xml:space="preserve"><value>Delete theme</value></data>
+  <data name="ThemeDeleted" xml:space="preserve"><value>Theme deleted.</value></data>
+  <data name="ThemeUploaded" xml:space="preserve"><value>Theme imported successfully.</value></data>
+  <data name="ThemeDeleteConfirmation" xml:space="preserve"><value>Delete theme '{0}'?</value></data>
+  <data name="Protected" xml:space="preserve"><value>Protected</value></data>
+  <data name="Editable" xml:space="preserve"><value>Editable</value></data>
+  <data name="DarkMode" xml:space="preserve"><value>Dark</value></data>
+  <data name="LightMode" xml:space="preserve"><value>Light</value></data>
 </root>

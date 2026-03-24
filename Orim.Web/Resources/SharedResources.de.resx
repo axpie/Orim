@@ -27,6 +27,7 @@
   <data name="MyBoards" xml:space="preserve"><value>Meine Boards</value></data>
   <data name="NewBoard" xml:space="preserve"><value>Neues Board</value></data>
   <data name="Users" xml:space="preserve"><value>Benutzer</value></data>
+  <data name="OrimSettings" xml:space="preserve"><value>ORIM-Einstellungen</value></data>
   <data name="Settings" xml:space="preserve"><value>Einstellungen</value></data>
   <data name="Username" xml:space="preserve"><value>Benutzername</value></data>
   <data name="Password" xml:space="preserve"><value>Passwort</value></data>
@@ -241,4 +242,24 @@
   <data name="TemplateDecisionTreeDescription" xml:space="preserve"><value>Visualisiere Verzweigungen, Freigaben und Folgepfade.</value></data>
   <data name="TemplateWorkshopTitle" xml:space="preserve"><value>Workshop-Board</value></data>
   <data name="TemplateWorkshopDescription" xml:space="preserve"><value>Nutze typische Cluster für Ziele, Ideen, Risiken und nächste Schritte.</value></data>
+  <data name="ThemeManagement" xml:space="preserve"><value>Theme-Verwaltung</value></data>
+  <data name="ThemeManagementDescription" xml:space="preserve"><value>Verwalte die in ORIM verfügbaren Themes, lade JSON-Dateien hoch oder herunter und aktiviere die freigegebenen Varianten.</value></data>
+  <data name="UploadThemeJson" xml:space="preserve"><value>Theme-JSON hochladen</value></data>
+  <data name="ThemeUploadReplaceHint" xml:space="preserve"><value>Ein Upload legt ein neues Theme an oder ersetzt ein bestehendes bearbeitbares Theme mit demselben Schlüssel.</value></data>
+  <data name="ThemeImmutableHint" xml:space="preserve"><value>Das helle Standard-Theme ist geschützt: Es kann nur heruntergeladen, aber nicht geändert oder gelöscht werden.</value></data>
+  <data name="ThemeName" xml:space="preserve"><value>Theme-Name</value></data>
+  <data name="ThemeKey" xml:space="preserve"><value>Theme-Schlüssel</value></data>
+  <data name="ThemeMode" xml:space="preserve"><value>Modus</value></data>
+  <data name="ThemeAvailability" xml:space="preserve"><value>Verfügbar</value></data>
+  <data name="ThemeProtection" xml:space="preserve"><value>Schutz</value></data>
+  <data name="CurrentTheme" xml:space="preserve"><value>Aktiv</value></data>
+  <data name="DownloadThemeJson" xml:space="preserve"><value>Theme-JSON herunterladen</value></data>
+  <data name="DeleteTheme" xml:space="preserve"><value>Theme löschen</value></data>
+  <data name="ThemeDeleted" xml:space="preserve"><value>Theme wurde gelöscht.</value></data>
+  <data name="ThemeUploaded" xml:space="preserve"><value>Theme wurde erfolgreich importiert.</value></data>
+  <data name="ThemeDeleteConfirmation" xml:space="preserve"><value>Theme '{0}' wirklich löschen?</value></data>
+  <data name="Protected" xml:space="preserve"><value>Geschützt</value></data>
+  <data name="Editable" xml:space="preserve"><value>Bearbeitbar</value></data>
+  <data name="DarkMode" xml:space="preserve"><value>Dunkel</value></data>
+  <data name="LightMode" xml:space="preserve"><value>Hell</value></data>
 </root>

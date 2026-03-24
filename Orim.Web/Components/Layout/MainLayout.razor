@@ -25,15 +25,12 @@
                     <MudMenuItem Disabled="true">
                         @Localizer["Theme"]
                     </MudMenuItem>
-                    <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Light)" OnClick="@(() => SetThemeAsync(ThemePreset.Light))">
-                        @Localizer["ThemeLight"]
-                    </MudMenuItem>
-                    <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Dark)" OnClick="@(() => SetThemeAsync(ThemePreset.Dark))">
-                        @Localizer["ThemeDark"]
-                    </MudMenuItem>
-                    <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Synthwave)" OnClick="@(() => SetThemeAsync(ThemePreset.Synthwave))">
-                        @Localizer["ThemeSynthwave"]
-                    </MudMenuItem>
+                    @foreach (var theme in ThemeManager.AvailableThemes)
+                    {
+                        <MudMenuItem Icon="@GetThemeIcon(theme.Key)" OnClick="@(() => SetThemeAsync(theme.Key))">
+                            @theme.Name
+                        </MudMenuItem>
+                    }
                 </MudMenu>
             }
             <AuthorizeView>
@@ -50,15 +47,12 @@
                         <MudMenuItem Disabled="true">
                             @Localizer["Theme"]
                         </MudMenuItem>
-                        <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Light)" OnClick="@(() => SetThemeAsync(ThemePreset.Light))">
-                            @Localizer["ThemeLight"]
-                        </MudMenuItem>
-                        <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Dark)" OnClick="@(() => SetThemeAsync(ThemePreset.Dark))">
-                            @Localizer["ThemeDark"]
-                        </MudMenuItem>
-                        <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Synthwave)" OnClick="@(() => SetThemeAsync(ThemePreset.Synthwave))">
-                            @Localizer["ThemeSynthwave"]
-                        </MudMenuItem>
+                        @foreach (var theme in ThemeManager.AvailableThemes)
+                        {
+                            <MudMenuItem Icon="@GetThemeIcon(theme.Key)" OnClick="@(() => SetThemeAsync(theme.Key))">
+                                @theme.Name
+                            </MudMenuItem>
+                        }
                         <MudDivider />
                         <MudMenuItem Href="/api/auth/logout" ForceLoad="true">
                             @Localizer["Logout"]
@@ -82,6 +76,10 @@
                             <MudNavLink Href="/admin/users" Icon="@Icons.Material.Filled.People"
                                         Class="orim-nav-link">
                                 @Localizer["Users"]
+                            </MudNavLink>
+                            <MudNavLink Href="/admin/settings" Icon="@Icons.Material.Filled.Palette"
+                                        Class="orim-nav-link">
+                                @Localizer["OrimSettings"]
                             </MudNavLink>
                         </Authorized>
                     </AuthorizeView>
@@ -118,9 +116,9 @@
         _currentLang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
     }
 
-    private Task SetThemeAsync(ThemePreset preset) => ThemeManager.SetThemeAsync(preset, JS);
+    private Task SetThemeAsync(string themeKey) => ThemeManager.SetThemeAsync(themeKey, JS);
 
-    private string GetThemeIcon(ThemePreset preset) => ThemeManager.CurrentPreset == preset
+    private string GetThemeIcon(string themeKey) => string.Equals(ThemeManager.CurrentThemeKey, themeKey, StringComparison.OrdinalIgnoreCase)
         ? Icons.Material.Filled.RadioButtonChecked
         : Icons.Material.Filled.RadioButtonUnchecked;
 
