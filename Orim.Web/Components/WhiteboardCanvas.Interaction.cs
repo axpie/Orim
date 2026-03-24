@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.JSInterop;
 using Orim.Core.Models;
+using Orim.Core.Services;
 using Orim.Web.Components.Pages;
 
 namespace Orim.Web.Components;
@@ -72,6 +73,7 @@ public partial class WhiteboardCanvas
         }
 
         var worldPoint = ScreenToWorld(screenPoint);
+        await NotifyPointerPresenceAsync(worldPoint, force: true);
 
         if (CanEdit && TryGetShapeTypeFromTool(SelectedTool, out var shapeType))
         {
@@ -262,6 +264,7 @@ public partial class WhiteboardCanvas
     {
         var screenPoint = GetScreenPointer(e);
         var suppressSnap = e.CtrlKey || e.MetaKey;
+        await NotifyPointerPresenceAsync(ScreenToWorld(screenPoint));
 
         if (_isPanning)
         {
@@ -405,6 +408,7 @@ public partial class WhiteboardCanvas
 
     private async Task OnSurfaceMouseLeave(MouseEventArgs _)
     {
+        await ClearPointerPresenceAsync();
         await FinalizeInteractionAsync(null);
     }
 
@@ -424,6 +428,7 @@ public partial class WhiteboardCanvas
         var screenPoint = GetScreenPointerFromCoords(clientX, clientY);
         var worldPoint = ScreenToWorld(screenPoint);
         _lastTouchWorldPoint = worldPoint;
+        await NotifyPointerPresenceAsync(worldPoint, force: true);
         ClearAlignmentGuides();
 
         if (CanEdit && TryGetShapeTypeFromTool(SelectedTool, out var shapeType))
@@ -615,6 +620,7 @@ public partial class WhiteboardCanvas
     public async Task OnTouchMoveFromJs(double clientX, double clientY)
     {
         var screenPoint = GetScreenPointerFromCoords(clientX, clientY);
+        await NotifyPointerPresenceAsync(ScreenToWorld(screenPoint));
 
         if (_isPanning && !_isDraggingSelection && !_isResizingSelection)
         {
@@ -728,8 +734,43 @@ public partial class WhiteboardCanvas
     [JSInvokable]
     public async Task OnTouchEndFromJs()
     {
+        await ClearPointerPresenceAsync();
         await FinalizeInteractionAsync(_lastTouchWorldPoint);
         StateHasChanged();
+    }
+
+    private async Task NotifyPointerPresenceAsync(Point worldPoint, bool force = false)
+    {
+        if (!OnPointerPresenceChanged.HasDelegate)
+        {
+            return;
+        }
+
+        var now = DateTime.UtcNow;
+        var movedEnough = _lastPointerPresencePoint is null
+            || Math.Abs(_lastPointerPresencePoint.Value.X - worldPoint.X) > 2
+            || Math.Abs(_lastPointerPresencePoint.Value.Y - worldPoint.Y) > 2;
+
+        if (!force && !movedEnough && (now - _lastPointerPresenceSentAt).TotalMilliseconds < 50)
+        {
+            return;
+        }
+
+        _lastPointerPresencePoint = worldPoint;
+        _lastPointerPresenceSentAt = now;
+        await OnPointerPresenceChanged.InvokeAsync(new BoardPointerPosition(worldPoint.X, worldPoint.Y));
+    }
+
+    private async Task ClearPointerPresenceAsync()
+    {
+        if (!OnPointerPresenceChanged.HasDelegate)
+        {
+            return;
+        }
+
+        _lastPointerPresencePoint = null;
+        _lastPointerPresenceSentAt = DateTime.MinValue;
+        await OnPointerPresenceChanged.InvokeAsync(null);
     }
 
     private Point GetScreenPointerFromCoords(double clientX, double clientY)
@@ -978,16 +1019,28 @@ public partial class WhiteboardCanvas
         {
             if (Board is not null)
             {
+                var sourcePoint = _draftArrow.Value.SourceElementId is Guid sourceElementId
+                    ? Board.Elements.FirstOrDefault(element => element.Id == sourceElementId) is BoardElement sourceElement
+                        ? GetDockPosition(sourceElement, _draftArrow.Value.SourceDock)
+                        : _draftArrow.Value.SourcePoint
+                    : _draftArrow.Value.SourcePoint;
+                var targetDock = _draftArrow.Value.TargetDock ?? ResolveFreeDock(_draftArrow.Value.SourcePoint, _draftArrow.Value.Pointer);
+                var targetPoint = _draftArrow.Value.TargetElementId is Guid targetElementId
+                    ? Board.Elements.FirstOrDefault(element => element.Id == targetElementId) is BoardElement targetElement
+                        ? GetDockPosition(targetElement, targetDock)
+                        : _draftArrow.Value.Pointer
+                    : _draftArrow.Value.Pointer;
+
                 var arrow = new ArrowElement
                 {
                     SourceElementId = _draftArrow.Value.SourceElementId,
-                    SourceX = _draftArrow.Value.SourceElementId is null ? _draftArrow.Value.SourcePoint.X : null,
-                    SourceY = _draftArrow.Value.SourceElementId is null ? _draftArrow.Value.SourcePoint.Y : null,
+                    SourceX = sourcePoint.X,
+                    SourceY = sourcePoint.Y,
                     SourceDock = _draftArrow.Value.SourceDock,
                     TargetElementId = _draftArrow.Value.TargetElementId,
-                    TargetX = _draftArrow.Value.TargetElementId is null ? _draftArrow.Value.Pointer.X : null,
-                    TargetY = _draftArrow.Value.TargetElementId is null ? _draftArrow.Value.Pointer.Y : null,
-                    TargetDock = _draftArrow.Value.TargetDock ?? ResolveFreeDock(_draftArrow.Value.SourcePoint, _draftArrow.Value.Pointer),
+                    TargetX = targetPoint.X,
+                    TargetY = targetPoint.Y,
+                    TargetDock = targetDock,
                     StrokeColor = GetDefaultStrokeColor(),
                     StrokeWidth = 2,
                     RouteStyle = ArrowRouteStyle.Orthogonal,

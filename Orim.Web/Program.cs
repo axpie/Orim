@@ -6,6 +6,7 @@ using MudBlazor.Services;
 using Orim.Core.Models;
 using Orim.Core.Services;
 using Orim.Infrastructure;
+using Orim.Web;
 using Orim.Web.Components;
 using Orim.Web.Services;
 
@@ -185,6 +186,17 @@ app.MapGet("/api/auth/logout", async (HttpContext context) =>
     await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     context.Response.Redirect("/login");
 });
+
+app.MapPost("/api/presence/leave", async (PresenceLeaveRequest request, BoardPresenceService boardPresenceService) =>
+{
+    if (request.BoardId == Guid.Empty || string.IsNullOrWhiteSpace(request.ClientId))
+    {
+        return Results.BadRequest();
+    }
+
+    await boardPresenceService.RemoveCursorAsync(request.BoardId, request.ClientId);
+    return Results.Ok();
+}).AllowAnonymous();
 
 app.MapGet("/api/export/pdf/{boardId:guid}", async (Guid boardId, BoardService boardService, HttpContext context) =>
 {

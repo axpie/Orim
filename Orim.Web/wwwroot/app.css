@@ -338,6 +338,7 @@ html[data-orim-theme='synthwave'] .orim-logo__wordmark {
     padding: 8px 16px;
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
     gap: 8px;
     background: var(--orim-shared-header) !important;
     color: var(--orim-shell-appbar-text) !important;
@@ -349,6 +350,29 @@ html[data-orim-theme='synthwave'] .orim-logo__wordmark {
 
 .orim-shared-divider {
     border-color: var(--orim-shared-divider) !important;
+}
+
+.orim-shared-name-input {
+    min-width: 200px;
+    max-width: 260px;
+}
+
+.orim-shared-name-input .mud-input-label,
+.orim-shared-name-input .mud-input-slot,
+.orim-shared-name-input input {
+    color: var(--orim-shared-header-text) !important;
+}
+
+.orim-shared-name-input .mud-input-outlined-border {
+    border-color: color-mix(in srgb, var(--orim-shared-header-text) 28%, transparent) !important;
+}
+
+.orim-active-participants {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
 }
 
 .orim-board-toolbar {

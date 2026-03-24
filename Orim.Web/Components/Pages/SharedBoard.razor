@@ -4,6 +4,8 @@
 @implements IDisposable
 @inject BoardService BoardService
 @inject BoardChangeNotifier BoardChangeNotifier
+@inject BoardPresenceService BoardPresenceService
+@inject IJSRuntime JS
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 
 @if (_board is null)
@@ -26,6 +28,25 @@ else
             <OrimLogo Class="orim-logo--shared" />
             <MudDivider Vertical="true" FlexItem="true" DividerType="DividerType.Middle" Class="orim-shared-divider" />
             <MudText Typo="Typo.subtitle1" Class="orim-shared-subtitle">@_board.Title (Nur-Lesen)</MudText>
+            <MudTextField T="string"
+                          Value="@_displayName"
+                          ValueChanged="@HandleDisplayNameChangedAsync"
+                          Immediate="true"
+                          Variant="Variant.Outlined"
+                          Margin="Margin.Dense"
+                          Class="orim-shared-name-input"
+                          Label="@Localizer["DisplayName"]" />
+            <div class="orim-active-participants">
+                @foreach (var participant in ActiveParticipants)
+                {
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Variant="Variant.Outlined"
+                             Style="@GetParticipantChipStyle(participant.ColorHex)">
+                        @participant.DisplayName
+                    </MudChip>
+                }
+            </div>
             <MudSpacer />
             <MudTooltip Text="@Localizer["FitToContent"]" Arrow="true">
                 <MudIconButton Icon="@Icons.Material.Filled.FitScreen"
@@ -37,6 +58,8 @@ else
         <div style="flex: 1; overflow: hidden;">
             <WhiteboardCanvas @ref="_canvas" Board="@_board" CanEdit="false"
                               CommandStack="@(new CommandStack())"
+                              RemoteCursors="@_remoteCursors"
+                              OnPointerPresenceChanged="@HandlePointerPresenceChangedAsync"
                               SelectedTool="BoardEditor.Tool.Select" />
         </div>
     </div>
@@ -49,6 +72,20 @@ else
     private WhiteboardCanvas? _canvas;
     private readonly string _boardSyncClientId = Guid.NewGuid().ToString("N");
     private IDisposable? _boardChangeSubscription;
+    private IDisposable? _cursorPresenceSubscription;
+    private readonly CancellationTokenSource _presenceHeartbeatCancellation = new();
+    private Task? _presenceHeartbeatTask;
+    private IReadOnlyList<BoardCursorPresence> _remoteCursors = [];
+    private BoardPointerPosition? _localPointerPosition;
+    private string _displayName = BoardPresenceIdentity.CreateFantasyName();
+    private string _cursorColor = BoardPresenceIdentity.ResolveColor(Guid.NewGuid().ToString("N"));
+    private const string SharedNameStorageKey = "orim.shared.display-name";
+    private const string SharedColorStorageKey = "orim.shared.cursor-color";
+    private IReadOnlyList<BoardCursorPresence> ActiveParticipants =>
+    [
+        new(_boardSyncClientId, _displayName, _cursorColor, _localPointerPosition?.WorldX, _localPointerPosition?.WorldY, DateTime.UtcNow),
+        .. _remoteCursors
+    ];
 
     protected override async Task OnInitializedAsync()
     {
@@ -65,6 +102,58 @@ else
         }
 
         _boardChangeSubscription = BoardChangeNotifier.Subscribe(_board.Id, _boardSyncClientId, HandleExternalBoardChangeAsync);
+        _cursorPresenceSubscription = BoardPresenceService.Subscribe(_board.Id, $"cursor-{_boardSyncClientId}", HandleCursorPresenceChangedAsync);
+        await PublishPresenceAsync(null);
+        _presenceHeartbeatTask ??= StartPresenceHeartbeatAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        if (_board is not null)
+        {
+            await JS.InvokeVoidAsync("orimWhiteboard.registerPresenceLifecycle", _board.Id, _boardSyncClientId);
+        }
+
+        var storedName = await JS.InvokeAsync<string?>("orimWhiteboard.getLocalStorageValue", SharedNameStorageKey);
+        var storedColor = await JS.InvokeAsync<string?>("orimWhiteboard.getLocalStorageValue", SharedColorStorageKey);
+        var changed = false;
+
+        if (!string.IsNullOrWhiteSpace(storedName) && storedName != _displayName)
+        {
+            _displayName = storedName;
+            changed = true;
+        }
+
+        if (!string.IsNullOrWhiteSpace(storedColor) && storedColor != _cursorColor)
+        {
+            _cursorColor = storedColor;
+            changed = true;
+        }
+
+        if (string.IsNullOrWhiteSpace(storedName))
+        {
+            await JS.InvokeVoidAsync("orimWhiteboard.setLocalStorageValue", SharedNameStorageKey, _displayName);
+        }
+
+        if (string.IsNullOrWhiteSpace(storedColor))
+        {
+            await JS.InvokeVoidAsync("orimWhiteboard.setLocalStorageValue", SharedColorStorageKey, _cursorColor);
+        }
+
+        if (_localPointerPosition is not null)
+        {
+            await PublishPresenceAsync(_localPointerPosition);
+        }
+
+        if (changed)
+        {
+            StateHasChanged();
+        }
     }
 
     private async Task FitToContentAsync()
@@ -75,6 +164,60 @@ else
         }
 
         await _canvas.FitToContentAsync();
+    }
+
+    private async Task HandleDisplayNameChangedAsync(string value)
+    {
+        _displayName = string.IsNullOrWhiteSpace(value) ? BoardPresenceIdentity.CreateFantasyName() : value.Trim();
+        await JS.InvokeVoidAsync("orimWhiteboard.setLocalStorageValue", SharedNameStorageKey, _displayName);
+        await PublishPresenceAsync(_localPointerPosition);
+    }
+
+    private Task HandlePointerPresenceChangedAsync(BoardPointerPosition? pointer)
+    {
+        _localPointerPosition = pointer;
+        if (_board is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return PublishPresenceAsync(pointer);
+    }
+
+    private Task PublishPresenceAsync(BoardPointerPosition? pointer)
+    {
+        if (_board is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return BoardPresenceService.UpsertCursorAsync(
+            _board.Id,
+            new BoardCursorPresence(
+                _boardSyncClientId,
+                _displayName,
+                _cursorColor,
+                pointer?.WorldX,
+                pointer?.WorldY,
+                DateTime.UtcNow));
+    }
+
+    private static string GetParticipantChipStyle(string colorHex) =>
+        $"border-color:{colorHex}; color:{colorHex}; background:color-mix(in srgb, {colorHex} 10%, transparent); font-weight:600;";
+
+    private async Task StartPresenceHeartbeatAsync()
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+            while (await timer.WaitForNextTickAsync(_presenceHeartbeatCancellation.Token))
+            {
+                await PublishPresenceAsync(_localPointerPosition);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
     }
 
     private Task HandleExternalBoardChangeAsync(BoardChangeNotification notification)
@@ -89,8 +232,34 @@ else
         });
     }
 
+    private Task HandleCursorPresenceChangedAsync(IReadOnlyList<BoardCursorPresence> cursors)
+    {
+        return InvokeAsync(() =>
+        {
+            _remoteCursors = cursors
+                .Where(cursor => cursor.ClientId != _boardSyncClientId)
+                .ToList();
+            StateHasChanged();
+        });
+    }
+
     public void Dispose()
     {
+        _presenceHeartbeatCancellation.Cancel();
+        if (_board is not null)
+        {
+            _ = BoardPresenceService.RemoveCursorAsync(_board.Id, _boardSyncClientId);
+            try
+            {
+                _ = JS.InvokeVoidAsync("orimWhiteboard.unregisterPresenceLifecycle", _board.Id, _boardSyncClientId);
+            }
+            catch
+            {
+            }
+        }
+
+        _cursorPresenceSubscription?.Dispose();
         _boardChangeSubscription?.Dispose();
+        _presenceHeartbeatCancellation.Dispose();
     }
 }

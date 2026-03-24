@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Rendering;
 using Orim.Core.Models;
+using Orim.Core.Services;
 using Orim.Web.Components.Pages;
 using Orim.Web.Services;
 
@@ -19,6 +20,10 @@ public partial class WhiteboardCanvas
 
     private string GetWorldStyle() =>
         $"position: absolute; inset: 0; overflow: visible; transform-origin: 0 0; transform: translate({CssNumber(_cameraOffset.X)}px, {CssNumber(_cameraOffset.Y)}px) scale({CssNumber(_zoom)});";
+
+    private Point WorldToScreen(Point point) => new(
+        point.X * _zoom + _cameraOffset.X,
+        point.Y * _zoom + _cameraOffset.Y);
 
     private static double GetWrappedGridOffset(double offset, double step)
     {
@@ -154,6 +159,18 @@ public partial class WhiteboardCanvas
             .ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
     private string Px(double value) => $"{CssNumber(value)}px";
+
+    private string GetRemoteCursorStyle(BoardCursorPresence cursor)
+    {
+        var screenPoint = WorldToScreen(new Point(cursor.WorldX ?? 0, cursor.WorldY ?? 0));
+        return $"position:absolute; left:{Px(screenPoint.X)}; top:{Px(screenPoint.Y)}; transform:translate(-2px, -2px); pointer-events:none; z-index:30;";
+    }
+
+    private string GetRemoteCursorPointerStyle(BoardCursorPresence cursor) =>
+        $"width:18px; height:24px; background:{cursor.ColorHex}; clip-path:polygon(0 0, 0 100%, 22% 79%, 32% 72%, 43% 100%, 57% 94%, 46% 68%, 78% 68%); transform:none; filter:drop-shadow(-1.8px 0 0 #ffffff) drop-shadow(1.8px 0 0 #ffffff) drop-shadow(0 -1.8px 0 #ffffff) drop-shadow(0 1.8px 0 #ffffff) drop-shadow(-0.8px 0 0 #111827) drop-shadow(0.8px 0 0 #111827) drop-shadow(0 -0.8px 0 #111827) drop-shadow(0 0.8px 0 #111827) drop-shadow(0 3px 8px rgba(15, 23, 42, 0.30));";
+
+    private string GetRemoteCursorLabelStyle(BoardCursorPresence cursor) =>
+        $"margin-left:12px; margin-top:-4px; display:inline-flex; align-items:center; max-width:220px; padding:3px 8px; border-radius:999px; background:{cursor.ColorHex}; color:#fff; font-size:12px; font-weight:700; line-height:1.2; white-space:nowrap; box-shadow:0 8px 24px rgba(15, 23, 42, 0.18);";
 
     private RenderFragment RenderElement(BoardElement element) => element switch
     {

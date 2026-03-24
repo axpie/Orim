@@ -5,6 +5,7 @@
 @using Microsoft.AspNetCore.Components.Forms
 @inject BoardService BoardService
 @inject BoardChangeNotifier BoardChangeNotifier
+@inject BoardPresenceService BoardPresenceService
 @inject UserService UserService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
@@ -48,6 +49,17 @@ else
                                    OnClick="@OpenRenameBoardDialog" />
                 </MudTooltip>
             }
+            <div class="orim-active-participants">
+                @foreach (var participant in ActiveParticipants)
+                {
+                    <MudChip T="string"
+                             Size="Size.Small"
+                             Variant="Variant.Outlined"
+                             Style="@GetParticipantChipStyle(participant.ColorHex)">
+                        @participant.DisplayName
+                    </MudChip>
+                }
+            </div>
             <MudSpacer />
 
             @if (_canEdit)
@@ -303,9 +315,11 @@ else
                                           AriaLabel="@Localizer["BoardCanvasRegionLabel"]"
                                           AriaDescription="@Localizer["BoardCanvasRegionDescription"]"
                                           FitRightInset="@CanvasFitRightInset"
+                                          RemoteCursors="@_remoteCursors"
                                           OnBoardChanged="@HandleBoardChanged"
                                           OnSelectedElementChanged="@HandleSelectedElementChanged"
                                           OnSelectedElementsChanged="@HandleSelectedElementsChanged"
+                                          OnPointerPresenceChanged="@HandlePointerPresenceChangedAsync"
                                           OnZoomChanged="@HandleZoomChanged"
                                           OnToolChanged="@HandleToolChanged"
                                           OnElementDoubleTapped="@OnCanvasElementDoubleTapped"
@@ -725,9 +739,20 @@ else
     private bool _useCompactLayout;
     private readonly string _boardSyncClientId = Guid.NewGuid().ToString("N");
     private IDisposable? _boardChangeSubscription;
+    private IDisposable? _cursorPresenceSubscription;
+    private readonly CancellationTokenSource _presenceHeartbeatCancellation = new();
+    private Task? _presenceHeartbeatTask;
+    private IReadOnlyList<BoardCursorPresence> _remoteCursors = [];
+    private BoardPointerPosition? _localPointerPosition;
+    private string _cursorColor = "#2563eb";
     private bool CanGroupSelection => _selectedElements.Count(element => element is not ArrowElement) > 1;
     private bool CanUngroupSelection => _selectedElements.Any(element => element.GroupId is not null);
     private bool CanManageBoard => _board?.OwnerId == _userId;
+    private IReadOnlyList<BoardCursorPresence> ActiveParticipants =>
+    [
+        new(_boardSyncClientId, string.IsNullOrWhiteSpace(_username) ? "User" : _username, _cursorColor, _localPointerPosition?.WorldX, _localPointerPosition?.WorldY, DateTime.UtcNow),
+        .. _remoteCursors
+    ];
     private double CanvasFitRightInset => (_propertiesPanelOpen ? 388d : 0d) + (_chatPanelOpen ? 388d : 0d);
     private List<User> _availableUsers = [];
     private List<MemberDraft> _memberDrafts = [];
@@ -791,9 +816,18 @@ else
         _canEdit = BoardService.HasAccess(_board, _userId, BoardRole.Editor);
         _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
         _boardVisibility = _board.Visibility;
+        _cursorColor = BoardPresenceIdentity.ResolveColor(_userId != Guid.Empty ? _userId.ToString() : _username);
         _boardChangeSubscription = _hasAccess
             ? BoardChangeNotifier.Subscribe(_board.Id, _boardSyncClientId, HandleExternalBoardChangeAsync)
             : null;
+        _cursorPresenceSubscription = _hasAccess
+            ? BoardPresenceService.Subscribe(_board.Id, $"cursor-{_boardSyncClientId}", HandleCursorPresenceChangedAsync)
+            : null;
+        if (_hasAccess)
+        {
+            await PublishLocalPresenceAsync(null);
+            _presenceHeartbeatTask ??= StartPresenceHeartbeatAsync();
+        }
         _commandStack.Clear();
         _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
         UpdateScreenReaderStatus(Localizer["BoardLoadedAnnouncement", _board.Title]);
@@ -803,6 +837,7 @@ else
     {
         if (firstRender && _board is not null && _hasAccess)
         {
+            await JS.InvokeVoidAsync("orimWhiteboard.registerPresenceLifecycle", _board.Id, _boardSyncClientId);
             await _editorSurface.FocusAsync();
             var viewport = await JS.InvokeAsync<ViewportProfile>("orimWhiteboard.getViewportProfile");
             _useCompactLayout = viewport.IsCompact;
@@ -1459,6 +1494,53 @@ else
         return Task.CompletedTask;
     }
 
+    private Task HandlePointerPresenceChangedAsync(BoardPointerPosition? pointer)
+    {
+        _localPointerPosition = pointer;
+        if (_board is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return PublishLocalPresenceAsync(pointer);
+    }
+
+    private Task PublishLocalPresenceAsync(BoardPointerPosition? pointer)
+    {
+        if (_board is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return BoardPresenceService.UpsertCursorAsync(
+            _board.Id,
+            new BoardCursorPresence(
+                _boardSyncClientId,
+                string.IsNullOrWhiteSpace(_username) ? "User" : _username,
+                _cursorColor,
+                pointer?.WorldX,
+                pointer?.WorldY,
+                DateTime.UtcNow));
+    }
+
+    private static string GetParticipantChipStyle(string colorHex) =>
+        $"border-color:{colorHex}; color:{colorHex}; background:color-mix(in srgb, {colorHex} 10%, transparent); font-weight:600;";
+
+    private async Task StartPresenceHeartbeatAsync()
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+            while (await timer.WaitForNextTickAsync(_presenceHeartbeatCancellation.Token))
+            {
+                await PublishLocalPresenceAsync(_localPointerPosition);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
     private async Task HandleSelectedElementsChanged(IReadOnlyList<BoardElement> elements)
     {
         _selectedElements = elements.ToList();
@@ -1840,9 +1922,35 @@ else
         });
     }
 
+    private Task HandleCursorPresenceChangedAsync(IReadOnlyList<BoardCursorPresence> cursors)
+    {
+        return InvokeAsync(() =>
+        {
+            _remoteCursors = cursors
+                .Where(cursor => cursor.ClientId != _boardSyncClientId)
+                .ToList();
+            StateHasChanged();
+        });
+    }
+
     public void Dispose()
     {
+        _presenceHeartbeatCancellation.Cancel();
+        if (_board is not null)
+        {
+            _ = BoardPresenceService.RemoveCursorAsync(_board.Id, _boardSyncClientId);
+            try
+            {
+                _ = JS.InvokeVoidAsync("orimWhiteboard.unregisterPresenceLifecycle", _board.Id, _boardSyncClientId);
+            }
+            catch
+            {
+            }
+        }
+
+        _cursorPresenceSubscription?.Dispose();
         _boardChangeSubscription?.Dispose();
+        _presenceHeartbeatCancellation.Dispose();
     }
 
     private string GetToolLabel(Tool tool) => tool switch

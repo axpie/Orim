@@ -94,6 +94,16 @@
             }
         }
     </div>
+
+    @foreach (var cursor in RemoteCursors.Where(cursor => cursor.WorldX is not null && cursor.WorldY is not null))
+    {
+        <div style="@GetRemoteCursorStyle(cursor)">
+            <div style="display:flex; align-items:flex-start; gap:0;">
+                <div style="@GetRemoteCursorPointerStyle(cursor)"></div>
+                <div style="@GetRemoteCursorLabelStyle(cursor)">@cursor.DisplayName</div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -124,9 +134,11 @@
     [Parameter] public EventCallback<BoardEditor.Tool> OnToolChanged { get; set; }
     [Parameter] public EventCallback<int> OnZoomChanged { get; set; }
     [Parameter] public EventCallback OnElementDoubleTapped { get; set; }
+    [Parameter] public EventCallback<BoardPointerPosition?> OnPointerPresenceChanged { get; set; }
     [Parameter] public string? PendingIconName { get; set; }
     [Parameter] public BoardEditor.Tool SelectedTool { get; set; }
     [Parameter] public double FitRightInset { get; set; }
+    [Parameter] public IReadOnlyList<BoardCursorPresence> RemoteCursors { get; set; } = [];
 
     public BoardElement? SelectedElement => _selectedElements.LastOrDefault();
 
@@ -159,6 +171,8 @@
     private bool _hasInitializedViewport;
     private DotNetObjectReference<WhiteboardCanvas>? _selfRef;
     private bool _registeredTouchHandler = false;
+    private DateTime _lastPointerPresenceSentAt = DateTime.MinValue;
+    private Point? _lastPointerPresencePoint;
     private SurfaceRect _surfaceRect;
     private Point _lastTouchWorldPoint;
     private DateTime _lastTapTime = DateTime.MinValue;
