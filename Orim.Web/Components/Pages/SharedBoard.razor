@@ -6,7 +6,9 @@
 @inject BoardChangeNotifier BoardChangeNotifier
 @inject BoardPresenceService BoardPresenceService
 @inject IJSRuntime JS
+@inject ThemeManager ThemeManager
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
+@using Orim.Web.Services
 
 @if (_board is null)
 {
@@ -48,10 +50,30 @@ else
                 }
             </div>
             <MudSpacer />
+            <MudMenu Icon="@Icons.Material.Filled.Palette"
+                     Size="Size.Small"
+                     Color="Color.Inherit"
+                     Class="orim-shared-header-action"
+                     AnchorOrigin="Origin.BottomRight"
+                     TransformOrigin="Origin.TopRight">
+                <MudMenuItem Disabled="true">
+                    @Localizer["Theme"]
+                </MudMenuItem>
+                <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Light)" OnClick="@(() => SetThemeAsync(ThemePreset.Light))">
+                    @Localizer["ThemeLight"]
+                </MudMenuItem>
+                <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Dark)" OnClick="@(() => SetThemeAsync(ThemePreset.Dark))">
+                    @Localizer["ThemeDark"]
+                </MudMenuItem>
+                <MudMenuItem Icon="@GetThemeIcon(ThemePreset.Synthwave)" OnClick="@(() => SetThemeAsync(ThemePreset.Synthwave))">
+                    @Localizer["ThemeSynthwave"]
+                </MudMenuItem>
+            </MudMenu>
             <MudTooltip Text="@Localizer["FitToContent"]" Arrow="true">
                 <MudIconButton Icon="@Icons.Material.Filled.FitScreen"
                                Size="Size.Small"
-                               Color="Color.Default"
+                               Color="Color.Inherit"
+                               Class="orim-shared-header-action"
                                OnClick="@FitToContentAsync" />
             </MudTooltip>
         </MudPaper>
@@ -204,6 +226,16 @@ else
 
     private static string GetParticipantChipStyle(string colorHex) =>
         $"border-color:{colorHex}; color:{colorHex}; background:color-mix(in srgb, {colorHex} 10%, transparent); font-weight:600;";
+
+    private async Task SetThemeAsync(ThemePreset preset)
+    {
+        await ThemeManager.SetThemeAsync(preset, JS);
+        StateHasChanged();
+    }
+
+    private string GetThemeIcon(ThemePreset preset) => ThemeManager.CurrentPreset == preset
+        ? Icons.Material.Filled.RadioButtonChecked
+        : Icons.Material.Filled.RadioButtonUnchecked;
 
     private async Task StartPresenceHeartbeatAsync()
     {
