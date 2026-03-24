@@ -101,46 +101,6 @@ else
 
                 <MudDivider Vertical="true" FlexItem="true" />
 
-                <MudTooltip Text="@Localizer["ZoomOut"]" Arrow="true">
-                    <MudIconButton Icon="@Icons.Material.Filled.Remove"
-                                   Size="Size.Small"
-                                   Color="Color.Default"
-                                   OnClick="@ZoomOutAsync" />
-                </MudTooltip>
-
-                  <input value="@_zoomDisplayValue"
-                       @onchange="HandleZoomInputChangedAsync"
-                      class="orim-board-zoom-input"
-                       aria-label="@Localizer["ZoomLevelPercent"]" />
-
-                <MudTooltip Text="@Localizer["ZoomIn"]" Arrow="true">
-                    <MudIconButton Icon="@Icons.Material.Filled.Add"
-                                   Size="Size.Small"
-                                   Color="Color.Default"
-                                   OnClick="@ZoomInAsync" />
-                </MudTooltip>
-
-                <MudTooltip Text="@Localizer["FitToContent"]" Arrow="true">
-                    <MudIconButton Icon="@Icons.Material.Filled.FitScreen"
-                                   Size="Size.Small"
-                                   Color="Color.Default"
-                                   OnClick="@FitToContentAsync" />
-                </MudTooltip>
-
-                <MudTooltip Text="@Localizer["OpenHelp"]" Arrow="true">
-                    <MudIconButton Icon="@Icons.Material.Filled.Info"
-                                   Size="Size.Small"
-                                   Color="Color.Default"
-                                   OnClick="@OpenHelpDialog" />
-                </MudTooltip>
-
-                <MudTooltip Text="@(CanManageBoard ? Localizer["ShareAndAccess"] : Localizer["BoardSettings"])" Arrow="true">
-                    <MudIconButton Icon="@(CanManageBoard ? Icons.Material.Filled.Group : Icons.Material.Filled.Settings)"
-                                    Size="Size.Small"
-                                    Color="Color.Default"
-                                    OnClick="@OpenBoardSettingsDialogAsync" />
-                </MudTooltip>
-
                 @if (_selectedElement is not null)
                 {
                     <MudTooltip Text="@Localizer["DeleteSelectedElement"]" Arrow="true">
@@ -172,6 +132,46 @@ else
 
                 <MudDivider Vertical="true" FlexItem="true" />
             }
+
+            <MudTooltip Text="@Localizer["ZoomOut"]" Arrow="true">
+                <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                               Size="Size.Small"
+                               Color="Color.Default"
+                               OnClick="@ZoomOutAsync" />
+            </MudTooltip>
+
+              <input value="@_zoomDisplayValue"
+                   @onchange="HandleZoomInputChangedAsync"
+                  class="orim-board-zoom-input"
+                   aria-label="@Localizer["ZoomLevelPercent"]" />
+
+            <MudTooltip Text="@Localizer["ZoomIn"]" Arrow="true">
+                <MudIconButton Icon="@Icons.Material.Filled.Add"
+                               Size="Size.Small"
+                               Color="Color.Default"
+                               OnClick="@ZoomInAsync" />
+            </MudTooltip>
+
+            <MudTooltip Text="@Localizer["FitToContent"]" Arrow="true">
+                <MudIconButton Icon="@Icons.Material.Filled.FitScreen"
+                               Size="Size.Small"
+                               Color="Color.Default"
+                               OnClick="@FitToContentAsync" />
+            </MudTooltip>
+
+            <MudTooltip Text="@Localizer["OpenHelp"]" Arrow="true">
+                <MudIconButton Icon="@Icons.Material.Filled.Info"
+                               Size="Size.Small"
+                               Color="Color.Default"
+                               OnClick="@OpenHelpDialog" />
+            </MudTooltip>
+
+            <MudTooltip Text="@(CanManageBoard ? Localizer["ShareAndAccess"] : Localizer["BoardSettings"])" Arrow="true">
+                <MudIconButton Icon="@(CanManageBoard ? Icons.Material.Filled.Group : Icons.Material.Filled.Settings)"
+                                Size="Size.Small"
+                                Color="Color.Default"
+                                OnClick="@OpenBoardSettingsDialogAsync" />
+            </MudTooltip>
 
             @if (_canEdit)
             {
@@ -501,12 +501,24 @@ else
             <MudCheckBox @bind-Value="_boardLabelOutlineEnabled"
                          T="bool"
                          Label="@Localizer["LabelOutlineEnabled"]" />
-            <MudSelect T="BoardVisibility" @bind-Value="_boardVisibility" Label="@Localizer["Visibility"]" Variant="Variant.Outlined" Class="mt-4">
-                <MudSelectItem T="BoardVisibility" Value="BoardVisibility.Private">@Localizer["Private"]</MudSelectItem>
-                <MudSelectItem T="BoardVisibility" Value="BoardVisibility.Public">@Localizer["Public"]</MudSelectItem>
-                <MudSelectItem T="BoardVisibility" Value="BoardVisibility.Shared">@Localizer["Shared"]</MudSelectItem>
-            </MudSelect>
-            <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["VisibilityExplanation"]</MudText>
+            @if (CanManageBoard)
+            {
+                <MudSelect T="BoardVisibility" @bind-Value="_boardVisibility" Label="@Localizer["Visibility"]" Variant="Variant.Outlined" Class="mt-4">
+                    <MudSelectItem T="BoardVisibility" Value="BoardVisibility.Private">@Localizer["Private"]</MudSelectItem>
+                    <MudSelectItem T="BoardVisibility" Value="BoardVisibility.Public">@Localizer["Public"]</MudSelectItem>
+                    <MudSelectItem T="BoardVisibility" Value="BoardVisibility.Shared">@Localizer["Shared"]</MudSelectItem>
+                </MudSelect>
+                <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["VisibilityExplanation"]</MudText>
+            }
+            else
+            {
+                <MudTextField Value="@Localizer[_boardVisibility.ToString()]"
+                              Label="@Localizer["Visibility"]"
+                              ReadOnly="true"
+                              Variant="Variant.Outlined"
+                              Class="mt-4" />
+                <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["BoardSettingsOwnerOnly"]</MudText>
+            }
 
             @if (CanManageBoard)
             {
@@ -924,10 +936,14 @@ else
         }
 
         _board.LabelOutlineEnabled = _boardLabelOutlineEnabled;
-        _board.Visibility = _boardVisibility;
-        _board.ShareLinkToken = _boardVisibility == BoardVisibility.Shared
-            ? string.IsNullOrWhiteSpace(_shareLinkTokenDraft) ? BoardService.GenerateShareLinkToken() : _shareLinkTokenDraft
-            : _shareLinkTokenDraft;
+
+        if (CanManageBoard)
+        {
+            _board.Visibility = _boardVisibility;
+            _board.ShareLinkToken = _boardVisibility == BoardVisibility.Shared
+                ? string.IsNullOrWhiteSpace(_shareLinkTokenDraft) ? BoardService.GenerateShareLinkToken() : _shareLinkTokenDraft
+                : _shareLinkTokenDraft;
+        }
 
         if (CanManageBoard)
         {

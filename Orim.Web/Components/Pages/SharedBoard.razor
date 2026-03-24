@@ -2,6 +2,7 @@
 @layout EmptyLayout
 @rendermode InteractiveServer
 @inject BoardService BoardService
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 
 @if (_board is null)
 {
@@ -23,9 +24,16 @@ else
             <OrimLogo Class="orim-logo--shared" />
             <MudDivider Vertical="true" FlexItem="true" DividerType="DividerType.Middle" Class="orim-shared-divider" />
             <MudText Typo="Typo.subtitle1" Class="orim-shared-subtitle">@_board.Title (Nur-Lesen)</MudText>
+            <MudSpacer />
+            <MudTooltip Text="@Localizer["FitToContent"]" Arrow="true">
+                <MudIconButton Icon="@Icons.Material.Filled.FitScreen"
+                               Size="Size.Small"
+                               Color="Color.Default"
+                               OnClick="@FitToContentAsync" />
+            </MudTooltip>
         </MudPaper>
         <div style="flex: 1; overflow: hidden;">
-            <WhiteboardCanvas Board="@_board" CanEdit="false"
+            <WhiteboardCanvas @ref="_canvas" Board="@_board" CanEdit="false"
                               CommandStack="@(new CommandStack())"
                               SelectedTool="BoardEditor.Tool.Select" />
         </div>
@@ -36,6 +44,7 @@ else
     [Parameter] public string Token { get; set; } = "";
     private Board? _board;
     private bool _notFound;
+    private WhiteboardCanvas? _canvas;
 
     protected override async Task OnInitializedAsync()
     {
@@ -47,5 +56,15 @@ else
         _board = await BoardService.GetBoardByShareTokenAsync(Token);
         if (_board is null)
             _notFound = true;
+    }
+
+    private async Task FitToContentAsync()
+    {
+        if (_canvas is null)
+        {
+            return;
+        }
+
+        await _canvas.FitToContentAsync();
     }
 }
