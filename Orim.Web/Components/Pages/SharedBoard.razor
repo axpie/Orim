@@ -1,7 +1,9 @@
 @page "/shared/{Token}"
 @layout EmptyLayout
 @rendermode InteractiveServer
+@implements IDisposable
 @inject BoardService BoardService
+@inject BoardChangeNotifier BoardChangeNotifier
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 
 @if (_board is null)
@@ -45,6 +47,8 @@ else
     private Board? _board;
     private bool _notFound;
     private WhiteboardCanvas? _canvas;
+    private readonly string _boardSyncClientId = Guid.NewGuid().ToString("N");
+    private IDisposable? _boardChangeSubscription;
 
     protected override async Task OnInitializedAsync()
     {
@@ -55,7 +59,12 @@ else
         }
         _board = await BoardService.GetBoardByShareTokenAsync(Token);
         if (_board is null)
+        {
             _notFound = true;
+            return;
+        }
+
+        _boardChangeSubscription = BoardChangeNotifier.Subscribe(_board.Id, _boardSyncClientId, HandleExternalBoardChangeAsync);
     }
 
     private async Task FitToContentAsync()
@@ -66,5 +75,22 @@ else
         }
 
         await _canvas.FitToContentAsync();
+    }
+
+    private Task HandleExternalBoardChangeAsync(BoardChangeNotification notification)
+    {
+        return InvokeAsync(async () =>
+        {
+            var latestBoard = await BoardService.GetBoardByShareTokenAsync(Token);
+            _board = latestBoard;
+            _notFound = latestBoard is null;
+            _canvas?.ForceRerender();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        _boardChangeSubscription?.Dispose();
     }
 }

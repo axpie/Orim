@@ -9,10 +9,12 @@ public class BoardService
 {
     private const int MaxSnapshots = 30;
     private readonly IBoardRepository _boardRepository;
+    private readonly BoardChangeNotifier _boardChangeNotifier;
 
-    public BoardService(IBoardRepository boardRepository)
+    public BoardService(IBoardRepository boardRepository, BoardChangeNotifier boardChangeNotifier)
     {
         _boardRepository = boardRepository;
+        _boardChangeNotifier = boardChangeNotifier;
     }
 
     public IReadOnlyList<BoardTemplateDefinition> GetTemplates() => BoardTemplateCatalog.Definitions;
@@ -79,16 +81,18 @@ public class BoardService
         ).ToList();
     }
 
-    public async Task UpdateBoardAsync(Board board)
+    public async Task UpdateBoardAsync(Board board, string? sourceClientId = null)
     {
         EnsureOwnerMembership(board);
         board.UpdatedAt = DateTime.UtcNow;
         await _boardRepository.SaveAsync(board);
+        await _boardChangeNotifier.NotifyBoardChangedAsync(board.Id, sourceClientId);
     }
 
     public async Task DeleteBoardAsync(Guid boardId)
     {
         await _boardRepository.DeleteAsync(boardId);
+        await _boardChangeNotifier.NotifyBoardChangedAsync(boardId);
     }
 
     public string GenerateShareLinkToken() =>

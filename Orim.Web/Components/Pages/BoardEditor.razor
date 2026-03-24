@@ -1,8 +1,10 @@
 @page "/board/{BoardId:guid}"
 @attribute [Authorize]
 @rendermode InteractiveServer
+@implements IDisposable
 @using Microsoft.AspNetCore.Components.Forms
 @inject BoardService BoardService
+@inject BoardChangeNotifier BoardChangeNotifier
 @inject UserService UserService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
@@ -721,6 +723,8 @@ else
     private Guid? _selectedMemberToAddId;
     private BoardRole _selectedMemberRoleToAdd = BoardRole.Editor;
     private bool _useCompactLayout;
+    private readonly string _boardSyncClientId = Guid.NewGuid().ToString("N");
+    private IDisposable? _boardChangeSubscription;
     private bool CanGroupSelection => _selectedElements.Count(element => element is not ArrowElement) > 1;
     private bool CanUngroupSelection => _selectedElements.Any(element => element.GroupId is not null);
     private bool CanManageBoard => _board?.OwnerId == _userId;
@@ -787,6 +791,9 @@ else
         _canEdit = BoardService.HasAccess(_board, _userId, BoardRole.Editor);
         _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
         _boardVisibility = _board.Visibility;
+        _boardChangeSubscription = _hasAccess
+            ? BoardChangeNotifier.Subscribe(_board.Id, _boardSyncClientId, HandleExternalBoardChangeAsync)
+            : null;
         _commandStack.Clear();
         _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
         UpdateScreenReaderStatus(Localizer["BoardLoadedAnnouncement", _board.Title]);
@@ -865,7 +872,7 @@ else
     {
         if (_board is null) return;
         _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
-        await BoardService.UpdateBoardAsync(_board);
+        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId);
         if (_canvas is not null)
         {
             _canvas.ForceRerender();
@@ -1004,7 +1011,7 @@ else
         }
 
         _board.Title = _renameBoardTitle.Trim();
-        await BoardService.UpdateBoardAsync(_board);
+        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId);
         _renameDialogVisible = false;
         StateHasChanged();
     }
@@ -1373,7 +1380,7 @@ else
             await SyncSelectionToBoardAsync();
         }
 
-        await BoardService.UpdateBoardAsync(_board);
+        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId);
     }
 
     private async Task PersistBoardStateAsync()
@@ -1662,7 +1669,7 @@ else
         }
 
         var snapshot = BoardService.CreateSnapshot(_board, _snapshotName, _userId, _username);
-        await BoardService.UpdateBoardAsync(_board);
+        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId);
         _snapshotName = string.Empty;
         SetBoardSettingsMessage(Localizer["SnapshotCreated", snapshot.Name], Severity.Success, announce: true);
     }
@@ -1705,7 +1712,7 @@ else
         _selectedElement = null;
         _canvas?.ClearSelection();
         _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
-        await BoardService.UpdateBoardAsync(_board);
+        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId);
         _canvas?.ForceRerender();
         if (fitToContent && _canvas is not null)
         {
@@ -1794,6 +1801,49 @@ else
     }
 
     private void UpdateScreenReaderStatus(string message) => _screenReaderStatus = message;
+
+    private Task HandleExternalBoardChangeAsync(BoardChangeNotification notification)
+    {
+        if (notification.SourceClientId == _boardSyncClientId)
+        {
+            return Task.CompletedTask;
+        }
+
+        return InvokeAsync(async () =>
+        {
+            var latestBoard = await BoardService.GetBoardAsync(BoardId);
+            if (latestBoard is null)
+            {
+                Navigation.NavigateTo("/");
+                return;
+            }
+
+            _board = latestBoard;
+            _hasAccess = BoardService.HasAccess(_board, _userId);
+            _canEdit = BoardService.HasAccess(_board, _userId, BoardRole.Editor);
+            _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
+            _boardVisibility = _board.Visibility;
+            _commandStack.Clear();
+            _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
+            _formatTransferActive = false;
+            _formatTransferSourceId = null;
+            if (!_canEdit)
+            {
+                _selectedTool = Tool.Select;
+            }
+
+            InitializeBoardSettingsDrafts();
+            await SyncSelectionToBoardAsync();
+            _canvas?.ForceRerender();
+            UpdateScreenReaderStatus(Localizer["BoardCanvasUpdatedAnnouncement"]);
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        _boardChangeSubscription?.Dispose();
+    }
 
     private string GetToolLabel(Tool tool) => tool switch
     {
