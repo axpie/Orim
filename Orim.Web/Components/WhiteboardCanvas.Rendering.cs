@@ -433,6 +433,9 @@ public partial class WhiteboardCanvas
         var translatedLine = linePoints.Select(point => new Point(point.X - minX, point.Y - minY)).ToList();
         var polylinePoints = string.Join(" ", translatedLine.Select(point => $"{CssNumber(point.X)},{CssNumber(point.Y)}"));
         var dashArray = GetStrokeDashArray(lineStyle, strokeWidth);
+        var showArrowOutline = Board?.ArrowOutlineEnabled ?? true;
+        var outlineColor = GetOutlineColor(effectiveColor, GetBoardSurfaceColor());
+        var outlineStrokeWidth = Math.Max(strokeWidth + Math.Max(2.4, strokeWidth * 1.35), strokeWidth + 2.4);
 
         builder.OpenElement(0, "div");
         builder.AddAttribute(1, "style", $"position:absolute; left:{Px(minX)}; top:{Px(minY)}; width:{Px(width)}; height:{Px(height)}; overflow:visible; pointer-events:none; opacity:{CssNumber(opacity)};");
@@ -440,29 +443,83 @@ public partial class WhiteboardCanvas
         builder.AddAttribute(3, "viewBox", $"0 0 {CssNumber(width)} {CssNumber(height)}");
         builder.AddAttribute(4, "style", "width:100%; height:100%; overflow:visible; display:block;");
 
-        builder.OpenElement(5, "polyline");
-        builder.AddAttribute(6, "points", polylinePoints);
-        builder.AddAttribute(7, "fill", "none");
-        builder.AddAttribute(8, "stroke", effectiveColor);
-        builder.AddAttribute(9, "stroke-width", CssNumber(strokeWidth));
-        builder.AddAttribute(10, "stroke-linecap", "round");
-        builder.AddAttribute(11, "stroke-linejoin", "round");
-        builder.AddAttribute(12, "vector-effect", "non-scaling-stroke");
+        if (showArrowOutline)
+        {
+            builder.OpenElement(5, "polyline");
+            builder.AddAttribute(6, "points", polylinePoints);
+            builder.AddAttribute(7, "fill", "none");
+            builder.AddAttribute(8, "stroke", outlineColor);
+            builder.AddAttribute(9, "stroke-width", CssNumber(outlineStrokeWidth));
+            builder.AddAttribute(10, "stroke-linecap", "round");
+            builder.AddAttribute(11, "stroke-linejoin", "round");
+            builder.AddAttribute(12, "vector-effect", "non-scaling-stroke");
+            if (!string.IsNullOrWhiteSpace(dashArray))
+            {
+                builder.AddAttribute(13, "stroke-dasharray", dashArray);
+            }
+
+            builder.CloseElement();
+        }
+
+        builder.OpenElement(20, "polyline");
+        builder.AddAttribute(21, "points", polylinePoints);
+        builder.AddAttribute(22, "fill", "none");
+        builder.AddAttribute(23, "stroke", effectiveColor);
+        builder.AddAttribute(24, "stroke-width", CssNumber(strokeWidth));
+        builder.AddAttribute(25, "stroke-linecap", "round");
+        builder.AddAttribute(26, "stroke-linejoin", "round");
+        builder.AddAttribute(27, "vector-effect", "non-scaling-stroke");
         if (!string.IsNullOrWhiteSpace(dashArray))
         {
-            builder.AddAttribute(13, "stroke-dasharray", dashArray);
+            builder.AddAttribute(28, "stroke-dasharray", dashArray);
         }
 
         builder.CloseElement();
 
         if (visibleSourceHead != ArrowHeadStyle.None)
         {
-            RenderArrowHead(builder, 20, sourceHead, translated[0], translated[1], effectiveColor, strokeWidth, headSize, true);
+            var useBuiltInSourceOutline = showArrowOutline && sourceHead == ArrowHeadStyle.FilledTriangle;
+
+            if (showArrowOutline && !useBuiltInSourceOutline)
+            {
+                RenderArrowHead(builder, 40, sourceHead, translated[0], translated[1], outlineColor, outlineStrokeWidth, headSize + Math.Max(2, strokeWidth * 0.85), true);
+            }
+
+            RenderArrowHead(
+                builder,
+                60,
+                sourceHead,
+                translated[0],
+                translated[1],
+                effectiveColor,
+                strokeWidth,
+                headSize,
+                true,
+                useBuiltInSourceOutline ? outlineColor : null,
+                useBuiltInSourceOutline ? outlineStrokeWidth : 0);
         }
 
         if (visibleTargetHead != ArrowHeadStyle.None)
         {
-            RenderArrowHead(builder, 40, targetHead, translated[^1], translated[^2], effectiveColor, strokeWidth, headSize, false);
+            var useBuiltInTargetOutline = showArrowOutline && targetHead == ArrowHeadStyle.FilledTriangle;
+
+            if (showArrowOutline && !useBuiltInTargetOutline)
+            {
+                RenderArrowHead(builder, 80, targetHead, translated[^1], translated[^2], outlineColor, outlineStrokeWidth, headSize + Math.Max(2, strokeWidth * 0.85), false);
+            }
+
+            RenderArrowHead(
+                builder,
+                100,
+                targetHead,
+                translated[^1],
+                translated[^2],
+                effectiveColor,
+                strokeWidth,
+                headSize,
+                false,
+                useBuiltInTargetOutline ? outlineColor : null,
+                useBuiltInTargetOutline ? outlineStrokeWidth : 0);
         }
 
         builder.CloseElement();
@@ -764,7 +821,7 @@ public partial class WhiteboardCanvas
         return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(size)}; height:{Px(size)}; border-radius:999px; background:{background}; border:2px solid {border}; box-sizing:border-box; pointer-events:none; box-shadow:0 0 0 {Px(1 / _zoom)} {GetSelectionTint(0.12)};";
     }
 
-    private void RenderArrowHead(RenderTreeBuilder builder, int sequence, ArrowHeadStyle style, Point tip, Point adjacent, string color, double strokeWidth, double size, bool reverse)
+    private void RenderArrowHead(RenderTreeBuilder builder, int sequence, ArrowHeadStyle style, Point tip, Point adjacent, string color, double strokeWidth, double size, bool reverse, string? outlineColor = null, double outlineStrokeWidth = 0)
     {
         if (style == ArrowHeadStyle.None)
         {
@@ -786,7 +843,6 @@ public partial class WhiteboardCanvas
             ux *= -1;
             uy *= -1;
         }
-
         var normalX = -uy;
         var normalY = ux;
         var baseDistance = size;
@@ -795,6 +851,7 @@ public partial class WhiteboardCanvas
         var left = new Point(baseCenter.X + normalX * wing, baseCenter.Y + normalY * wing);
         var right = new Point(baseCenter.X - normalX * wing, baseCenter.Y - normalY * wing);
         var circleRadius = Math.Max(strokeWidth * 1.4, size * 0.28);
+        var triangleOutlineWidth = Math.Max(outlineStrokeWidth - strokeWidth, Math.Max(1.8, strokeWidth * 0.95));
 
         switch (style)
         {
@@ -802,6 +859,14 @@ public partial class WhiteboardCanvas
                 builder.OpenElement(sequence, "polygon");
                 builder.AddAttribute(sequence + 1, "points", $"{CssNumber(tip.X)},{CssNumber(tip.Y)} {CssNumber(left.X)},{CssNumber(left.Y)} {CssNumber(right.X)},{CssNumber(right.Y)}");
                 builder.AddAttribute(sequence + 2, "fill", color);
+                if (!string.IsNullOrWhiteSpace(outlineColor) && triangleOutlineWidth > 0)
+                {
+                    builder.AddAttribute(sequence + 3, "stroke", outlineColor);
+                    builder.AddAttribute(sequence + 4, "stroke-width", CssNumber(triangleOutlineWidth));
+                    builder.AddAttribute(sequence + 5, "stroke-linejoin", "round");
+                    builder.AddAttribute(sequence + 6, "paint-order", "stroke fill");
+                }
+
                 builder.CloseElement();
                 break;
             case ArrowHeadStyle.OpenTriangle:

@@ -23,13 +23,42 @@
         }
     </MudContainer>
 }
+else if (!_shareAccessGranted)
+{
+    <MudContainer MaxWidth="MaxWidth.Small" Class="py-8">
+        <MudPaper Class="pa-6">
+            <MudText Typo="Typo.h6">@Localizer["SharedLinkProtected"]</MudText>
+            <MudText Typo="Typo.body2" Class="mt-2 mb-4">@Localizer["SharedLinkPasswordPrompt"]</MudText>
+
+            @if (!string.IsNullOrWhiteSpace(_sharePasswordError))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_sharePasswordError</MudAlert>
+            }
+
+            <MudTextField @bind-Value="_sharePasswordInput"
+                          Label="@Localizer["Password"]"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Immediate="true"
+                          OnKeyDown="@HandleSharePasswordKeyDownAsync" />
+
+            <div class="d-flex justify-end mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@UnlockSharedBoardAsync">
+                    @Localizer["UnlockSharedLink"]
+                </MudButton>
+            </div>
+        </MudPaper>
+    </MudContainer>
+}
 else
 {
+    var selectedElement = _selectedElements.Count == 1 ? _selectedElements[0] : null;
+
     <div style="display: flex; flex-direction: column; height: 100vh; height: 100dvh;">
         <MudPaper Elevation="1" Class="orim-shared-header">
             <OrimLogo Class="orim-logo--shared" />
             <MudDivider Vertical="true" FlexItem="true" DividerType="DividerType.Middle" Class="orim-shared-divider" />
-            <MudText Typo="Typo.subtitle1" Class="orim-shared-subtitle">@_board.Title (Nur-Lesen)</MudText>
+            <MudText Typo="Typo.subtitle1" Class="orim-shared-subtitle">@_board.Title (@(_shareCanEdit ? Localizer["Edit"] : Localizer["ReadOnly"]))</MudText>
             <MudTextField T="string"
                           Value="@_displayName"
                           ValueChanged="@HandleDisplayNameChangedAsync"
@@ -50,6 +79,67 @@ else
                 }
             </div>
             <MudSpacer />
+            @if (_shareCanEdit)
+            {
+                <div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">
+                    <MudTooltip Text="@Localizer["SelectToolTooltip"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.NearMe"
+                                       Class="orim-shared-header-action"
+                                       Style="@GetSharedActionStyle(_selectedTool == BoardEditor.Tool.Select)"
+                                       OnClick="@(() => SelectTool(BoardEditor.Tool.Select))" />
+                    </MudTooltip>
+                    <MudTooltip Text="@Localizer["DrawRectangleTooltip"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.Rectangle"
+                                       Class="orim-shared-header-action"
+                                       Style="@GetSharedActionStyle(_selectedTool == BoardEditor.Tool.Rectangle)"
+                                       OnClick="@(() => SelectTool(BoardEditor.Tool.Rectangle))" />
+                    </MudTooltip>
+                    <MudTooltip Text="@Localizer["DrawCircleTooltip"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.PanoramaFishEye"
+                                       Class="orim-shared-header-action"
+                                       Style="@GetSharedActionStyle(_selectedTool == BoardEditor.Tool.Circle)"
+                                       OnClick="@(() => SelectTool(BoardEditor.Tool.Circle))" />
+                    </MudTooltip>
+                    <MudTooltip Text="@Localizer["DrawTriangleTooltip"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.ChangeHistory"
+                                       Class="orim-shared-header-action"
+                                       Style="@GetSharedActionStyle(_selectedTool == BoardEditor.Tool.Triangle)"
+                                       OnClick="@(() => SelectTool(BoardEditor.Tool.Triangle))" />
+                    </MudTooltip>
+                    <MudTooltip Text="@Localizer["ConnectArrowTooltip"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.NorthEast"
+                                       Class="orim-shared-header-action"
+                                       Style="@GetSharedActionStyle(_selectedTool == BoardEditor.Tool.Arrow)"
+                                       OnClick="@(() => SelectTool(BoardEditor.Tool.Arrow))" />
+                    </MudTooltip>
+                    <MudTooltip Text="@Localizer["Undo"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.Undo"
+                                       Class="orim-shared-header-action"
+                                       Disabled="@(!_commandStack.CanUndo)"
+                                       OnClick="@UndoAsync" />
+                    </MudTooltip>
+                    <MudTooltip Text="@Localizer["Redo"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.Redo"
+                                       Class="orim-shared-header-action"
+                                       Disabled="@(!_commandStack.CanRedo)"
+                                       OnClick="@RedoAsync" />
+                    </MudTooltip>
+                    @if (_selectedElement is not null)
+                    {
+                        <MudTooltip Text="@Localizer["DeleteSelectedElement"]" Arrow="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                           Class="orim-shared-header-action"
+                                           OnClick="@DeleteSelectedElementAsync" />
+                        </MudTooltip>
+                    }
+                    <MudTooltip Text="@Localizer["Properties"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.Tune"
+                                       Class="orim-shared-header-action"
+                                       Style="@GetSharedActionStyle(_propertiesPanelOpen)"
+                                       OnClick="@TogglePropertiesPanel" />
+                    </MudTooltip>
+                </div>
+            }
             <MudMenu Icon="@Icons.Material.Filled.Palette"
                      Size="Size.Small"
                      Color="Color.Inherit"
@@ -77,12 +167,29 @@ else
                                OnClick="@FitToContentAsync" />
             </MudTooltip>
         </MudPaper>
-        <div style="flex: 1; overflow: hidden;">
-            <WhiteboardCanvas @ref="_canvas" Board="@_board" CanEdit="false"
-                              CommandStack="@(new CommandStack())"
+        <div style="flex: 1; overflow: hidden; position: relative;">
+            <WhiteboardCanvas @ref="_canvas" Board="@_board" CanEdit="@_shareCanEdit"
+                              CommandStack="@_commandStack"
+                              FitRightInset="@(_shareCanEdit && _propertiesPanelOpen ? 388d : 0d)"
+                              OnBoardChanged="@HandleBoardChangedAsync"
+                              OnSelectedElementChanged="@HandleSelectedElementChangedAsync"
+                              OnSelectedElementsChanged="@HandleSelectedElementsChangedAsync"
+                              OnToolChanged="@HandleToolChangedAsync"
                               RemoteCursors="@_remoteCursors"
                               OnPointerPresenceChanged="@HandlePointerPresenceChangedAsync"
-                              SelectedTool="BoardEditor.Tool.Select" />
+                              SelectedTool="@_selectedTool" />
+
+            @if (_shareCanEdit)
+            {
+                <ElementPropertiesPanel @key="@(selectedElement?.Id ?? Guid.Empty)"
+                                        Board="@_board"
+                                        Element="@selectedElement"
+                                        SelectionCount="@_selectedElements.Count"
+                                        IsOpen="@_propertiesPanelOpen"
+                                        OnClose="@ClosePropertiesPanel"
+                                        OnPreviewChanged="@OnElementPropertyPreviewChangedAsync"
+                                        OnChanged="@OnElementPropertyChangedAsync" />
+            }
         </div>
     </div>
 }
@@ -92,6 +199,7 @@ else
     private Board? _board;
     private bool _notFound;
     private WhiteboardCanvas? _canvas;
+    private readonly CommandStack _commandStack = new();
     private readonly string _boardSyncClientId = Guid.NewGuid().ToString("N");
     private IDisposable? _boardChangeSubscription;
     private IDisposable? _cursorPresenceSubscription;
@@ -99,8 +207,20 @@ else
     private Task? _presenceHeartbeatTask;
     private IReadOnlyList<BoardCursorPresence> _remoteCursors = [];
     private BoardPointerPosition? _localPointerPosition;
+    private BoardEditor.Tool _selectedTool = BoardEditor.Tool.Select;
+    private BoardElement? _selectedElement;
+    private List<BoardElement> _selectedElements = [];
+    private bool _propertiesPanelOpen;
+    private string _lastCommittedBoardSnapshot = string.Empty;
     private string _displayName = BoardPresenceIdentity.CreateFantasyName();
     private string _cursorColor = BoardPresenceIdentity.ResolveColor(Guid.NewGuid().ToString("N"));
+    private bool _shareAccessGranted;
+    private bool _shareCanEdit;
+    private string? _verifiedSharePassword;
+    private string _sharePasswordInput = string.Empty;
+    private string? _sharePasswordError;
+    private bool _presenceLifecycleRegistered;
+    private bool _loadedPresenceIdentity;
     private const string SharedNameStorageKey = "orim.shared.display-name";
     private const string SharedColorStorageKey = "orim.shared.cursor-color";
     private IReadOnlyList<BoardCursorPresence> ActiveParticipants =>
@@ -117,64 +237,90 @@ else
             return;
         }
         _board = await BoardService.GetBoardByShareTokenAsync(Token);
-        if (_board is null)
+        if (_board is null || _board.Visibility != BoardVisibility.Shared)
         {
             _notFound = true;
             return;
         }
 
-        _boardChangeSubscription = BoardChangeNotifier.Subscribe(_board.Id, _boardSyncClientId, HandleExternalBoardChangeAsync);
-        _cursorPresenceSubscription = BoardPresenceService.Subscribe(_board.Id, $"cursor-{_boardSyncClientId}", HandleCursorPresenceChangedAsync);
-        await PublishPresenceAsync(null);
-        _presenceHeartbeatTask ??= StartPresenceHeartbeatAsync();
+        if (!BoardService.IsSharePasswordProtected(_board))
+        {
+            await GrantSharedAccessAsync(null);
+        }
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (!firstRender)
+        if (!_loadedPresenceIdentity)
+        {
+            var storedName = await JS.InvokeAsync<string?>("orimWhiteboard.getLocalStorageValue", SharedNameStorageKey);
+            var storedColor = await JS.InvokeAsync<string?>("orimWhiteboard.getLocalStorageValue", SharedColorStorageKey);
+            var changed = false;
+
+            if (!string.IsNullOrWhiteSpace(storedName) && storedName != _displayName)
+            {
+                _displayName = storedName;
+                changed = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(storedColor) && storedColor != _cursorColor)
+            {
+                _cursorColor = storedColor;
+                changed = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(storedName))
+            {
+                await JS.InvokeVoidAsync("orimWhiteboard.setLocalStorageValue", SharedNameStorageKey, _displayName);
+            }
+
+            if (string.IsNullOrWhiteSpace(storedColor))
+            {
+                await JS.InvokeVoidAsync("orimWhiteboard.setLocalStorageValue", SharedColorStorageKey, _cursorColor);
+            }
+
+            if (_localPointerPosition is not null)
+            {
+                await PublishPresenceAsync(_localPointerPosition);
+            }
+
+            _loadedPresenceIdentity = true;
+
+            if (changed)
+            {
+                StateHasChanged();
+            }
+        }
+
+        if (_board is not null && _shareAccessGranted && !_presenceLifecycleRegistered)
+        {
+            await JS.InvokeVoidAsync("orimWhiteboard.registerPresenceLifecycle", _board.Id, _boardSyncClientId);
+            _presenceLifecycleRegistered = true;
+        }
+    }
+
+    private async Task UnlockSharedBoardAsync()
+    {
+        if (_board is null)
         {
             return;
         }
 
-        if (_board is not null)
+        if (!BoardService.HasSharedLinkAccess(_board, _sharePasswordInput))
         {
-            await JS.InvokeVoidAsync("orimWhiteboard.registerPresenceLifecycle", _board.Id, _boardSyncClientId);
+            _sharePasswordError = Localizer["InvalidSharePassword"];
+            return;
         }
 
-        var storedName = await JS.InvokeAsync<string?>("orimWhiteboard.getLocalStorageValue", SharedNameStorageKey);
-        var storedColor = await JS.InvokeAsync<string?>("orimWhiteboard.getLocalStorageValue", SharedColorStorageKey);
-        var changed = false;
+        _sharePasswordError = null;
+        await GrantSharedAccessAsync(_sharePasswordInput);
+    }
 
-        if (!string.IsNullOrWhiteSpace(storedName) && storedName != _displayName)
+    private async Task HandleSharePasswordKeyDownAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
         {
-            _displayName = storedName;
-            changed = true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(storedColor) && storedColor != _cursorColor)
-        {
-            _cursorColor = storedColor;
-            changed = true;
-        }
-
-        if (string.IsNullOrWhiteSpace(storedName))
-        {
-            await JS.InvokeVoidAsync("orimWhiteboard.setLocalStorageValue", SharedNameStorageKey, _displayName);
-        }
-
-        if (string.IsNullOrWhiteSpace(storedColor))
-        {
-            await JS.InvokeVoidAsync("orimWhiteboard.setLocalStorageValue", SharedColorStorageKey, _cursorColor);
-        }
-
-        if (_localPointerPosition is not null)
-        {
-            await PublishPresenceAsync(_localPointerPosition);
-        }
-
-        if (changed)
-        {
-            StateHasChanged();
+            await UnlockSharedBoardAsync();
         }
     }
 
@@ -227,6 +373,169 @@ else
     private static string GetParticipantChipStyle(string colorHex) =>
         $"border-color:{colorHex}; color:{colorHex}; background:color-mix(in srgb, {colorHex} 10%, transparent); font-weight:600;";
 
+    private static string CaptureBoardSnapshot(Board board)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(board, Orim.Core.OrimJsonOptions.Default);
+    }
+
+    private void SelectTool(BoardEditor.Tool tool)
+    {
+        _selectedTool = tool;
+    }
+
+    private static string GetSharedActionStyle(bool active)
+    {
+        return active
+            ? "background: color-mix(in srgb, var(--orim-shared-header-text) 28%, transparent) !important; border-color: color-mix(in srgb, var(--orim-shared-header-text) 48%, transparent);"
+            : string.Empty;
+    }
+
+    private void TogglePropertiesPanel() => _propertiesPanelOpen = !_propertiesPanelOpen;
+
+    private void ClosePropertiesPanel() => _propertiesPanelOpen = false;
+
+    private Task HandleToolChangedAsync(BoardEditor.Tool tool)
+    {
+        _selectedTool = tool;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleSelectedElementChangedAsync(BoardElement? element)
+    {
+        _selectedElement = element;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleSelectedElementsChangedAsync(IReadOnlyList<BoardElement> elements)
+    {
+        _selectedElements = elements.ToList();
+        _selectedElement = _selectedElements.LastOrDefault();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleBoardChangedAsync() => SaveBoardAsync();
+
+    private async Task SaveBoardAsync(bool recordHistory = true)
+    {
+        if (_board is null || !_shareCanEdit)
+        {
+            return;
+        }
+
+        var currentSnapshot = CaptureBoardSnapshot(_board);
+        var historyRecorded = false;
+        if (recordHistory && currentSnapshot != _lastCommittedBoardSnapshot)
+        {
+            _commandStack.Execute(_board, new BoardSnapshotCommand(_lastCommittedBoardSnapshot, currentSnapshot));
+            currentSnapshot = CaptureBoardSnapshot(_board);
+            historyRecorded = true;
+        }
+
+        _lastCommittedBoardSnapshot = currentSnapshot;
+
+        if (historyRecorded)
+        {
+            await SyncSelectionToBoardAsync();
+        }
+
+        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId);
+    }
+
+    private async Task PersistBoardStateAsync()
+    {
+        if (_board is null)
+        {
+            return;
+        }
+
+        _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
+        await SyncSelectionToBoardAsync();
+        await SaveBoardAsync(recordHistory: false);
+        StateHasChanged();
+    }
+
+    private async Task SyncSelectionToBoardAsync()
+    {
+        if (_board is null)
+        {
+            return;
+        }
+
+        var selectedIds = _selectedElements.Select(element => element.Id).ToHashSet();
+        var nextSelection = _board.Elements
+            .Where(element => selectedIds.Contains(element.Id))
+            .OrderBy(element => element.ZIndex)
+            .ToList();
+
+        _selectedElements = nextSelection;
+        _selectedElement = nextSelection.LastOrDefault();
+
+        if (_canvas is not null)
+        {
+            await _canvas.SelectElementsAsync(nextSelection);
+        }
+    }
+
+    private async Task UndoAsync()
+    {
+        if (_board is null || !_commandStack.CanUndo)
+        {
+            return;
+        }
+
+        _commandStack.Undo(_board);
+        await PersistBoardStateAsync();
+    }
+
+    private async Task RedoAsync()
+    {
+        if (_board is null || !_commandStack.CanRedo)
+        {
+            return;
+        }
+
+        _commandStack.Redo(_board);
+        await PersistBoardStateAsync();
+    }
+
+    private async Task DeleteSelectedElementAsync()
+    {
+        if (_board is null || !_shareCanEdit || _selectedElements.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var elementId in _selectedElements.Select(element => element.Id).Distinct().ToList())
+        {
+            if (_board.Elements.Any(element => element.Id == elementId))
+            {
+                var command = new RemoveElementCommand(elementId);
+                command.Execute(_board);
+            }
+        }
+
+        _selectedElement = null;
+        _selectedElements = [];
+        _canvas?.ClearSelection();
+        await SaveBoardAsync();
+    }
+
+    private Task OnElementPropertyPreviewChangedAsync()
+    {
+        _canvas?.ForceRerender();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task OnElementPropertyChangedAsync()
+    {
+        await SaveBoardAsync();
+        StateHasChanged();
+    }
+
     private async Task SetThemeAsync(ThemePreset preset)
     {
         await ThemeManager.SetThemeAsync(preset, JS);
@@ -257,8 +566,42 @@ else
         return InvokeAsync(async () =>
         {
             var latestBoard = await BoardService.GetBoardByShareTokenAsync(Token);
+            if (latestBoard is null || latestBoard.Visibility != BoardVisibility.Shared)
+            {
+                if (_board is not null)
+                {
+                    await TearDownSharedRealtimeAsync(_board.Id);
+                }
+
+                _board = null;
+                _notFound = true;
+                _shareAccessGranted = false;
+                _shareCanEdit = false;
+                StateHasChanged();
+                return;
+            }
+
             _board = latestBoard;
-            _notFound = latestBoard is null;
+
+            if (!BoardService.HasSharedLinkAccess(latestBoard, _verifiedSharePassword))
+            {
+                await TearDownSharedRealtimeAsync(latestBoard.Id);
+                _shareAccessGranted = false;
+                _shareCanEdit = false;
+                _sharePasswordInput = string.Empty;
+                _sharePasswordError = Localizer["SharedLinkProtected"];
+                _propertiesPanelOpen = false;
+                _selectedElement = null;
+                _selectedElements = [];
+                _selectedTool = BoardEditor.Tool.Select;
+                _commandStack.Clear();
+                _remoteCursors = [];
+                StateHasChanged();
+                return;
+            }
+
+            _shareCanEdit = BoardService.HasSharedLinkAccess(latestBoard, _verifiedSharePassword, BoardRole.Editor);
+            _lastCommittedBoardSnapshot = CaptureBoardSnapshot(latestBoard);
             _canvas?.ForceRerender();
             StateHasChanged();
         });
@@ -281,17 +624,70 @@ else
         if (_board is not null)
         {
             _ = BoardPresenceService.RemoveCursorAsync(_board.Id, _boardSyncClientId);
-            try
+            if (_presenceLifecycleRegistered)
             {
-                _ = JS.InvokeVoidAsync("orimWhiteboard.unregisterPresenceLifecycle", _board.Id, _boardSyncClientId);
-            }
-            catch
-            {
+                try
+                {
+                    _ = JS.InvokeVoidAsync("orimWhiteboard.unregisterPresenceLifecycle", _board.Id, _boardSyncClientId);
+                }
+                catch
+                {
+                }
             }
         }
 
         _cursorPresenceSubscription?.Dispose();
         _boardChangeSubscription?.Dispose();
         _presenceHeartbeatCancellation.Dispose();
+    }
+
+    private async Task GrantSharedAccessAsync(string? password)
+    {
+        if (_board is null)
+        {
+            return;
+        }
+
+        if (!BoardService.HasSharedLinkAccess(_board, password))
+        {
+            _shareAccessGranted = false;
+            _shareCanEdit = false;
+            return;
+        }
+
+        _verifiedSharePassword = BoardService.IsSharePasswordProtected(_board) ? password?.Trim() : null;
+        _shareAccessGranted = true;
+        _shareCanEdit = BoardService.HasSharedLinkAccess(_board, _verifiedSharePassword, BoardRole.Editor);
+        _sharePasswordError = null;
+        _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
+        _commandStack.Clear();
+
+        _boardChangeSubscription ??= BoardChangeNotifier.Subscribe(_board.Id, _boardSyncClientId, HandleExternalBoardChangeAsync);
+        _cursorPresenceSubscription ??= BoardPresenceService.Subscribe(_board.Id, $"cursor-{_boardSyncClientId}", HandleCursorPresenceChangedAsync);
+        await PublishPresenceAsync(null);
+        _presenceHeartbeatTask ??= StartPresenceHeartbeatAsync();
+        StateHasChanged();
+    }
+
+    private async Task TearDownSharedRealtimeAsync(Guid boardId)
+    {
+        await BoardPresenceService.RemoveCursorAsync(boardId, _boardSyncClientId);
+        _cursorPresenceSubscription?.Dispose();
+        _boardChangeSubscription?.Dispose();
+        _cursorPresenceSubscription = null;
+        _boardChangeSubscription = null;
+
+        if (_presenceLifecycleRegistered)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("orimWhiteboard.unregisterPresenceLifecycle", boardId, _boardSyncClientId);
+            }
+            catch
+            {
+            }
+
+            _presenceLifecycleRegistered = false;
+        }
     }
 }

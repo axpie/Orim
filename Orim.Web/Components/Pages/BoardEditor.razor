@@ -517,6 +517,9 @@ else
             <MudCheckBox @bind-Value="_boardLabelOutlineEnabled"
                          T="bool"
                          Label="@Localizer["LabelOutlineEnabled"]" />
+            <MudCheckBox @bind-Value="_boardArrowOutlineEnabled"
+                         T="bool"
+                         Label="@Localizer["ArrowOutlineEnabled"]" />
             @if (CanManageBoard)
             {
                 <MudSelect T="BoardVisibility" @bind-Value="_boardVisibility" Label="@Localizer["Visibility"]" Variant="Variant.Outlined" Class="mt-4">
@@ -555,6 +558,32 @@ else
                         @Localizer["CopyShareLink"]
                     </MudButton>
                 </div>
+
+                <MudCheckBox @bind-Value="_shareAllowAnonymousEditingDraft"
+                             T="bool"
+                             Disabled="@(_boardVisibility != BoardVisibility.Shared)"
+                             Label="@Localizer["AllowEditingViaShareLink"]"
+                             Class="mt-3" />
+                <MudCheckBox @bind-Value="_sharePasswordEnabledDraft"
+                             T="bool"
+                             Disabled="@(_boardVisibility != BoardVisibility.Shared)"
+                             Label="@Localizer["RequireSharePassword"]"
+                             Class="mt-1" />
+
+                @if (_sharePasswordEnabledDraft)
+                {
+                    <MudTextField @bind-Value="_sharePasswordDraft"
+                                  Label="@Localizer["Password"]"
+                                  Variant="Variant.Outlined"
+                                  InputType="InputType.Password"
+                                  Immediate="true"
+                                  Class="mt-3" />
+                    <MudText Typo="Typo.caption" Class="orim-board-muted-text">
+                        @(BoardService.IsSharePasswordProtected(_board!)
+                            ? Localizer["LeavePasswordEmpty"]
+                            : Localizer["SharePasswordHint"])
+                    </MudText>
+                }
 
                 <MudDivider Class="my-4" />
                 <div class="d-flex justify-space-between align-center mb-2" style="gap: 12px;">
@@ -715,6 +744,7 @@ else
     private bool _chatPanelOpen;
     private bool _propertiesPanelOpen = false;
     private bool _boardLabelOutlineEnabled = true;
+    private bool _boardArrowOutlineEnabled = true;
     private BoardVisibility _boardVisibility = BoardVisibility.Private;
     private bool _formatTransferActive;
     private Guid? _formatTransferSourceId;
@@ -731,6 +761,9 @@ else
     private string _renameBoardTitle = string.Empty;
     private string _snapshotName = string.Empty;
     private string? _shareLinkTokenDraft;
+    private bool _shareAllowAnonymousEditingDraft;
+    private bool _sharePasswordEnabledDraft;
+    private string _sharePasswordDraft = string.Empty;
     private string? _boardSettingsMessage;
     private Severity? _boardSettingsMessageSeverity;
     private string _screenReaderStatus = string.Empty;
@@ -815,6 +848,7 @@ else
         _hasAccess = BoardService.HasAccess(_board, _userId);
         _canEdit = BoardService.HasAccess(_board, _userId, BoardRole.Editor);
         _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
+        _boardArrowOutlineEnabled = _board.ArrowOutlineEnabled;
         _boardVisibility = _board.Visibility;
         _cursorColor = BoardPresenceIdentity.ResolveColor(_userId != Guid.Empty ? _userId.ToString() : _username);
         _boardChangeSubscription = _hasAccess
@@ -977,7 +1011,18 @@ else
             return;
         }
 
+        if (CanManageBoard
+            && _boardVisibility == BoardVisibility.Shared
+            && _sharePasswordEnabledDraft
+            && string.IsNullOrWhiteSpace(_sharePasswordDraft)
+            && !BoardService.IsSharePasswordProtected(_board))
+        {
+            SetBoardSettingsMessage(Localizer["SharePasswordRequired"], Severity.Error, announce: true);
+            return;
+        }
+
         _board.LabelOutlineEnabled = _boardLabelOutlineEnabled;
+        _board.ArrowOutlineEnabled = _boardArrowOutlineEnabled;
 
         if (CanManageBoard)
         {
@@ -985,6 +1030,27 @@ else
             _board.ShareLinkToken = _boardVisibility == BoardVisibility.Shared
                 ? string.IsNullOrWhiteSpace(_shareLinkTokenDraft) ? BoardService.GenerateShareLinkToken() : _shareLinkTokenDraft
                 : _shareLinkTokenDraft;
+            _board.SharedAllowAnonymousEditing = _boardVisibility == BoardVisibility.Shared && _shareAllowAnonymousEditingDraft;
+
+            if (_boardVisibility == BoardVisibility.Shared)
+            {
+                if (_sharePasswordEnabledDraft)
+                {
+                    if (!string.IsNullOrWhiteSpace(_sharePasswordDraft))
+                    {
+                        BoardService.SetSharePassword(_board, _sharePasswordDraft);
+                    }
+                }
+                else
+                {
+                    BoardService.ClearSharePassword(_board);
+                }
+            }
+            else
+            {
+                _board.SharedAllowAnonymousEditing = false;
+                BoardService.ClearSharePassword(_board);
+            }
         }
 
         if (CanManageBoard)
@@ -1627,8 +1693,12 @@ else
         }
 
         _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
+        _boardArrowOutlineEnabled = _board.ArrowOutlineEnabled;
         _boardVisibility = _board.Visibility;
         _shareLinkTokenDraft = _board.ShareLinkToken;
+        _shareAllowAnonymousEditingDraft = _board.SharedAllowAnonymousEditing;
+        _sharePasswordEnabledDraft = BoardService.IsSharePasswordProtected(_board);
+        _sharePasswordDraft = string.Empty;
         _memberDrafts = _board.Members
             .Select(member => new MemberDraft
             {
@@ -1904,6 +1974,7 @@ else
             _hasAccess = BoardService.HasAccess(_board, _userId);
             _canEdit = BoardService.HasAccess(_board, _userId, BoardRole.Editor);
             _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
+            _boardArrowOutlineEnabled = _board.ArrowOutlineEnabled;
             _boardVisibility = _board.Visibility;
             _commandStack.Clear();
             _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);

@@ -20,6 +20,7 @@ public class BoardSnapshotContent
 {
     public string Title { get; set; } = string.Empty;
     public bool LabelOutlineEnabled { get; set; } = true;
+    public bool ArrowOutlineEnabled { get; set; } = true;
     public List<string> CustomColors { get; set; } = [];
     public List<string> RecentColors { get; set; } = [];
     public List<BoardElement> Elements { get; set; } = [];

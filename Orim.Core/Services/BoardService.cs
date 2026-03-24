@@ -8,6 +8,9 @@ namespace Orim.Core.Services;
 public class BoardService
 {
     private const int MaxSnapshots = 30;
+    private const int SharePasswordIterations = 100_000;
+    private const int SharePasswordSaltSize = 16;
+    private const int SharePasswordKeySize = 32;
     private readonly IBoardRepository _boardRepository;
     private readonly BoardChangeNotifier _boardChangeNotifier;
 
@@ -53,6 +56,7 @@ public class BoardService
             Title = title.Trim(),
             OwnerId = ownerId,
             LabelOutlineEnabled = importedBoard.LabelOutlineEnabled,
+            ArrowOutlineEnabled = importedBoard.ArrowOutlineEnabled,
             CustomColors = importedBoard.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             RecentColors = importedBoard.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             Elements = CloneElements(importedBoard.Elements),
@@ -70,6 +74,88 @@ public class BoardService
     public Task<Board?> GetBoardAsync(Guid boardId) => _boardRepository.GetByIdAsync(boardId);
 
     public Task<Board?> GetBoardByShareTokenAsync(string token) => _boardRepository.GetByShareTokenAsync(token);
+
+    public bool IsSharePasswordProtected(Board board)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        return !string.IsNullOrWhiteSpace(board.SharePasswordHash);
+    }
+
+    public void SetSharePassword(Board board, string password)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+
+        var salt = RandomNumberGenerator.GetBytes(SharePasswordSaltSize);
+        var derivedKey = Rfc2898DeriveBytes.Pbkdf2(
+            password.Trim(),
+            salt,
+            SharePasswordIterations,
+            HashAlgorithmName.SHA256,
+            SharePasswordKeySize);
+
+        board.SharePasswordHash = string.Join('.',
+            SharePasswordIterations.ToString(),
+            Convert.ToBase64String(salt),
+            Convert.ToBase64String(derivedKey));
+    }
+
+    public void ClearSharePassword(Board board)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        board.SharePasswordHash = null;
+    }
+
+    public bool ValidateSharePassword(Board board, string? password)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+
+        if (!IsSharePasswordProtected(board))
+            return true;
+
+        if (string.IsNullOrWhiteSpace(password))
+            return false;
+
+        var parts = board.SharePasswordHash!.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 3 || !int.TryParse(parts[0], out var iterations))
+            return false;
+
+        try
+        {
+            var salt = Convert.FromBase64String(parts[1]);
+            var expectedKey = Convert.FromBase64String(parts[2]);
+            var actualKey = Rfc2898DeriveBytes.Pbkdf2(
+                password.Trim(),
+                salt,
+                iterations,
+                HashAlgorithmName.SHA256,
+                expectedKey.Length);
+
+            return CryptographicOperations.FixedTimeEquals(actualKey, expectedKey);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    public bool HasSharedLinkAccess(Board board, string? password, BoardRole minimumRole = BoardRole.Viewer)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+
+        if (board.Visibility != BoardVisibility.Shared)
+            return false;
+
+        if (!ValidateSharePassword(board, password))
+            return false;
+
+        return minimumRole switch
+        {
+            BoardRole.Viewer => true,
+            BoardRole.Editor => board.SharedAllowAnonymousEditing,
+            _ => false
+        };
+    }
 
     public async Task<List<BoardSummary>> GetAccessibleBoardSummariesAsync(Guid userId)
     {
@@ -184,6 +270,7 @@ public class BoardService
 
         board.Title = content.Title;
         board.LabelOutlineEnabled = content.LabelOutlineEnabled;
+        board.ArrowOutlineEnabled = content.ArrowOutlineEnabled;
         board.CustomColors = content.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         board.RecentColors = content.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         board.Elements = CloneElements(content.Elements);
@@ -196,6 +283,7 @@ public class BoardService
         ArgumentNullException.ThrowIfNull(importedBoard);
 
         targetBoard.LabelOutlineEnabled = importedBoard.LabelOutlineEnabled;
+        targetBoard.ArrowOutlineEnabled = importedBoard.ArrowOutlineEnabled;
         targetBoard.CustomColors = importedBoard.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         targetBoard.RecentColors = importedBoard.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         targetBoard.Elements = CloneElements(importedBoard.Elements);
@@ -244,6 +332,7 @@ public class BoardService
     {
         Title = board.Title,
         LabelOutlineEnabled = board.LabelOutlineEnabled,
+        ArrowOutlineEnabled = board.ArrowOutlineEnabled,
         CustomColors = board.CustomColors.ToList(),
         RecentColors = board.RecentColors.ToList(),
         Elements = CloneElements(board.Elements)
