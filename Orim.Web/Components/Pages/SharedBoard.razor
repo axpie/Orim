@@ -7,7 +7,11 @@
 @inject BoardPresenceService BoardPresenceService
 @inject IJSRuntime JS
 @inject IWebHostEnvironment Environment
+@inject NavigationManager Navigation
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
+@inject ThemeManager ThemeManager
+@using System.Globalization
+@using Microsoft.AspNetCore.WebUtilities
 @using Orim.Web.Services
 
 @if (_board is null)
@@ -240,21 +244,19 @@ else
                                        OnClick="@DeleteSelectedElementAsync" />
                     }
 
-                    <MudIconButton Icon="@Icons.Material.Filled.Settings"
-                                   Size="Size.Small"
-                                   OnClick="@OpenBoardSettingsDialogAsync" />
-
                     <MudIconButton Icon="@Icons.Material.Filled.Tune"
                                    Size="Size.Small"
                                    Color="@(_propertiesPanelOpen ? Color.Primary : Color.Default)"
                                    OnClick="@TogglePropertiesPanel" />
                 }
 
+                <MudTooltip Text="@Localizer["Settings"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                                   Size="Size.Small"
+                                   OnClick="@OpenBoardSettingsDialogAsync" />
+                </MudTooltip>
+
                 <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
-                    <MudMenuItem Disabled="true">@_displayName</MudMenuItem>
-                    <MudMenuItem Icon="@Icons.Material.Filled.Remove" OnClick="@ZoomOutAsync">@Localizer["ZoomOut"]</MudMenuItem>
-                    <MudMenuItem Icon="@Icons.Material.Filled.Add" OnClick="@ZoomInAsync">@Localizer["ZoomIn"]</MudMenuItem>
-                    <MudMenuItem Icon="@Icons.Material.Filled.FitScreen" OnClick="@FitToContentAsync">@Localizer["FitToContent"]</MudMenuItem>
                     <MudMenuItem Icon="@Icons.Material.Filled.HelpOutline" OnClick="@OpenHelpDialog">@Localizer["OpenHelp"]</MudMenuItem>
                     <MudMenuItem Icon="@Icons.Material.Filled.FileDownload" OnClick="@ExportJson">@Localizer["ExportBoardJson"]</MudMenuItem>
                 </MudMenu>
@@ -387,25 +389,53 @@ else
         </DialogActions>
     </MudDialog>
 
-    <MudDialog @bind-Visible="_boardSettingsDialogVisible" Options="_boardSettingsDialogOptions">
+    <MudDialog @bind-Visible="_boardSettingsDialogVisible" Options="_helpDialogOptions">
         <TitleContent>
-            <MudText Typo="Typo.h6">@Localizer["BoardSettings"]</MudText>
+            <MudText Typo="Typo.h6">@Localizer["Settings"]</MudText>
         </TitleContent>
         <DialogContent>
-            <MudText Typo="Typo.body2" Class="orim-board-muted-text mb-4">@Localizer["BoardSettingsDescription"]</MudText>
-            <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["GeneralBoardSettings"]</MudText>
-            <MudCheckBox @bind-Value="_boardLabelOutlineEnabled"
-                         T="bool"
-                         Label="@Localizer["LabelOutlineEnabled"]" />
-            <MudCheckBox @bind-Value="_boardArrowOutlineEnabled"
-                         T="bool"
-                         Label="@Localizer["ArrowOutlineEnabled"]" />
+            <div style="display:flex; flex-direction:column; gap:16px; padding-top:4px;">
+                <MudTextField T="string"
+                              @bind-Value="_settingsDisplayName"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Label="@Localizer["DisplayName"]" />
+
+                <MudSelect T="string"
+                           @bind-Value="_settingsLanguage"
+                           Variant="Variant.Outlined"
+                           Label="@Localizer["Language"]">
+                    <MudSelectItem Value='@("de")'>Deutsch</MudSelectItem>
+                    <MudSelectItem Value='@("en")'>English</MudSelectItem>
+                </MudSelect>
+
+                <MudSelect T="string"
+                           @bind-Value="_settingsThemeKey"
+                           Variant="Variant.Outlined"
+                           Label="@Localizer["Theme"]">
+                    @foreach (var theme in ThemeManager.AvailableThemes)
+                    {
+                        <MudSelectItem Value="@theme.Key">@theme.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @if (_shareCanEdit)
+                {
+                    <MudDivider Class="my-1" />
+                    <MudText Typo="Typo.subtitle2">@Localizer["GeneralBoardSettings"]</MudText>
+                    <MudCheckBox @bind-Value="_boardLabelOutlineEnabled"
+                                 T="bool"
+                                 Label="@Localizer["LabelOutlineEnabled"]" />
+                    <MudCheckBox @bind-Value="_boardArrowOutlineEnabled"
+                                 T="bool"
+                                 Label="@Localizer["ArrowOutlineEnabled"]" />
+                }
+            </div>
         </DialogContent>
         <DialogActions>
             <MudButton OnClick="@CloseBoardSettingsDialog">@Localizer["Cancel"]</MudButton>
             <MudButton Variant="Variant.Filled"
                        Color="Color.Primary"
-                       Disabled="@(!_shareCanEdit)"
                        OnClick="@ConfirmBoardSettingsAsync">@Localizer["Save"]</MudButton>
         </DialogActions>
     </MudDialog>
@@ -444,6 +474,9 @@ else
     private bool _boardSettingsDialogVisible;
     private bool _boardLabelOutlineEnabled = true;
     private bool _boardArrowOutlineEnabled = true;
+    private string _settingsDisplayName = string.Empty;
+    private string _settingsLanguage = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    private string _settingsThemeKey = "light";
     private bool _isLoadingIcons;
     private int _zoomPercentage = 100;
     private string _zoomDisplayValue = "100%";
@@ -454,7 +487,6 @@ else
     private IReadOnlyList<string> _filteredMaterialIconsCache = [];
     private readonly DialogOptions _iconDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true };
     private readonly DialogOptions _helpDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
-    private readonly DialogOptions _boardSettingsDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.ExtraLarge, CloseButton = true };
     private List<string> _materialIcons = [];
     private static List<string>? _cachedMaterialIcons;
     private const string SharedNameStorageKey = "orim.shared.display-name";
@@ -727,28 +759,68 @@ else
 
     private async Task ConfirmBoardSettingsAsync()
     {
-        if (_board is null || !_shareCanEdit)
+        await HandleDisplayNameChangedAsync(_settingsDisplayName);
+
+        if (!string.IsNullOrWhiteSpace(_settingsThemeKey)
+            && !string.Equals(ThemeManager.CurrentThemeKey, _settingsThemeKey, StringComparison.OrdinalIgnoreCase))
         {
+            await ThemeManager.SetThemeAsync(_settingsThemeKey, JS);
+        }
+
+        if (_board is not null && _shareCanEdit)
+        {
+            _board.LabelOutlineEnabled = _boardLabelOutlineEnabled;
+            _board.ArrowOutlineEnabled = _boardArrowOutlineEnabled;
+            await PersistBoardStateAsync();
+            _canvas?.ForceRerender();
+        }
+
+        _boardSettingsDialogVisible = false;
+
+        if (!string.Equals(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName, _settingsLanguage, StringComparison.OrdinalIgnoreCase))
+        {
+            NavigateToCulture(_settingsLanguage);
             return;
         }
 
-        _board.LabelOutlineEnabled = _boardLabelOutlineEnabled;
-        _board.ArrowOutlineEnabled = _boardArrowOutlineEnabled;
-        _boardSettingsDialogVisible = false;
-        await PersistBoardStateAsync();
-        _canvas?.ForceRerender();
         StateHasChanged();
     }
 
     private void InitializeBoardSettingsDrafts()
     {
-        if (_board is null)
-        {
-            return;
-        }
+        _settingsDisplayName = _displayName;
+        _settingsLanguage = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        _settingsThemeKey = ThemeManager.CurrentThemeKey;
 
-        _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
-        _boardArrowOutlineEnabled = _board.ArrowOutlineEnabled;
+        if (_board is not null)
+        {
+            _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
+            _boardArrowOutlineEnabled = _board.ArrowOutlineEnabled;
+        }
+    }
+
+    private void NavigateToCulture(string language)
+    {
+        var currentRelativeUri = Navigation.ToBaseRelativePath(Navigation.Uri);
+        var relativeUriWithLeadingSlash = string.IsNullOrWhiteSpace(currentRelativeUri)
+            ? "/"
+            : $"/{currentRelativeUri}";
+        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
+        var query = QueryHelpers.ParseQuery(uri.Query)
+            .Where(entry => !string.Equals(entry.Key, "culture", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(entry.Key, "ui-culture", StringComparison.OrdinalIgnoreCase))
+            .ToDictionary(entry => entry.Key, entry => entry.Value.LastOrDefault());
+
+        var redirectUri = QueryHelpers.AddQueryString(relativeUriWithLeadingSlash.Split('?', 2)[0], query);
+        var switchUri = QueryHelpers.AddQueryString(
+            "/api/culture/set",
+            new Dictionary<string, string?>
+            {
+                ["culture"] = language,
+                ["redirectUri"] = redirectUri
+            });
+
+        Navigation.NavigateTo(switchUri, forceLoad: true);
     }
 
     private string GetMobileShapeIcon() => _selectedTool switch

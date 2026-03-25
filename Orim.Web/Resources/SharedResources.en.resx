@@ -20,6 +20,7 @@
   <data name="Login" xml:space="preserve"><value>Login</value></data>
   <data name="Logout" xml:space="preserve"><value>Logout</value></data>
   <data name="Theme" xml:space="preserve"><value>Theme</value></data>
+  <data name="Language" xml:space="preserve"><value>Language</value></data>
   <data name="ThemeLight" xml:space="preserve"><value>Light</value></data>
   <data name="ThemeDark" xml:space="preserve"><value>Dark</value></data>
   <data name="ThemeSynthwave" xml:space="preserve"><value>Synthwave</value></data>
@@ -32,7 +33,6 @@
   <data name="ShareAndSettings" xml:space="preserve"><value>Sharing and settings</value></data>
   <data name="General" xml:space="preserve"><value>General</value></data>
   <data name="GeneralSettingsDescription" xml:space="preserve"><value>Choose which general content is shown in your interface.</value></data>
-  <data name="Language" xml:space="preserve"><value>Language</value></data>
   <data name="LanguageSettingsDescription" xml:space="preserve"><value>Choose the interface language.</value></data>
   <data name="LanguageGerman" xml:space="preserve"><value>German</value></data>
   <data name="LanguageGermanDescription" xml:space="preserve"><value>Show the interface in German</value></data>
