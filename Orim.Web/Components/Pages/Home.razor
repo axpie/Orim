@@ -1,15 +1,18 @@
 @page "/"
 @attribute [Authorize]
 @rendermode InteractiveServer
+@implements IDisposable
 @using System.Security.Claims
 @using Microsoft.AspNetCore.Components.Forms
 @using Orim.Core.Models
 @using Orim.Core.Services
+@using Orim.Web.Services
 @inject BoardService BoardService
 @inject NavigationManager Navigation
 @inject AuthenticationStateProvider AuthStateProvider
 @inject IJSRuntime JS
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
+@inject UserPreferencesManager UserPreferences
 
 <PageTitle>@Localizer["AppTitle"] - @Localizer["Dashboard"]</PageTitle>
 
@@ -26,7 +29,7 @@
         <div class="d-flex flex-wrap justify-space-between align-center" style="gap: 16px;">
             <div>
                 <MudText Typo="Typo.h6" Style="font-weight: 700;">@Localizer["QuickStartTitle"]</MudText>
-                <MudText Typo="Typo.body2" Class="orim-board-muted-text">@Localizer["QuickStartDescription"]</MudText>
+                <MudText Typo="Typo.body2" Class="orim-board-muted-text">@GetQuickStartDescription()</MudText>
             </div>
             <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.UploadFile" HtmlTag="label">
                 @Localizer["ImportBoardJson"]
@@ -39,27 +42,30 @@
             <MudAlert Severity="Severity.Error" Dense="true" Class="mt-4">@_importError</MudAlert>
         }
 
-        <MudGrid Class="mt-2">
-            @foreach (var template in _templates)
-            {
-                <MudItem xs="12" sm="6" md="4" lg="2">
-                    <MudCard Class="orim-template-card" Elevation="0">
-                        <MudCardContent>
-                            <div class="d-flex align-center mb-2" style="gap: 8px;">
-                                <MudIcon Icon="@GetTemplateIcon(template)" Color="Color.Primary" />
-                                <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">@Localizer[template.TitleResourceKey]</MudText>
-                            </div>
-                            <MudText Typo="Typo.body2" Class="orim-board-muted-text">@Localizer[template.DescriptionResourceKey]</MudText>
-                        </MudCardContent>
-                        <MudCardActions>
-                            <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => CreateBoardFromTemplate(template))">
-                                @Localizer["UseTemplate"]
-                            </MudButton>
-                        </MudCardActions>
-                    </MudCard>
-                </MudItem>
-            }
-        </MudGrid>
+        @if (UserPreferences.ShowDashboardTemplates)
+        {
+            <MudGrid Class="mt-2">
+                @foreach (var template in _templates)
+                {
+                    <MudItem xs="12" sm="6" md="4" lg="2">
+                        <MudCard Class="orim-template-card" Elevation="0">
+                            <MudCardContent>
+                                <div class="d-flex align-center mb-2" style="gap: 8px;">
+                                    <MudIcon Icon="@GetTemplateIcon(template)" Color="Color.Primary" />
+                                    <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">@Localizer[template.TitleResourceKey]</MudText>
+                                </div>
+                                <MudText Typo="Typo.body2" Class="orim-board-muted-text">@Localizer[template.DescriptionResourceKey]</MudText>
+                            </MudCardContent>
+                            <MudCardActions>
+                                <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="@(() => CreateBoardFromTemplate(template))">
+                                    @Localizer["UseTemplate"]
+                                </MudButton>
+                            </MudCardActions>
+                        </MudCard>
+                    </MudItem>
+                }
+            </MudGrid>
+        }
     </MudPaper>
 
     @if (_boards is null)
@@ -72,7 +78,10 @@
             <MudText Typo="Typo.h5" Style="font-weight: 700;">@Localizer["NoBoardsHeadline"]</MudText>
             <MudText Typo="Typo.body1" Class="mt-2 orim-board-muted-text">@Localizer["NoBoards"]</MudText>
             <ul class="orim-empty-state-list">
-                <li>@Localizer["DashboardEmptyStateTemplateTip"]</li>
+                @if (UserPreferences.ShowDashboardTemplates)
+                {
+                    <li>@Localizer["DashboardEmptyStateTemplateTip"]</li>
+                }
                 <li>@Localizer["DashboardEmptyStateImportTip"]</li>
                 <li>@Localizer["DashboardEmptyStateShareTip"]</li>
             </ul>
@@ -195,6 +204,7 @@
 
     protected override async Task OnInitializedAsync()
     {
+        UserPreferences.Changed += HandleUserPreferencesChanged;
         _templates = BoardService.GetTemplates().ToList();
 
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
@@ -205,6 +215,21 @@
             _username = user.Identity.Name ?? "";
             _boards = await BoardService.GetAccessibleBoardSummariesAsync(_userId);
         }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await UserPreferences.InitializeAsync(JS);
+    }
+
+    public void Dispose()
+    {
+        UserPreferences.Changed -= HandleUserPreferencesChanged;
     }
 
     private void CreateBoard() => OpenCreateBoardDialog(BoardTemplateCatalog.BlankTemplateId, string.Empty);
@@ -335,6 +360,15 @@
     }
 
     private void OpenBoard(Guid boardId) => Navigation.NavigateTo($"/board/{boardId}");
+
+    private string GetQuickStartDescription() => UserPreferences.ShowDashboardTemplates
+        ? Localizer["QuickStartDescription"]
+        : Localizer["QuickStartDescriptionWithoutTemplates"];
+
+    private void HandleUserPreferencesChanged()
+    {
+        _ = InvokeAsync(StateHasChanged);
+    }
 
     private static string GetTemplateIcon(BoardTemplateDefinition template) => template.Id switch
     {

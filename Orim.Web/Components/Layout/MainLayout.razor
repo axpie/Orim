@@ -5,6 +5,7 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 @inject IJSRuntime JS
 @inject ThemeManager ThemeManager
+@inject UserPreferencesManager UserPreferences
 
 <ThemeShell>
     <MudLayout>
@@ -41,18 +42,9 @@
                             @context.User.Identity?.Name
                         </MudMenuItem>
                         <MudDivider />
-                        <MudMenuItem OnClick="@ToggleLanguage">
-                            @(_currentLang == "de" ? "English" : "Deutsch")
+                        <MudMenuItem Icon="@Icons.Material.Filled.Settings" OnClick="@OpenSettingsDialog">
+                            @Localizer["Settings"]
                         </MudMenuItem>
-                        <MudMenuItem Disabled="true">
-                            @Localizer["Theme"]
-                        </MudMenuItem>
-                        @foreach (var theme in ThemeManager.AvailableThemes)
-                        {
-                            <MudMenuItem Icon="@GetThemeIcon(theme.Key)" OnClick="@(() => SetThemeAsync(theme.Key))">
-                                @theme.Name
-                            </MudMenuItem>
-                        }
                         <MudDivider />
                         <MudMenuItem Href="/api/auth/logout" ForceLoad="true">
                             @Localizer["Logout"]
@@ -91,11 +83,92 @@
             @Body
         </MudMainContent>
     </MudLayout>
+
+    <MudDialog @bind-Visible="_settingsDialogVisible" Options="_settingsDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">@Localizer["Settings"]</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudTabs Rounded="true">
+                <MudTabPanel Text="@Localizer["General"]">
+                    <MudStack Spacing="2" Class="pt-4">
+                        <MudText Typo="Typo.body2">@Localizer["GeneralSettingsDescription"]</MudText>
+                        <MudPaper Class="pa-4" Outlined="true">
+                            <MudCheckBox T="bool"
+                                         Value="@UserPreferences.ShowDashboardTemplates"
+                                         ValueChanged="@SetShowDashboardTemplatesAsync"
+                                         Label="@Localizer["ShowBoardOverviewTemplates"]" />
+                            <MudText Typo="Typo.caption" Color="Color.Secondary">@Localizer["ShowBoardOverviewTemplatesDescription"]</MudText>
+                        </MudPaper>
+                    </MudStack>
+                </MudTabPanel>
+                <MudTabPanel Text="@Localizer["Language"]">
+                    <MudStack Spacing="2" Class="pt-4">
+                        <MudText Typo="Typo.body2">@Localizer["LanguageSettingsDescription"]</MudText>
+                        <MudList T="string" Class="orim-settings-list">
+                            @foreach (var languageOption in GetLanguageOptions())
+                            {
+                                <MudListItem T="string" OnClick="@(() => SetLanguage(languageOption.Key))"
+                                             Class="orim-settings-list-item">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="w-100">
+                                        <MudStack Spacing="0">
+                                            <MudText Typo="Typo.body1">@languageOption.Label</MudText>
+                                            <MudText Typo="Typo.caption" Color="Color.Secondary">@languageOption.Description</MudText>
+                                        </MudStack>
+                                        <MudIcon Icon="@(IsCurrentLanguage(languageOption.Key)
+                                            ? Icons.Material.Filled.RadioButtonChecked
+                                            : Icons.Material.Filled.RadioButtonUnchecked)"
+                                                 Color="@(IsCurrentLanguage(languageOption.Key) ? Color.Primary : Color.Default)" />
+                                    </MudStack>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    </MudStack>
+                </MudTabPanel>
+                <MudTabPanel Text="@Localizer["Theme"]">
+                    <MudStack Spacing="2" Class="pt-4">
+                        <MudText Typo="Typo.body2">@Localizer["ThemeSettingsDescription"]</MudText>
+                        <MudList T="string" Class="orim-settings-list">
+                            @foreach (var theme in ThemeManager.AvailableThemes)
+                            {
+                                <MudListItem T="string" OnClick="@(() => SetThemeAsync(theme.Key))"
+                                             Class="orim-settings-list-item">
+                                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.SpaceBetween" Class="w-100">
+                                        <MudStack Row="true" AlignItems="AlignItems.Center" Spacing="2">
+                                            <MudIcon Icon="@GetThemeIcon(theme.Key)"
+                                                     Color="@(IsCurrentTheme(theme.Key) ? Color.Primary : Color.Default)" />
+                                            <MudStack Spacing="0">
+                                                <MudText Typo="Typo.body1">@theme.Name</MudText>
+                                                <MudText Typo="Typo.caption" Color="Color.Secondary">@GetThemeModeLabel(theme)</MudText>
+                                            </MudStack>
+                                        </MudStack>
+                                    </MudStack>
+                                </MudListItem>
+                            }
+                        </MudList>
+                    </MudStack>
+                </MudTabPanel>
+            </MudTabs>
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Text" OnClick="@CloseSettingsDialog">@Localizer["Close"]</MudButton>
+        </DialogActions>
+    </MudDialog>
 </ThemeShell>
 
 @code {
+    private sealed record LanguageOption(string Key, string Label, string Description);
+
     private bool _drawerOpen = true;
     private string _currentLang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    private bool _settingsDialogVisible;
+    private readonly DialogOptions _settingsDialogOptions = new()
+    {
+        CloseButton = true,
+        MaxWidth = MaxWidth.Small,
+        FullWidth = true
+    };
+
     private bool IsBoardEditorRoute
     {
         get
@@ -116,15 +189,64 @@
         _currentLang = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+
+        await UserPreferences.InitializeAsync(JS);
+        await InvokeAsync(StateHasChanged);
+    }
+
     private Task SetThemeAsync(string themeKey) => ThemeManager.SetThemeAsync(themeKey, JS);
+
+    private void OpenSettingsDialog() => _settingsDialogVisible = true;
+
+    private void CloseSettingsDialog() => _settingsDialogVisible = false;
 
     private string GetThemeIcon(string themeKey) => string.Equals(ThemeManager.CurrentThemeKey, themeKey, StringComparison.OrdinalIgnoreCase)
         ? Icons.Material.Filled.RadioButtonChecked
         : Icons.Material.Filled.RadioButtonUnchecked;
 
+    private bool IsCurrentTheme(string themeKey) => string.Equals(ThemeManager.CurrentThemeKey, themeKey, StringComparison.OrdinalIgnoreCase);
+
+    private string GetThemeModeLabel(ThemeDefinition theme) => theme.IsDarkMode
+        ? Localizer["ThemeDark"]
+        : Localizer["ThemeLight"];
+
+    private Task SetShowDashboardTemplatesAsync(bool value) => UserPreferences.SetShowDashboardTemplatesAsync(value, JS);
+
+    private IReadOnlyList<LanguageOption> GetLanguageOptions()
+    {
+        return
+        [
+            new("de", Localizer["LanguageGerman"], Localizer["LanguageGermanDescription"]),
+            new("en", Localizer["LanguageEnglish"], Localizer["LanguageEnglishDescription"])
+        ];
+    }
+
+    private bool IsCurrentLanguage(string languageKey) => string.Equals(_currentLang, languageKey, StringComparison.OrdinalIgnoreCase);
+
+    private void SetLanguage(string languageKey)
+    {
+        if (IsCurrentLanguage(languageKey))
+        {
+            return;
+        }
+
+        NavigateToLanguage(languageKey);
+    }
+
     private void ToggleLanguage()
     {
         var nextLanguage = _currentLang == "de" ? "en" : "de";
+        NavigateToLanguage(nextLanguage);
+    }
+
+    private void NavigateToLanguage(string languageKey)
+    {
         var currentRelativeUri = Navigation.ToBaseRelativePath(Navigation.Uri);
         var relativeUriWithLeadingSlash = string.IsNullOrWhiteSpace(currentRelativeUri)
             ? "/"
@@ -135,13 +257,13 @@
                 && !string.Equals(entry.Key, "ui-culture", StringComparison.OrdinalIgnoreCase))
             .ToDictionary(entry => entry.Key, entry => entry.Value.LastOrDefault());
 
-        _currentLang = nextLanguage;
+        _currentLang = languageKey;
         var redirectUri = QueryHelpers.AddQueryString(relativeUriWithLeadingSlash.Split('?', 2)[0], query);
         var switchUri = QueryHelpers.AddQueryString(
             "/api/culture/set",
             new Dictionary<string, string?>
             {
-                ["culture"] = nextLanguage,
+                ["culture"] = languageKey,
                 ["redirectUri"] = redirectUri
             });
 

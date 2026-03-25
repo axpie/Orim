@@ -33,6 +33,7 @@ builder.Services.AddSingleton(sp =>
     return new ThemeCatalogService(Path.Combine(dataPath, "themes"), logger);
 });
 builder.Services.AddScoped<ThemeManager>();
+builder.Services.AddScoped<UserPreferencesManager>();
 builder.Services.AddSingleton<DiagramAssistantService>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)

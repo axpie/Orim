@@ -29,6 +29,17 @@
   <data name="Users" xml:space="preserve"><value>Benutzer</value></data>
   <data name="OrimSettings" xml:space="preserve"><value>ORIM-Einstellungen</value></data>
   <data name="Settings" xml:space="preserve"><value>Einstellungen</value></data>
+  <data name="General" xml:space="preserve"><value>Allgemein</value></data>
+  <data name="GeneralSettingsDescription" xml:space="preserve"><value>Lege fest, welche allgemeinen Inhalte in deiner Oberfläche angezeigt werden.</value></data>
+  <data name="Language" xml:space="preserve"><value>Sprache</value></data>
+  <data name="LanguageSettingsDescription" xml:space="preserve"><value>Wähle die Sprache der Benutzeroberfläche.</value></data>
+  <data name="LanguageGerman" xml:space="preserve"><value>Deutsch</value></data>
+  <data name="LanguageGermanDescription" xml:space="preserve"><value>Benutzeroberfläche auf Deutsch anzeigen</value></data>
+  <data name="LanguageEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="LanguageEnglishDescription" xml:space="preserve"><value>Benutzeroberfläche auf Englisch anzeigen</value></data>
+  <data name="ShowBoardOverviewTemplates" xml:space="preserve"><value>Vorlagen in der Board-Übersicht anzeigen</value></data>
+  <data name="ShowBoardOverviewTemplatesDescription" xml:space="preserve"><value>Blendet den Vorlagenbereich auf dem Dashboard ein oder aus.</value></data>
+  <data name="ThemeSettingsDescription" xml:space="preserve"><value>Wähle ein verfügbares Theme mit Farbvorschau aus.</value></data>
   <data name="Username" xml:space="preserve"><value>Benutzername</value></data>
   <data name="Password" xml:space="preserve"><value>Passwort</value></data>
   <data name="InvalidCredentials" xml:space="preserve"><value>Benutzername oder Passwort ungültig.</value></data>
@@ -203,6 +214,7 @@
   <data name="NoSnapshots" xml:space="preserve"><value>Noch keine Snapshots vorhanden.</value></data>
   <data name="Owner" xml:space="preserve"><value>Owner</value></data>
   <data name="QuickStartDescription" xml:space="preserve"><value>Erstelle ein neues Board, nutze eine Vorlage oder importiere vorhandene Inhalte.</value></data>
+  <data name="QuickStartDescriptionWithoutTemplates" xml:space="preserve"><value>Erstelle ein neues Board oder importiere vorhandene Inhalte.</value></data>
   <data name="QuickStartTitle" xml:space="preserve"><value>Schnell loslegen</value></data>
   <data name="RestoreSnapshot" xml:space="preserve"><value>Snapshot wiederherstellen</value></data>
   <data name="Retry" xml:space="preserve"><value>Erneut versuchen</value></data>

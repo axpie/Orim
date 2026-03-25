@@ -29,6 +29,17 @@
   <data name="Users" xml:space="preserve"><value>Users</value></data>
   <data name="OrimSettings" xml:space="preserve"><value>ORIM Settings</value></data>
   <data name="Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="General" xml:space="preserve"><value>General</value></data>
+  <data name="GeneralSettingsDescription" xml:space="preserve"><value>Choose which general content is shown in your interface.</value></data>
+  <data name="Language" xml:space="preserve"><value>Language</value></data>
+  <data name="LanguageSettingsDescription" xml:space="preserve"><value>Choose the interface language.</value></data>
+  <data name="LanguageGerman" xml:space="preserve"><value>German</value></data>
+  <data name="LanguageGermanDescription" xml:space="preserve"><value>Show the interface in German</value></data>
+  <data name="LanguageEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="LanguageEnglishDescription" xml:space="preserve"><value>Show the interface in English</value></data>
+  <data name="ShowBoardOverviewTemplates" xml:space="preserve"><value>Show templates on the board overview</value></data>
+  <data name="ShowBoardOverviewTemplatesDescription" xml:space="preserve"><value>Shows or hides the template section on the dashboard.</value></data>
+  <data name="ThemeSettingsDescription" xml:space="preserve"><value>Choose an available theme with a compact color preview.</value></data>
   <data name="Username" xml:space="preserve"><value>Username</value></data>
   <data name="Password" xml:space="preserve"><value>Password</value></data>
   <data name="InvalidCredentials" xml:space="preserve"><value>Invalid username or password.</value></data>
@@ -203,6 +214,7 @@
   <data name="NoSnapshots" xml:space="preserve"><value>No snapshots available yet.</value></data>
   <data name="Owner" xml:space="preserve"><value>Owner</value></data>
   <data name="QuickStartDescription" xml:space="preserve"><value>Create a new board, use a template, or import existing content.</value></data>
+  <data name="QuickStartDescriptionWithoutTemplates" xml:space="preserve"><value>Create a new board or import existing content.</value></data>
   <data name="QuickStartTitle" xml:space="preserve"><value>Get started quickly</value></data>
   <data name="RestoreSnapshot" xml:space="preserve"><value>Restore snapshot</value></data>
   <data name="Retry" xml:space="preserve"><value>Retry</value></data>

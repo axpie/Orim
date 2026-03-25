@@ -18,3 +18,17 @@
         right: 0.75rem;
         top: 0.5rem;
     }
+
+.orim-settings-list {
+    border: 1px solid var(--mud-palette-lines-default);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.orim-settings-list-item {
+    padding: 0.9rem 1rem;
+}
+
+.orim-settings-list-item + .orim-settings-list-item {
+    border-top: 1px solid var(--mud-palette-lines-default);
+}
