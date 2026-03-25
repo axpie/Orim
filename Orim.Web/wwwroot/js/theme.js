@@ -1,3 +1,25 @@
+window.orimLanguage = {
+    _cookieName: '.AspNetCore.Culture',
+    get() {
+        try {
+            return window.localStorage.getItem('orim-language') || '';
+        } catch {
+            return '';
+        }
+    },
+    set(lang) {
+        try {
+            window.localStorage.setItem('orim-language', lang);
+        } catch {}
+        this._syncCookie(lang);
+    },
+    _syncCookie(lang) {
+        if (!lang) return;
+        var value = encodeURIComponent('c=' + lang + '|uic=' + lang);
+        document.cookie = this._cookieName + '=' + value + ';path=/;max-age=31536000;samesite=lax';
+    }
+};
+
 window.orimTheme = {
     _appliedCssKeys: [],
     get() {

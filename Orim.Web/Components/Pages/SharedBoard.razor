@@ -11,7 +11,6 @@
 @inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
 @inject ThemeManager ThemeManager
 @using System.Globalization
-@using Microsoft.AspNetCore.WebUtilities
 @using Orim.Web.Services
 
 @if (_board is null)
@@ -779,7 +778,7 @@ else
 
         if (!string.Equals(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName, _settingsLanguage, StringComparison.OrdinalIgnoreCase))
         {
-            NavigateToCulture(_settingsLanguage);
+            await NavigateToCultureAsync(_settingsLanguage);
             return;
         }
 
@@ -799,28 +798,10 @@ else
         }
     }
 
-    private void NavigateToCulture(string language)
+    private async Task NavigateToCultureAsync(string language)
     {
-        var currentRelativeUri = Navigation.ToBaseRelativePath(Navigation.Uri);
-        var relativeUriWithLeadingSlash = string.IsNullOrWhiteSpace(currentRelativeUri)
-            ? "/"
-            : $"/{currentRelativeUri}";
-        var uri = Navigation.ToAbsoluteUri(Navigation.Uri);
-        var query = QueryHelpers.ParseQuery(uri.Query)
-            .Where(entry => !string.Equals(entry.Key, "culture", StringComparison.OrdinalIgnoreCase)
-                && !string.Equals(entry.Key, "ui-culture", StringComparison.OrdinalIgnoreCase))
-            .ToDictionary(entry => entry.Key, entry => entry.Value.LastOrDefault());
-
-        var redirectUri = QueryHelpers.AddQueryString(relativeUriWithLeadingSlash.Split('?', 2)[0], query);
-        var switchUri = QueryHelpers.AddQueryString(
-            "/api/culture/set",
-            new Dictionary<string, string?>
-            {
-                ["culture"] = language,
-                ["redirectUri"] = redirectUri
-            });
-
-        Navigation.NavigateTo(switchUri, forceLoad: true);
+        await JS.InvokeVoidAsync("orimLanguage.set", language);
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
     }
 
     private string GetMobileShapeIcon() => _selectedTool switch

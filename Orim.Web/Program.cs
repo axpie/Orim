@@ -117,6 +117,14 @@ var localizationOptions = new RequestLocalizationOptions()
     .AddSupportedCultures("de", "en")
     .AddSupportedUICultures("de", "en");
 
+localizationOptions.RequestCultureProviders =
+[
+    new CookieRequestCultureProvider
+    {
+        CookieName = CookieRequestCultureProvider.DefaultCookieName
+    }
+];
+
 app.UseRequestLocalization(localizationOptions);
 
 app.UseAuthentication();
@@ -141,6 +149,7 @@ app.MapGet("/api/culture/set", (string culture, string? redirectUri, HttpContext
             Expires = DateTimeOffset.UtcNow.AddYears(1),
             IsEssential = true,
             HttpOnly = false,
+            Path = "/",
             Secure = context.Request.IsHttps,
             SameSite = SameSiteMode.Lax
         });
