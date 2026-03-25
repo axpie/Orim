@@ -17,21 +17,6 @@
                 <OrimLogo Class="orim-logo--appbar" />
             </a>
             <MudSpacer />
-            @if (IsSharedRoute)
-            {
-                <MudMenu Icon="@Icons.Material.Filled.Palette" Color="Color.Inherit"
-                         AnchorOrigin="Origin.BottomRight" TransformOrigin="Origin.TopRight">
-                    <MudMenuItem Disabled="true">
-                        @Localizer["Theme"]
-                    </MudMenuItem>
-                    @foreach (var theme in ThemeManager.AvailableThemes)
-                    {
-                        <MudMenuItem Icon="@GetThemeIcon(theme.Key)" OnClick="@(() => SetThemeAsync(theme.Key))">
-                            @theme.Name
-                        </MudMenuItem>
-                    }
-                </MudMenu>
-            }
             <AuthorizeView>
                 <Authorized>
                     <MudMenu Icon="@Icons.Material.Filled.AccountCircle" Color="Color.Inherit"
@@ -104,7 +89,6 @@
                 || relativePath.StartsWith("shared/", StringComparison.OrdinalIgnoreCase);
         }
     }
-    private bool IsSharedRoute => Navigation.ToBaseRelativePath(Navigation.Uri).StartsWith("shared/", StringComparison.OrdinalIgnoreCase);
 
     [Inject] private NavigationManager Navigation { get; set; } = default!;
 

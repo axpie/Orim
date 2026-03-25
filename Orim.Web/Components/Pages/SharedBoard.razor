@@ -179,14 +179,11 @@ else
                                    Size="Size.Small"
                                    OnClick="@OpenHelpDialog" />
                 </MudTooltip>
-                @if (_shareCanEdit)
-                {
-                    <MudTooltip Text="@Localizer["BoardSettings"]" Arrow="true">
-                        <MudIconButton Icon="@Icons.Material.Filled.Settings"
-                                       Size="Size.Small"
-                                       OnClick="@OpenBoardSettingsDialogAsync" />
-                    </MudTooltip>
-                }
+                <MudTooltip Text="@Localizer["Settings"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                                   Size="Size.Small"
+                                   OnClick="@OpenBoardSettingsDialogAsync" />
+                </MudTooltip>
                 <MudTooltip Text="@Localizer["ExportBoardJson"]" Arrow="true">
                     <MudIconButton Icon="@Icons.Material.Filled.FileDownload"
                                    Size="Size.Small"
