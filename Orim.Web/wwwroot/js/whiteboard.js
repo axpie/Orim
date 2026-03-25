@@ -96,6 +96,106 @@ window.orimWhiteboard = {
         URL.revokeObjectURL(url);
     },
 
+    copyTextToClipboard: async function (text) {
+        if (navigator.clipboard?.writeText) {
+            await navigator.clipboard.writeText(text);
+            return;
+        }
+
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.setAttribute('readonly', '');
+        textarea.style.position = 'absolute';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+    },
+
+    getLocalStorageValue: function (key) {
+        try {
+            return window.localStorage.getItem(key);
+        } catch {
+            return null;
+        }
+    },
+
+    setLocalStorageValue: function (key, value) {
+        try {
+            window.localStorage.setItem(key, value);
+        } catch {
+            // Ignore storage write failures.
+        }
+    },
+
+    _presenceLifecycle: {},
+
+    registerPresenceLifecycle: function (boardId, clientId) {
+        if (!boardId || !clientId) {
+            return;
+        }
+
+        const lifecycleKey = `${boardId}:${clientId}`;
+        const existing = window.orimWhiteboard._presenceLifecycle[lifecycleKey];
+        if (existing) {
+            return;
+        }
+
+        const sendLeave = function () {
+            const payload = JSON.stringify({ boardId, clientId });
+
+            try {
+                if (navigator.sendBeacon) {
+                    const blob = new Blob([payload], { type: 'application/json' });
+                    navigator.sendBeacon('/api/presence/leave', blob);
+                    return;
+                }
+            } catch {
+                // Fall through to fetch keepalive.
+            }
+
+            try {
+                fetch('/api/presence/leave', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: payload,
+                    keepalive: true
+                });
+            } catch {
+                // Ignore unload transport failures.
+            }
+        };
+
+        const onPageHide = function () {
+            sendLeave();
+        };
+
+        const onBeforeUnload = function () {
+            sendLeave();
+        };
+
+        window.addEventListener('pagehide', onPageHide);
+        window.addEventListener('beforeunload', onBeforeUnload);
+
+        window.orimWhiteboard._presenceLifecycle[lifecycleKey] = {
+            onPageHide,
+            onBeforeUnload
+        };
+    },
+
+    unregisterPresenceLifecycle: function (boardId, clientId) {
+        const lifecycleKey = `${boardId}:${clientId}`;
+        const lifecycle = window.orimWhiteboard._presenceLifecycle[lifecycleKey];
+        if (!lifecycle) {
+            return;
+        }
+
+        window.removeEventListener('pagehide', lifecycle.onPageHide);
+        window.removeEventListener('beforeunload', lifecycle.onBeforeUnload);
+        delete window.orimWhiteboard._presenceLifecycle[lifecycleKey];
+    },
+
     _touchState: null,
 
     registerTouchHandler: function (elementId, dotNetRef) {

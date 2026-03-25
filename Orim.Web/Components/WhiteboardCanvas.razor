@@ -1,11 +1,15 @@
 @using Microsoft.AspNetCore.Components.Rendering
 @using Orim.Web.Components.Pages
 @using Orim.Web.Services
+@using Orim.Core.Services
 @implements IAsyncDisposable
 @inject IJSRuntime JS
 @inject ThemeManager ThemeManager
 
 <div id="whiteboard-surface"
+     role="group"
+     aria-label="@AriaLabel"
+     aria-description="@AriaDescription"
      style="@GetSurfaceStyle()"
      @onmousedown="OnSurfaceMouseDown"
      @onmousemove="OnSurfaceMouseMove"
@@ -90,6 +94,16 @@
             }
         }
     </div>
+
+    @foreach (var cursor in RemoteCursors.Where(cursor => cursor.WorldX is not null && cursor.WorldY is not null))
+    {
+        <div style="@GetRemoteCursorStyle(cursor)">
+            <div style="display:flex; align-items:flex-start; gap:0;">
+                <div style="@GetRemoteCursorPointerStyle(cursor)"></div>
+                <div style="@GetRemoteCursorLabelStyle(cursor)">@cursor.DisplayName</div>
+            </div>
+        </div>
+    }
 </div>
 
 @code {
@@ -110,16 +124,21 @@
     private const double StraightArrowAngleSnapThresholdDegrees = 5;
 
     [Parameter] public Board? Board { get; set; }
+    [Parameter] public string? AriaLabel { get; set; }
+    [Parameter] public string? AriaDescription { get; set; }
     [Parameter] public bool CanEdit { get; set; }
+    [Parameter] public CommandStack? CommandStack { get; set; }
     [Parameter] public EventCallback OnBoardChanged { get; set; }
     [Parameter] public EventCallback<BoardElement?> OnSelectedElementChanged { get; set; }
     [Parameter] public EventCallback<IReadOnlyList<BoardElement>> OnSelectedElementsChanged { get; set; }
     [Parameter] public EventCallback<BoardEditor.Tool> OnToolChanged { get; set; }
     [Parameter] public EventCallback<int> OnZoomChanged { get; set; }
     [Parameter] public EventCallback OnElementDoubleTapped { get; set; }
+    [Parameter] public EventCallback<BoardPointerPosition?> OnPointerPresenceChanged { get; set; }
     [Parameter] public string? PendingIconName { get; set; }
     [Parameter] public BoardEditor.Tool SelectedTool { get; set; }
     [Parameter] public double FitRightInset { get; set; }
+    [Parameter] public IReadOnlyList<BoardCursorPresence> RemoteCursors { get; set; } = [];
 
     public BoardElement? SelectedElement => _selectedElements.LastOrDefault();
 
@@ -151,6 +170,9 @@
     private double _zoom = 1;
     private bool _hasInitializedViewport;
     private DotNetObjectReference<WhiteboardCanvas>? _selfRef;
+    private bool _registeredTouchHandler = false;
+    private DateTime _lastPointerPresenceSentAt = DateTime.MinValue;
+    private Point? _lastPointerPresencePoint;
     private SurfaceRect _surfaceRect;
     private Point _lastTouchWorldPoint;
     private DateTime _lastTapTime = DateTime.MinValue;
@@ -273,6 +295,7 @@
         {
             _selfRef = DotNetObjectReference.Create(this);
             await JS.InvokeVoidAsync("orimWhiteboard.registerTouchHandler", SurfaceId, _selfRef);
+            _registeredTouchHandler = true;
         }
 
         if (!_hasInitializedViewport && Board is not null)
@@ -292,7 +315,10 @@
     {
         try
         {
-            await JS.InvokeVoidAsync("orimWhiteboard.disposeTouchHandler");
+            if (_registeredTouchHandler)
+            {
+                await JS.InvokeVoidAsync("orimWhiteboard.disposeTouchHandler");
+            }
         }
         catch (JSDisconnectedException) { }
         _selfRef?.Dispose();

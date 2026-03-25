@@ -931,7 +931,14 @@ public partial class WhiteboardCanvas
             var connectedElement = Board.Elements.FirstOrDefault(element => element.Id == connectedElementId);
             if (connectedElement is null)
             {
-                return null;
+                var fallbackX = isSource ? arrow.SourceX : arrow.TargetX;
+                var fallbackY = isSource ? arrow.SourceY : arrow.TargetY;
+                if (fallbackX is null || fallbackY is null)
+                {
+                    return null;
+                }
+
+                return (connectedElementId, new Point(fallbackX.Value, fallbackY.Value), dock);
             }
 
             return (connectedElementId, GetDockPosition(connectedElement, dock), dock);
@@ -947,23 +954,25 @@ public partial class WhiteboardCanvas
         return (null, new Point(x.Value, y.Value), dock);
     }
 
-    private static void ApplyDraggedEndpoint(ArrowElement arrow, bool isSource, ArrowEndpointDrag drag)
+    private void ApplyDraggedEndpoint(ArrowElement arrow, bool isSource, ArrowEndpointDrag drag)
     {
         if (drag.HoverElementId is Guid hoverElementId && drag.HoverDock is DockPoint hoverDock)
         {
+            var hoverElement = Board?.Elements.FirstOrDefault(element => element.Id == hoverElementId);
+            var hoverPoint = hoverElement is not null ? GetDockPosition(hoverElement, hoverDock) : drag.Pointer;
             if (isSource)
             {
                 arrow.SourceElementId = hoverElementId;
                 arrow.SourceDock = hoverDock;
-                arrow.SourceX = null;
-                arrow.SourceY = null;
+                arrow.SourceX = hoverPoint.X;
+                arrow.SourceY = hoverPoint.Y;
             }
             else
             {
                 arrow.TargetElementId = hoverElementId;
                 arrow.TargetDock = hoverDock;
-                arrow.TargetX = null;
-                arrow.TargetY = null;
+                arrow.TargetX = hoverPoint.X;
+                arrow.TargetY = hoverPoint.Y;
             }
 
             return;

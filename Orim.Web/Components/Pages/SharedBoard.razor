@@ -1,7 +1,17 @@
 @page "/shared/{Token}"
-@layout EmptyLayout
+@layout MainLayout
 @rendermode InteractiveServer
+@implements IDisposable
 @inject BoardService BoardService
+@inject BoardChangeNotifier BoardChangeNotifier
+@inject BoardPresenceService BoardPresenceService
+@inject IJSRuntime JS
+@inject IWebHostEnvironment Environment
+@inject NavigationManager Navigation
+@inject Microsoft.Extensions.Localization.IStringLocalizer<SharedResources> Localizer
+@inject ThemeManager ThemeManager
+@using System.Globalization
+@using Orim.Web.Services
 
 @if (_board is null)
 {
@@ -16,26 +26,493 @@
         }
     </MudContainer>
 }
+else if (!_shareAccessGranted)
+{
+    <MudContainer MaxWidth="MaxWidth.Small" Class="py-8">
+        <MudPaper Class="pa-6">
+            <MudText Typo="Typo.h6">@Localizer["SharedLinkProtected"]</MudText>
+            <MudText Typo="Typo.body2" Class="mt-2 mb-4">@Localizer["SharedLinkPasswordPrompt"]</MudText>
+
+            @if (!string.IsNullOrWhiteSpace(_sharePasswordError))
+            {
+                <MudAlert Severity="Severity.Error" Dense="true" Class="mb-4">@_sharePasswordError</MudAlert>
+            }
+
+            <MudTextField @bind-Value="_sharePasswordInput"
+                          Label="@Localizer["Password"]"
+                          Variant="Variant.Outlined"
+                          InputType="InputType.Password"
+                          Immediate="true"
+                          OnKeyDown="@HandleSharePasswordKeyDownAsync" />
+
+            <div class="d-flex justify-end mt-4">
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@UnlockSharedBoardAsync">
+                    @Localizer["UnlockSharedLink"]
+                </MudButton>
+            </div>
+        </MudPaper>
+    </MudContainer>
+}
 else
 {
-    <div style="display: flex; flex-direction: column; height: 100vh; height: 100dvh;">
-        <MudPaper Elevation="1" Class="orim-shared-header">
-            <OrimLogo Class="orim-logo--shared" />
-            <MudDivider Vertical="true" FlexItem="true" DividerType="DividerType.Middle" Class="orim-shared-divider" />
-            <MudText Typo="Typo.subtitle1" Class="orim-shared-subtitle">@_board.Title (Nur-Lesen)</MudText>
-        </MudPaper>
-        <div style="flex: 1; overflow: hidden;">
-            <WhiteboardCanvas Board="@_board" CanEdit="false"
-                              CommandStack="@(new CommandStack())"
-                              SelectedTool="BoardEditor.Tool.Select" />
+    var selectedElement = _selectedElements.Count == 1 ? _selectedElements[0] : null;
+
+    <div style="display: flex; flex-direction: column; height: calc(100vh - 64px); height: calc(100dvh - 64px);">
+        @if (!_useCompactLayout)
+        {
+            <MudPaper Elevation="1" Class="orim-board-toolbar orim-board-toolbar-desktop">
+                <MudText Typo="Typo.subtitle1" Style="font-weight: 600;">@_board.Title</MudText>
+                <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined">
+                    @(_shareCanEdit ? Localizer["Edit"] : Localizer["ReadOnly"])
+                </MudChip>
+                <MudTextField T="string"
+                              Value="@_displayName"
+                              ValueChanged="@HandleDisplayNameChangedAsync"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Margin="Margin.Dense"
+                              Class="orim-shared-name-input"
+                              Label="@Localizer["DisplayName"]" />
+                <div class="orim-active-participants">
+                    @foreach (var participant in ActiveParticipants)
+                    {
+                        <MudChip T="string"
+                                 Size="Size.Small"
+                                 Variant="Variant.Outlined"
+                                 Style="@GetParticipantChipStyle(participant.ColorHex)">
+                            @participant.DisplayName
+                        </MudChip>
+                    }
+                </div>
+                <MudSpacer />
+
+                @if (_shareCanEdit)
+                {
+                    <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" Style="border-radius: 8px;">
+                        <MudTooltip Text="@Localizer["SelectToolTooltip"]" Arrow="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.NearMe"
+                                           Color="@(_selectedTool == BoardEditor.Tool.Select ? Color.Primary : Color.Default)"
+                                           OnClick="@(() => SelectTool(BoardEditor.Tool.Select))" />
+                        </MudTooltip>
+                        <MudTooltip Text="@Localizer["DrawRectangleTooltip"]" Arrow="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.Rectangle"
+                                           Color="@(_selectedTool == BoardEditor.Tool.Rectangle ? Color.Primary : Color.Default)"
+                                           OnClick="@(() => SelectTool(BoardEditor.Tool.Rectangle))" />
+                        </MudTooltip>
+                        <MudTooltip Text="@Localizer["DrawCircleTooltip"]" Arrow="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.PanoramaFishEye"
+                                           Color="@(_selectedTool == BoardEditor.Tool.Circle ? Color.Primary : Color.Default)"
+                                           OnClick="@(() => SelectTool(BoardEditor.Tool.Circle))" />
+                        </MudTooltip>
+                        <MudTooltip Text="@Localizer["DrawTriangleTooltip"]" Arrow="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.ChangeHistory"
+                                           Color="@(_selectedTool == BoardEditor.Tool.Triangle ? Color.Primary : Color.Default)"
+                                           OnClick="@(() => SelectTool(BoardEditor.Tool.Triangle))" />
+                        </MudTooltip>
+                        <MudTooltip Text="@Localizer["ConnectArrowTooltip"]" Arrow="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.NorthEast"
+                                           Color="@(_selectedTool == BoardEditor.Tool.Arrow ? Color.Primary : Color.Default)"
+                                           OnClick="@(() => SelectTool(BoardEditor.Tool.Arrow))" />
+                        </MudTooltip>
+                        <MudTooltip Text="@Localizer["InsertIconTooltip"]" Arrow="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.AddReaction"
+                                           Color="@(_selectedTool == BoardEditor.Tool.Icon ? Color.Primary : Color.Default)"
+                                           OnClick="@OpenIconPickerAsync" />
+                        </MudTooltip>
+                    </MudButtonGroup>
+
+                    <MudTooltip Text="@Localizer["Undo"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.Undo"
+                                       Size="Size.Small"
+                                       Disabled="@(!_commandStack.CanUndo)"
+                                       OnClick="@UndoAsync" />
+                    </MudTooltip>
+
+                    <MudTooltip Text="@Localizer["Redo"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.Redo"
+                                       Size="Size.Small"
+                                       Disabled="@(!_commandStack.CanRedo)"
+                                       OnClick="@RedoAsync" />
+                    </MudTooltip>
+
+                    <MudDivider Vertical="true" FlexItem="true" />
+
+                    @if (_selectedElement is not null)
+                    {
+                        <MudTooltip Text="@Localizer["DeleteSelectedElement"]" Arrow="true">
+                            <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                           Color="Color.Error"
+                                           Size="Size.Small"
+                                           OnClick="@DeleteSelectedElementAsync" />
+                        </MudTooltip>
+                    }
+
+                    <MudTooltip Text="@Localizer["Properties"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.Tune"
+                                       Size="Size.Small"
+                                       Color="@(_propertiesPanelOpen ? Color.Primary : Color.Default)"
+                                       OnClick="@TogglePropertiesPanel" />
+                    </MudTooltip>
+                }
+
+                <MudTooltip Text="@Localizer["ZoomOut"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                                   Size="Size.Small"
+                                   OnClick="@ZoomOutAsync" />
+                </MudTooltip>
+                  <input class="orim-board-zoom-input"
+                       value="@_zoomDisplayValue"
+                       @onchange="HandleZoomInputChangedAsync"
+                      aria-label="@Localizer["ZoomLevelPercent"]" />
+                <MudTooltip Text="@Localizer["ZoomIn"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                   Size="Size.Small"
+                                   OnClick="@ZoomInAsync" />
+                </MudTooltip>
+                <MudTooltip Text="@Localizer["FitToContent"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.FitScreen"
+                                   Size="Size.Small"
+                                   OnClick="@FitToContentAsync" />
+                </MudTooltip>
+                <MudTooltip Text="@Localizer["OpenHelp"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.HelpOutline"
+                                   Size="Size.Small"
+                                   OnClick="@OpenHelpDialog" />
+                </MudTooltip>
+                <MudTooltip Text="@Localizer["Settings"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                                   Size="Size.Small"
+                                   OnClick="@OpenBoardSettingsDialogAsync" />
+                </MudTooltip>
+                <MudTooltip Text="@Localizer["ExportBoardJson"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.FileDownload"
+                                   Size="Size.Small"
+                                   OnClick="@ExportJson" />
+                </MudTooltip>
+            </MudPaper>
+        }
+        @if (_useCompactLayout)
+        {
+            <MudPaper Elevation="1" Class="orim-board-toolbar orim-board-toolbar-mobile">
+                <MudText Typo="Typo.subtitle2" Style="font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 150px;">@_board.Title</MudText>
+                <MudSpacer />
+
+                @if (_shareCanEdit)
+                {
+                    <MudTooltip Text="@Localizer["SelectToolTooltip"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.NearMe"
+                                       Size="Size.Small"
+                                       Color="@(_selectedTool == BoardEditor.Tool.Select ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SelectTool(BoardEditor.Tool.Select))" />
+                    </MudTooltip>
+
+                    <MudMenu Icon="@GetMobileShapeIcon()"
+                             Size="Size.Small"
+                             Color="@(IsShapeTool(_selectedTool) ? Color.Primary : Color.Default)"
+                             Dense="true">
+                        <MudMenuItem Icon="@Icons.Material.Filled.Rectangle"
+                                     OnClick="@(() => SelectTool(BoardEditor.Tool.Rectangle))">@Localizer["DrawRectangleTooltip"]</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.PanoramaFishEye"
+                                     OnClick="@(() => SelectTool(BoardEditor.Tool.Circle))">@Localizer["DrawCircleTooltip"]</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.ChangeHistory"
+                                     OnClick="@(() => SelectTool(BoardEditor.Tool.Triangle))">@Localizer["DrawTriangleTooltip"]</MudMenuItem>
+                        <MudMenuItem Icon="@Icons.Material.Filled.AddReaction"
+                                     OnClick="@OpenIconPickerAsync">@Localizer["InsertIconTooltip"]</MudMenuItem>
+                    </MudMenu>
+
+                    <MudTooltip Text="@Localizer["ConnectArrowTooltip"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.NorthEast"
+                                       Size="Size.Small"
+                                       Color="@(_selectedTool == BoardEditor.Tool.Arrow ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SelectTool(BoardEditor.Tool.Arrow))" />
+                    </MudTooltip>
+
+                    <MudIconButton Icon="@Icons.Material.Filled.Undo"
+                                   Size="Size.Small"
+                                   Disabled="@(!_commandStack.CanUndo)"
+                                   OnClick="@UndoAsync" />
+
+                    @if (_selectedElement is not null)
+                    {
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete"
+                                       Color="Color.Error"
+                                       Size="Size.Small"
+                                       OnClick="@DeleteSelectedElementAsync" />
+                    }
+
+                    <MudIconButton Icon="@Icons.Material.Filled.Tune"
+                                   Size="Size.Small"
+                                   Color="@(_propertiesPanelOpen ? Color.Primary : Color.Default)"
+                                   OnClick="@TogglePropertiesPanel" />
+                }
+
+                <MudTooltip Text="@Localizer["Settings"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.Settings"
+                                   Size="Size.Small"
+                                   OnClick="@OpenBoardSettingsDialogAsync" />
+                </MudTooltip>
+
+                <MudMenu Icon="@Icons.Material.Filled.MoreVert" Size="Size.Small" Dense="true">
+                    <MudMenuItem Icon="@Icons.Material.Filled.HelpOutline" OnClick="@OpenHelpDialog">@Localizer["OpenHelp"]</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.FileDownload" OnClick="@ExportJson">@Localizer["ExportBoardJson"]</MudMenuItem>
+                </MudMenu>
+            </MudPaper>
+        }
+        <div style="flex: 1; overflow: hidden; position: relative;">
+            <WhiteboardCanvas @ref="_canvas" Board="@_board" CanEdit="@_shareCanEdit"
+                              CommandStack="@_commandStack"
+                              FitRightInset="@(_shareCanEdit && _propertiesPanelOpen ? 388d : 0d)"
+                              OnBoardChanged="@HandleBoardChangedAsync"
+                              OnSelectedElementChanged="@HandleSelectedElementChangedAsync"
+                              OnSelectedElementsChanged="@HandleSelectedElementsChangedAsync"
+                              OnZoomChanged="@HandleZoomChanged"
+                              OnToolChanged="@HandleToolChangedAsync"
+                              PendingIconName="@_pendingIconName"
+                              RemoteCursors="@_remoteCursors"
+                              OnPointerPresenceChanged="@HandlePointerPresenceChangedAsync"
+                              SelectedTool="@_selectedTool" />
+
+            @if (_shareCanEdit)
+            {
+                <ElementPropertiesPanel @key="@(selectedElement?.Id ?? Guid.Empty)"
+                                        Board="@_board"
+                                        Element="@selectedElement"
+                                        SelectionCount="@_selectedElements.Count"
+                                        IsOpen="@_propertiesPanelOpen"
+                                        OnClose="@ClosePropertiesPanel"
+                                        OnPreviewChanged="@OnElementPropertyPreviewChangedAsync"
+                                        OnChanged="@OnElementPropertyChangedAsync" />
+            }
+
+            @if (_useCompactLayout)
+            {
+                <div class="orim-mobile-zoom-controls">
+                    <MudIconButton Icon="@Icons.Material.Filled.Remove"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   OnClick="@ZoomOutAsync" />
+                    <span class="orim-mobile-zoom-label">@_zoomDisplayValue</span>
+                    <MudIconButton Icon="@Icons.Material.Filled.Add"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   OnClick="@ZoomInAsync" />
+                    <MudIconButton Icon="@Icons.Material.Filled.FitScreen"
+                                   Size="Size.Small"
+                                   Color="Color.Default"
+                                   OnClick="@FitToContentAsync" />
+                </div>
+            }
         </div>
     </div>
+
+    <MudDialog @bind-Visible="_iconPickerVisible" Options="_iconDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">@Localizer["MaterialDesignIcons"]</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudTextField @bind-Value="_iconSearch"
+                          Label="@Localizer["SearchIcon"]"
+                          Variant="Variant.Outlined"
+                          Immediate="true"
+                          Adornment="Adornment.Start"
+                          AdornmentIcon="@Icons.Material.Filled.Search" />
+
+            @if (_isLoadingIcons)
+            {
+                <div style="display:flex; align-items:center; justify-content:center; min-height:220px;">
+                    <MudProgressCircular Indeterminate="true" Color="Color.Primary" />
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(_iconLoadError))
+            {
+                <MudAlert Severity="Severity.Error" Class="mt-4">@_iconLoadError</MudAlert>
+            }
+            else
+            {
+                <MudText Typo="Typo.caption" Class="mt-2 mb-2 orim-board-muted-text">
+                    @string.Format(Localizer["IconCount"], FilteredMaterialIcons.Count)
+                </MudText>
+                <div class="orim-icon-picker-grid">
+                    @foreach (var iconName in FilteredMaterialIcons)
+                    {
+                        <button type="button"
+                                @onclick="@(() => SelectMaterialIconAsync(iconName))"
+                                class="orim-icon-picker-card">
+                            <span class="mdi @iconName orim-icon-picker-preview"></span>
+                            <span class="orim-icon-picker-label">@iconName[4..]</span>
+                        </button>
+                    }
+                </div>
+            }
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@CloseIconPicker">@Localizer["Cancel"]</MudButton>
+        </DialogActions>
+    </MudDialog>
+
+    <MudDialog @bind-Visible="_helpDialogVisible" Options="_helpDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">@Localizer["HelpDialogTitle"]</MudText>
+        </TitleContent>
+        <DialogContent>
+            <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["ToolsSectionTitle"]</MudText>
+            <ul style="margin:0 0 16px 18px; padding:0; color:#334155; line-height:1.5;">
+                <li>@Localizer["HelpToolsSelect"]</li>
+                <li>@Localizer["HelpToolsShapes"]</li>
+                <li>@Localizer["HelpToolsArrow"]</li>
+                <li>@Localizer["HelpToolsIcon"]</li>
+            </ul>
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["SelectionGroupsSectionTitle"]</MudText>
+            <ul style="margin:0 0 16px 18px; padding:0; color:#334155; line-height:1.5;">
+                <li>@Localizer["HelpSelectionMarquee"]</li>
+                <li>@Localizer["HelpSelectionAdditive"]</li>
+                <li>@Localizer["HelpSelectionGroupMove"]</li>
+                <li>@Localizer["HelpSelectionSingleEdit"]</li>
+                <li>@Localizer["HelpSelectionZoom"]</li>
+                <li>@Localizer["HelpSelectionSnapDisable"]</li>
+            </ul>
+
+            <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["ShortcutsSectionTitle"]</MudText>
+            <ul style="margin:0 0 0 18px; padding:0; color:#334155; line-height:1.5;">
+                <li>@Localizer["ShortcutUndo"]</li>
+                <li>@Localizer["ShortcutRedo"]</li>
+                <li>@Localizer["ShortcutDelete"]</li>
+            </ul>
+        </DialogContent>
+        <DialogActions>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CloseHelpDialog">@Localizer["Close"]</MudButton>
+        </DialogActions>
+    </MudDialog>
+
+    <MudDialog @bind-Visible="_boardSettingsDialogVisible" Options="_helpDialogOptions">
+        <TitleContent>
+            <MudText Typo="Typo.h6">@Localizer["Settings"]</MudText>
+        </TitleContent>
+        <DialogContent>
+            <div style="display:flex; flex-direction:column; gap:16px; padding-top:4px;">
+                <MudTextField T="string"
+                              @bind-Value="_settingsDisplayName"
+                              Immediate="true"
+                              Variant="Variant.Outlined"
+                              Label="@Localizer["DisplayName"]" />
+
+                <MudSelect T="string"
+                           @bind-Value="_settingsLanguage"
+                           Variant="Variant.Outlined"
+                           Label="@Localizer["Language"]">
+                    <MudSelectItem Value='@("de")'>Deutsch</MudSelectItem>
+                    <MudSelectItem Value='@("en")'>English</MudSelectItem>
+                </MudSelect>
+
+                <MudSelect T="string"
+                           @bind-Value="_settingsThemeKey"
+                           Variant="Variant.Outlined"
+                           Label="@Localizer["Theme"]">
+                    @foreach (var theme in ThemeManager.AvailableThemes)
+                    {
+                        <MudSelectItem Value="@theme.Key">@theme.Name</MudSelectItem>
+                    }
+                </MudSelect>
+
+                @if (_shareCanEdit)
+                {
+                    <MudDivider Class="my-1" />
+                    <MudText Typo="Typo.subtitle2">@Localizer["GeneralBoardSettings"]</MudText>
+                    <MudCheckBox @bind-Value="_boardLabelOutlineEnabled"
+                                 T="bool"
+                                 Label="@Localizer["LabelOutlineEnabled"]" />
+                    <MudCheckBox @bind-Value="_boardArrowOutlineEnabled"
+                                 T="bool"
+                                 Label="@Localizer["ArrowOutlineEnabled"]" />
+                }
+            </div>
+        </DialogContent>
+        <DialogActions>
+            <MudButton OnClick="@CloseBoardSettingsDialog">@Localizer["Cancel"]</MudButton>
+            <MudButton Variant="Variant.Filled"
+                       Color="Color.Primary"
+                       OnClick="@ConfirmBoardSettingsAsync">@Localizer["Save"]</MudButton>
+        </DialogActions>
+    </MudDialog>
 }
 
 @code {
     [Parameter] public string Token { get; set; } = "";
     private Board? _board;
     private bool _notFound;
+    private WhiteboardCanvas? _canvas;
+    private readonly CommandStack _commandStack = new();
+    private readonly string _boardSyncClientId = Guid.NewGuid().ToString("N");
+    private IDisposable? _boardChangeSubscription;
+    private IDisposable? _cursorPresenceSubscription;
+    private readonly CancellationTokenSource _presenceHeartbeatCancellation = new();
+    private Task? _presenceHeartbeatTask;
+    private IReadOnlyList<BoardCursorPresence> _remoteCursors = [];
+    private BoardPointerPosition? _localPointerPosition;
+    private BoardEditor.Tool _selectedTool = BoardEditor.Tool.Select;
+    private BoardElement? _selectedElement;
+    private List<BoardElement> _selectedElements = [];
+    private bool _propertiesPanelOpen;
+    private string _lastCommittedBoardSnapshot = string.Empty;
+    private string _displayName = BoardPresenceIdentity.CreateFantasyName();
+    private string _cursorColor = BoardPresenceIdentity.ResolveColor(Guid.NewGuid().ToString("N"));
+    private bool _shareAccessGranted;
+    private bool _shareCanEdit;
+    private string? _verifiedSharePassword;
+    private string _sharePasswordInput = string.Empty;
+    private string? _sharePasswordError;
+    private bool _presenceLifecycleRegistered;
+    private bool _loadedPresenceIdentity;
+    private bool _useCompactLayout;
+    private bool _iconPickerVisible;
+    private bool _helpDialogVisible;
+    private bool _boardSettingsDialogVisible;
+    private bool _boardLabelOutlineEnabled = true;
+    private bool _boardArrowOutlineEnabled = true;
+    private string _settingsDisplayName = string.Empty;
+    private string _settingsLanguage = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+    private string _settingsThemeKey = "light";
+    private bool _isLoadingIcons;
+    private int _zoomPercentage = 100;
+    private string _zoomDisplayValue = "100%";
+    private string _iconSearch = string.Empty;
+    private string _lastIconSearchValue = string.Empty;
+    private string? _iconLoadError;
+    private string? _pendingIconName;
+    private IReadOnlyList<string> _filteredMaterialIconsCache = [];
+    private readonly DialogOptions _iconDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true };
+    private readonly DialogOptions _helpDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
+    private List<string> _materialIcons = [];
+    private static List<string>? _cachedMaterialIcons;
+    private const string SharedNameStorageKey = "orim.shared.display-name";
+    private const string SharedColorStorageKey = "orim.shared.cursor-color";
+    private record struct ViewportProfile(double Width, double Height, bool IsCompact);
+    private IReadOnlyList<BoardCursorPresence> ActiveParticipants =>
+    [
+        new(_boardSyncClientId, _displayName, _cursorColor, _localPointerPosition?.WorldX, _localPointerPosition?.WorldY, DateTime.UtcNow),
+        .. _remoteCursors
+    ];
+    private IReadOnlyList<string> FilteredMaterialIcons
+    {
+        get
+        {
+            if (_iconSearch == _lastIconSearchValue)
+            {
+                return _filteredMaterialIconsCache;
+            }
+
+            _lastIconSearchValue = _iconSearch;
+            var search = (_iconSearch ?? string.Empty).Trim();
+            _filteredMaterialIconsCache = _materialIcons
+                .Where(icon => string.IsNullOrWhiteSpace(search)
+                    || icon.Contains(search, StringComparison.OrdinalIgnoreCase))
+                .Take(200)
+                .ToList();
+
+            return _filteredMaterialIconsCache;
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
@@ -45,7 +522,661 @@ else
             return;
         }
         _board = await BoardService.GetBoardByShareTokenAsync(Token);
-        if (_board is null)
+        if (_board is null || _board.Visibility != BoardVisibility.Shared)
+        {
             _notFound = true;
+            return;
+        }
+
+        if (!BoardService.IsSharePasswordProtected(_board))
+        {
+            await GrantSharedAccessAsync(null);
+        }
+
+        InitializeBoardSettingsDrafts();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                var viewport = await JS.InvokeAsync<ViewportProfile>("orimWhiteboard.getViewportProfile");
+                _useCompactLayout = viewport.IsCompact;
+                StateHasChanged();
+            }
+            catch
+            {
+            }
+        }
+
+        if (!_loadedPresenceIdentity)
+        {
+            var storedName = await JS.InvokeAsync<string?>("orimWhiteboard.getLocalStorageValue", SharedNameStorageKey);
+            var storedColor = await JS.InvokeAsync<string?>("orimWhiteboard.getLocalStorageValue", SharedColorStorageKey);
+            var changed = false;
+
+            if (!string.IsNullOrWhiteSpace(storedName) && storedName != _displayName)
+            {
+                _displayName = storedName;
+                changed = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(storedColor) && storedColor != _cursorColor)
+            {
+                _cursorColor = storedColor;
+                changed = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(storedName))
+            {
+                await JS.InvokeVoidAsync("orimWhiteboard.setLocalStorageValue", SharedNameStorageKey, _displayName);
+            }
+
+            if (string.IsNullOrWhiteSpace(storedColor))
+            {
+                await JS.InvokeVoidAsync("orimWhiteboard.setLocalStorageValue", SharedColorStorageKey, _cursorColor);
+            }
+
+            if (_localPointerPosition is not null)
+            {
+                await PublishPresenceAsync(_localPointerPosition);
+            }
+
+            _loadedPresenceIdentity = true;
+
+            if (changed)
+            {
+                StateHasChanged();
+            }
+        }
+
+        if (_board is not null && _shareAccessGranted && !_presenceLifecycleRegistered)
+        {
+            await JS.InvokeVoidAsync("orimWhiteboard.registerPresenceLifecycle", _board.Id, _boardSyncClientId);
+            _presenceLifecycleRegistered = true;
+        }
+    }
+
+    private async Task UnlockSharedBoardAsync()
+    {
+        if (_board is null)
+        {
+            return;
+        }
+
+        if (!BoardService.HasSharedLinkAccess(_board, _sharePasswordInput))
+        {
+            _sharePasswordError = Localizer["InvalidSharePassword"];
+            return;
+        }
+
+        _sharePasswordError = null;
+        await GrantSharedAccessAsync(_sharePasswordInput);
+    }
+
+    private async Task HandleSharePasswordKeyDownAsync(KeyboardEventArgs args)
+    {
+        if (args.Key == "Enter")
+        {
+            await UnlockSharedBoardAsync();
+        }
+    }
+
+    private async Task FitToContentAsync()
+    {
+        if (_canvas is null)
+        {
+            return;
+        }
+
+        await _canvas.FitToContentAsync();
+    }
+
+    private async Task ZoomInAsync()
+    {
+        if (_canvas is null)
+        {
+            return;
+        }
+
+        await _canvas.ZoomInAsync();
+    }
+
+    private async Task ZoomOutAsync()
+    {
+        if (_canvas is null)
+        {
+            return;
+        }
+
+        await _canvas.ZoomOutAsync();
+    }
+
+    private async Task HandleZoomInputChangedAsync(ChangeEventArgs args)
+    {
+        if (_canvas is null)
+        {
+            return;
+        }
+
+        var rawValue = args.Value?.ToString()?.Trim() ?? string.Empty;
+        var numericValue = new string(rawValue.Where(char.IsDigit).ToArray());
+        if (!int.TryParse(numericValue, out var percentage))
+        {
+            _zoomDisplayValue = $"{_zoomPercentage}%";
+            StateHasChanged();
+            return;
+        }
+
+        percentage = Math.Clamp(percentage, 20, 350);
+        await _canvas.SetZoomPercentageAsync(percentage);
+    }
+
+    private async Task HandleDisplayNameChangedAsync(string value)
+    {
+        _displayName = string.IsNullOrWhiteSpace(value) ? BoardPresenceIdentity.CreateFantasyName() : value.Trim();
+        await JS.InvokeVoidAsync("orimWhiteboard.setLocalStorageValue", SharedNameStorageKey, _displayName);
+        await PublishPresenceAsync(_localPointerPosition);
+    }
+
+    private Task HandlePointerPresenceChangedAsync(BoardPointerPosition? pointer)
+    {
+        _localPointerPosition = pointer;
+        if (_board is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return PublishPresenceAsync(pointer);
+    }
+
+    private Task PublishPresenceAsync(BoardPointerPosition? pointer)
+    {
+        if (_board is null)
+        {
+            return Task.CompletedTask;
+        }
+
+        return BoardPresenceService.UpsertCursorAsync(
+            _board.Id,
+            new BoardCursorPresence(
+                _boardSyncClientId,
+                _displayName,
+                _cursorColor,
+                pointer?.WorldX,
+                pointer?.WorldY,
+                DateTime.UtcNow));
+    }
+
+    private static string GetParticipantChipStyle(string colorHex) =>
+        $"border-color:{colorHex}; color:{colorHex}; background:color-mix(in srgb, {colorHex} 10%, transparent); font-weight:600;";
+
+    private static string CaptureBoardSnapshot(Board board)
+    {
+        return System.Text.Json.JsonSerializer.Serialize(board, Orim.Core.OrimJsonOptions.Default);
+    }
+
+    private async Task OpenIconPickerAsync()
+    {
+        await EnsureMaterialIconsLoadedAsync();
+        _iconSearch = string.Empty;
+        _iconPickerVisible = true;
+    }
+
+    private void CloseIconPicker()
+    {
+        _iconPickerVisible = false;
+    }
+
+    private void OpenHelpDialog()
+    {
+        _helpDialogVisible = true;
+    }
+
+    private void CloseHelpDialog()
+    {
+        _helpDialogVisible = false;
+    }
+
+    private Task OpenBoardSettingsDialogAsync()
+    {
+        InitializeBoardSettingsDrafts();
+        _boardSettingsDialogVisible = true;
+        return Task.CompletedTask;
+    }
+
+    private void CloseBoardSettingsDialog()
+    {
+        _boardSettingsDialogVisible = false;
+        InitializeBoardSettingsDrafts();
+    }
+
+    private async Task ConfirmBoardSettingsAsync()
+    {
+        await HandleDisplayNameChangedAsync(_settingsDisplayName);
+
+        if (!string.IsNullOrWhiteSpace(_settingsThemeKey)
+            && !string.Equals(ThemeManager.CurrentThemeKey, _settingsThemeKey, StringComparison.OrdinalIgnoreCase))
+        {
+            await ThemeManager.SetThemeAsync(_settingsThemeKey, JS);
+        }
+
+        if (_board is not null && _shareCanEdit)
+        {
+            _board.LabelOutlineEnabled = _boardLabelOutlineEnabled;
+            _board.ArrowOutlineEnabled = _boardArrowOutlineEnabled;
+            await PersistBoardStateAsync();
+            _canvas?.ForceRerender();
+        }
+
+        _boardSettingsDialogVisible = false;
+
+        if (!string.Equals(CultureInfo.CurrentUICulture.TwoLetterISOLanguageName, _settingsLanguage, StringComparison.OrdinalIgnoreCase))
+        {
+            await NavigateToCultureAsync(_settingsLanguage);
+            return;
+        }
+
+        StateHasChanged();
+    }
+
+    private void InitializeBoardSettingsDrafts()
+    {
+        _settingsDisplayName = _displayName;
+        _settingsLanguage = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName;
+        _settingsThemeKey = ThemeManager.CurrentThemeKey;
+
+        if (_board is not null)
+        {
+            _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
+            _boardArrowOutlineEnabled = _board.ArrowOutlineEnabled;
+        }
+    }
+
+    private async Task NavigateToCultureAsync(string language)
+    {
+        await JS.InvokeVoidAsync("orimLanguage.set", language);
+        Navigation.NavigateTo(Navigation.Uri, forceLoad: true);
+    }
+
+    private string GetMobileShapeIcon() => _selectedTool switch
+    {
+        BoardEditor.Tool.Circle => Icons.Material.Filled.PanoramaFishEye,
+        BoardEditor.Tool.Triangle => Icons.Material.Filled.ChangeHistory,
+        BoardEditor.Tool.Icon => Icons.Material.Filled.AddReaction,
+        _ => Icons.Material.Filled.Rectangle
+    };
+
+    private static bool IsShapeTool(BoardEditor.Tool tool) =>
+        tool is BoardEditor.Tool.Rectangle or BoardEditor.Tool.Circle or BoardEditor.Tool.Triangle or BoardEditor.Tool.Icon;
+
+    private Task SelectMaterialIconAsync(string iconName)
+    {
+        _pendingIconName = iconName;
+        _selectedTool = BoardEditor.Tool.Icon;
+        _iconPickerVisible = false;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task EnsureMaterialIconsLoadedAsync()
+    {
+        if (_materialIcons.Count > 0 || _isLoadingIcons)
+        {
+            return;
+        }
+
+        if (_cachedMaterialIcons is not null)
+        {
+            _materialIcons = _cachedMaterialIcons;
+            return;
+        }
+
+        _isLoadingIcons = true;
+        _iconLoadError = null;
+
+        try
+        {
+            var path = Path.Combine(Environment.WebRootPath, "data", "materialdesignicons.json");
+            if (!File.Exists(path))
+            {
+                throw new FileNotFoundException("materialdesignicons.json not found", path);
+            }
+
+            await using var stream = File.OpenRead(path);
+            var icons = await System.Text.Json.JsonSerializer.DeserializeAsync<List<string>>(stream) ?? [];
+            _materialIcons = icons.Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(icon => icon).ToList();
+            _cachedMaterialIcons = _materialIcons;
+        }
+        catch
+        {
+            _iconLoadError = Localizer["MaterialIconsLoadError"];
+        }
+        finally
+        {
+            _isLoadingIcons = false;
+            StateHasChanged();
+        }
+    }
+
+    private void SelectTool(BoardEditor.Tool tool)
+    {
+        _selectedTool = tool;
+    }
+
+    private void TogglePropertiesPanel() => _propertiesPanelOpen = !_propertiesPanelOpen;
+
+    private void ClosePropertiesPanel() => _propertiesPanelOpen = false;
+
+    private Task HandleToolChangedAsync(BoardEditor.Tool tool)
+    {
+        _selectedTool = tool;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleZoomChanged(int percentage)
+    {
+        _zoomPercentage = percentage;
+        _zoomDisplayValue = $"{percentage}%";
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleSelectedElementChangedAsync(BoardElement? element)
+    {
+        _selectedElement = element;
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleSelectedElementsChangedAsync(IReadOnlyList<BoardElement> elements)
+    {
+        _selectedElements = elements.ToList();
+        _selectedElement = _selectedElements.LastOrDefault();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private Task HandleBoardChangedAsync() => SaveBoardAsync();
+
+    private async Task SaveBoardAsync(bool recordHistory = true)
+    {
+        if (_board is null || !_shareCanEdit)
+        {
+            return;
+        }
+
+        var currentSnapshot = CaptureBoardSnapshot(_board);
+        var historyRecorded = false;
+        if (recordHistory && currentSnapshot != _lastCommittedBoardSnapshot)
+        {
+            _commandStack.Execute(_board, new BoardSnapshotCommand(_lastCommittedBoardSnapshot, currentSnapshot));
+            currentSnapshot = CaptureBoardSnapshot(_board);
+            historyRecorded = true;
+        }
+
+        _lastCommittedBoardSnapshot = currentSnapshot;
+
+        if (historyRecorded)
+        {
+            await SyncSelectionToBoardAsync();
+        }
+
+        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId);
+    }
+
+    private async Task PersistBoardStateAsync()
+    {
+        if (_board is null)
+        {
+            return;
+        }
+
+        _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
+        await SyncSelectionToBoardAsync();
+        await SaveBoardAsync(recordHistory: false);
+        StateHasChanged();
+    }
+
+    private async Task SyncSelectionToBoardAsync()
+    {
+        if (_board is null)
+        {
+            return;
+        }
+
+        var selectedIds = _selectedElements.Select(element => element.Id).ToHashSet();
+        var nextSelection = _board.Elements
+            .Where(element => selectedIds.Contains(element.Id))
+            .OrderBy(element => element.ZIndex)
+            .ToList();
+
+        _selectedElements = nextSelection;
+        _selectedElement = nextSelection.LastOrDefault();
+
+        if (_canvas is not null)
+        {
+            await _canvas.SelectElementsAsync(nextSelection);
+        }
+    }
+
+    private async Task UndoAsync()
+    {
+        if (_board is null || !_commandStack.CanUndo)
+        {
+            return;
+        }
+
+        _commandStack.Undo(_board);
+        await PersistBoardStateAsync();
+    }
+
+    private async Task RedoAsync()
+    {
+        if (_board is null || !_commandStack.CanRedo)
+        {
+            return;
+        }
+
+        _commandStack.Redo(_board);
+        await PersistBoardStateAsync();
+    }
+
+    private async Task DeleteSelectedElementAsync()
+    {
+        if (_board is null || !_shareCanEdit || _selectedElements.Count == 0)
+        {
+            return;
+        }
+
+        foreach (var elementId in _selectedElements.Select(element => element.Id).Distinct().ToList())
+        {
+            if (_board.Elements.Any(element => element.Id == elementId))
+            {
+                var command = new RemoveElementCommand(elementId);
+                command.Execute(_board);
+            }
+        }
+
+        _selectedElement = null;
+        _selectedElements = [];
+        _canvas?.ClearSelection();
+        await SaveBoardAsync();
+    }
+
+    private Task OnElementPropertyPreviewChangedAsync()
+    {
+        _canvas?.ForceRerender();
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    private async Task OnElementPropertyChangedAsync()
+    {
+        await SaveBoardAsync();
+        StateHasChanged();
+    }
+
+    private async Task StartPresenceHeartbeatAsync()
+    {
+        try
+        {
+            using var timer = new PeriodicTimer(TimeSpan.FromSeconds(5));
+            while (await timer.WaitForNextTickAsync(_presenceHeartbeatCancellation.Token))
+            {
+                await PublishPresenceAsync(_localPointerPosition);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+        }
+    }
+
+    private Task HandleExternalBoardChangeAsync(BoardChangeNotification notification)
+    {
+        return InvokeAsync(async () =>
+        {
+            var latestBoard = await BoardService.GetBoardByShareTokenAsync(Token);
+            if (latestBoard is null || latestBoard.Visibility != BoardVisibility.Shared)
+            {
+                if (_board is not null)
+                {
+                    await TearDownSharedRealtimeAsync(_board.Id);
+                }
+
+                _board = null;
+                _notFound = true;
+                _shareAccessGranted = false;
+                _shareCanEdit = false;
+                StateHasChanged();
+                return;
+            }
+
+            _board = latestBoard;
+
+            if (!BoardService.HasSharedLinkAccess(latestBoard, _verifiedSharePassword))
+            {
+                await TearDownSharedRealtimeAsync(latestBoard.Id);
+                _shareAccessGranted = false;
+                _shareCanEdit = false;
+                _sharePasswordInput = string.Empty;
+                _sharePasswordError = Localizer["SharedLinkProtected"];
+                _propertiesPanelOpen = false;
+                _selectedElement = null;
+                _selectedElements = [];
+                _selectedTool = BoardEditor.Tool.Select;
+                _commandStack.Clear();
+                _remoteCursors = [];
+                StateHasChanged();
+                return;
+            }
+
+            _shareCanEdit = BoardService.HasSharedLinkAccess(latestBoard, _verifiedSharePassword, BoardRole.Editor);
+            _lastCommittedBoardSnapshot = CaptureBoardSnapshot(latestBoard);
+            InitializeBoardSettingsDrafts();
+            _canvas?.ForceRerender();
+            StateHasChanged();
+        });
+    }
+
+    private Task HandleCursorPresenceChangedAsync(IReadOnlyList<BoardCursorPresence> cursors)
+    {
+        return InvokeAsync(() =>
+        {
+            _remoteCursors = cursors
+                .Where(cursor => cursor.ClientId != _boardSyncClientId)
+                .ToList();
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose()
+    {
+        _presenceHeartbeatCancellation.Cancel();
+        if (_board is not null)
+        {
+            _ = BoardPresenceService.RemoveCursorAsync(_board.Id, _boardSyncClientId);
+            if (_presenceLifecycleRegistered)
+            {
+                try
+                {
+                    _ = JS.InvokeVoidAsync("orimWhiteboard.unregisterPresenceLifecycle", _board.Id, _boardSyncClientId);
+                }
+                catch
+                {
+                }
+            }
+        }
+
+        _cursorPresenceSubscription?.Dispose();
+        _boardChangeSubscription?.Dispose();
+        _presenceHeartbeatCancellation.Dispose();
+    }
+
+    private async Task GrantSharedAccessAsync(string? password)
+    {
+        if (_board is null)
+        {
+            return;
+        }
+
+        if (!BoardService.HasSharedLinkAccess(_board, password))
+        {
+            _shareAccessGranted = false;
+            _shareCanEdit = false;
+            return;
+        }
+
+        _verifiedSharePassword = BoardService.IsSharePasswordProtected(_board) ? password?.Trim() : null;
+        _shareAccessGranted = true;
+        _shareCanEdit = BoardService.HasSharedLinkAccess(_board, _verifiedSharePassword, BoardRole.Editor);
+        _sharePasswordError = null;
+        _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
+        InitializeBoardSettingsDrafts();
+        _commandStack.Clear();
+
+        _boardChangeSubscription ??= BoardChangeNotifier.Subscribe(_board.Id, _boardSyncClientId, HandleExternalBoardChangeAsync);
+        _cursorPresenceSubscription ??= BoardPresenceService.Subscribe(_board.Id, $"cursor-{_boardSyncClientId}", HandleCursorPresenceChangedAsync);
+        await PublishPresenceAsync(null);
+        _presenceHeartbeatTask ??= StartPresenceHeartbeatAsync();
+        StateHasChanged();
+    }
+
+    private async Task TearDownSharedRealtimeAsync(Guid boardId)
+    {
+        await BoardPresenceService.RemoveCursorAsync(boardId, _boardSyncClientId);
+        _cursorPresenceSubscription?.Dispose();
+        _boardChangeSubscription?.Dispose();
+        _cursorPresenceSubscription = null;
+        _boardChangeSubscription = null;
+
+        if (_presenceLifecycleRegistered)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("orimWhiteboard.unregisterPresenceLifecycle", boardId, _boardSyncClientId);
+            }
+            catch
+            {
+            }
+
+            _presenceLifecycleRegistered = false;
+        }
+    }
+
+    private async Task ExportJson()
+    {
+        if (_board is null)
+        {
+            return;
+        }
+
+        var json = System.Text.Json.JsonSerializer.Serialize(_board, Orim.Core.OrimJsonOptions.Indented);
+        var bytes = System.Text.Encoding.UTF8.GetBytes(json);
+        var base64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("orimWhiteboard.downloadFile", $"{_board.Title}.json", "application/json", base64);
     }
 }

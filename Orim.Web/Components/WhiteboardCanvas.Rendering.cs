@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Rendering;
 using Orim.Core.Models;
+using Orim.Core.Services;
 using Orim.Web.Components.Pages;
 using Orim.Web.Services;
 
@@ -20,6 +21,10 @@ public partial class WhiteboardCanvas
     private string GetWorldStyle() =>
         $"position: absolute; inset: 0; overflow: visible; transform-origin: 0 0; transform: translate({CssNumber(_cameraOffset.X)}px, {CssNumber(_cameraOffset.Y)}px) scale({CssNumber(_zoom)});";
 
+    private Point WorldToScreen(Point point) => new(
+        point.X * _zoom + _cameraOffset.X,
+        point.Y * _zoom + _cameraOffset.Y);
+
     private static double GetWrappedGridOffset(double offset, double step)
     {
         if (step <= 0)
@@ -31,68 +36,25 @@ public partial class WhiteboardCanvas
         return wrapped < 0 ? wrapped + step : wrapped;
     }
 
-    private string GetBoardSurfaceColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#10192A",
-        ThemePreset.Synthwave => "#160A29",
-        _ => "#FFFFFF"
-    };
+    private ThemeBoardDefaults GetBoardThemeDefaults() => ThemeManager.CurrentDefinition.BoardDefaults;
 
-    private string GetBoardGridColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "rgba(148, 163, 184, 0.16)",
-        ThemePreset.Synthwave => "rgba(53, 242, 255, 0.16)",
-        _ => "#EEF2F7"
-    };
+    private string GetBoardSurfaceColor() => GetBoardThemeDefaults().SurfaceColor;
 
-    private string GetDefaultShapeFillColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#18253B",
-        ThemePreset.Synthwave => "#261145",
-        _ => "#FFFFFF"
-    };
+    private string GetBoardGridColor() => GetBoardThemeDefaults().GridColor;
 
-    private string GetDefaultStrokeColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#E5EEF9",
-        ThemePreset.Synthwave => "#35F2FF",
-        _ => "#0F172A"
-    };
+    private string GetDefaultShapeFillColor() => GetBoardThemeDefaults().ShapeFillColor;
 
-    private string GetDefaultIconColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#E5EEF9",
-        ThemePreset.Synthwave => "#FFF0FF",
-        _ => "#0F172A"
-    };
+    private string GetDefaultStrokeColor() => GetBoardThemeDefaults().StrokeColor;
 
-    private string GetSelectionColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#8B5CF6",
-        ThemePreset.Synthwave => "#FF4FD8",
-        _ => "#2563EB"
-    };
+    private string GetDefaultIconColor() => GetBoardThemeDefaults().IconColor;
 
-    private string GetSelectionTint(double opacity) => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => $"rgba(139, 92, 246, {CssNumber(opacity)})",
-        ThemePreset.Synthwave => $"rgba(255, 79, 216, {CssNumber(opacity)})",
-        _ => $"rgba(37, 99, 235, {CssNumber(opacity)})"
-    };
+    private string GetSelectionColor() => GetBoardThemeDefaults().SelectionColor;
 
-    private string GetHandleSurfaceColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#10192A",
-        ThemePreset.Synthwave => "#160A29",
-        _ => "#FFFFFF"
-    };
+    private string GetSelectionTint(double opacity) => $"rgba({GetBoardThemeDefaults().SelectionTintRgb}, {CssNumber(opacity)})";
 
-    private string GetDockTargetColor() => ThemeManager.CurrentPreset switch
-    {
-        ThemePreset.Dark => "#22C55E",
-        ThemePreset.Synthwave => "#35F2FF",
-        _ => "#0F766E"
-    };
+    private string GetHandleSurfaceColor() => GetBoardThemeDefaults().HandleSurfaceColor;
+
+    private string GetDockTargetColor() => GetBoardThemeDefaults().DockTargetColor;
 
     private string GetSelectionFrameStyle()
     {
@@ -154,6 +116,18 @@ public partial class WhiteboardCanvas
             .ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 
     private string Px(double value) => $"{CssNumber(value)}px";
+
+    private string GetRemoteCursorStyle(BoardCursorPresence cursor)
+    {
+        var screenPoint = WorldToScreen(new Point(cursor.WorldX ?? 0, cursor.WorldY ?? 0));
+        return $"position:absolute; left:{Px(screenPoint.X)}; top:{Px(screenPoint.Y)}; transform:translate(-2px, -2px); pointer-events:none; z-index:30;";
+    }
+
+    private string GetRemoteCursorPointerStyle(BoardCursorPresence cursor) =>
+        $"width:18px; height:24px; background:{cursor.ColorHex}; clip-path:polygon(0 0, 0 100%, 22% 79%, 32% 72%, 43% 100%, 57% 94%, 46% 68%, 78% 68%); transform:none; filter:drop-shadow(-1.8px 0 0 #ffffff) drop-shadow(1.8px 0 0 #ffffff) drop-shadow(0 -1.8px 0 #ffffff) drop-shadow(0 1.8px 0 #ffffff) drop-shadow(-0.8px 0 0 #111827) drop-shadow(0.8px 0 0 #111827) drop-shadow(0 -0.8px 0 #111827) drop-shadow(0 0.8px 0 #111827) drop-shadow(0 3px 8px rgba(15, 23, 42, 0.30));";
+
+    private string GetRemoteCursorLabelStyle(BoardCursorPresence cursor) =>
+        $"margin-left:12px; margin-top:-4px; display:inline-flex; align-items:center; max-width:220px; padding:3px 8px; border-radius:999px; background:{cursor.ColorHex}; color:#fff; font-size:12px; font-weight:700; line-height:1.2; white-space:nowrap; box-shadow:0 8px 24px rgba(15, 23, 42, 0.18);";
 
     private RenderFragment RenderElement(BoardElement element) => element switch
     {
@@ -416,6 +390,9 @@ public partial class WhiteboardCanvas
         var translatedLine = linePoints.Select(point => new Point(point.X - minX, point.Y - minY)).ToList();
         var polylinePoints = string.Join(" ", translatedLine.Select(point => $"{CssNumber(point.X)},{CssNumber(point.Y)}"));
         var dashArray = GetStrokeDashArray(lineStyle, strokeWidth);
+        var showArrowOutline = Board?.ArrowOutlineEnabled ?? true;
+        var outlineColor = GetOutlineColor(effectiveColor, GetBoardSurfaceColor());
+        var outlineStrokeWidth = Math.Max(strokeWidth + Math.Max(2.4, strokeWidth * 1.35), strokeWidth + 2.4);
 
         builder.OpenElement(0, "div");
         builder.AddAttribute(1, "style", $"position:absolute; left:{Px(minX)}; top:{Px(minY)}; width:{Px(width)}; height:{Px(height)}; overflow:visible; pointer-events:none; opacity:{CssNumber(opacity)};");
@@ -423,29 +400,83 @@ public partial class WhiteboardCanvas
         builder.AddAttribute(3, "viewBox", $"0 0 {CssNumber(width)} {CssNumber(height)}");
         builder.AddAttribute(4, "style", "width:100%; height:100%; overflow:visible; display:block;");
 
-        builder.OpenElement(5, "polyline");
-        builder.AddAttribute(6, "points", polylinePoints);
-        builder.AddAttribute(7, "fill", "none");
-        builder.AddAttribute(8, "stroke", effectiveColor);
-        builder.AddAttribute(9, "stroke-width", CssNumber(strokeWidth));
-        builder.AddAttribute(10, "stroke-linecap", "round");
-        builder.AddAttribute(11, "stroke-linejoin", "round");
-        builder.AddAttribute(12, "vector-effect", "non-scaling-stroke");
+        if (showArrowOutline)
+        {
+            builder.OpenElement(5, "polyline");
+            builder.AddAttribute(6, "points", polylinePoints);
+            builder.AddAttribute(7, "fill", "none");
+            builder.AddAttribute(8, "stroke", outlineColor);
+            builder.AddAttribute(9, "stroke-width", CssNumber(outlineStrokeWidth));
+            builder.AddAttribute(10, "stroke-linecap", "round");
+            builder.AddAttribute(11, "stroke-linejoin", "round");
+            builder.AddAttribute(12, "vector-effect", "non-scaling-stroke");
+            if (!string.IsNullOrWhiteSpace(dashArray))
+            {
+                builder.AddAttribute(13, "stroke-dasharray", dashArray);
+            }
+
+            builder.CloseElement();
+        }
+
+        builder.OpenElement(20, "polyline");
+        builder.AddAttribute(21, "points", polylinePoints);
+        builder.AddAttribute(22, "fill", "none");
+        builder.AddAttribute(23, "stroke", effectiveColor);
+        builder.AddAttribute(24, "stroke-width", CssNumber(strokeWidth));
+        builder.AddAttribute(25, "stroke-linecap", "round");
+        builder.AddAttribute(26, "stroke-linejoin", "round");
+        builder.AddAttribute(27, "vector-effect", "non-scaling-stroke");
         if (!string.IsNullOrWhiteSpace(dashArray))
         {
-            builder.AddAttribute(13, "stroke-dasharray", dashArray);
+            builder.AddAttribute(28, "stroke-dasharray", dashArray);
         }
 
         builder.CloseElement();
 
         if (visibleSourceHead != ArrowHeadStyle.None)
         {
-            RenderArrowHead(builder, 20, sourceHead, translated[0], translated[1], effectiveColor, strokeWidth, headSize, true);
+            var useBuiltInSourceOutline = showArrowOutline && sourceHead == ArrowHeadStyle.FilledTriangle;
+
+            if (showArrowOutline && !useBuiltInSourceOutline)
+            {
+                RenderArrowHead(builder, 40, sourceHead, translated[0], translated[1], outlineColor, outlineStrokeWidth, headSize + Math.Max(2, strokeWidth * 0.85), true);
+            }
+
+            RenderArrowHead(
+                builder,
+                60,
+                sourceHead,
+                translated[0],
+                translated[1],
+                effectiveColor,
+                strokeWidth,
+                headSize,
+                true,
+                useBuiltInSourceOutline ? outlineColor : null,
+                useBuiltInSourceOutline ? outlineStrokeWidth : 0);
         }
 
         if (visibleTargetHead != ArrowHeadStyle.None)
         {
-            RenderArrowHead(builder, 40, targetHead, translated[^1], translated[^2], effectiveColor, strokeWidth, headSize, false);
+            var useBuiltInTargetOutline = showArrowOutline && targetHead == ArrowHeadStyle.FilledTriangle;
+
+            if (showArrowOutline && !useBuiltInTargetOutline)
+            {
+                RenderArrowHead(builder, 80, targetHead, translated[^1], translated[^2], outlineColor, outlineStrokeWidth, headSize + Math.Max(2, strokeWidth * 0.85), false);
+            }
+
+            RenderArrowHead(
+                builder,
+                100,
+                targetHead,
+                translated[^1],
+                translated[^2],
+                effectiveColor,
+                strokeWidth,
+                headSize,
+                false,
+                useBuiltInTargetOutline ? outlineColor : null,
+                useBuiltInTargetOutline ? outlineStrokeWidth : 0);
         }
 
         builder.CloseElement();
@@ -747,7 +778,7 @@ public partial class WhiteboardCanvas
         return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(size)}; height:{Px(size)}; border-radius:999px; background:{background}; border:2px solid {border}; box-sizing:border-box; pointer-events:none; box-shadow:0 0 0 {Px(1 / _zoom)} {GetSelectionTint(0.12)};";
     }
 
-    private void RenderArrowHead(RenderTreeBuilder builder, int sequence, ArrowHeadStyle style, Point tip, Point adjacent, string color, double strokeWidth, double size, bool reverse)
+    private void RenderArrowHead(RenderTreeBuilder builder, int sequence, ArrowHeadStyle style, Point tip, Point adjacent, string color, double strokeWidth, double size, bool reverse, string? outlineColor = null, double outlineStrokeWidth = 0)
     {
         if (style == ArrowHeadStyle.None)
         {
@@ -769,7 +800,6 @@ public partial class WhiteboardCanvas
             ux *= -1;
             uy *= -1;
         }
-
         var normalX = -uy;
         var normalY = ux;
         var baseDistance = size;
@@ -778,6 +808,7 @@ public partial class WhiteboardCanvas
         var left = new Point(baseCenter.X + normalX * wing, baseCenter.Y + normalY * wing);
         var right = new Point(baseCenter.X - normalX * wing, baseCenter.Y - normalY * wing);
         var circleRadius = Math.Max(strokeWidth * 1.4, size * 0.28);
+        var triangleOutlineWidth = Math.Max(outlineStrokeWidth - strokeWidth, Math.Max(1.8, strokeWidth * 0.95));
 
         switch (style)
         {
@@ -785,6 +816,14 @@ public partial class WhiteboardCanvas
                 builder.OpenElement(sequence, "polygon");
                 builder.AddAttribute(sequence + 1, "points", $"{CssNumber(tip.X)},{CssNumber(tip.Y)} {CssNumber(left.X)},{CssNumber(left.Y)} {CssNumber(right.X)},{CssNumber(right.Y)}");
                 builder.AddAttribute(sequence + 2, "fill", color);
+                if (!string.IsNullOrWhiteSpace(outlineColor) && triangleOutlineWidth > 0)
+                {
+                    builder.AddAttribute(sequence + 3, "stroke", outlineColor);
+                    builder.AddAttribute(sequence + 4, "stroke-width", CssNumber(triangleOutlineWidth));
+                    builder.AddAttribute(sequence + 5, "stroke-linejoin", "round");
+                    builder.AddAttribute(sequence + 6, "paint-order", "stroke fill");
+                }
+
                 builder.CloseElement();
                 break;
             case ArrowHeadStyle.OpenTriangle:

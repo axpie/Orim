@@ -18,6 +18,21 @@
             }
         })();
     </script>
+    <script>
+        (function () {
+            try {
+                var lang = window.localStorage.getItem("orim-language");
+                if (lang) {
+                    var cn = ".AspNetCore.Culture";
+                    var cv = encodeURIComponent("c=" + lang + "|uic=" + lang);
+                    document.cookie = cn + "=" + cv + ";path=/;max-age=31536000;samesite=lax";
+                    if (document.documentElement.lang && document.documentElement.lang !== lang) {
+                        window.location.reload();
+                    }
+                }
+            } catch {}
+        })();
+    </script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;700&display=swap" rel="stylesheet" />
     <link href="_content/MudBlazor/MudBlazor.min.css" rel="stylesheet" />
     <link href="vendor/mdi/css/materialdesignicons.min.css" rel="stylesheet" />

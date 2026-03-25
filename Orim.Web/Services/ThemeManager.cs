@@ -3,13 +3,6 @@ using MudBlazor;
 
 namespace Orim.Web.Services;
 
-public enum ThemePreset
-{
-    Light,
-    Dark,
-    Synthwave
-}
-
 public sealed class ThemeManager
 {
     private static readonly LayoutProperties SharedLayoutProperties = new()
@@ -17,112 +10,26 @@ public sealed class ThemeManager
         DefaultBorderRadius = "10px"
     };
 
-    private static readonly MudTheme LightTheme = new()
-    {
-        PaletteLight = new PaletteLight
-        {
-            Primary = "#6E40C9",
-            Secondary = "#1F8A5B",
-            Tertiary = "#EA580C",
-            AppbarBackground = "#0D1117",
-            AppbarText = "#FFFFFF",
-            Background = "#F6F8FA",
-            Surface = "#FFFFFF",
-            DrawerBackground = "#161B22",
-            DrawerText = "#C9D1D9",
-            DrawerIcon = "#C9D1D9",
-            TextPrimary = "#24292F",
-            TextSecondary = "#57606A",
-            LinesDefault = "#D0D7DE"
-        },
-        Typography = new Typography
-        {
-            Default = new DefaultTypography
-            {
-                FontFamily = ["Inter", "system-ui", "-apple-system", "sans-serif"]
-            }
-        },
-        LayoutProperties = SharedLayoutProperties
-    };
-
-    private static readonly MudTheme DarkTheme = new()
-    {
-        PaletteDark = new PaletteDark
-        {
-            Primary = "#8B5CF6",
-            Secondary = "#22C55E",
-            Tertiary = "#38BDF8",
-            AppbarBackground = "#0B1220",
-            AppbarText = "#F8FAFC",
-            Background = "#09111F",
-            Surface = "#121A2B",
-            DrawerBackground = "#0F172A",
-            DrawerText = "#D7E0F2",
-            DrawerIcon = "#D7E0F2",
-            TextPrimary = "#E5EEF9",
-            TextSecondary = "#94A3B8",
-            LinesDefault = "#24324A"
-        },
-        Typography = new Typography
-        {
-            Default = new DefaultTypography
-            {
-                FontFamily = ["Inter", "system-ui", "-apple-system", "sans-serif"]
-            }
-        },
-        LayoutProperties = SharedLayoutProperties
-    };
-
-    private static readonly MudTheme SynthwaveTheme = new()
-    {
-        PaletteDark = new PaletteDark
-        {
-            Primary = "#FF4FD8",
-            Secondary = "#35F2FF",
-            Tertiary = "#FFC857",
-            AppbarBackground = "#160A29",
-            AppbarText = "#FFF4FD",
-            Background = "#12051F",
-            Surface = "#1B0D33",
-            DrawerBackground = "#130720",
-            DrawerText = "#F6D6FF",
-            DrawerIcon = "#F6D6FF",
-            TextPrimary = "#FFF0FF",
-            TextSecondary = "#C6A9FF",
-            LinesDefault = "#39205E",
-            Success = "#41FFD9",
-            Warning = "#FFC857",
-            Info = "#35F2FF"
-        },
-        Typography = new Typography
-        {
-            Default = new DefaultTypography
-            {
-                FontFamily = ["Space Grotesk", "Inter", "system-ui", "sans-serif"]
-            }
-        },
-        LayoutProperties = SharedLayoutProperties
-    };
-
+    private readonly ThemeCatalogService _themeCatalogService;
     private bool _isInitialized;
+    private IReadOnlyList<ThemeDefinition> _availableThemes = [ThemeCatalogService.CreateDefaultLightTheme()];
 
-    public ThemePreset CurrentPreset { get; private set; } = ThemePreset.Light;
-
-    public MudTheme CurrentTheme => CurrentPreset switch
+    public ThemeManager(ThemeCatalogService themeCatalogService)
     {
-        ThemePreset.Dark => DarkTheme,
-        ThemePreset.Synthwave => SynthwaveTheme,
-        _ => LightTheme
-    };
+        _themeCatalogService = themeCatalogService;
+        CurrentDefinition = ThemeCatalogService.CreateDefaultLightTheme();
+        CurrentTheme = BuildMudTheme(CurrentDefinition);
+    }
 
-    public bool IsDarkMode => CurrentPreset is ThemePreset.Dark or ThemePreset.Synthwave;
+    public ThemeDefinition CurrentDefinition { get; private set; }
 
-    public string CurrentThemeKey => CurrentPreset switch
-    {
-        ThemePreset.Dark => "dark",
-        ThemePreset.Synthwave => "synthwave",
-        _ => "light"
-    };
+    public MudTheme CurrentTheme { get; private set; }
+
+    public IReadOnlyList<ThemeDefinition> AvailableThemes => _availableThemes;
+
+    public bool IsDarkMode => CurrentDefinition.IsDarkMode;
+
+    public string CurrentThemeKey => CurrentDefinition.Key;
 
     public event Action? Changed;
 
@@ -130,36 +37,139 @@ public sealed class ThemeManager
     {
         if (_isInitialized)
         {
-            await jsRuntime.InvokeVoidAsync("orimTheme.apply", CurrentThemeKey);
+            await ApplyThemeAsync(jsRuntime, persist: false);
             return;
         }
 
-        var storedTheme = await jsRuntime.InvokeAsync<string?>("orimTheme.get");
-        CurrentPreset = ParseTheme(storedTheme);
+        var storedThemeKey = await jsRuntime.InvokeAsync<string?>("orimTheme.get");
+        await LoadThemesAsync();
+        SetCurrentThemeDefinition(ResolveTheme(storedThemeKey));
         _isInitialized = true;
 
-        await jsRuntime.InvokeVoidAsync("orimTheme.apply", CurrentThemeKey);
+        await ApplyThemeAsync(jsRuntime, persist: false);
         Changed?.Invoke();
     }
 
-    public async Task SetThemeAsync(ThemePreset preset, IJSRuntime jsRuntime)
+    public async Task SetThemeAsync(string themeKey, IJSRuntime jsRuntime)
     {
-        var hasChanged = CurrentPreset != preset;
-        CurrentPreset = preset;
+        await LoadThemesAsync();
+        var nextTheme = ResolveTheme(themeKey);
+        var hasChanged = !string.Equals(CurrentThemeKey, nextTheme.Key, StringComparison.Ordinal);
+        SetCurrentThemeDefinition(nextTheme);
         _isInitialized = true;
 
-        await jsRuntime.InvokeVoidAsync("orimTheme.set", CurrentThemeKey);
-
+        await ApplyThemeAsync(jsRuntime, persist: true);
         if (hasChanged)
         {
             Changed?.Invoke();
         }
     }
 
-    private static ThemePreset ParseTheme(string? themeKey) => themeKey?.Trim().ToLowerInvariant() switch
+    public async Task ReloadThemesAsync(IJSRuntime jsRuntime)
     {
-        "dark" => ThemePreset.Dark,
-        "synthwave" => ThemePreset.Synthwave,
-        _ => ThemePreset.Light
-    };
+        await LoadThemesAsync();
+        SetCurrentThemeDefinition(ResolveTheme(CurrentThemeKey));
+        _isInitialized = true;
+        await ApplyThemeAsync(jsRuntime, persist: true);
+        Changed?.Invoke();
+    }
+
+    private async Task LoadThemesAsync()
+    {
+        var enabledThemes = await _themeCatalogService.GetEnabledThemesAsync();
+        _availableThemes = enabledThemes.Count > 0
+            ? enabledThemes
+            : [ThemeCatalogService.CreateDefaultLightTheme()];
+    }
+
+    private ThemeDefinition ResolveTheme(string? requestedKey)
+    {
+        if (!string.IsNullOrWhiteSpace(requestedKey))
+        {
+            var matchingTheme = _availableThemes.FirstOrDefault(theme => string.Equals(theme.Key, requestedKey, StringComparison.OrdinalIgnoreCase));
+            if (matchingTheme is not null)
+            {
+                return matchingTheme.Clone();
+            }
+        }
+
+        var lightTheme = _availableThemes.FirstOrDefault(theme => string.Equals(theme.Key, "light", StringComparison.Ordinal));
+        return (lightTheme ?? _availableThemes.First()).Clone();
+    }
+
+    private void SetCurrentThemeDefinition(ThemeDefinition definition)
+    {
+        CurrentDefinition = definition.Clone();
+        CurrentTheme = BuildMudTheme(CurrentDefinition);
+    }
+
+    private async Task ApplyThemeAsync(IJSRuntime jsRuntime, bool persist)
+    {
+        if (persist)
+        {
+            await jsRuntime.InvokeVoidAsync("orimTheme.set", CurrentThemeKey, CurrentDefinition.CssVariables, IsDarkMode);
+            return;
+        }
+
+        await jsRuntime.InvokeVoidAsync("orimTheme.apply", CurrentThemeKey, CurrentDefinition.CssVariables, IsDarkMode);
+    }
+
+    private static MudTheme BuildMudTheme(ThemeDefinition definition)
+    {
+        var theme = new MudTheme
+        {
+            Typography = new Typography
+            {
+                Default = new DefaultTypography
+                {
+                    FontFamily = [.. definition.FontFamily]
+                }
+            },
+            LayoutProperties = SharedLayoutProperties
+        };
+
+        if (definition.IsDarkMode)
+        {
+            theme.PaletteDark = new PaletteDark
+            {
+                Primary = definition.Palette.Primary,
+                Secondary = definition.Palette.Secondary,
+                Tertiary = definition.Palette.Tertiary,
+                AppbarBackground = definition.Palette.AppbarBackground,
+                AppbarText = definition.Palette.AppbarText,
+                Background = definition.Palette.Background,
+                Surface = definition.Palette.Surface,
+                DrawerBackground = definition.Palette.DrawerBackground,
+                DrawerText = definition.Palette.DrawerText,
+                DrawerIcon = definition.Palette.DrawerIcon,
+                TextPrimary = definition.Palette.TextPrimary,
+                TextSecondary = definition.Palette.TextSecondary,
+                LinesDefault = definition.Palette.LinesDefault,
+                Success = definition.Palette.Success ?? definition.Palette.Secondary,
+                Warning = definition.Palette.Warning ?? definition.Palette.Tertiary,
+                Info = definition.Palette.Info ?? definition.Palette.Primary
+            };
+        }
+        else
+        {
+            theme.PaletteLight = new PaletteLight
+            {
+                Primary = definition.Palette.Primary,
+                Secondary = definition.Palette.Secondary,
+                Tertiary = definition.Palette.Tertiary,
+                AppbarBackground = definition.Palette.AppbarBackground,
+                AppbarText = definition.Palette.AppbarText,
+                Background = definition.Palette.Background,
+                Surface = definition.Palette.Surface,
+                DrawerBackground = definition.Palette.DrawerBackground,
+                DrawerText = definition.Palette.DrawerText,
+                DrawerIcon = definition.Palette.DrawerIcon,
+                TextPrimary = definition.Palette.TextPrimary,
+                TextSecondary = definition.Palette.TextSecondary,
+                LinesDefault = definition.Palette.LinesDefault
+            };
+        }
+
+        return theme;
+    }
 }

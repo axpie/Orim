@@ -1,0 +1,73 @@
+using System.Collections.Concurrent;
+
+namespace Orim.Core.Services;
+
+public sealed record BoardChangeNotification(Guid BoardId, string? SourceClientId, DateTime ChangedAtUtc);
+
+public sealed class BoardChangeNotifier
+{
+    private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, Func<BoardChangeNotification, Task>>> _subscriptions = new();
+
+    public IDisposable Subscribe(Guid boardId, string subscriberId, Func<BoardChangeNotification, Task> handler)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(subscriberId);
+        ArgumentNullException.ThrowIfNull(handler);
+
+        var boardSubscriptions = _subscriptions.GetOrAdd(boardId, static _ => new());
+        boardSubscriptions[subscriberId] = handler;
+        return new Subscription(this, boardId, subscriberId);
+    }
+
+    public Task NotifyBoardChangedAsync(Guid boardId, string? sourceClientId = null)
+    {
+        if (!_subscriptions.TryGetValue(boardId, out var boardSubscriptions) || boardSubscriptions.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        var notification = new BoardChangeNotification(boardId, sourceClientId, DateTime.UtcNow);
+        var handlers = boardSubscriptions.Values.ToArray();
+        return Task.WhenAll(handlers.Select(handler => InvokeHandlerSafelyAsync(handler, notification)));
+    }
+
+    private void Unsubscribe(Guid boardId, string subscriberId)
+    {
+        if (!_subscriptions.TryGetValue(boardId, out var boardSubscriptions))
+        {
+            return;
+        }
+
+        boardSubscriptions.TryRemove(subscriberId, out _);
+        if (boardSubscriptions.IsEmpty)
+        {
+            _subscriptions.TryRemove(boardId, out _);
+        }
+    }
+
+    private static async Task InvokeHandlerSafelyAsync(Func<BoardChangeNotification, Task> handler, BoardChangeNotification notification)
+    {
+        try
+        {
+            await handler(notification);
+        }
+        catch
+        {
+            // Ignore subscriber failures so one broken circuit does not block other viewers.
+        }
+    }
+
+    private sealed class Subscription(BoardChangeNotifier notifier, Guid boardId, string subscriberId) : IDisposable
+    {
+        private int _disposed;
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
+            {
+                return;
+            }
+
+            notifier.Unsubscribe(boardId, subscriberId);
+        }
+    }
+}

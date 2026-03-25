@@ -22,12 +22,12 @@
     @if (Element is null)
     {
         <MudText Typo="Typo.body2" Class="mb-3 orim-properties-muted-text">
-            @(SelectionCount > 1 ? "Mehrfachauswahl aktiv. Bitte genau ein Element auswählen, um Eigenschaften zu bearbeiten." : "Kein Element ausgewählt. Wähle ein Element aus, um seine Eigenschaften zu bearbeiten.")
+            @(SelectionCount > 1 ? Localizer["MultiSelectionPropertiesHint"] : Localizer["NoElementSelectedHint"])
         </MudText>
     }
     else
     {
-        <MudText Typo="Typo.body2" Class="mb-3 orim-properties-muted-text">Element bearbeiten</MudText>
+        <MudText Typo="Typo.body2" Class="mb-3 orim-properties-muted-text">@Localizer["EditElement"]</MudText>
 
     <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
         <div>
@@ -43,13 +43,13 @@
                    class="orim-properties-input" />
         </div>
         <div>
-            <label class="orim-properties-label">Breite</label>
+            <label class="orim-properties-label">@Localizer["Width"]</label>
             <input type="number" value="@Element.Width.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                    @onchange="HandleWidthChange"
                    class="orim-properties-input" />
         </div>
         <div>
-            <label class="orim-properties-label">Höhe</label>
+            <label class="orim-properties-label">@Localizer["Height"]</label>
             <input type="number" value="@Element.Height.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                    @onchange="HandleHeightChange"
                    class="orim-properties-input" />
@@ -60,7 +60,7 @@
     {
         <MudDivider Class="my-3" />
         <div>
-            <label class="orim-properties-label">Label</label>
+            <label class="orim-properties-label">@Localizer["Label"]</label>
             <textarea rows="4"
                       value="@_labelDraft"
                       @oninput="HandleLabelInputAsync"
@@ -71,19 +71,19 @@
 
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:12px;">
             <div>
-                <label class="orim-properties-label">Horizontal</label>
+                <label class="orim-properties-label">@Localizer["Horizontal"]</label>
                 <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" Style="border-radius: 8px;">
-                    <MudTooltip Text="Links" Arrow="true">
+                    <MudTooltip Text="@Localizer["Left"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.FormatAlignLeft"
                                        Color="@(Element.LabelHorizontalAlignment == HorizontalLabelAlignment.Left ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SetLabelHorizontalAlignment(HorizontalLabelAlignment.Left))" />
                     </MudTooltip>
-                    <MudTooltip Text="Zentriert" Arrow="true">
+                    <MudTooltip Text="@Localizer["Centered"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.FormatAlignCenter"
                                        Color="@(Element.LabelHorizontalAlignment == HorizontalLabelAlignment.Center ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SetLabelHorizontalAlignment(HorizontalLabelAlignment.Center))" />
                     </MudTooltip>
-                    <MudTooltip Text="Rechts" Arrow="true">
+                    <MudTooltip Text="@Localizer["Right"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.FormatAlignRight"
                                        Color="@(Element.LabelHorizontalAlignment == HorizontalLabelAlignment.Right ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SetLabelHorizontalAlignment(HorizontalLabelAlignment.Right))" />
@@ -91,19 +91,19 @@
                 </MudButtonGroup>
             </div>
             <div>
-                <label class="orim-properties-label">Vertikal</label>
+                <label class="orim-properties-label">@Localizer["Vertical"]</label>
                 <MudButtonGroup Variant="Variant.Outlined" Size="Size.Small" Style="border-radius: 8px;">
-                    <MudTooltip Text="Oben" Arrow="true">
+                    <MudTooltip Text="@Localizer["Top"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.VerticalAlignTop"
                                        Color="@(Element.LabelVerticalAlignment == VerticalLabelAlignment.Top ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SetLabelVerticalAlignment(VerticalLabelAlignment.Top))" />
                     </MudTooltip>
-                    <MudTooltip Text="Mitte" Arrow="true">
+                    <MudTooltip Text="@Localizer["Middle"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.VerticalAlignCenter"
                                        Color="@(Element.LabelVerticalAlignment == VerticalLabelAlignment.Middle ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SetLabelVerticalAlignment(VerticalLabelAlignment.Middle))" />
                     </MudTooltip>
-                    <MudTooltip Text="Unten" Arrow="true">
+                    <MudTooltip Text="@Localizer["Bottom"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.VerticalAlignBottom"
                                        Color="@(Element.LabelVerticalAlignment == VerticalLabelAlignment.Bottom ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SetLabelVerticalAlignment(VerticalLabelAlignment.Bottom))" />
@@ -112,13 +112,13 @@
             </div>
         </div>
 
-        <MudCheckBox Value="_labelAutoSize" Label="Schriftgröße automatisch" Dense="true" T="bool"
+        <MudCheckBox Value="_labelAutoSize" Label="@Localizer["AutoFontSize"]" Dense="true" T="bool"
                      ValueChanged="@((bool value) => HandleLabelAutoSizeChanged(value))" />
 
         @if (!_labelAutoSize)
         {
             <div class="mt-2">
-                <label class="orim-properties-label">Schriftgröße</label>
+                <label class="orim-properties-label">@Localizer["FontSize"]</label>
                 <input type="number" min="1"
                        value="@_labelFontSize.ToString(System.Globalization.CultureInfo.InvariantCulture)"
                        @onchange="HandleLabelFontSizeChange"
@@ -129,19 +129,19 @@
 
     @if (Element is ShapeElement shape)
     {
-        <label class="orim-properties-label">Füllung</label>
+        <label class="orim-properties-label">@Localizer["Fill"]</label>
         <div class="orim-color-button-group mb-2">
             <button type="button" class="orim-properties-color-trigger"
-                    @onclick='@(() => OpenColorDialog(ColorFieldTarget.ShapeFill, "Füllung", shape.FillColor))'>
+                    @onclick='@(() => OpenColorDialog(ColorFieldTarget.ShapeFill, Localizer["Fill"], shape.FillColor))'>
                 <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(shape.FillColor))"></span>
-                <span>Farbe auswählen</span>
+                <span>@Localizer["ChooseColor"]</span>
             </button>
             @if (!DialogMode)
             {
             <button type="button"
                     class="orim-properties-color-icon-button"
-                    title="Pipette"
-                    aria-label="Pipette"
+                    title="@Localizer["Eyedropper"]"
+                    aria-label="@Localizer["Eyedropper"]"
                     @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.ShapeFill))'>
                 <span class="mdi mdi-eyedropper"></span>
             </button>
@@ -151,19 +151,19 @@
         {
             <div class="orim-properties-color-status">@_colorPickerStatusMessage</div>
         }
-        <label class="orim-properties-label">Rahmen</label>
+        <label class="orim-properties-label">@Localizer["Stroke"]</label>
         <div class="orim-color-button-group mb-2">
             <button type="button" class="orim-properties-color-trigger"
-                    @onclick='@(() => OpenColorDialog(ColorFieldTarget.ShapeStroke, "Rahmen", shape.StrokeColor))'>
+                    @onclick='@(() => OpenColorDialog(ColorFieldTarget.ShapeStroke, Localizer["Stroke"], shape.StrokeColor))'>
                 <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(shape.StrokeColor))"></span>
-                <span>Farbe auswählen</span>
+                <span>@Localizer["ChooseColor"]</span>
             </button>
             @if (!DialogMode)
             {
             <button type="button"
                     class="orim-properties-color-icon-button"
-                    title="Pipette"
-                    aria-label="Pipette"
+                    title="@Localizer["Eyedropper"]"
+                    aria-label="@Localizer["Eyedropper"]"
                     @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.ShapeStroke))'>
                 <span class="mdi mdi-eyedropper"></span>
             </button>
@@ -173,9 +173,9 @@
         {
             <div class="orim-properties-color-status">@_colorPickerStatusMessage</div>
         }
-        <MudNumericField @bind-Value="ShapeStrokeWidthValue" Label="Rahmenbreite" Variant="Variant.Outlined"
+        <MudNumericField @bind-Value="ShapeStrokeWidthValue" Label="@Localizer["BorderWidth"]" Variant="Variant.Outlined"
                  Size="Size.Small" Margin="Margin.Dense" T="double" />
-        <MudSelect Value="shape.BorderLineStyle" Label="Linienstil" Variant="Variant.Outlined"
+        <MudSelect Value="shape.BorderLineStyle" Label="@Localizer["LineStyle"]" Variant="Variant.Outlined"
                    Margin="Margin.Dense" T="BorderLineStyle"
                    ValueChanged="@(v => { shape.BorderLineStyle = v; OnValueChanged(); })">
             @foreach (var option in _borderStyleOptions)
@@ -194,23 +194,23 @@
     else if (Element is TextElement text)
     {
         <MudDivider Class="my-3" />
-        <MudTextField Value="text.Text" Label="Text" Variant="Variant.Outlined"
+        <MudTextField Value="text.Text" Label="@Localizer["Text"]" Variant="Variant.Outlined"
                       ValueChanged="@((string v) => { text.Text = v; OnValueChanged(); })" />
-        <MudNumericField @bind-Value="TextFontSizeValue" Label="Schriftgröße" Variant="Variant.Outlined"
+        <MudNumericField @bind-Value="TextFontSizeValue" Label="@Localizer["FontSize"]" Variant="Variant.Outlined"
                  Size="Size.Small" Margin="Margin.Dense" T="double" />
-        <label class="orim-properties-label">Farbe</label>
+        <label class="orim-properties-label">@Localizer["Color"]</label>
         <div class="orim-color-button-group mb-2">
             <button type="button" class="orim-properties-color-trigger"
-                    @onclick='@(() => OpenColorDialog(ColorFieldTarget.Text, "Textfarbe", text.Color))'>
+                    @onclick='@(() => OpenColorDialog(ColorFieldTarget.Text, Localizer["TextColor"], text.Color))'>
                 <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(text.Color))"></span>
-                <span>Farbe auswählen</span>
+                <span>@Localizer["ChooseColor"]</span>
             </button>
             @if (!DialogMode)
             {
             <button type="button"
                     class="orim-properties-color-icon-button"
-                    title="Pipette"
-                    aria-label="Pipette"
+                    title="@Localizer["Eyedropper"]"
+                    aria-label="@Localizer["Eyedropper"]"
                     @onclick='@(() => HandleInlineEyeDropperAsync(ColorFieldTarget.Text))'>
                 <span class="mdi mdi-eyedropper"></span>
             </button>

@@ -20,6 +20,7 @@
   <data name="Login" xml:space="preserve"><value>Login</value></data>
   <data name="Logout" xml:space="preserve"><value>Logout</value></data>
   <data name="Theme" xml:space="preserve"><value>Theme</value></data>
+  <data name="Language" xml:space="preserve"><value>Language</value></data>
   <data name="ThemeLight" xml:space="preserve"><value>Light</value></data>
   <data name="ThemeDark" xml:space="preserve"><value>Dark</value></data>
   <data name="ThemeSynthwave" xml:space="preserve"><value>Synthwave</value></data>
@@ -27,7 +28,19 @@
   <data name="MyBoards" xml:space="preserve"><value>My Boards</value></data>
   <data name="NewBoard" xml:space="preserve"><value>New Board</value></data>
   <data name="Users" xml:space="preserve"><value>Users</value></data>
+  <data name="OrimSettings" xml:space="preserve"><value>ORIM Settings</value></data>
   <data name="Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="ShareAndSettings" xml:space="preserve"><value>Sharing and settings</value></data>
+  <data name="General" xml:space="preserve"><value>General</value></data>
+  <data name="GeneralSettingsDescription" xml:space="preserve"><value>Choose which general content is shown in your interface.</value></data>
+  <data name="LanguageSettingsDescription" xml:space="preserve"><value>Choose the interface language.</value></data>
+  <data name="LanguageGerman" xml:space="preserve"><value>German</value></data>
+  <data name="LanguageGermanDescription" xml:space="preserve"><value>Show the interface in German</value></data>
+  <data name="LanguageEnglish" xml:space="preserve"><value>English</value></data>
+  <data name="LanguageEnglishDescription" xml:space="preserve"><value>Show the interface in English</value></data>
+  <data name="ShowBoardOverviewTemplates" xml:space="preserve"><value>Show templates on the board overview</value></data>
+  <data name="ShowBoardOverviewTemplatesDescription" xml:space="preserve"><value>Shows or hides the template section on the dashboard.</value></data>
+  <data name="ThemeSettingsDescription" xml:space="preserve"><value>Choose an available theme with a compact color preview.</value></data>
   <data name="Username" xml:space="preserve"><value>Username</value></data>
   <data name="Password" xml:space="preserve"><value>Password</value></data>
   <data name="InvalidCredentials" xml:space="preserve"><value>Invalid username or password.</value></data>
@@ -61,6 +74,7 @@
   <data name="UserManagement" xml:space="preserve"><value>User Management</value></data>
   <data name="BoardSettings" xml:space="preserve"><value>Board Settings</value></data>
   <data name="LabelOutlineEnabled" xml:space="preserve"><value>Show label outline</value></data>
+  <data name="ArrowOutlineEnabled" xml:space="preserve"><value>Show arrow outline</value></data>
   <data name="ShareLink" xml:space="preserve"><value>Share Link</value></data>
   <data name="GenerateShareLink" xml:space="preserve"><value>Generate New Share Link</value></data>
   <data name="Properties" xml:space="preserve"><value>Properties</value></data>
@@ -87,6 +101,16 @@
   <data name="Admin" xml:space="preserve"><value>Admin</value></data>
   <data name="Board" xml:space="preserve"><value>Board</value></data>
   <data name="NoBoardAccess" xml:space="preserve"><value>No access to this board.</value></data>
+  <data name="DisplayName" xml:space="preserve"><value>Display name</value></data>
+  <data name="ReadOnly" xml:space="preserve"><value>Read-only</value></data>
+  <data name="AllowEditingViaShareLink" xml:space="preserve"><value>Allow editing via share link</value></data>
+  <data name="RequireSharePassword" xml:space="preserve"><value>Require password for share link</value></data>
+  <data name="SharePasswordHint" xml:space="preserve"><value>Set a password to add protection to the share link.</value></data>
+  <data name="SharePasswordRequired" xml:space="preserve"><value>Please enter a password for the share link.</value></data>
+  <data name="SharedLinkProtected" xml:space="preserve"><value>This share link is protected by a password.</value></data>
+  <data name="SharedLinkPasswordPrompt" xml:space="preserve"><value>Enter the password to open the board.</value></data>
+  <data name="UnlockSharedLink" xml:space="preserve"><value>Unlock link</value></data>
+  <data name="InvalidSharePassword" xml:space="preserve"><value>The password for this share link is invalid.</value></data>
   <data name="BackToOverview" xml:space="preserve"><value>Back to overview</value></data>
   <data name="SelectToolTooltip" xml:space="preserve"><value>Select tool</value></data>
   <data name="DrawRectangleTooltip" xml:space="preserve"><value>Draw rectangle</value></data>
@@ -137,6 +161,118 @@
   <data name="ChatAssistantWelcome" xml:space="preserve"><value>Describe a diagram and I'll create it on the whiteboard for you. E.g. "Create a software architecture with mediator pattern".</value></data>
   <data name="ChatAssistantNotConfigured" xml:space="preserve"><value>The AI assistant is not configured. Please configure AzureOpenAI in settings.</value></data>
   <data name="ChatInputPlaceholder" xml:space="preserve"><value>Describe a diagram…</value></data>
-  <data name="CanvasError" xml:space="preserve"><value>An error occurred in the canvas.</value></data>
+  <data name="AddMember" xml:space="preserve"><value>Add member</value></data>
+  <data name="AutoFontSize" xml:space="preserve"><value>Automatic font size</value></data>
+  <data name="AutomaticImportBackupSnapshot" xml:space="preserve"><value>Automatic backup before import</value></data>
+  <data name="AutomaticRestoreBackupSnapshot" xml:space="preserve"><value>Automatic backup before restore</value></data>
+  <data name="BoardCanvasRegionDescription" xml:space="preserve"><value>Interactive whiteboard area for drawing, selecting, and editing elements.</value></data>
+  <data name="BoardCanvasRegionLabel" xml:space="preserve"><value>Whiteboard canvas</value></data>
+  <data name="BoardCanvasUpdatedAnnouncement" xml:space="preserve"><value>The board has been updated.</value></data>
+  <data name="BoardElement" xml:space="preserve"><value>Board element</value></data>
+  <data name="BoardLoadedAnnouncement" xml:space="preserve"><value>Board {0} loaded.</value></data>
+  <data name="BoardMemberAdded" xml:space="preserve"><value>{0} was added to the board.</value></data>
+  <data name="BoardMemberRemoved" xml:space="preserve"><value>Member was removed from the board.</value></data>
+  <data name="BoardOnboardingDescription" xml:space="preserve"><value>Start with the key tools or share your board with others.</value></data>
+  <data name="BoardOnboardingTipDraw" xml:space="preserve"><value>Use shapes and arrows to capture your first ideas quickly.</value></data>
+  <data name="BoardOnboardingTipImport" xml:space="preserve"><value>Import existing JSON boards and continue working on them.</value></data>
+  <data name="BoardOnboardingTipShare" xml:space="preserve"><value>Share your board with members or via link.</value></data>
+  <data name="BoardOnboardingTitle" xml:space="preserve"><value>Quick start</value></data>
+  <data name="BoardSettingsDescription" xml:space="preserve"><value>Manage general settings, sharing, members, imports, and snapshots for this board.</value></data>
+  <data name="BoardSettingsOwnerOnly" xml:space="preserve"><value>Only the owner can change this setting.</value></data>
+  <data name="BoardSettingsSavedAnnouncement" xml:space="preserve"><value>Board settings saved.</value></data>
+  <data name="BorderWidth" xml:space="preserve"><value>Border width</value></data>
+  <data name="Bottom" xml:space="preserve"><value>Bottom</value></data>
+  <data name="CanvasError" xml:space="preserve"><value>An error occurred while loading the whiteboard.</value></data>
+  <data name="Centered" xml:space="preserve"><value>Centered</value></data>
+  <data name="ChooseColor" xml:space="preserve"><value>Choose color</value></data>
+  <data name="Color" xml:space="preserve"><value>Color</value></data>
+  <data name="CopyShareLink" xml:space="preserve"><value>Copy share link</value></data>
+  <data name="CreateSnapshot" xml:space="preserve"><value>Create snapshot</value></data>
+  <data name="DashboardEmptyStateImportTip" xml:space="preserve"><value>Import an existing board from JSON.</value></data>
+  <data name="DashboardEmptyStateShareTip" xml:space="preserve"><value>Share boards with your team or via link.</value></data>
+  <data name="DashboardEmptyStateTemplateTip" xml:space="preserve"><value>Start faster with a template.</value></data>
+  <data name="EditElement" xml:space="preserve"><value>Edit element</value></data>
+  <data name="Editor" xml:space="preserve"><value>Editor</value></data>
+  <data name="Eyedropper" xml:space="preserve"><value>Pick color</value></data>
+  <data name="FormatTransferCancel" xml:space="preserve"><value>Cancel format transfer</value></data>
+  <data name="FormatTransferStart" xml:space="preserve"><value>Transfer format</value></data>
+  <data name="GeneralBoardSettings" xml:space="preserve"><value>General board settings</value></data>
+  <data name="Horizontal" xml:space="preserve"><value>Horizontal</value></data>
+  <data name="ImportBoardInvalidJson" xml:space="preserve"><value>The imported file is not valid board JSON.</value></data>
+  <data name="ImportBoardJson" xml:space="preserve"><value>Import board JSON</value></data>
+  <data name="ImportBoardReadError" xml:space="preserve"><value>The import file could not be read.</value></data>
+  <data name="ImportReplaceBoard" xml:space="preserve"><value>Replace board content</value></data>
+  <data name="ImportReplaceBoardDescription" xml:space="preserve"><value>Import a JSON file and replace the current board content with it.</value></data>
+  <data name="ImportReplaceSuccess" xml:space="preserve"><value>Board content was replaced successfully.</value></data>
+  <data name="Label" xml:space="preserve"><value>Label</value></data>
+  <data name="Left" xml:space="preserve"><value>Left</value></data>
+  <data name="LineStyle" xml:space="preserve"><value>Line style</value></data>
+  <data name="MembersDescription" xml:space="preserve"><value>Manage who can view or edit this board.</value></data>
+  <data name="Middle" xml:space="preserve"><value>Middle</value></data>
+  <data name="MultiSelectionPropertiesHint" xml:space="preserve"><value>Only limited properties are available for multi-selection.</value></data>
+  <data name="NoBoardsHeadline" xml:space="preserve"><value>No boards yet</value></data>
+  <data name="NoElementSelectedHint" xml:space="preserve"><value>Select an element to edit its properties.</value></data>
+  <data name="NoSnapshots" xml:space="preserve"><value>No snapshots available yet.</value></data>
+  <data name="Owner" xml:space="preserve"><value>Owner</value></data>
+  <data name="QuickStartDescription" xml:space="preserve"><value>Create a new board, use a template, or import existing content.</value></data>
+  <data name="QuickStartDescriptionWithoutTemplates" xml:space="preserve"><value>Create a new board or import existing content.</value></data>
+  <data name="QuickStartTitle" xml:space="preserve"><value>Get started quickly</value></data>
+  <data name="RestoreSnapshot" xml:space="preserve"><value>Restore snapshot</value></data>
   <data name="Retry" xml:space="preserve"><value>Retry</value></data>
+  <data name="Right" xml:space="preserve"><value>Right</value></data>
+  <data name="SelectionClearedAnnouncement" xml:space="preserve"><value>Selection cleared.</value></data>
+  <data name="SelectionCountAnnouncement" xml:space="preserve"><value>{0} elements selected.</value></data>
+  <data name="SelectionDeletedAnnouncement" xml:space="preserve"><value>Selected elements deleted.</value></data>
+  <data name="SelectionMovedAnnouncement" xml:space="preserve"><value>Selection moved.</value></data>
+  <data name="SelectionSingleAnnouncement" xml:space="preserve"><value>{0} selected.</value></data>
+  <data name="ShareAndAccess" xml:space="preserve"><value>Share and access</value></data>
+  <data name="ShareLinkCopied" xml:space="preserve"><value>Share link copied to clipboard.</value></data>
+  <data name="ShareLinkExplanation" xml:space="preserve"><value>Use this link for anonymous access when the board visibility is set to shared.</value></data>
+  <data name="ShareLinkGenerated" xml:space="preserve"><value>New share link generated.</value></data>
+  <data name="SnapshotCreated" xml:space="preserve"><value>Snapshot {0} created.</value></data>
+  <data name="SnapshotMetadata" xml:space="preserve"><value>Created by {0} on {1}</value></data>
+  <data name="SnapshotName" xml:space="preserve"><value>Snapshot name</value></data>
+  <data name="SnapshotRestored" xml:space="preserve"><value>Snapshot restored.</value></data>
+  <data name="Snapshots" xml:space="preserve"><value>Snapshots</value></data>
+  <data name="SnapshotsDescription" xml:space="preserve"><value>Save the current board state and restore it later.</value></data>
+  <data name="Template" xml:space="preserve"><value>Template</value></data>
+  <data name="TextColor" xml:space="preserve"><value>Text color</value></data>
+  <data name="ToolSelectedAnnouncement" xml:space="preserve"><value>Tool {0} selected.</value></data>
+  <data name="Top" xml:space="preserve"><value>Top</value></data>
+  <data name="UseTemplate" xml:space="preserve"><value>Use template</value></data>
+  <data name="Vertical" xml:space="preserve"><value>Vertical</value></data>
+  <data name="Viewer" xml:space="preserve"><value>Viewer</value></data>
+  <data name="VisibilityExplanation" xml:space="preserve"><value>Private: members only. Public: visible to signed-in users. Shared: also available via share link.</value></data>
+  <data name="TemplateBlankTitle" xml:space="preserve"><value>Blank board</value></data>
+  <data name="TemplateBlankDescription" xml:space="preserve"><value>Start from scratch with a completely empty workspace.</value></data>
+  <data name="TemplateProcessTitle" xml:space="preserve"><value>Process flow</value></data>
+  <data name="TemplateProcessDescription" xml:space="preserve"><value>Template for workflows with start, decision, and finish stages.</value></data>
+  <data name="TemplateOrgChartTitle" xml:space="preserve"><value>Org chart</value></data>
+  <data name="TemplateOrgChartDescription" xml:space="preserve"><value>Structure teams, roles, and reporting lines in a hierarchy.</value></data>
+  <data name="TemplateSwimlaneTitle" xml:space="preserve"><value>Swimlane diagram</value></data>
+  <data name="TemplateSwimlaneDescription" xml:space="preserve"><value>Map cross-team or cross-function workflows in lanes.</value></data>
+  <data name="TemplateDecisionTreeTitle" xml:space="preserve"><value>Decision tree</value></data>
+  <data name="TemplateDecisionTreeDescription" xml:space="preserve"><value>Visualize branches, approvals, and follow-up paths.</value></data>
+  <data name="TemplateWorkshopTitle" xml:space="preserve"><value>Workshop board</value></data>
+  <data name="TemplateWorkshopDescription" xml:space="preserve"><value>Use common clusters for goals, ideas, risks, and next steps.</value></data>
+  <data name="ThemeManagement" xml:space="preserve"><value>Theme management</value></data>
+  <data name="ThemeManagementDescription" xml:space="preserve"><value>Manage the themes available in ORIM, upload or download JSON files, and enable the variants that should be offered to users.</value></data>
+  <data name="UploadThemeJson" xml:space="preserve"><value>Upload theme JSON</value></data>
+  <data name="ThemeUploadReplaceHint" xml:space="preserve"><value>Uploading a JSON file creates a new theme or replaces an existing editable theme with the same key.</value></data>
+  <data name="ThemeImmutableHint" xml:space="preserve"><value>The default light theme is protected: it can be downloaded, but it cannot be changed or deleted.</value></data>
+  <data name="ThemeName" xml:space="preserve"><value>Theme name</value></data>
+  <data name="ThemeKey" xml:space="preserve"><value>Theme key</value></data>
+  <data name="ThemeMode" xml:space="preserve"><value>Mode</value></data>
+  <data name="ThemeAvailability" xml:space="preserve"><value>Available</value></data>
+  <data name="ThemeProtection" xml:space="preserve"><value>Protection</value></data>
+  <data name="CurrentTheme" xml:space="preserve"><value>Current</value></data>
+  <data name="DownloadThemeJson" xml:space="preserve"><value>Download theme JSON</value></data>
+  <data name="DeleteTheme" xml:space="preserve"><value>Delete theme</value></data>
+  <data name="ThemeDeleted" xml:space="preserve"><value>Theme deleted.</value></data>
+  <data name="ThemeUploaded" xml:space="preserve"><value>Theme imported successfully.</value></data>
+  <data name="ThemeDeleteConfirmation" xml:space="preserve"><value>Delete theme '{0}'?</value></data>
+  <data name="Protected" xml:space="preserve"><value>Protected</value></data>
+  <data name="Editable" xml:space="preserve"><value>Editable</value></data>
+  <data name="DarkMode" xml:space="preserve"><value>Dark</value></data>
+  <data name="LightMode" xml:space="preserve"><value>Light</value></data>
 </root>

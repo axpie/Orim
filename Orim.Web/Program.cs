@@ -6,6 +6,7 @@ using MudBlazor.Services;
 using Orim.Core.Models;
 using Orim.Core.Services;
 using Orim.Infrastructure;
+using Orim.Web;
 using Orim.Web.Components;
 using Orim.Web.Services;
 
@@ -26,7 +27,13 @@ builder.Services.AddRazorComponents()
 
 builder.Services.AddMudServices();
 builder.Services.AddOrimInfrastructure(dataPath, useDebugStorage);
+builder.Services.AddSingleton(sp =>
+{
+    var logger = sp.GetRequiredService<ILogger<ThemeCatalogService>>();
+    return new ThemeCatalogService(Path.Combine(dataPath, "themes"), logger);
+});
 builder.Services.AddScoped<ThemeManager>();
+builder.Services.AddScoped<UserPreferencesManager>();
 builder.Services.AddSingleton<DiagramAssistantService>();
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
@@ -110,6 +117,14 @@ var localizationOptions = new RequestLocalizationOptions()
     .AddSupportedCultures("de", "en")
     .AddSupportedUICultures("de", "en");
 
+localizationOptions.RequestCultureProviders =
+[
+    new CookieRequestCultureProvider
+    {
+        CookieName = CookieRequestCultureProvider.DefaultCookieName
+    }
+];
+
 app.UseRequestLocalization(localizationOptions);
 
 app.UseAuthentication();
@@ -134,6 +149,7 @@ app.MapGet("/api/culture/set", (string culture, string? redirectUri, HttpContext
             Expires = DateTimeOffset.UtcNow.AddYears(1),
             IsEssential = true,
             HttpOnly = false,
+            Path = "/",
             Secure = context.Request.IsHttps,
             SameSite = SameSiteMode.Lax
         });
@@ -185,6 +201,17 @@ app.MapGet("/api/auth/logout", async (HttpContext context) =>
     await context.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
     context.Response.Redirect("/login");
 });
+
+app.MapPost("/api/presence/leave", async (PresenceLeaveRequest request, BoardPresenceService boardPresenceService) =>
+{
+    if (request.BoardId == Guid.Empty || string.IsNullOrWhiteSpace(request.ClientId))
+    {
+        return Results.BadRequest();
+    }
+
+    await boardPresenceService.RemoveCursorAsync(request.BoardId, request.ClientId);
+    return Results.Ok();
+}).AllowAnonymous();
 
 app.MapGet("/api/export/pdf/{boardId:guid}", async (Guid boardId, BoardService boardService, HttpContext context) =>
 {

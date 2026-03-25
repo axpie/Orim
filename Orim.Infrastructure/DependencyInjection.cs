@@ -14,6 +14,8 @@ public static class DependencyInjection
 
         services.AddSingleton<IUserRepository>(new JsonUserRepository(dataPath, userFileName));
         services.AddSingleton<IBoardRepository>(new JsonBoardRepository(dataPath, boardDirectoryName));
+        services.AddSingleton<BoardChangeNotifier>();
+        services.AddSingleton<BoardPresenceService>();
         services.AddScoped<UserService>();
         services.AddScoped<BoardService>();
         return services;

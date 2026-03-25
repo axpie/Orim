@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+using System.Text.Json;
 using Orim.Core.Interfaces;
 using Orim.Core.Models;
 
@@ -5,24 +7,36 @@ namespace Orim.Core.Services;
 
 public class BoardService
 {
+    private const int MaxSnapshots = 30;
+    private const int SharePasswordIterations = 100_000;
+    private const int SharePasswordSaltSize = 16;
+    private const int SharePasswordKeySize = 32;
     private readonly IBoardRepository _boardRepository;
+    private readonly BoardChangeNotifier _boardChangeNotifier;
 
-    public BoardService(IBoardRepository boardRepository)
+    public BoardService(IBoardRepository boardRepository, BoardChangeNotifier boardChangeNotifier)
     {
         _boardRepository = boardRepository;
+        _boardChangeNotifier = boardChangeNotifier;
     }
 
-    public async Task<Board> CreateBoardAsync(string title, Guid ownerId, string ownerUsername)
+    public IReadOnlyList<BoardTemplateDefinition> GetTemplates() => BoardTemplateCatalog.Definitions;
+
+    public async Task<Board> CreateBoardAsync(string title, Guid ownerId, string ownerUsername, string? templateId = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
 
         if (title.Length > 200)
             throw new ArgumentException("Board title must not exceed 200 characters.", nameof(title));
 
+        if (!BoardTemplateCatalog.IsKnownTemplate(templateId))
+            throw new InvalidOperationException($"Unknown board template '{templateId}'.");
+
         var board = new Board
         {
-            Title = title,
+            Title = title.Trim(),
             OwnerId = ownerId,
+            Elements = CloneElements(BoardTemplateCatalog.CreateElements(templateId)),
             Members =
             [
                 new BoardMember { UserId = ownerId, Username = ownerUsername, Role = BoardRole.Owner }
@@ -32,9 +46,116 @@ public class BoardService
         return board;
     }
 
+    public async Task<Board> CreateBoardFromImportAsync(Board importedBoard, string title, Guid ownerId, string ownerUsername)
+    {
+        ArgumentNullException.ThrowIfNull(importedBoard);
+        ArgumentException.ThrowIfNullOrWhiteSpace(title);
+
+        var board = new Board
+        {
+            Title = title.Trim(),
+            OwnerId = ownerId,
+            LabelOutlineEnabled = importedBoard.LabelOutlineEnabled,
+            ArrowOutlineEnabled = importedBoard.ArrowOutlineEnabled,
+            CustomColors = importedBoard.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            RecentColors = importedBoard.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            Elements = CloneElements(importedBoard.Elements),
+            Members =
+            [
+                new BoardMember { UserId = ownerId, Username = ownerUsername, Role = BoardRole.Owner }
+            ]
+        };
+
+        NormalizeZIndexes(board.Elements);
+        await _boardRepository.SaveAsync(board);
+        return board;
+    }
+
     public Task<Board?> GetBoardAsync(Guid boardId) => _boardRepository.GetByIdAsync(boardId);
 
     public Task<Board?> GetBoardByShareTokenAsync(string token) => _boardRepository.GetByShareTokenAsync(token);
+
+    public bool IsSharePasswordProtected(Board board)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        return !string.IsNullOrWhiteSpace(board.SharePasswordHash);
+    }
+
+    public void SetSharePassword(Board board, string password)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentException.ThrowIfNullOrWhiteSpace(password);
+
+        var salt = RandomNumberGenerator.GetBytes(SharePasswordSaltSize);
+        var derivedKey = Rfc2898DeriveBytes.Pbkdf2(
+            password.Trim(),
+            salt,
+            SharePasswordIterations,
+            HashAlgorithmName.SHA256,
+            SharePasswordKeySize);
+
+        board.SharePasswordHash = string.Join('.',
+            SharePasswordIterations.ToString(),
+            Convert.ToBase64String(salt),
+            Convert.ToBase64String(derivedKey));
+    }
+
+    public void ClearSharePassword(Board board)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        board.SharePasswordHash = null;
+    }
+
+    public bool ValidateSharePassword(Board board, string? password)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+
+        if (!IsSharePasswordProtected(board))
+            return true;
+
+        if (string.IsNullOrWhiteSpace(password))
+            return false;
+
+        var parts = board.SharePasswordHash!.Split('.', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        if (parts.Length != 3 || !int.TryParse(parts[0], out var iterations))
+            return false;
+
+        try
+        {
+            var salt = Convert.FromBase64String(parts[1]);
+            var expectedKey = Convert.FromBase64String(parts[2]);
+            var actualKey = Rfc2898DeriveBytes.Pbkdf2(
+                password.Trim(),
+                salt,
+                iterations,
+                HashAlgorithmName.SHA256,
+                expectedKey.Length);
+
+            return CryptographicOperations.FixedTimeEquals(actualKey, expectedKey);
+        }
+        catch (FormatException)
+        {
+            return false;
+        }
+    }
+
+    public bool HasSharedLinkAccess(Board board, string? password, BoardRole minimumRole = BoardRole.Viewer)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+
+        if (board.Visibility != BoardVisibility.Shared)
+            return false;
+
+        if (!ValidateSharePassword(board, password))
+            return false;
+
+        return minimumRole switch
+        {
+            BoardRole.Viewer => true,
+            BoardRole.Editor => board.SharedAllowAnonymousEditing,
+            _ => false
+        };
+    }
 
     public async Task<List<BoardSummary>> GetAccessibleBoardSummariesAsync(Guid userId)
     {
@@ -46,20 +167,133 @@ public class BoardService
         ).ToList();
     }
 
-    public async Task UpdateBoardAsync(Board board)
+    public async Task UpdateBoardAsync(Board board, string? sourceClientId = null)
     {
+        EnsureOwnerMembership(board);
         board.UpdatedAt = DateTime.UtcNow;
         await _boardRepository.SaveAsync(board);
+        await _boardChangeNotifier.NotifyBoardChangedAsync(board.Id, sourceClientId);
     }
 
     public async Task DeleteBoardAsync(Guid boardId)
     {
         await _boardRepository.DeleteAsync(boardId);
+        await _boardChangeNotifier.NotifyBoardChangedAsync(boardId);
+    }
+
+    public string GenerateShareLinkToken() =>
+        Convert.ToHexString(RandomNumberGenerator.GetBytes(8)).ToLowerInvariant();
+
+    public void AddMember(Board board, User user, BoardRole role)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentNullException.ThrowIfNull(user);
+
+        if (!user.IsActive)
+            throw new InvalidOperationException("Only active users can be added to boards.");
+
+        if (user.Id == board.OwnerId)
+            return;
+
+        var existingMember = board.Members.FirstOrDefault(member => member.UserId == user.Id);
+        if (existingMember is not null)
+        {
+            existingMember.Role = role;
+            existingMember.Username = user.Username;
+            return;
+        }
+
+        board.Members.Add(new BoardMember
+        {
+            UserId = user.Id,
+            Username = user.Username,
+            Role = role
+        });
+    }
+
+    public void RemoveMember(Board board, Guid userId)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+
+        if (userId == board.OwnerId)
+            throw new InvalidOperationException("The board owner cannot be removed.");
+
+        board.Members.RemoveAll(member => member.UserId == userId);
+    }
+
+    public void UpdateMemberRole(Board board, Guid userId, BoardRole role)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+
+        if (userId == board.OwnerId)
+            throw new InvalidOperationException("The board owner role cannot be changed.");
+
+        var member = board.Members.FirstOrDefault(candidate => candidate.UserId == userId)
+            ?? throw new InvalidOperationException("Board member not found.");
+
+        member.Role = role;
+    }
+
+    public BoardSnapshot CreateSnapshot(Board board, string? name, Guid userId, string username)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+
+        var snapshot = new BoardSnapshot
+        {
+            Name = string.IsNullOrWhiteSpace(name)
+                ? $"Snapshot {DateTime.UtcNow:yyyy-MM-dd HH:mm}"
+                : name.Trim(),
+            CreatedByUserId = userId,
+            CreatedByUsername = username.Trim(),
+            ContentJson = JsonSerializer.Serialize(CaptureSnapshotContent(board), OrimJsonOptions.Default)
+        };
+
+        board.Snapshots.Insert(0, snapshot);
+        if (board.Snapshots.Count > MaxSnapshots)
+        {
+            board.Snapshots = board.Snapshots.Take(MaxSnapshots).ToList();
+        }
+
+        return snapshot;
+    }
+
+    public void RestoreSnapshot(Board board, Guid snapshotId)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+
+        var snapshot = board.Snapshots.FirstOrDefault(candidate => candidate.Id == snapshotId)
+            ?? throw new InvalidOperationException("Snapshot not found.");
+
+        var content = JsonSerializer.Deserialize<BoardSnapshotContent>(snapshot.ContentJson, OrimJsonOptions.Default)
+            ?? throw new InvalidOperationException("Snapshot content is invalid.");
+
+        board.Title = content.Title;
+        board.LabelOutlineEnabled = content.LabelOutlineEnabled;
+        board.ArrowOutlineEnabled = content.ArrowOutlineEnabled;
+        board.CustomColors = content.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        board.RecentColors = content.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        board.Elements = CloneElements(content.Elements);
+        NormalizeZIndexes(board.Elements);
+    }
+
+    public void ReplaceBoardContent(Board targetBoard, Board importedBoard)
+    {
+        ArgumentNullException.ThrowIfNull(targetBoard);
+        ArgumentNullException.ThrowIfNull(importedBoard);
+
+        targetBoard.LabelOutlineEnabled = importedBoard.LabelOutlineEnabled;
+        targetBoard.ArrowOutlineEnabled = importedBoard.ArrowOutlineEnabled;
+        targetBoard.CustomColors = importedBoard.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        targetBoard.RecentColors = importedBoard.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        targetBoard.Elements = CloneElements(importedBoard.Elements);
+        NormalizeZIndexes(targetBoard.Elements);
     }
 
     public bool HasAccess(Board board, Guid? userId, BoardRole minimumRole = BoardRole.Viewer)
     {
-        if (board.Visibility == BoardVisibility.Shared)
+        // Shared visibility grants viewer-only access (share-link read mode)
+        if (board.Visibility == BoardVisibility.Shared && minimumRole == BoardRole.Viewer)
             return true;
 
         if (userId is null)
@@ -77,7 +311,8 @@ public class BoardService
 
     public bool HasAccess(BoardSummary summary, Guid? userId, BoardRole minimumRole = BoardRole.Viewer)
     {
-        if (summary.Visibility == BoardVisibility.Shared)
+        // Shared visibility grants viewer-only access (share-link read mode)
+        if (summary.Visibility == BoardVisibility.Shared && minimumRole == BoardRole.Viewer)
             return true;
 
         if (userId is null)
@@ -91,5 +326,46 @@ public class BoardService
             return false;
 
         return member.Role <= minimumRole;
+    }
+
+    private static BoardSnapshotContent CaptureSnapshotContent(Board board) => new()
+    {
+        Title = board.Title,
+        LabelOutlineEnabled = board.LabelOutlineEnabled,
+        ArrowOutlineEnabled = board.ArrowOutlineEnabled,
+        CustomColors = board.CustomColors.ToList(),
+        RecentColors = board.RecentColors.ToList(),
+        Elements = CloneElements(board.Elements)
+    };
+
+    private static List<BoardElement> CloneElements(IEnumerable<BoardElement> elements)
+    {
+        var json = JsonSerializer.Serialize(elements, OrimJsonOptions.Default);
+        return JsonSerializer.Deserialize<List<BoardElement>>(json, OrimJsonOptions.Default) ?? [];
+    }
+
+    private static void NormalizeZIndexes(List<BoardElement> elements)
+    {
+        for (var index = 0; index < elements.Count; index++)
+        {
+            elements[index].ZIndex = index;
+        }
+    }
+
+    private static void EnsureOwnerMembership(Board board)
+    {
+        var ownerMembership = board.Members.FirstOrDefault(member => member.UserId == board.OwnerId);
+        if (ownerMembership is null)
+        {
+            board.Members.Insert(0, new BoardMember
+            {
+                UserId = board.OwnerId,
+                Username = board.Members.FirstOrDefault(member => member.Role == BoardRole.Owner)?.Username ?? "Owner",
+                Role = BoardRole.Owner
+            });
+            return;
+        }
+
+        ownerMembership.Role = BoardRole.Owner;
     }
 }
