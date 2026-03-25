@@ -180,8 +180,8 @@ else
                                OnClick="@OpenHelpDialog" />
             </MudTooltip>
 
-            <MudTooltip Text="@(CanManageBoard ? Localizer["ShareAndAccess"] : Localizer["BoardSettings"])" Arrow="true">
-                <MudIconButton Icon="@(CanManageBoard ? Icons.Material.Filled.Group : Icons.Material.Filled.Settings)"
+            <MudTooltip Text="@(CanManageBoard ? Localizer["ShareAndSettings"] : Localizer["BoardSettings"])" Arrow="true">
+                <MudIconButton Icon="@Icons.Material.Filled.AdminPanelSettings"
                                 Size="Size.Small"
                                 Color="Color.Default"
                                 OnClick="@OpenBoardSettingsDialogAsync" />
@@ -278,7 +278,7 @@ else
                 }
 
                 @* Board Settings *@
-                <MudIconButton Icon="@(CanManageBoard ? Icons.Material.Filled.Group : Icons.Material.Filled.Settings)"
+                <MudIconButton Icon="@Icons.Material.Filled.AdminPanelSettings"
                                Size="Size.Small"
                                OnClick="@OpenBoardSettingsDialogAsync" />
 
@@ -499,7 +499,7 @@ else
         </DialogActions>
     </MudDialog>
 
-    <MudDialog @bind-Visible="_boardSettingsDialogVisible" Options="_helpDialogOptions">
+    <MudDialog @bind-Visible="_boardSettingsDialogVisible" Options="_boardSettingsDialogOptions">
         <TitleContent>
             <MudText Typo="Typo.h6">@Localizer["BoardSettings"]</MudText>
         </TitleContent>
@@ -513,178 +513,196 @@ else
                 </MudAlert>
             }
 
-            <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["GeneralBoardSettings"]</MudText>
-            <MudCheckBox @bind-Value="_boardLabelOutlineEnabled"
-                         T="bool"
-                         Label="@Localizer["LabelOutlineEnabled"]" />
-            <MudCheckBox @bind-Value="_boardArrowOutlineEnabled"
-                         T="bool"
-                         Label="@Localizer["ArrowOutlineEnabled"]" />
-            @if (CanManageBoard)
-            {
-                <MudSelect T="BoardVisibility" @bind-Value="_boardVisibility" Label="@Localizer["Visibility"]" Variant="Variant.Outlined" Class="mt-4">
-                    <MudSelectItem T="BoardVisibility" Value="BoardVisibility.Private">@Localizer["Private"]</MudSelectItem>
-                    <MudSelectItem T="BoardVisibility" Value="BoardVisibility.Public">@Localizer["Public"]</MudSelectItem>
-                    <MudSelectItem T="BoardVisibility" Value="BoardVisibility.Shared">@Localizer["Shared"]</MudSelectItem>
-                </MudSelect>
-                <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["VisibilityExplanation"]</MudText>
-            }
-            else
-            {
-                <MudTextField Value="@Localizer[_boardVisibility.ToString()]"
-                              Label="@Localizer["Visibility"]"
-                              ReadOnly="true"
-                              Variant="Variant.Outlined"
-                              Class="mt-4" />
-                <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["BoardSettingsOwnerOnly"]</MudText>
-            }
+            <MudTabs Rounded="true">
+                <MudTabPanel Text="@Localizer["General"]">
+                    <div style="@BoardSettingsTabContentStyle">
+                    <MudStack Spacing="2">
+                        <MudText Typo="Typo.subtitle2">@Localizer["GeneralBoardSettings"]</MudText>
+                        <MudCheckBox @bind-Value="_boardLabelOutlineEnabled"
+                                     T="bool"
+                                     Label="@Localizer["LabelOutlineEnabled"]" />
+                        <MudCheckBox @bind-Value="_boardArrowOutlineEnabled"
+                                     T="bool"
+                                     Label="@Localizer["ArrowOutlineEnabled"]" />
+                        @if (CanManageBoard)
+                        {
+                            <MudSelect T="BoardVisibility" @bind-Value="_boardVisibility" Label="@Localizer["Visibility"]" Variant="Variant.Outlined" Class="mt-2">
+                                <MudSelectItem T="BoardVisibility" Value="BoardVisibility.Private">@Localizer["Private"]</MudSelectItem>
+                                <MudSelectItem T="BoardVisibility" Value="BoardVisibility.Public">@Localizer["Public"]</MudSelectItem>
+                                <MudSelectItem T="BoardVisibility" Value="BoardVisibility.Shared">@Localizer["Shared"]</MudSelectItem>
+                            </MudSelect>
+                            <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["VisibilityExplanation"]</MudText>
+                        }
+                        else
+                        {
+                            <MudTextField Value="@Localizer[_boardVisibility.ToString()]"
+                                          Label="@Localizer["Visibility"]"
+                                          ReadOnly="true"
+                                          Variant="Variant.Outlined"
+                                          Class="mt-2" />
+                            <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["BoardSettingsOwnerOnly"]</MudText>
+                        }
+                    </MudStack>
+                    </div>
+                </MudTabPanel>
 
-            @if (CanManageBoard)
-            {
-                <MudDivider Class="my-4" />
-                <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["ShareAndAccess"]</MudText>
-                <MudTextField Value="@GetShareLinkDraftUrl()"
-                              Label="@Localizer["ShareLink"]"
-                              ReadOnly="true"
-                              Variant="Variant.Outlined" />
-                <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["ShareLinkExplanation"]</MudText>
-                <div class="d-flex flex-wrap mt-3" style="gap: 8px;">
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@GenerateShareLinkDraft">
-                        @Localizer["GenerateShareLink"]
-                    </MudButton>
-                    <MudButton Variant="Variant.Outlined" Color="Color.Primary"
-                               Disabled="@string.IsNullOrWhiteSpace(GetShareLinkDraftUrl())"
-                               OnClick="@CopyShareLinkAsync">
-                        @Localizer["CopyShareLink"]
-                    </MudButton>
-                </div>
-
-                <MudCheckBox @bind-Value="_shareAllowAnonymousEditingDraft"
-                             T="bool"
-                             Disabled="@(_boardVisibility != BoardVisibility.Shared)"
-                             Label="@Localizer["AllowEditingViaShareLink"]"
-                             Class="mt-3" />
-                <MudCheckBox @bind-Value="_sharePasswordEnabledDraft"
-                             T="bool"
-                             Disabled="@(_boardVisibility != BoardVisibility.Shared)"
-                             Label="@Localizer["RequireSharePassword"]"
-                             Class="mt-1" />
-
-                @if (_sharePasswordEnabledDraft)
+                @if (CanManageBoard)
                 {
-                    <MudTextField @bind-Value="_sharePasswordDraft"
-                                  Label="@Localizer["Password"]"
-                                  Variant="Variant.Outlined"
-                                  InputType="InputType.Password"
-                                  Immediate="true"
-                                  Class="mt-3" />
-                    <MudText Typo="Typo.caption" Class="orim-board-muted-text">
-                        @(BoardService.IsSharePasswordProtected(_board!)
-                            ? Localizer["LeavePasswordEmpty"]
-                            : Localizer["SharePasswordHint"])
-                    </MudText>
-                }
-
-                <MudDivider Class="my-4" />
-                <div class="d-flex justify-space-between align-center mb-2" style="gap: 12px;">
-                    <MudText Typo="Typo.subtitle2">@Localizer["Members"]</MudText>
-                    <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["MembersDescription"]</MudText>
-                </div>
-                @foreach (var member in _memberDrafts.OrderBy(candidate => candidate.Role).ThenBy(candidate => candidate.Username))
-                {
-                    <MudPaper Class="pa-3 mb-2" Elevation="0" Style="border: 1px solid var(--orim-properties-panel-border);">
-                        <div class="d-flex flex-wrap justify-space-between align-center" style="gap: 12px;">
-                            <div>
-                                <MudText Typo="Typo.subtitle2">@member.Username</MudText>
-                                <MudText Typo="Typo.caption" Class="orim-board-muted-text">
-                                    @(member.IsOwner ? Localizer["Owner"] : Localizer["Role"])
-                                </MudText>
+                    <MudTabPanel Text="@Localizer["ShareAndAccess"]">
+                        <div style="@BoardSettingsTabContentStyle">
+                        <MudStack Spacing="2">
+                            <MudTextField Value="@GetShareLinkDraftUrl()"
+                                          Label="@Localizer["ShareLink"]"
+                                          ReadOnly="true"
+                                          Variant="Variant.Outlined" />
+                            <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["ShareLinkExplanation"]</MudText>
+                            <div class="d-flex flex-wrap mt-1" style="gap: 8px;">
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@GenerateShareLinkDraft">
+                                    @Localizer["GenerateShareLink"]
+                                </MudButton>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary"
+                                           Disabled="@string.IsNullOrWhiteSpace(GetShareLinkDraftUrl())"
+                                           OnClick="@CopyShareLinkAsync">
+                                    @Localizer["CopyShareLink"]
+                                </MudButton>
                             </div>
-                            @if (member.IsOwner)
+
+                            <MudCheckBox @bind-Value="_shareAllowAnonymousEditingDraft"
+                                         T="bool"
+                                         Disabled="@(_boardVisibility != BoardVisibility.Shared)"
+                                         Label="@Localizer["AllowEditingViaShareLink"]"
+                                         Class="mt-2" />
+                            <MudCheckBox @bind-Value="_sharePasswordEnabledDraft"
+                                         T="bool"
+                                         Disabled="@(_boardVisibility != BoardVisibility.Shared)"
+                                         Label="@Localizer["RequireSharePassword"]" />
+
+                            @if (_sharePasswordEnabledDraft)
                             {
-                                <MudChip T="string" Color="Color.Primary">@Localizer["Owner"]</MudChip>
+                                <MudTextField @bind-Value="_sharePasswordDraft"
+                                              Label="@Localizer["Password"]"
+                                              Variant="Variant.Outlined"
+                                              InputType="InputType.Password"
+                                              Immediate="true"
+                                              Class="mt-2" />
+                                <MudText Typo="Typo.caption" Class="orim-board-muted-text">
+                                    @(BoardService.IsSharePasswordProtected(_board!)
+                                        ? Localizer["LeavePasswordEmpty"]
+                                        : Localizer["SharePasswordHint"])
+                                </MudText>
+                            }
+                        </MudStack>
+                        </div>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="@Localizer["Members"]">
+                        <div style="@BoardSettingsTabContentStyle">
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.body2" Class="orim-board-muted-text">@Localizer["MembersDescription"]</MudText>
+                            @foreach (var member in _memberDrafts.OrderBy(candidate => candidate.Role).ThenBy(candidate => candidate.Username))
+                            {
+                                <MudPaper Class="pa-3" Elevation="0" Style="border: 1px solid var(--orim-properties-panel-border);">
+                                    <div class="d-flex flex-wrap justify-space-between align-center" style="gap: 12px;">
+                                        <div>
+                                            <MudText Typo="Typo.subtitle2">@member.Username</MudText>
+                                            <MudText Typo="Typo.caption" Class="orim-board-muted-text">
+                                                @(member.IsOwner ? Localizer["Owner"] : Localizer["Role"])
+                                            </MudText>
+                                        </div>
+                                        @if (member.IsOwner)
+                                        {
+                                            <MudChip T="string" Color="Color.Primary">@Localizer["Owner"]</MudChip>
+                                        }
+                                        else
+                                        {
+                                            <div class="d-flex flex-wrap align-center" style="gap: 8px;">
+                                                <MudSelect T="BoardRole" Value="@member.Role" Dense="true" Style="min-width: 140px;"
+                                                           ValueChanged="@((BoardRole role) => member.Role = role)">
+                                                    <MudSelectItem T="BoardRole" Value="BoardRole.Editor">@Localizer["Editor"]</MudSelectItem>
+                                                    <MudSelectItem T="BoardRole" Value="BoardRole.Viewer">@Localizer["Viewer"]</MudSelectItem>
+                                                </MudSelect>
+                                                <MudIconButton Icon="@Icons.Material.Filled.PersonRemove"
+                                                               Color="Color.Error"
+                                                               Size="Size.Small"
+                                                               OnClick="@(() => RemoveMemberDraft(member.UserId))" />
+                                            </div>
+                                        }
+                                    </div>
+                                </MudPaper>
+                            }
+
+                            <div class="d-flex flex-wrap align-end mt-1" style="gap: 12px;">
+                                <MudSelect T="Guid?" @bind-Value="_selectedMemberToAddId" Label="@Localizer["AddMember"]" Variant="Variant.Outlined" Style="min-width: 220px;">
+                                    @foreach (var candidate in AvailableUsersToAdd)
+                                    {
+                                        <MudSelectItem T="Guid?" Value="@candidate.Id">@candidate.Username</MudSelectItem>
+                                    }
+                                </MudSelect>
+                                <MudSelect T="BoardRole" @bind-Value="_selectedMemberRoleToAdd" Label="@Localizer["Role"]" Variant="Variant.Outlined" Style="min-width: 160px;">
+                                    <MudSelectItem T="BoardRole" Value="BoardRole.Editor">@Localizer["Editor"]</MudSelectItem>
+                                    <MudSelectItem T="BoardRole" Value="BoardRole.Viewer">@Localizer["Viewer"]</MudSelectItem>
+                                </MudSelect>
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@AddSelectedMemberAsync">
+                                    @Localizer["AddMember"]
+                                </MudButton>
+                            </div>
+                        </MudStack>
+                        </div>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="@Localizer["Import"]">
+                        <div style="@BoardSettingsTabContentStyle">
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.body2" Class="orim-board-muted-text">@Localizer["ImportReplaceBoardDescription"]</MudText>
+                            <div>
+                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" HtmlTag="label" Disabled="@_isApplyingBoardImport">
+                                    @Localizer["ImportReplaceBoard"]
+                                    <InputFile OnChange="@ImportIntoCurrentBoardAsync" accept=".json,application/json" style="display:none" />
+                                </MudButton>
+                            </div>
+                        </MudStack>
+                        </div>
+                    </MudTabPanel>
+
+                    <MudTabPanel Text="@Localizer["Snapshots"]">
+                        <div style="@BoardSettingsTabContentStyle">
+                        <MudStack Spacing="2">
+                            <MudText Typo="Typo.body2" Class="orim-board-muted-text">@Localizer["SnapshotsDescription"]</MudText>
+                            <div class="d-flex flex-wrap align-end mt-1" style="gap: 12px;">
+                                <MudTextField @bind-Value="_snapshotName" Label="@Localizer["SnapshotName"]" Variant="Variant.Outlined" />
+                                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreateSnapshotAsync">
+                                    @Localizer["CreateSnapshot"]
+                                </MudButton>
+                            </div>
+
+                            @if (_board?.Snapshots.Count > 0)
+                            {
+                                @foreach (var snapshot in _board.Snapshots.OrderByDescending(candidate => candidate.CreatedAt))
+                                {
+                                    <MudPaper Class="pa-3" Elevation="0" Style="border: 1px solid var(--orim-properties-panel-border);">
+                                        <div class="d-flex flex-wrap justify-space-between align-center" style="gap: 12px;">
+                                            <div>
+                                                <MudText Typo="Typo.subtitle2">@snapshot.Name</MudText>
+                                                <MudText Typo="Typo.caption" Class="orim-board-muted-text">
+                                                    @string.Format(Localizer["SnapshotMetadata"], snapshot.CreatedByUsername, snapshot.CreatedAt.ToString("g"))
+                                                </MudText>
+                                            </div>
+                                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => RestoreSnapshotAsync(snapshot.Id))">
+                                                @Localizer["RestoreSnapshot"]
+                                            </MudButton>
+                                        </div>
+                                    </MudPaper>
+                                }
                             }
                             else
                             {
-                                <div class="d-flex flex-wrap align-center" style="gap: 8px;">
-                                    <MudSelect T="BoardRole" Value="@member.Role" Dense="true" Style="min-width: 140px;"
-                                               ValueChanged="@((BoardRole role) => member.Role = role)">
-                                        <MudSelectItem T="BoardRole" Value="BoardRole.Editor">@Localizer["Editor"]</MudSelectItem>
-                                        <MudSelectItem T="BoardRole" Value="BoardRole.Viewer">@Localizer["Viewer"]</MudSelectItem>
-                                    </MudSelect>
-                                    <MudIconButton Icon="@Icons.Material.Filled.PersonRemove"
-                                                   Color="Color.Error"
-                                                   Size="Size.Small"
-                                                   OnClick="@(() => RemoveMemberDraft(member.UserId))" />
-                                </div>
+                                <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["NoSnapshots"]</MudText>
                             }
+                        </MudStack>
                         </div>
-                    </MudPaper>
+                    </MudTabPanel>
                 }
-
-                <div class="d-flex flex-wrap align-end mt-3" style="gap: 12px;">
-                    <MudSelect T="Guid?" @bind-Value="_selectedMemberToAddId" Label="@Localizer["AddMember"]" Variant="Variant.Outlined" Style="min-width: 220px;">
-                        @foreach (var candidate in AvailableUsersToAdd)
-                        {
-                            <MudSelectItem T="Guid?" Value="@candidate.Id">@candidate.Username</MudSelectItem>
-                        }
-                    </MudSelect>
-                    <MudSelect T="BoardRole" @bind-Value="_selectedMemberRoleToAdd" Label="@Localizer["Role"]" Variant="Variant.Outlined" Style="min-width: 160px;">
-                        <MudSelectItem T="BoardRole" Value="BoardRole.Editor">@Localizer["Editor"]</MudSelectItem>
-                        <MudSelectItem T="BoardRole" Value="BoardRole.Viewer">@Localizer["Viewer"]</MudSelectItem>
-                    </MudSelect>
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@AddSelectedMemberAsync">
-                        @Localizer["AddMember"]
-                    </MudButton>
-                </div>
-
-                <MudDivider Class="my-4" />
-                <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["Import"]</MudText>
-                <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["ImportReplaceBoardDescription"]</MudText>
-                <MudButton Variant="Variant.Outlined" Color="Color.Primary" Class="mt-2" HtmlTag="label" Disabled="@_isApplyingBoardImport">
-                    @Localizer["ImportReplaceBoard"]
-                    <InputFile OnChange="@ImportIntoCurrentBoardAsync" accept=".json,application/json" style="display:none" />
-                </MudButton>
-
-                <MudDivider Class="my-4" />
-                <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["Snapshots"]</MudText>
-                <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["SnapshotsDescription"]</MudText>
-                <div class="d-flex flex-wrap align-end mt-2" style="gap: 12px;">
-                    <MudTextField @bind-Value="_snapshotName" Label="@Localizer["SnapshotName"]" Variant="Variant.Outlined" />
-                    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@CreateSnapshotAsync">
-                        @Localizer["CreateSnapshot"]
-                    </MudButton>
-                </div>
-
-                @if (_board?.Snapshots.Count > 0)
-                {
-                    @foreach (var snapshot in _board.Snapshots.OrderByDescending(candidate => candidate.CreatedAt))
-                    {
-                        <MudPaper Class="pa-3 mt-2" Elevation="0" Style="border: 1px solid var(--orim-properties-panel-border);">
-                            <div class="d-flex flex-wrap justify-space-between align-center" style="gap: 12px;">
-                                <div>
-                                    <MudText Typo="Typo.subtitle2">@snapshot.Name</MudText>
-                                    <MudText Typo="Typo.caption" Class="orim-board-muted-text">
-                                        @string.Format(Localizer["SnapshotMetadata"], snapshot.CreatedByUsername, snapshot.CreatedAt.ToString("g"))
-                                    </MudText>
-                                </div>
-                                <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => RestoreSnapshotAsync(snapshot.Id))">
-                                    @Localizer["RestoreSnapshot"]
-                                </MudButton>
-                            </div>
-                        </MudPaper>
-                    }
-                }
-                else
-                {
-                    <MudText Typo="Typo.caption" Class="orim-board-muted-text mt-2">@Localizer["NoSnapshots"]</MudText>
-                }
-            }
-            else
-            {
-                <MudDivider Class="my-4" />
-                <MudText Typo="Typo.caption" Class="orim-board-muted-text">@Localizer["BoardSettingsOwnerOnly"]</MudText>
-            }
+            </MudTabs>
         </DialogContent>
         <DialogActions>
             <MudButton OnClick="@CloseBoardSettingsDialog">@Localizer["Cancel"]</MudButton>
@@ -790,9 +808,11 @@ else
     private List<User> _availableUsers = [];
     private List<MemberDraft> _memberDrafts = [];
 
+    private const string BoardSettingsTabContentStyle = "height: min(56vh, 36rem); overflow-y: auto; padding: 1rem 0.25rem 0 0; box-sizing: border-box; scrollbar-gutter: stable;";
     private List<string> _materialIcons = [];
     private readonly DialogOptions _iconDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true };
     private readonly DialogOptions _helpDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
+    private readonly DialogOptions _boardSettingsDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.ExtraLarge, CloseButton = true };
     private readonly DialogOptions _mobilePropertiesDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
     private static List<string>? _cachedMaterialIcons;
 

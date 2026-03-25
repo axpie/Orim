@@ -387,7 +387,7 @@ else
         </DialogActions>
     </MudDialog>
 
-    <MudDialog @bind-Visible="_boardSettingsDialogVisible" Options="_helpDialogOptions">
+    <MudDialog @bind-Visible="_boardSettingsDialogVisible" Options="_boardSettingsDialogOptions">
         <TitleContent>
             <MudText Typo="Typo.h6">@Localizer["BoardSettings"]</MudText>
         </TitleContent>
@@ -454,6 +454,7 @@ else
     private IReadOnlyList<string> _filteredMaterialIconsCache = [];
     private readonly DialogOptions _iconDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Medium, CloseButton = true };
     private readonly DialogOptions _helpDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.Small, CloseButton = true };
+    private readonly DialogOptions _boardSettingsDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.ExtraLarge, CloseButton = true };
     private List<string> _materialIcons = [];
     private static List<string>? _cachedMaterialIcons;
     private const string SharedNameStorageKey = "orim.shared.display-name";

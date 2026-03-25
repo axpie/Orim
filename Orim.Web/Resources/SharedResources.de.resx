@@ -29,6 +29,7 @@
   <data name="Users" xml:space="preserve"><value>Benutzer</value></data>
   <data name="OrimSettings" xml:space="preserve"><value>ORIM-Einstellungen</value></data>
   <data name="Settings" xml:space="preserve"><value>Einstellungen</value></data>
+  <data name="ShareAndSettings" xml:space="preserve"><value>Freigabe und Einstellungen</value></data>
   <data name="General" xml:space="preserve"><value>Allgemein</value></data>
   <data name="GeneralSettingsDescription" xml:space="preserve"><value>Lege fest, welche allgemeinen Inhalte in deiner Oberfläche angezeigt werden.</value></data>
   <data name="Language" xml:space="preserve"><value>Sprache</value></data>

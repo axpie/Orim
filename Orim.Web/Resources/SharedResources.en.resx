@@ -29,6 +29,7 @@
   <data name="Users" xml:space="preserve"><value>Users</value></data>
   <data name="OrimSettings" xml:space="preserve"><value>ORIM Settings</value></data>
   <data name="Settings" xml:space="preserve"><value>Settings</value></data>
+  <data name="ShareAndSettings" xml:space="preserve"><value>Sharing and settings</value></data>
   <data name="General" xml:space="preserve"><value>General</value></data>
   <data name="GeneralSettingsDescription" xml:space="preserve"><value>Choose which general content is shown in your interface.</value></data>
   <data name="Language" xml:space="preserve"><value>Language</value></data>
