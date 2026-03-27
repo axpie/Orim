@@ -579,11 +579,13 @@ public partial class WhiteboardCanvas
 
         var ux = dx / length;
         var uy = dy / length;
-        if (reverse)
+        var isTriangleHead = style is ArrowHeadStyle.FilledTriangle or ArrowHeadStyle.OpenTriangle;
+        if (reverse && !isTriangleHead)
         {
             ux *= -1;
             uy *= -1;
         }
+
         var normalX = -uy;
         var normalY = ux;
         var baseDistance = size;
