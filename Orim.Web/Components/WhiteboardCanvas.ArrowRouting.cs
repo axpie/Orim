@@ -5,6 +5,8 @@ namespace Orim.Web.Components;
 
 public partial class WhiteboardCanvas
 {
+    private const double OrthogonalDockStubLength = 40;
+
     private static List<Point> BuildArrowPath(Point start, DockPoint sourceDock, Point end, DockPoint targetDock, ArrowRouteStyle routeStyle, IReadOnlyList<(double X, double Y, double Width, double Height)>? obstacles = null)
     {
         if (routeStyle == ArrowRouteStyle.Straight)
@@ -12,9 +14,8 @@ public partial class WhiteboardCanvas
             return new List<Point> { start, end };
         }
 
-        const double stub = 24;
-        var startStub = OffsetPoint(start, sourceDock, stub);
-        var endStub = OffsetPoint(end, targetDock, stub);
+        var startStub = OffsetPoint(start, sourceDock, OrthogonalDockStubLength);
+        var endStub = OffsetPoint(end, targetDock, OrthogonalDockStubLength);
 
         if (obstacles is { Count: > 0 })
         {
@@ -60,9 +61,8 @@ public partial class WhiteboardCanvas
         Point end, Point endStub, DockPoint targetDock,
         IReadOnlyList<(double X, double Y, double Width, double Height)> obstacles)
     {
-        const double padding = 12;
+        const double padding = OrthogonalDockStubLength;
         const double bendPenalty = 40;
-        const double stubLength = 24;
         const int maxBends = 12;
         var deadline = Stopwatch.GetTimestamp() + Stopwatch.Frequency / 2;
 
@@ -90,10 +90,10 @@ public partial class WhiteboardCanvas
             if (r.Bottom > globalBottom) globalBottom = r.Bottom;
         }
 
-        globalLeft = Math.Min(globalLeft, Math.Min(startStub.X, endStub.X)) - stubLength;
-        globalTop = Math.Min(globalTop, Math.Min(startStub.Y, endStub.Y)) - stubLength;
-        globalRight = Math.Max(globalRight, Math.Max(startStub.X, endStub.X)) + stubLength;
-        globalBottom = Math.Max(globalBottom, Math.Max(startStub.Y, endStub.Y)) + stubLength;
+        globalLeft = Math.Min(globalLeft, Math.Min(startStub.X, endStub.X)) - OrthogonalDockStubLength;
+        globalTop = Math.Min(globalTop, Math.Min(startStub.Y, endStub.Y)) - OrthogonalDockStubLength;
+        globalRight = Math.Max(globalRight, Math.Max(startStub.X, endStub.X)) + OrthogonalDockStubLength;
+        globalBottom = Math.Max(globalBottom, Math.Max(startStub.Y, endStub.Y)) + OrthogonalDockStubLength;
         xSet.Add(globalLeft);
         xSet.Add(globalRight);
         ySet.Add(globalTop);
@@ -308,6 +308,14 @@ public partial class WhiteboardCanvas
                 var sameX = Math.Abs(a.X - b.X) < 0.1 && Math.Abs(b.X - c.X) < 0.1;
                 var sameY = Math.Abs(a.Y - b.Y) < 0.1 && Math.Abs(b.Y - c.Y) < 0.1;
                 if (!sameX && !sameY)
+                {
+                    break;
+                }
+
+                var keepsDirection = sameX
+                    ? (b.Y - a.Y) * (c.Y - b.Y) >= 0
+                    : (b.X - a.X) * (c.X - b.X) >= 0;
+                if (!keepsDirection)
                 {
                     break;
                 }
