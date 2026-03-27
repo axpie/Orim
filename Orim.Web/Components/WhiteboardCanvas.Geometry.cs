@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Orim.Core.Models;
 
 namespace Orim.Web.Components;
@@ -577,21 +578,6 @@ public partial class WhiteboardCanvas
         yield return new ArrowEndpointHandleDefinition(false, renderData.Value.Points[^1], _arrowEndpointDrag is not null && _arrowEndpointDrag.Value.ArrowId == arrow.Id && !_arrowEndpointDrag.Value.IsSource);
     }
 
-    private ArrowMiddleSegmentHandleDefinition? GetArrowMiddleSegmentHandle(ArrowElement arrow)
-    {
-        if (!TryResolveOrthogonalMiddleSegment(arrow, out var isVertical, out var start, out var end, out _))
-        {
-            return null;
-        }
-
-        return new ArrowMiddleSegmentHandleDefinition(
-            isVertical,
-            start,
-            end,
-            new Point((start.X + end.X) / 2, (start.Y + end.Y) / 2),
-            _arrowMiddleSegmentDrag is not null && _arrowMiddleSegmentDrag.Value.ArrowId == arrow.Id);
-    }
-
     private ArrowEndpointHandleDefinition? GetArrowEndpointHandleAtPoint(ArrowElement arrow, Point point)
     {
         foreach (var handle in GetArrowEndpointHandles(arrow))
@@ -604,19 +590,6 @@ public partial class WhiteboardCanvas
         }
 
         return null;
-    }
-
-    private ArrowMiddleSegmentHandleDefinition? GetArrowMiddleSegmentHandleAtPoint(ArrowElement arrow, Point point)
-    {
-        var handle = GetArrowMiddleSegmentHandle(arrow);
-        if (handle is null)
-        {
-            return null;
-        }
-
-        var hitTolerance = 14 / _zoom;
-        var distance = PointToLineDistance(point, handle.Value.Start, handle.Value.End);
-        return distance <= hitTolerance ? handle : null;
     }
 
     private DockHandleDefinition? GetDockHandleAtPoint(Point point, Guid? excludedElementId = null)
@@ -662,7 +635,8 @@ public partial class WhiteboardCanvas
             return null;
         }
 
-        var points = BuildArrowPath(sourceEndpoint.Value.Point, sourceEndpoint.Value.Dock, targetEndpoint.Value.Point, targetEndpoint.Value.Dock, arrow.RouteStyle, arrow.OrthogonalMiddleCoordinate);
+        var obstacles = GetArrowObstacles();
+        var points = BuildArrowPath(sourceEndpoint.Value.Point, sourceEndpoint.Value.Dock, targetEndpoint.Value.Point, targetEndpoint.Value.Dock, arrow.RouteStyle, obstacles);
         return new ArrowRenderData(points, GetPointAlongPolyline(points, 0.5));
     }
 
@@ -693,14 +667,29 @@ public partial class WhiteboardCanvas
             }
         }
 
+        var obstacles = GetArrowObstacles();
+
         var points = drag.IsSource
-            ? BuildArrowPath(movingPoint, movingDock, fixedPoint, drag.FixedDock, arrow.RouteStyle, arrow.OrthogonalMiddleCoordinate)
-            : BuildArrowPath(fixedPoint, drag.FixedDock, movingPoint, movingDock, arrow.RouteStyle, arrow.OrthogonalMiddleCoordinate);
+            ? BuildArrowPath(movingPoint, movingDock, fixedPoint, drag.FixedDock, arrow.RouteStyle, obstacles)
+            : BuildArrowPath(fixedPoint, drag.FixedDock, movingPoint, movingDock, arrow.RouteStyle, obstacles);
 
         return new ArrowRenderData(points, GetPointAlongPolyline(points, 0.5));
     }
 
-    private static List<Point> BuildArrowPath(Point start, DockPoint sourceDock, Point end, DockPoint targetDock, ArrowRouteStyle routeStyle, double? orthogonalMiddleCoordinate = null)
+    private IReadOnlyList<(double X, double Y, double Width, double Height)> GetArrowObstacles()
+    {
+        if (Board is null)
+        {
+            return [];
+        }
+
+        return Board.Elements
+            .Where(e => e is not ArrowElement)
+            .Select(e => (e.X, e.Y, e.Width, e.Height))
+            .ToList();
+    }
+
+    private static List<Point> BuildArrowPath(Point start, DockPoint sourceDock, Point end, DockPoint targetDock, ArrowRouteStyle routeStyle, IReadOnlyList<(double X, double Y, double Width, double Height)>? obstacles = null)
     {
         if (routeStyle == ArrowRouteStyle.Straight)
         {
@@ -710,19 +699,29 @@ public partial class WhiteboardCanvas
         const double stub = 24;
         var startStub = OffsetPoint(start, sourceDock, stub);
         var endStub = OffsetPoint(end, targetDock, stub);
+
+        if (obstacles is { Count: > 0 })
+        {
+            var path = FindOrthogonalPathAvoidingObstacles(start, startStub, sourceDock, end, endStub, targetDock, obstacles);
+            if (path is not null)
+            {
+                return path;
+            }
+        }
+
         var points = new List<Point> { start, startStub };
         var sourceHorizontal = sourceDock is DockPoint.Left or DockPoint.Right;
         var targetHorizontal = targetDock is DockPoint.Left or DockPoint.Right;
 
         if (sourceHorizontal && targetHorizontal)
         {
-            var middleX = orthogonalMiddleCoordinate ?? (startStub.X + endStub.X) / 2;
+            var middleX = (startStub.X + endStub.X) / 2;
             points.Add(new Point(middleX, startStub.Y));
             points.Add(new Point(middleX, endStub.Y));
         }
         else if (!sourceHorizontal && !targetHorizontal)
         {
-            var middleY = orthogonalMiddleCoordinate ?? (startStub.Y + endStub.Y) / 2;
+            var middleY = (startStub.Y + endStub.Y) / 2;
             points.Add(new Point(startStub.X, middleY));
             points.Add(new Point(endStub.X, middleY));
         }
@@ -738,6 +737,231 @@ public partial class WhiteboardCanvas
         points.Add(endStub);
         points.Add(end);
         return SimplifyPoints(points);
+    }
+
+    private static List<Point>? FindOrthogonalPathAvoidingObstacles(
+        Point start, Point startStub, DockPoint sourceDock,
+        Point end, Point endStub, DockPoint targetDock,
+        IReadOnlyList<(double X, double Y, double Width, double Height)> obstacles)
+    {
+        const double padding = 12;
+        const double bendPenalty = 40;
+        const double stubLength = 24;
+        const int maxBends = 12;
+        var deadline = Stopwatch.GetTimestamp() + Stopwatch.Frequency / 2;
+
+        var rects = new (double Left, double Top, double Right, double Bottom)[obstacles.Count];
+        for (var i = 0; i < obstacles.Count; i++)
+        {
+            var o = obstacles[i];
+            rects[i] = (o.X - padding, o.Y - padding, o.X + o.Width + padding, o.Y + o.Height + padding);
+        }
+
+        var xSet = new SortedSet<double> { startStub.X, endStub.X };
+        var ySet = new SortedSet<double> { startStub.Y, endStub.Y };
+
+        double globalLeft = startStub.X, globalTop = startStub.Y, globalRight = startStub.X, globalBottom = startStub.Y;
+
+        foreach (var r in rects)
+        {
+            xSet.Add(r.Left);
+            xSet.Add(r.Right);
+            ySet.Add(r.Top);
+            ySet.Add(r.Bottom);
+            if (r.Left < globalLeft) globalLeft = r.Left;
+            if (r.Top < globalTop) globalTop = r.Top;
+            if (r.Right > globalRight) globalRight = r.Right;
+            if (r.Bottom > globalBottom) globalBottom = r.Bottom;
+        }
+
+        globalLeft = Math.Min(globalLeft, Math.Min(startStub.X, endStub.X)) - stubLength;
+        globalTop = Math.Min(globalTop, Math.Min(startStub.Y, endStub.Y)) - stubLength;
+        globalRight = Math.Max(globalRight, Math.Max(startStub.X, endStub.X)) + stubLength;
+        globalBottom = Math.Max(globalBottom, Math.Max(startStub.Y, endStub.Y)) + stubLength;
+        xSet.Add(globalLeft);
+        xSet.Add(globalRight);
+        ySet.Add(globalTop);
+        ySet.Add(globalBottom);
+
+        var xs = new List<double>(xSet);
+        var ys = new List<double>(ySet);
+        var nx = xs.Count;
+        var ny = ys.Count;
+
+        var startXi = xs.IndexOf(startStub.X);
+        var startYi = ys.IndexOf(startStub.Y);
+        var endXi = xs.IndexOf(endStub.X);
+        var endYi = ys.IndexOf(endStub.Y);
+
+        var sourceHorizontal = sourceDock is DockPoint.Left or DockPoint.Right;
+        var targetHorizontal = targetDock is DockPoint.Left or DockPoint.Right;
+        var startDir = sourceHorizontal ? 0 : 1;
+        var endDir = targetHorizontal ? 0 : 1;
+        var endKey = (endXi * ny + endYi) * 2 + endDir;
+
+        var stateCount = nx * ny * 2;
+        var gScore = new double[stateCount];
+        Array.Fill(gScore, double.MaxValue);
+        var cameFrom = new int[stateCount];
+        Array.Fill(cameFrom, -1);
+        var bendCount = new int[stateCount];
+
+        var startKey = (startXi * ny + startYi) * 2 + startDir;
+        gScore[startKey] = 0;
+        bendCount[startKey] = 0;
+
+        var openSet = new PriorityQueue<int, double>();
+        openSet.Enqueue(startKey, Heuristic(startXi, startYi));
+
+        List<Point>? bestPath = null;
+        var bestCost = double.MaxValue;
+
+        while (openSet.Count > 0)
+        {
+            if (Stopwatch.GetTimestamp() > deadline)
+                break;
+
+            var key = openSet.Dequeue();
+            var g = gScore[key];
+
+            if (g >= bestCost)
+                continue;
+
+            var dir = key & 1;
+            var pos = key >> 1;
+            var yi = pos % ny;
+            var xi = pos / ny;
+            var b = bendCount[key];
+
+            if (key == endKey)
+            {
+                bestCost = g;
+                bestPath = ReconstructOrthogonalPath(cameFrom, key, xs, ys, ny, start, end);
+                continue;
+            }
+
+            if (dir == 0)
+            {
+                for (var nxi = xi - 1; nxi >= 0; nxi--)
+                {
+                    if (IsHSegmentBlocked(ys[yi], xs[nxi], xs[nxi + 1], rects)) break;
+                    var dist = xs[xi] - xs[nxi];
+                    TryAdd((nxi * ny + yi) * 2, g + dist, key, b);
+                }
+
+                for (var nxi = xi + 1; nxi < nx; nxi++)
+                {
+                    if (IsHSegmentBlocked(ys[yi], xs[nxi - 1], xs[nxi], rects)) break;
+                    var dist = xs[nxi] - xs[xi];
+                    TryAdd((nxi * ny + yi) * 2, g + dist, key, b);
+                }
+            }
+            else
+            {
+                for (var nyi = yi - 1; nyi >= 0; nyi--)
+                {
+                    if (IsVSegmentBlocked(xs[xi], ys[nyi], ys[nyi + 1], rects)) break;
+                    var dist = ys[yi] - ys[nyi];
+                    TryAdd((xi * ny + nyi) * 2 + 1, g + dist, key, b);
+                }
+
+                for (var nyi = yi + 1; nyi < ny; nyi++)
+                {
+                    if (IsVSegmentBlocked(xs[xi], ys[nyi - 1], ys[nyi], rects)) break;
+                    var dist = ys[nyi] - ys[yi];
+                    TryAdd((xi * ny + nyi) * 2 + 1, g + dist, key, b);
+                }
+            }
+
+            if (b < maxBends)
+            {
+                var newDir = 1 - dir;
+                var nk = (xi * ny + yi) * 2 + newDir;
+                var ng = g + bendPenalty;
+                if (ng < gScore[nk] && ng < bestCost)
+                {
+                    gScore[nk] = ng;
+                    cameFrom[nk] = key;
+                    bendCount[nk] = b + 1;
+                    openSet.Enqueue(nk, ng + Heuristic(xi, yi));
+                }
+            }
+        }
+
+        return bestPath;
+
+        void TryAdd(int nk, double ng, int fromKey, int b)
+        {
+            if (ng < gScore[nk] && ng < bestCost)
+            {
+                gScore[nk] = ng;
+                cameFrom[nk] = fromKey;
+                bendCount[nk] = b;
+                openSet.Enqueue(nk, ng + Heuristic((nk >> 1) / ny, (nk >> 1) % ny));
+            }
+        }
+
+        double Heuristic(int xi, int yi)
+        {
+            return Math.Abs(xs[xi] - xs[endXi]) + Math.Abs(ys[yi] - ys[endYi]);
+        }
+    }
+
+    private static bool IsHSegmentBlocked(double y, double x1, double x2, (double Left, double Top, double Right, double Bottom)[] rects)
+    {
+        var minX = Math.Min(x1, x2);
+        var maxX = Math.Max(x1, x2);
+        foreach (var r in rects)
+        {
+            if (y > r.Top && y < r.Bottom && maxX > r.Left && minX < r.Right)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static bool IsVSegmentBlocked(double x, double y1, double y2, (double Left, double Top, double Right, double Bottom)[] rects)
+    {
+        var minY = Math.Min(y1, y2);
+        var maxY = Math.Max(y1, y2);
+        foreach (var r in rects)
+        {
+            if (x > r.Left && x < r.Right && maxY > r.Top && minY < r.Bottom)
+                return true;
+        }
+
+        return false;
+    }
+
+    private static List<Point> ReconstructOrthogonalPath(int[] cameFrom, int endKey, List<double> xs, List<double> ys, int ny, Point start, Point end)
+    {
+        var keys = new List<int>();
+        var current = endKey;
+        while (current >= 0)
+        {
+            keys.Add(current);
+            current = cameFrom[current];
+        }
+
+        keys.Reverse();
+
+        var path = new List<Point> { start };
+        Point? last = null;
+        foreach (var key in keys)
+        {
+            var pos = key >> 1;
+            var yi = pos % ny;
+            var xi = pos / ny;
+            var point = new Point(xs[xi], ys[yi]);
+            if (last is null || Math.Abs(last.Value.X - point.X) > 0.1 || Math.Abs(last.Value.Y - point.Y) > 0.1)
+            {
+                path.Add(point);
+                last = point;
+            }
+        }
+
+        path.Add(end);
+        return SimplifyPoints(path);
     }
 
     private static List<Point> SimplifyPoints(IEnumerable<Point> points)
@@ -829,52 +1053,6 @@ public partial class WhiteboardCanvas
         }
 
         return Board.Elements.OfType<ArrowElement>().FirstOrDefault(arrow => arrow.Id == arrowId)?.RouteStyle ?? ArrowRouteStyle.Orthogonal;
-    }
-
-    private bool TryResolveOrthogonalMiddleSegment(ArrowElement arrow, out bool isVertical, out Point start, out Point end, out double coordinate)
-    {
-        isVertical = false;
-        start = default;
-        end = default;
-        coordinate = 0;
-
-        if (arrow.RouteStyle != ArrowRouteStyle.Orthogonal)
-        {
-            return false;
-        }
-
-        var sourceEndpoint = ResolveArrowEndpoint(arrow, true);
-        var targetEndpoint = ResolveArrowEndpoint(arrow, false);
-        if (sourceEndpoint is null || targetEndpoint is null)
-        {
-            return false;
-        }
-
-        const double stub = 24;
-        var startStub = OffsetPoint(sourceEndpoint.Value.Point, sourceEndpoint.Value.Dock, stub);
-        var endStub = OffsetPoint(targetEndpoint.Value.Point, targetEndpoint.Value.Dock, stub);
-        var sourceHorizontal = sourceEndpoint.Value.Dock is DockPoint.Left or DockPoint.Right;
-        var targetHorizontal = targetEndpoint.Value.Dock is DockPoint.Left or DockPoint.Right;
-
-        if (sourceHorizontal && targetHorizontal)
-        {
-            coordinate = arrow.OrthogonalMiddleCoordinate ?? (startStub.X + endStub.X) / 2;
-            start = new Point(coordinate, startStub.Y);
-            end = new Point(coordinate, endStub.Y);
-            isVertical = true;
-            return Math.Abs(start.Y - end.Y) > 0.1;
-        }
-
-        if (!sourceHorizontal && !targetHorizontal)
-        {
-            coordinate = arrow.OrthogonalMiddleCoordinate ?? (startStub.Y + endStub.Y) / 2;
-            start = new Point(startStub.X, coordinate);
-            end = new Point(endStub.X, coordinate);
-            isVertical = false;
-            return Math.Abs(start.X - end.X) > 0.1;
-        }
-
-        return false;
     }
 
     private static Point SnapPointToMagneticAngle(Point origin, Point point, double stepDegrees, double thresholdDegrees)

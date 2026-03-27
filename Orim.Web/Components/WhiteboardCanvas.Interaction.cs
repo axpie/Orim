@@ -169,22 +169,6 @@ public partial class WhiteboardCanvas
 
                 return;
             }
-
-            var middleHandle = GetArrowMiddleSegmentHandleAtPoint(selectedArrow, worldPoint);
-            if (middleHandle is not null)
-            {
-                var coordinate = middleHandle.Value.IsVertical ? middleHandle.Value.Center.X : middleHandle.Value.Center.Y;
-                var pointerCoordinate = middleHandle.Value.IsVertical ? worldPoint.X : worldPoint.Y;
-                _arrowMiddleSegmentDrag = new ArrowMiddleSegmentDrag(
-                    selectedArrow.Id,
-                    middleHandle.Value.IsVertical,
-                    pointerCoordinate - coordinate,
-                    coordinate,
-                    coordinate);
-                _hoverArrowMiddleSegmentHandle = middleHandle;
-                _hasInteractionChanged = false;
-                return;
-            }
         }
 
         var clicked = HitTest(worldPoint);
@@ -290,9 +274,6 @@ public partial class WhiteboardCanvas
             _hoverArrowEndpointHandle = CanEdit && SelectedTool == BoardEditor.Tool.Select && _selectedElements.Count == 1 && SelectedElement is ArrowElement selectedArrow
                 ? GetArrowEndpointHandleAtPoint(selectedArrow, worldPoint)
                 : null;
-            _hoverArrowMiddleSegmentHandle = CanEdit && SelectedTool == BoardEditor.Tool.Select && _selectedElements.Count == 1 && SelectedElement is ArrowElement selectedArrowForMiddle
-                ? GetArrowMiddleSegmentHandleAtPoint(selectedArrowForMiddle, worldPoint)
-                : null;
         }
 
         if (_isResizingSelection && SelectedElement is not null)
@@ -313,28 +294,6 @@ public partial class WhiteboardCanvas
                 HoverDock = nextTarget?.DockPoint,
                 Pointer = nextPointer
             };
-            return;
-        }
-
-        if (_arrowMiddleSegmentDrag is not null)
-        {
-            if (Board is null)
-            {
-                return;
-            }
-
-            var arrow = Board.Elements.OfType<ArrowElement>().FirstOrDefault(candidate => candidate.Id == _arrowMiddleSegmentDrag.Value.ArrowId);
-            if (arrow is null)
-            {
-                return;
-            }
-
-            var pointerCoordinate = _arrowMiddleSegmentDrag.Value.IsVertical ? worldPoint.X : worldPoint.Y;
-            var nextCoordinate = pointerCoordinate - _arrowMiddleSegmentDrag.Value.PointerOffset;
-            arrow.OrthogonalMiddleCoordinate = nextCoordinate;
-            _arrowMiddleSegmentDrag = _arrowMiddleSegmentDrag.Value with { CurrentCoordinate = nextCoordinate };
-            _hasInteractionChanged = Math.Abs(nextCoordinate - _arrowMiddleSegmentDrag.Value.InitialCoordinate) > 0.1;
-            _hoverArrowMiddleSegmentHandle = GetArrowMiddleSegmentHandle(arrow);
             return;
         }
 
@@ -526,23 +485,6 @@ public partial class WhiteboardCanvas
                     return;
                 }
             }
-
-            var middleHandle = GetArrowMiddleSegmentHandleAtPoint(selectedArrowTouch, worldPoint);
-            if (middleHandle is not null)
-            {
-                var coordinate = middleHandle.Value.IsVertical ? middleHandle.Value.Center.X : middleHandle.Value.Center.Y;
-                var pointerCoordinate = middleHandle.Value.IsVertical ? worldPoint.X : worldPoint.Y;
-                _arrowMiddleSegmentDrag = new ArrowMiddleSegmentDrag(
-                    selectedArrowTouch.Id,
-                    middleHandle.Value.IsVertical,
-                    pointerCoordinate - coordinate,
-                    coordinate,
-                    coordinate);
-                _hoverArrowMiddleSegmentHandle = middleHandle;
-                _hasInteractionChanged = false;
-                StateHasChanged();
-                return;
-            }
         }
 
         var clicked = HitTest(worldPoint);
@@ -659,25 +601,6 @@ public partial class WhiteboardCanvas
                 HoverDock = nextTarget?.DockPoint,
                 Pointer = nextPointer
             };
-            StateHasChanged();
-            return;
-        }
-
-        if (_arrowMiddleSegmentDrag is not null)
-        {
-            if (Board is not null)
-            {
-                var arrow = Board.Elements.OfType<ArrowElement>().FirstOrDefault(candidate => candidate.Id == _arrowMiddleSegmentDrag.Value.ArrowId);
-                if (arrow is not null)
-                {
-                    var pointerCoordinate = _arrowMiddleSegmentDrag.Value.IsVertical ? worldPoint.X : worldPoint.Y;
-                    var nextCoordinate = pointerCoordinate - _arrowMiddleSegmentDrag.Value.PointerOffset;
-                    arrow.OrthogonalMiddleCoordinate = nextCoordinate;
-                    _arrowMiddleSegmentDrag = _arrowMiddleSegmentDrag.Value with { CurrentCoordinate = nextCoordinate };
-                    _hasInteractionChanged = Math.Abs(nextCoordinate - _arrowMiddleSegmentDrag.Value.InitialCoordinate) > 0.1;
-                    _hoverArrowMiddleSegmentHandle = GetArrowMiddleSegmentHandle(arrow);
-                }
-            }
             StateHasChanged();
             return;
         }
@@ -904,7 +827,6 @@ public partial class WhiteboardCanvas
         _clearSelectionOnPanRelease = false;
         _panExceededClickThreshold = false;
         _hoverArrowEndpointHandle = null;
-        _hoverArrowMiddleSegmentHandle = null;
         ClearAlignmentGuides();
 
         if (_isResizingSelection)
@@ -965,17 +887,6 @@ public partial class WhiteboardCanvas
             }
 
             _arrowEndpointDrag = null;
-        }
-
-        if (_arrowMiddleSegmentDrag is not null)
-        {
-            if (_hasInteractionChanged)
-            {
-                _hasInteractionChanged = false;
-                await OnBoardChanged.InvokeAsync();
-            }
-
-            _arrowMiddleSegmentDrag = null;
         }
 
         if (_isDrawingRectangle)

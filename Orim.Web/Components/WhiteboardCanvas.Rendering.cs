@@ -103,9 +103,7 @@ public partial class WhiteboardCanvas
         _ when _isResizingSelection => GetResizeCursor(_activeResizeHandle),
         BoardEditor.Tool.Rectangle or BoardEditor.Tool.Circle or BoardEditor.Tool.Triangle => "crosshair",
         BoardEditor.Tool.Arrow => "crosshair",
-        _ when _arrowMiddleSegmentDrag is not null => _arrowMiddleSegmentDrag.Value.IsVertical ? "ew-resize" : "ns-resize",
         _ when _arrowEndpointDrag is not null || _hoverArrowEndpointHandle is not null => "pointer",
-        _ when _hoverArrowMiddleSegmentHandle is not null => _hoverArrowMiddleSegmentHandle.Value.IsVertical ? "ew-resize" : "ns-resize",
         _ when _hoverResizeHandle != ResizeHandle.None => GetResizeCursor(_hoverResizeHandle),
         _ when _isDraggingSelection => "grabbing",
         _ => "grab"
@@ -348,7 +346,8 @@ public partial class WhiteboardCanvas
             }
         }
 
-        var points = BuildArrowPath(start, draft.SourceDock, end, ResolvePreviewTargetDock(draft, start, end), ArrowRouteStyle.Orthogonal);
+        var obstacles = GetArrowObstacles();
+        var points = BuildArrowPath(start, draft.SourceDock, end, ResolvePreviewTargetDock(draft, start, end), ArrowRouteStyle.Orthogonal, obstacles: obstacles);
         RenderArrowVisual(
             builder,
             points,
@@ -751,21 +750,6 @@ public partial class WhiteboardCanvas
         var background = handle.IsSource ? GetHandleSurfaceColor() : GetSelectionColor();
         var border = handle.IsSource ? GetSelectionColor() : GetHandleSurfaceColor();
         return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(size)}; height:{Px(size)}; border-radius:999px; background:{background}; border:2px solid {border}; box-sizing:border-box; pointer-events:none; box-shadow:0 0 0 {Px(2 / _zoom)} {GetSelectionTint(0.18)};";
-    }
-
-    private string GetArrowMiddleSegmentHandleStyle(ArrowMiddleSegmentHandleDefinition handle)
-    {
-        var isHovered = _hoverArrowMiddleSegmentHandle is not null &&
-            _hoverArrowMiddleSegmentHandle.Value.IsVertical == handle.IsVertical &&
-            Math.Abs(_hoverArrowMiddleSegmentHandle.Value.Center.X - handle.Center.X) < 0.1 &&
-            Math.Abs(_hoverArrowMiddleSegmentHandle.Value.Center.Y - handle.Center.Y) < 0.1;
-        var thickness = (handle.IsActive || isHovered ? 12 : 8) / _zoom;
-        var length = Math.Max(handle.IsVertical ? Math.Abs(handle.End.Y - handle.Start.Y) : Math.Abs(handle.End.X - handle.Start.X), 18 / _zoom);
-        var left = handle.IsVertical ? handle.Center.X - thickness / 2 : handle.Center.X - length / 2;
-        var top = handle.IsVertical ? handle.Center.Y - length / 2 : handle.Center.Y - thickness / 2;
-        var width = handle.IsVertical ? thickness : length;
-        var height = handle.IsVertical ? length : thickness;
-        return $"position:absolute; left:{Px(left)}; top:{Px(top)}; width:{Px(width)}; height:{Px(height)}; border-radius:{Px(Math.Max(thickness, 6 / _zoom))}; background:{GetSelectionTint(handle.IsActive || isHovered ? 0.28 : 0.18)}; border:{Px(2 / _zoom)} solid {GetSelectionColor()}; box-sizing:border-box; pointer-events:none;";
     }
 
     private string GetDockHandleStyle(DockHandleDefinition handle)

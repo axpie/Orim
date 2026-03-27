@@ -88,10 +88,6 @@
                 <div style="@GetArrowEndpointHandleStyle(handle)"></div>
             }
 
-            @if (GetArrowMiddleSegmentHandle(selectedArrow) is ArrowMiddleSegmentHandleDefinition middleHandle)
-            {
-                <div style="@GetArrowMiddleSegmentHandleStyle(middleHandle)"></div>
-            }
         }
     </div>
 
@@ -164,9 +160,7 @@
     private ShapeElement? _draftShape;
     private ArrowDraft? _draftArrow;
     private ArrowEndpointDrag? _arrowEndpointDrag;
-    private ArrowMiddleSegmentDrag? _arrowMiddleSegmentDrag;
     private ArrowEndpointHandleDefinition? _hoverArrowEndpointHandle;
-    private ArrowMiddleSegmentHandleDefinition? _hoverArrowMiddleSegmentHandle;
     private double _zoom = 1;
     private bool _hasInitializedViewport;
     private DotNetObjectReference<WhiteboardCanvas>? _selfRef;
@@ -193,8 +187,6 @@
     private record struct ArrowRenderData(IReadOnlyList<Point> Points, Point LabelPoint);
     private record struct ArrowEndpointHandleDefinition(bool IsSource, Point Center, bool IsActive);
     private record struct ArrowEndpointDrag(Guid ArrowId, bool IsSource, Guid? FixedElementId, Point FixedPoint, DockPoint FixedDock, Guid? HoverElementId, DockPoint? HoverDock, Point Pointer);
-    private record struct ArrowMiddleSegmentHandleDefinition(bool IsVertical, Point Start, Point End, Point Center, bool IsActive);
-    private record struct ArrowMiddleSegmentDrag(Guid ArrowId, bool IsVertical, double PointerOffset, double InitialCoordinate, double CurrentCoordinate);
     private record struct AlignmentGuide(bool IsVertical, double Coordinate, double Start, double End);
     private record struct AlignmentMatch(bool IsVertical, double Coordinate, double Start, double End, double Delta, double Distance);
     private record struct ResizeAlignmentMatch(bool IsVertical, double AppliedDelta, double Distance);
