@@ -110,8 +110,8 @@
     private const double ZoomStep = 1.1;
     private const double ResizeHandleScreenSize = 10;
     private const double ResizeHandleHitScreenSize = 16;
-    private const double MinimumAutoLabelFontSize = 8;
-    private const double MinimumLabelFontSize = 10;
+    internal const double MinimumAutoLabelFontSize = 8;
+    internal const double MinimumLabelFontSize = 10;
     private const double MaximumLabelFontSize = 48;
     private const double ClickPanThreshold = 3;
     private const double DockSnapRadiusScreen = 28;
@@ -175,24 +175,24 @@
     private ResizeHandle _hoverResizeHandle;
     private ElementBounds _resizeStartBounds;
 
-    private record struct Point(double X, double Y);
-    private record struct Size(double Width, double Height);
-    private record struct RelativePointer(double X, double Y, double Width, double Height);
-    private record struct SurfaceRect(double Left, double Top, double Width, double Height);
-    private record struct ElementBounds(double X, double Y, double Width, double Height);
-    private record struct SelectionBounds(double Left, double Top, double Width, double Height);
-    private record struct ResizeHandleDefinition(ResizeHandle Handle, Point Center);
-    private record struct DockHandleDefinition(Guid ElementId, DockPoint DockPoint, Point Center, bool IsActive, bool IsTarget);
-    private record struct ArrowDraft(Guid? SourceElementId, Point SourcePoint, DockPoint SourceDock, Guid? TargetElementId, DockPoint? TargetDock, Point Pointer);
-    private record struct ArrowRenderData(IReadOnlyList<Point> Points, Point LabelPoint);
-    private record struct ArrowEndpointHandleDefinition(bool IsSource, Point Center, bool IsActive);
-    private record struct ArrowEndpointDrag(Guid ArrowId, bool IsSource, Guid? FixedElementId, Point FixedPoint, DockPoint FixedDock, Guid? HoverElementId, DockPoint? HoverDock, Point Pointer);
-    private record struct AlignmentGuide(bool IsVertical, double Coordinate, double Start, double End);
-    private record struct AlignmentMatch(bool IsVertical, double Coordinate, double Start, double End, double Delta, double Distance);
-    private record struct ResizeAlignmentMatch(bool IsVertical, double AppliedDelta, double Distance);
-    private record struct RgbColor(byte R, byte G, byte B);
+    internal record struct Point(double X, double Y);
+    internal record struct Size(double Width, double Height);
+    internal record struct RelativePointer(double X, double Y, double Width, double Height);
+    internal record struct SurfaceRect(double Left, double Top, double Width, double Height);
+    internal record struct ElementBounds(double X, double Y, double Width, double Height);
+    internal record struct SelectionBounds(double Left, double Top, double Width, double Height);
+    internal record struct ResizeHandleDefinition(ResizeHandle Handle, Point Center);
+    internal record struct DockHandleDefinition(Guid ElementId, DockPoint DockPoint, Point Center, bool IsActive, bool IsTarget);
+    internal record struct ArrowDraft(Guid? SourceElementId, Point SourcePoint, DockPoint SourceDock, Guid? TargetElementId, DockPoint? TargetDock, Point Pointer);
+    internal record struct ArrowRenderData(IReadOnlyList<Point> Points, Point LabelPoint);
+    internal record struct ArrowEndpointHandleDefinition(bool IsSource, Point Center, bool IsActive);
+    internal record struct ArrowEndpointDrag(Guid ArrowId, bool IsSource, Guid? FixedElementId, Point FixedPoint, DockPoint FixedDock, Guid? HoverElementId, DockPoint? HoverDock, Point Pointer);
+    internal record struct AlignmentGuide(bool IsVertical, double Coordinate, double Start, double End);
+    internal record struct AlignmentMatch(bool IsVertical, double Coordinate, double Start, double End, double Delta, double Distance);
+    internal record struct ResizeAlignmentMatch(bool IsVertical, double AppliedDelta, double Distance);
+    internal record struct RgbColor(byte R, byte G, byte B);
 
-    private enum ResizeHandle
+    internal enum ResizeHandle
     {
         None,
         NorthWest,

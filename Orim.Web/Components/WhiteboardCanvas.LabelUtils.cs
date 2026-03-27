@@ -4,7 +4,7 @@ namespace Orim.Web.Components;
 
 public partial class WhiteboardCanvas
 {
-    private static double EstimateFittingFontSize(string? text, double availableWidth, double availableHeight, double preferredSize, double maximumSize)
+    internal static double EstimateFittingFontSize(string? text, double availableWidth, double availableHeight, double preferredSize, double maximumSize)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -25,7 +25,7 @@ public partial class WhiteboardCanvas
         return minSize;
     }
 
-    private static bool DoesTextFit(string text, double availableWidth, double availableHeight, double fontSize)
+    internal static bool DoesTextFit(string text, double availableWidth, double availableHeight, double fontSize)
     {
         if (availableWidth <= 0 || availableHeight <= 0 || fontSize <= 0)
         {
@@ -52,21 +52,21 @@ public partial class WhiteboardCanvas
         return requiredHeight <= availableHeight;
     }
 
-    private static string GetCssTextAlign(HorizontalLabelAlignment alignment) => alignment switch
+    internal static string GetCssTextAlign(HorizontalLabelAlignment alignment) => alignment switch
     {
         HorizontalLabelAlignment.Left => "left",
         HorizontalLabelAlignment.Right => "right",
         _ => "center"
     };
 
-    private static string GetCssJustifyContent(HorizontalLabelAlignment alignment) => alignment switch
+    internal static string GetCssJustifyContent(HorizontalLabelAlignment alignment) => alignment switch
     {
         HorizontalLabelAlignment.Left => "flex-start",
         HorizontalLabelAlignment.Right => "flex-end",
         _ => "center"
     };
 
-    private static string GetCssAlignItems(VerticalLabelAlignment alignment) => alignment switch
+    internal static string GetCssAlignItems(VerticalLabelAlignment alignment) => alignment switch
     {
         VerticalLabelAlignment.Top => "flex-start",
         VerticalLabelAlignment.Bottom => "flex-end",

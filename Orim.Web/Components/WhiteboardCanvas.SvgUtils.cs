@@ -4,7 +4,7 @@ namespace Orim.Web.Components;
 
 public partial class WhiteboardCanvas
 {
-    private static string GetTrianglePoints(double width, double height, double inset)
+    internal static string GetTrianglePoints(double width, double height, double inset)
     {
         var topX = width / 2;
         var topY = inset;
@@ -15,7 +15,7 @@ public partial class WhiteboardCanvas
         return $"{CssNumber(topX)},{CssNumber(topY)} {CssNumber(leftX)},{CssNumber(leftY)} {CssNumber(rightX)},{CssNumber(rightY)}";
     }
 
-    private static string GetStrokeDashArray(BorderLineStyle borderLineStyle) => borderLineStyle switch
+    internal static string GetStrokeDashArray(BorderLineStyle borderLineStyle) => borderLineStyle switch
     {
         BorderLineStyle.Dashed => "10 6",
         BorderLineStyle.Dotted => "2 5",
@@ -24,7 +24,7 @@ public partial class WhiteboardCanvas
         _ => string.Empty
     };
 
-    private static string GetStrokeDashArray(ArrowLineStyle lineStyle, double strokeWidth)
+    internal static string GetStrokeDashArray(ArrowLineStyle lineStyle, double strokeWidth)
     {
         var normalizedStrokeWidth = Math.Max(strokeWidth, 1);
 
@@ -38,6 +38,6 @@ public partial class WhiteboardCanvas
         };
     }
 
-    private static string FormatDashArray(params double[] segments) =>
+    internal static string FormatDashArray(params double[] segments) =>
         string.Join(" ", segments.Select(segment => CssNumber(Math.Max(segment, 1))));
 }

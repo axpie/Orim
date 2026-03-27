@@ -2,7 +2,7 @@ namespace Orim.Web.Components;
 
 public partial class WhiteboardCanvas
 {
-    private static bool TryParseCssColor(string color, out RgbColor parsed)
+    internal static bool TryParseCssColor(string color, out RgbColor parsed)
     {
         parsed = default;
         if (string.IsNullOrWhiteSpace(color))
@@ -58,7 +58,7 @@ public partial class WhiteboardCanvas
         return false;
     }
 
-    private static double GetContrastRatio(RgbColor first, RgbColor second)
+    internal static double GetContrastRatio(RgbColor first, RgbColor second)
     {
         var luminance1 = GetRelativeLuminance(first);
         var luminance2 = GetRelativeLuminance(second);
@@ -67,7 +67,7 @@ public partial class WhiteboardCanvas
         return (lighter + 0.05) / (darker + 0.05);
     }
 
-    private static double GetRelativeLuminance(RgbColor color)
+    internal static double GetRelativeLuminance(RgbColor color)
     {
         static double Channel(byte value)
         {
@@ -78,7 +78,7 @@ public partial class WhiteboardCanvas
         return 0.2126 * Channel(color.R) + 0.7152 * Channel(color.G) + 0.0722 * Channel(color.B);
     }
 
-    private static string GetOutlineColor(string textColor, string backgroundColor)
+    internal static string GetOutlineColor(string textColor, string backgroundColor)
     {
         var useWhite = true;
 

@@ -4,7 +4,7 @@ namespace Orim.Web.Components;
 
 public partial class WhiteboardCanvas
 {
-    private static double GetPolylineLength(IReadOnlyList<Point> points)
+    internal static double GetPolylineLength(IReadOnlyList<Point> points)
     {
         var total = 0d;
         for (var index = 0; index < points.Count - 1; index++)
@@ -15,7 +15,7 @@ public partial class WhiteboardCanvas
         return total;
     }
 
-    private static Point GetPointAlongPolyline(IReadOnlyList<Point> points, double progress)
+    internal static Point GetPointAlongPolyline(IReadOnlyList<Point> points, double progress)
     {
         if (points.Count == 0)
         {
@@ -47,7 +47,7 @@ public partial class WhiteboardCanvas
         return points[^1];
     }
 
-    private static List<Point> GetTrimmedArrowLinePoints(IReadOnlyList<Point> points, ArrowHeadStyle sourceHead, ArrowHeadStyle targetHead, double headSize)
+    internal static List<Point> GetTrimmedArrowLinePoints(IReadOnlyList<Point> points, ArrowHeadStyle sourceHead, ArrowHeadStyle targetHead, double headSize)
     {
         if (points.Count < 2)
         {
@@ -70,9 +70,9 @@ public partial class WhiteboardCanvas
         return trimmed;
     }
 
-    private static bool RequiresLineTrim(ArrowHeadStyle headStyle) => headStyle is ArrowHeadStyle.FilledTriangle or ArrowHeadStyle.OpenTriangle;
+    internal static bool RequiresLineTrim(ArrowHeadStyle headStyle) => headStyle is ArrowHeadStyle.FilledTriangle or ArrowHeadStyle.OpenTriangle;
 
-    private static Point MovePointToward(Point point, Point toward, double distance)
+    internal static Point MovePointToward(Point point, Point toward, double distance)
     {
         var dx = toward.X - point.X;
         var dy = toward.Y - point.Y;

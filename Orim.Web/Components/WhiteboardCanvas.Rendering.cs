@@ -109,7 +109,7 @@ public partial class WhiteboardCanvas
         _ => "grab"
     };
 
-    private static string CssNumber(double value) =>
+    internal static string CssNumber(double value) =>
         Math.Round(value, 2, MidpointRounding.AwayFromZero)
             .ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
 

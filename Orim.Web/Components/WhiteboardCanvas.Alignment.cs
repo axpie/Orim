@@ -2,7 +2,7 @@ namespace Orim.Web.Components;
 
 public partial class WhiteboardCanvas
 {
-    private static AlignmentMatch? GetCloserAlignmentMatch(AlignmentMatch? current, AlignmentMatch? candidate)
+    internal static AlignmentMatch? GetCloserAlignmentMatch(AlignmentMatch? current, AlignmentMatch? candidate)
     {
         if (candidate is null)
         {
@@ -17,7 +17,7 @@ public partial class WhiteboardCanvas
         return current;
     }
 
-    private static AlignmentMatch? FindAlignmentMatch(SelectionBounds movingBounds, SelectionBounds referenceBounds, bool vertical, double threshold)
+    internal static AlignmentMatch? FindAlignmentMatch(SelectionBounds movingBounds, SelectionBounds referenceBounds, bool vertical, double threshold)
     {
         var matches = FindAlignmentMatches(movingBounds, referenceBounds, vertical, threshold);
         return matches.Count == 0
@@ -25,7 +25,7 @@ public partial class WhiteboardCanvas
             : matches.MinBy(candidate => candidate.Distance);
     }
 
-    private static IReadOnlyList<AlignmentMatch> FindAlignmentMatches(SelectionBounds movingBounds, SelectionBounds referenceBounds, bool vertical, double threshold)
+    internal static IReadOnlyList<AlignmentMatch> FindAlignmentMatches(SelectionBounds movingBounds, SelectionBounds referenceBounds, bool vertical, double threshold)
     {
         var movingAnchors = vertical
             ? new[] { movingBounds.Left, movingBounds.Left + movingBounds.Width / 2, movingBounds.Left + movingBounds.Width }
@@ -67,7 +67,7 @@ public partial class WhiteboardCanvas
         return matches;
     }
 
-    private static void AddOrExtendAlignmentGuide(List<AlignmentGuide> guides, AlignmentGuide candidate)
+    internal static void AddOrExtendAlignmentGuide(List<AlignmentGuide> guides, AlignmentGuide candidate)
     {
         for (var index = 0; index < guides.Count; index++)
         {
@@ -88,15 +88,15 @@ public partial class WhiteboardCanvas
         guides.Add(candidate);
     }
 
-    private static bool ResizeHandleMovesLeft(ResizeHandle handle) => handle is ResizeHandle.NorthWest or ResizeHandle.SouthWest or ResizeHandle.West;
+    internal static bool ResizeHandleMovesLeft(ResizeHandle handle) => handle is ResizeHandle.NorthWest or ResizeHandle.SouthWest or ResizeHandle.West;
 
-    private static bool ResizeHandleMovesRight(ResizeHandle handle) => handle is ResizeHandle.NorthEast or ResizeHandle.East or ResizeHandle.SouthEast;
+    internal static bool ResizeHandleMovesRight(ResizeHandle handle) => handle is ResizeHandle.NorthEast or ResizeHandle.East or ResizeHandle.SouthEast;
 
-    private static bool ResizeHandleMovesTop(ResizeHandle handle) => handle is ResizeHandle.NorthWest or ResizeHandle.North or ResizeHandle.NorthEast;
+    internal static bool ResizeHandleMovesTop(ResizeHandle handle) => handle is ResizeHandle.NorthWest or ResizeHandle.North or ResizeHandle.NorthEast;
 
-    private static bool ResizeHandleMovesBottom(ResizeHandle handle) => handle is ResizeHandle.SouthWest or ResizeHandle.South or ResizeHandle.SouthEast;
+    internal static bool ResizeHandleMovesBottom(ResizeHandle handle) => handle is ResizeHandle.SouthWest or ResizeHandle.South or ResizeHandle.SouthEast;
 
-    private static bool ResizeHandleMovesHorizontally(ResizeHandle handle) => ResizeHandleMovesLeft(handle) || ResizeHandleMovesRight(handle);
+    internal static bool ResizeHandleMovesHorizontally(ResizeHandle handle) => ResizeHandleMovesLeft(handle) || ResizeHandleMovesRight(handle);
 
-    private static bool ResizeHandleMovesVertically(ResizeHandle handle) => ResizeHandleMovesTop(handle) || ResizeHandleMovesBottom(handle);
+    internal static bool ResizeHandleMovesVertically(ResizeHandle handle) => ResizeHandleMovesTop(handle) || ResizeHandleMovesBottom(handle);
 }

@@ -21,4 +21,8 @@
     <ApplicationIcon>wwwroot\branding\favicon.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Orim.Tests" />
+  </ItemGroup>
+
 </Project>

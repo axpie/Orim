@@ -4,7 +4,7 @@ namespace Orim.Web.Components;
 
 public partial class WhiteboardCanvas
 {
-    private static bool ElementIntersectsSelectionBounds(BoardElement element, SelectionBounds bounds)
+    internal static bool ElementIntersectsSelectionBounds(BoardElement element, SelectionBounds bounds)
     {
         var elementRight = element.X + element.Width;
         var elementBottom = element.Y + element.Height;
@@ -17,7 +17,7 @@ public partial class WhiteboardCanvas
                elementBottom >= bounds.Top;
     }
 
-    private static bool PointInSelectionBounds(Point point, SelectionBounds bounds)
+    internal static bool PointInSelectionBounds(Point point, SelectionBounds bounds)
     {
         return point.X >= bounds.Left &&
                point.X <= bounds.Left + bounds.Width &&
@@ -25,7 +25,7 @@ public partial class WhiteboardCanvas
                point.Y <= bounds.Top + bounds.Height;
     }
 
-    private static bool SegmentIntersectsSelectionBounds(Point start, Point end, SelectionBounds bounds)
+    internal static bool SegmentIntersectsSelectionBounds(Point start, Point end, SelectionBounds bounds)
     {
         if (PointInSelectionBounds(start, bounds) || PointInSelectionBounds(end, bounds))
         {
@@ -43,7 +43,7 @@ public partial class WhiteboardCanvas
             || LinesIntersect(start, end, bottomLeft, topLeft);
     }
 
-    private static bool LinesIntersect(Point a1, Point a2, Point b1, Point b2)
+    internal static bool LinesIntersect(Point a1, Point a2, Point b1, Point b2)
     {
         static double Cross(Point origin, Point first, Point second) =>
             (first.X - origin.X) * (second.Y - origin.Y) - (first.Y - origin.Y) * (second.X - origin.X);
@@ -83,7 +83,7 @@ public partial class WhiteboardCanvas
         return Math.Abs(d4) < 0.001 && OnSegment(b1, a2, b2);
     }
 
-    private static double PointToLineDistance(Point point, Point start, Point end)
+    internal static double PointToLineDistance(Point point, Point start, Point end)
     {
         var dx = end.X - start.X;
         var dy = end.Y - start.Y;
@@ -99,7 +99,7 @@ public partial class WhiteboardCanvas
         return Math.Sqrt(Math.Pow(point.X - projectionX, 2) + Math.Pow(point.Y - projectionY, 2));
     }
 
-    private static bool IsPointNearPolyline(Point point, IReadOnlyList<Point> points, double tolerance)
+    internal static bool IsPointNearPolyline(Point point, IReadOnlyList<Point> points, double tolerance)
     {
         for (var index = 0; index < points.Count - 1; index++)
         {

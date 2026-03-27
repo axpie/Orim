@@ -7,7 +7,7 @@ public partial class WhiteboardCanvas
 {
     private const double OrthogonalDockStubLength = 40;
 
-    private static List<Point> BuildArrowPath(Point start, DockPoint sourceDock, Point end, DockPoint targetDock, ArrowRouteStyle routeStyle, IReadOnlyList<(double X, double Y, double Width, double Height)>? obstacles = null)
+    internal static List<Point> BuildArrowPath(Point start, DockPoint sourceDock, Point end, DockPoint targetDock, ArrowRouteStyle routeStyle, IReadOnlyList<(double X, double Y, double Width, double Height)>? obstacles = null)
     {
         if (routeStyle == ArrowRouteStyle.Straight)
         {
@@ -280,7 +280,7 @@ public partial class WhiteboardCanvas
         return SimplifyPoints(path);
     }
 
-    private static List<Point> SimplifyPoints(IEnumerable<Point> points)
+    internal static List<Point> SimplifyPoints(IEnumerable<Point> points)
     {
         var simplified = new List<Point>();
 
@@ -327,7 +327,7 @@ public partial class WhiteboardCanvas
         return simplified;
     }
 
-    private static Point OffsetPoint(Point point, DockPoint dockPoint, double distance) => dockPoint switch
+    internal static Point OffsetPoint(Point point, DockPoint dockPoint, double distance) => dockPoint switch
     {
         DockPoint.Top => new Point(point.X, point.Y - distance),
         DockPoint.Right => new Point(point.X + distance, point.Y),
@@ -350,7 +350,7 @@ public partial class WhiteboardCanvas
             : dy >= 0 ? DockPoint.Top : DockPoint.Bottom;
     }
 
-    private static DockPoint ResolveFreeDock(Point start, Point end)
+    internal static DockPoint ResolveFreeDock(Point start, Point end)
     {
         var dx = end.X - start.X;
         var dy = end.Y - start.Y;
@@ -359,7 +359,7 @@ public partial class WhiteboardCanvas
             : dy >= 0 ? DockPoint.Bottom : DockPoint.Top;
     }
 
-    private static Point SnapPointToMagneticAngle(Point origin, Point point, double stepDegrees, double thresholdDegrees)
+    internal static Point SnapPointToMagneticAngle(Point origin, Point point, double stepDegrees, double thresholdDegrees)
     {
         var dx = point.X - origin.X;
         var dy = point.Y - origin.Y;
@@ -384,7 +384,7 @@ public partial class WhiteboardCanvas
             origin.Y + Math.Sin(snappedAngle) * distance);
     }
 
-    private static double NormalizeAngle(double angle)
+    internal static double NormalizeAngle(double angle)
     {
         while (angle <= -Math.PI)
         {
