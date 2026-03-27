@@ -8,11 +8,12 @@ namespace Orim.Tests.Core.Services;
 public class UserServiceTests
 {
     private readonly IUserRepository _userRepo = Substitute.For<IUserRepository>();
+    private readonly IBoardRepository _boardRepo = Substitute.For<IBoardRepository>();
     private readonly UserService _sut;
 
     public UserServiceTests()
     {
-        _sut = new UserService(_userRepo);
+        _sut = new UserService(_userRepo, _boardRepo);
     }
 
     [Fact]
@@ -223,5 +224,56 @@ public class UserServiceTests
         await _sut.UpdateUserAsync(user);
 
         await _userRepo.Received(1).SaveAsync(user);
+    }
+
+    [Fact]
+    public async Task DeleteUserAsync_UserNotFound_Throws()
+    {
+        _userRepo.GetByIdAsync(Arg.Any<Guid>()).Returns((User?)null);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.DeleteUserAsync(Guid.NewGuid()));
+    }
+
+    [Fact]
+    public async Task DeleteUserAsync_DeletesOwnedBoardsAndUser()
+    {
+        var user = new User { Username = "alice" };
+        var ownedBoard = new Board { OwnerId = user.Id, Title = "Owned" };
+        var foreignBoard = new Board { OwnerId = Guid.NewGuid(), Title = "Foreign" };
+
+        _userRepo.GetByIdAsync(user.Id).Returns(user);
+        _boardRepo.GetAllAsync().Returns([ownedBoard, foreignBoard]);
+
+        await _sut.DeleteUserAsync(user.Id);
+
+        await _boardRepo.Received(1).DeleteAsync(ownedBoard.Id);
+        await _boardRepo.DidNotReceive().DeleteAsync(foreignBoard.Id);
+        await _userRepo.Received(1).DeleteAsync(user.Id);
+    }
+
+    [Fact]
+    public async Task DeleteUserAsync_RemovesMembershipFromOtherBoards()
+    {
+        var user = new User { Username = "alice" };
+        var board = new Board
+        {
+            OwnerId = Guid.NewGuid(),
+            Title = "Shared",
+            Members =
+            [
+                new BoardMember { UserId = user.Id, Username = user.Username, Role = BoardRole.Editor },
+                new BoardMember { UserId = Guid.NewGuid(), Username = "bob", Role = BoardRole.Viewer }
+            ]
+        };
+
+        _userRepo.GetByIdAsync(user.Id).Returns(user);
+        _boardRepo.GetAllAsync().Returns([board]);
+
+        await _sut.DeleteUserAsync(user.Id);
+
+        Assert.DoesNotContain(board.Members, member => member.UserId == user.Id);
+        await _boardRepo.Received(1).SaveAsync(board);
+        await _userRepo.Received(1).DeleteAsync(user.Id);
     }
 }

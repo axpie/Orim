@@ -6,10 +6,12 @@ namespace Orim.Core.Services;
 public class UserService
 {
     private readonly IUserRepository _userRepository;
+    private readonly IBoardRepository _boardRepository;
 
-    public UserService(IUserRepository userRepository)
+    public UserService(IUserRepository userRepository, IBoardRepository boardRepository)
     {
         _userRepository = userRepository;
+        _boardRepository = boardRepository;
     }
 
     public Task<List<User>> GetAllUsersAsync() => _userRepository.GetAllAsync();
@@ -71,5 +73,26 @@ public class UserService
                    ?? throw new InvalidOperationException("User not found.");
         user.IsActive = false;
         await _userRepository.SaveAsync(user);
+    }
+
+    public async Task DeleteUserAsync(Guid userId)
+    {
+        var user = await _userRepository.GetByIdAsync(userId)
+                   ?? throw new InvalidOperationException("User not found.");
+
+        var boards = await _boardRepository.GetAllAsync();
+
+        foreach (var ownedBoard in boards.Where(board => board.OwnerId == user.Id))
+        {
+            await _boardRepository.DeleteAsync(ownedBoard.Id);
+        }
+
+        foreach (var board in boards.Where(board => board.OwnerId != user.Id && board.Members.Any(member => member.UserId == user.Id)))
+        {
+            board.Members.RemoveAll(member => member.UserId == user.Id);
+            await _boardRepository.SaveAsync(board);
+        }
+
+        await _userRepository.DeleteAsync(user.Id);
     }
 }
