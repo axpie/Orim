@@ -133,7 +133,7 @@
         <div class="orim-color-button-group mb-2">
             <button type="button" class="orim-properties-color-trigger"
                     @onclick='@(() => OpenColorDialog(ColorFieldTarget.ShapeFill, Localizer["Fill"], shape.FillColor))'>
-                <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(shape.FillColor))"></span>
+                <span class="orim-properties-color-chip" style="@GetColorChipStyle(NormalizeColor(shape.FillColor))"></span>
                 <span>@Localizer["ChooseColor"]</span>
             </button>
             @if (!DialogMode)
@@ -155,7 +155,7 @@
         <div class="orim-color-button-group mb-2">
             <button type="button" class="orim-properties-color-trigger"
                     @onclick='@(() => OpenColorDialog(ColorFieldTarget.ShapeStroke, Localizer["Stroke"], shape.StrokeColor))'>
-                <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(shape.StrokeColor))"></span>
+                <span class="orim-properties-color-chip" style="@GetColorChipStyle(NormalizeColor(shape.StrokeColor))"></span>
                 <span>@Localizer["ChooseColor"]</span>
             </button>
             @if (!DialogMode)
@@ -202,7 +202,7 @@
         <div class="orim-color-button-group mb-2">
             <button type="button" class="orim-properties-color-trigger"
                     @onclick='@(() => OpenColorDialog(ColorFieldTarget.Text, Localizer["TextColor"], text.Color))'>
-                <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(text.Color))"></span>
+                <span class="orim-properties-color-chip" style="@GetColorChipStyle(NormalizeColor(text.Color))"></span>
                 <span>@Localizer["ChooseColor"]</span>
             </button>
             @if (!DialogMode)
@@ -234,7 +234,7 @@
         <div class="orim-color-button-group mb-2">
             <button type="button" class="orim-properties-color-trigger"
                     @onclick='@(() => OpenColorDialog(ColorFieldTarget.Arrow, "Linienfarbe", arrow.StrokeColor))'>
-                <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(arrow.StrokeColor))"></span>
+                <span class="orim-properties-color-chip" style="@GetColorChipStyle(NormalizeColor(arrow.StrokeColor))"></span>
                 <span>Farbe auswählen</span>
             </button>
             @if (!DialogMode)
@@ -324,7 +324,7 @@
         <div class="orim-color-button-group mb-2">
             <button type="button" class="orim-properties-color-trigger"
                     @onclick='@(() => OpenColorDialog(ColorFieldTarget.Icon, "Symbolfarbe", icon.Color))'>
-                <span class="orim-properties-color-chip" style="@GetColorChipStyle(ToHexColor(icon.Color))"></span>
+                <span class="orim-properties-color-chip" style="@GetColorChipStyle(NormalizeColor(icon.Color))"></span>
                 <span>Farbe auswählen</span>
             </button>
             @if (!DialogMode)
@@ -360,22 +360,42 @@
         <MudText Typo="Typo.h6">@_colorDialogTitle</MudText>
     </TitleContent>
     <DialogContent>
-        <div class="orim-color-dialog-preview" style="@GetDialogPreviewStyle(_colorDialogHex)"></div>
+        <div class="orim-color-dialog-preview" style="@GetDialogPreviewStyle(_colorDialogValue)"></div>
 
         <div class="orim-color-dialog-inputs">
             <div>
                 <label class="orim-properties-label">HTML</label>
                 <input type="color"
-                       value="@_colorDialogHex"
+                       value="@_colorDialogHtmlHex"
                        @oninput="HandleHtmlColorInput"
                        class="orim-properties-color-html-input" />
             </div>
             <div>
-                <label class="orim-properties-label">HEX</label>
+                <label class="orim-properties-label">Farbwert</label>
                 <input type="text"
-                       value="@_colorDialogHexInput"
-                       @oninput="HandleHexColorInput"
+                       value="@_colorDialogTextInput"
+                       @oninput="HandleColorValueInput"
                        class="orim-properties-input" />
+            </div>
+            <div class="orim-color-dialog-input-span-2">
+                <label class="orim-properties-label">Deckkraft</label>
+                <div class="orim-color-dialog-alpha-row">
+                    <input type="range"
+                           min="0"
+                           max="100"
+                           step="1"
+                           value="@_colorDialogAlphaPercent"
+                           @oninput="HandleAlphaInput"
+                           class="orim-color-dialog-alpha-range" />
+                    <input type="number"
+                           min="0"
+                           max="100"
+                           step="1"
+                           value="@_colorDialogAlphaPercent"
+                           @oninput="HandleAlphaInput"
+                           class="orim-properties-input orim-color-dialog-alpha-number" />
+                    <span class="orim-color-dialog-alpha-unit">%</span>
+                </div>
             </div>
         </div>
 
@@ -442,8 +462,10 @@
     private bool _labelAutoSize;
     private bool _colorDialogVisible;
     private string _colorDialogTitle = "Farbe";
-    private string _colorDialogHex = "#000000";
-    private string _colorDialogHexInput = "#000000";
+    private string _colorDialogValue = "#000000";
+    private string _colorDialogHtmlHex = "#000000";
+    private string _colorDialogTextInput = "#000000";
+    private int _colorDialogAlphaPercent = 100;
     private string? _colorPickerStatusMessage;
     private ColorFieldTarget _colorPickerStatusField;
     private ColorFieldTarget _activeColorField;
@@ -508,6 +530,7 @@
     private sealed record RouteStyleOption(ArrowRouteStyle Style, string Label);
     private sealed record DockPointOption(DockPoint Dock, string Label);
     private sealed record EyeDropperResult(bool Supported, bool Canceled, string? Color);
+    private sealed record NormalizedColor(string Normalized, string HtmlHex, int AlphaPercent);
     private readonly DialogOptions _colorDialogOptions = new() { FullWidth = true, MaxWidth = MaxWidth.ExtraSmall, CloseButton = true };
 
     private enum ColorFieldTarget
@@ -522,13 +545,13 @@
 
     private IReadOnlyList<string> VisibleCustomColors =>
         ((IEnumerable<string>)(Board?.CustomColors is { Count: > 0 } ? Board.CustomColors : FallbackCustomColors))
-            .Select(ToHexColor)
+            .Select(NormalizeColor)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
     private IReadOnlyList<string> VisibleRecentColors =>
         (Board?.RecentColors ?? [])
-            .Select(ToHexColor)
+            .Select(NormalizeColor)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .Take(10)
             .ToList();
@@ -772,23 +795,49 @@
 
     private void HandleHtmlColorInput(ChangeEventArgs e)
     {
-        SetDialogColor(e.Value?.ToString());
+        if (TryCreateNormalizedColor(e.Value?.ToString(), _colorDialogAlphaPercent, out var normalizedColor))
+        {
+            SetDialogColor(normalizedColor);
+        }
     }
 
-    private void HandleHexColorInput(ChangeEventArgs e)
+    private void HandleAlphaInput(ChangeEventArgs e)
     {
-        _colorDialogHexInput = (e.Value?.ToString() ?? string.Empty).Trim().ToUpperInvariant();
-
-        if (TryNormalizeHexColor(_colorDialogHexInput, out var normalized))
+        if (TryParseAlphaPercent(e.Value?.ToString(), out var alphaPercent) &&
+            TryCreateNormalizedColor(_colorDialogHtmlHex, alphaPercent, out var normalizedColor))
         {
-            _colorDialogHex = normalized;
+            SetDialogColor(normalizedColor);
+        }
+    }
+
+    private void HandleColorValueInput(ChangeEventArgs e)
+    {
+        _colorDialogTextInput = (e.Value?.ToString() ?? string.Empty).Trim();
+
+        if (TryCreateNormalizedColor(_colorDialogTextInput, out var normalizedColor))
+        {
+            SetDialogColor(normalizedColor);
         }
     }
 
     private void SetDialogColor(string? color)
     {
-        _colorDialogHex = ToHexColor(color);
-        _colorDialogHexInput = _colorDialogHex;
+        if (TryCreateNormalizedColor(color, out var normalizedColor))
+        {
+            SetDialogColor(normalizedColor);
+        }
+        else
+        {
+            SetDialogColor(new NormalizedColor("#000000", "#000000", 100));
+        }
+    }
+
+    private void SetDialogColor(NormalizedColor color)
+    {
+        _colorDialogValue = color.Normalized;
+        _colorDialogHtmlHex = color.HtmlHex;
+        _colorDialogTextInput = color.Normalized;
+        _colorDialogAlphaPercent = color.AlphaPercent;
     }
 
     private async Task AddDialogColorToCustomColorsAsync()
@@ -798,10 +847,10 @@
             return;
         }
 
-        var normalized = ToHexColor(_colorDialogHex);
+        var normalized = NormalizeColor(_colorDialogValue);
         Board.CustomColors ??= [];
 
-        Board.CustomColors.RemoveAll(color => string.Equals(ToHexColor(color), normalized, StringComparison.OrdinalIgnoreCase));
+        Board.CustomColors.RemoveAll(color => string.Equals(NormalizeColor(color), normalized, StringComparison.OrdinalIgnoreCase));
         Board.CustomColors.Insert(0, normalized);
         Board.CustomColors = Board.CustomColors.Take(18).ToList();
 
@@ -815,7 +864,7 @@
             return;
         }
 
-        var normalized = ToHexColor(_colorDialogHex);
+        var normalized = NormalizeColor(_colorDialogValue);
 
         if (!TryApplyColor(_activeColorField, normalized))
         {
@@ -866,7 +915,7 @@
             return false;
         }
 
-        var normalized = ToHexColor(color);
+        var normalized = NormalizeColor(color);
 
         switch (target)
         {
@@ -917,9 +966,9 @@
             return;
         }
 
-        var normalized = ToHexColor(color);
+        var normalized = NormalizeColor(color);
         Board.RecentColors ??= [];
-        Board.RecentColors.RemoveAll(item => string.Equals(ToHexColor(item), normalized, StringComparison.OrdinalIgnoreCase));
+        Board.RecentColors.RemoveAll(item => string.Equals(NormalizeColor(item), normalized, StringComparison.OrdinalIgnoreCase));
         Board.RecentColors.Insert(0, normalized);
         Board.RecentColors = Board.RecentColors.Take(10).ToList();
     }
@@ -932,10 +981,17 @@
             : Math.Clamp(Math.Min(Math.Max(element.Width, 1), Math.Max(element.Height, 1)) * 0.28, 10, 48);
 
     private static string GetColorChipStyle(string color) =>
-        $"width: 24px; height: 24px; border-radius: 8px; border: 1px solid var(--orim-properties-input-border); background: {color}; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); flex: 0 0 auto;";
+        GetColorSurfaceStyle(color, "24px", "24px", "8px", null, "flex: 0 0 auto;");
 
     private static string GetDialogPreviewStyle(string color) =>
-        $"width: 100%; height: 72px; border-radius: 12px; border: 1px solid var(--orim-properties-input-border); background: {color}; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); margin-bottom: 16px;";
+        GetColorSurfaceStyle(color, "100%", "72px", "12px", "margin-bottom: 16px;", null);
+
+    private static string GetColorSurfaceStyle(string color, string width, string height, string borderRadius, string? extraStyle, string? layoutStyle)
+    {
+        var normalized = NormalizeColor(color);
+
+        return $"width: {width}; height: {height}; border-radius: {borderRadius}; border: 1px solid var(--orim-properties-input-border); background-color: #FFFFFF; background-image: linear-gradient({normalized}, {normalized}), linear-gradient(45deg, rgba(15,23,42,0.08) 25%, transparent 25%, transparent 75%, rgba(15,23,42,0.08) 75%, rgba(15,23,42,0.08)), linear-gradient(45deg, rgba(15,23,42,0.08) 25%, transparent 25%, transparent 75%, rgba(15,23,42,0.08) 75%, rgba(15,23,42,0.08)); background-size: auto, 12px 12px, 12px 12px; background-position: 0 0, 0 0, 6px 6px; box-shadow: inset 0 0 0 1px rgba(255,255,255,0.35); {extraStyle}{layoutStyle}";
+    }
 
     private static string GetArrowHeadOptionSymbol(ArrowHeadStyle style) => style switch
     {
@@ -946,24 +1002,19 @@
         _ => "-"
     };
 
-    private static string ToCssColor(MudColor color, bool includeAlpha = false) =>
-        includeAlpha
-            ? color.ToString(MudColorOutputFormats.RGBA)
-            : color.ToString(MudColorOutputFormats.Hex);
-
-    private static string ToHexColor(string? color)
+    private static string NormalizeColor(string? color)
     {
-        if (TryNormalizeHexColor(color, out var normalized))
+        if (TryCreateNormalizedColor(color, out var normalizedColor))
         {
-            return normalized;
+            return normalizedColor.Normalized;
         }
 
         return "#000000";
     }
 
-    private static bool TryNormalizeHexColor(string? color, out string normalized)
+    private static bool TryCreateNormalizedColor(string? color, out NormalizedColor normalizedColor)
     {
-        normalized = "#000000";
+        normalizedColor = new NormalizedColor("#000000", "#000000", 100);
 
         if (string.IsNullOrWhiteSpace(color))
         {
@@ -972,12 +1023,132 @@
 
         try
         {
-            normalized = new MudColor(color.Trim()).ToString(MudColorOutputFormats.Hex).ToUpperInvariant();
-            return normalized.Length == 7 && normalized.StartsWith('#');
+            var parsed = new MudColor(color.Trim());
+            var htmlHex = parsed.ToString(MudColorOutputFormats.Hex).ToUpperInvariant();
+
+            if (!TryNormalizeHtmlHex(htmlHex, out htmlHex))
+            {
+                return false;
+            }
+
+            var rgba = parsed.ToString(MudColorOutputFormats.RGBA);
+            if (!TryParseRgbComponents(rgba, out var red, out var green, out var blue, out var alpha))
+            {
+                red = byte.Parse(htmlHex[1..3], System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture);
+                green = byte.Parse(htmlHex[3..5], System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture);
+                blue = byte.Parse(htmlHex[5..7], System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture);
+                alpha = 1d;
+            }
+
+            alpha = Math.Clamp(alpha, 0d, 1d);
+            var alphaPercent = (int)Math.Round(alpha * 100d, MidpointRounding.AwayFromZero);
+            var normalized = alphaPercent >= 100
+                ? htmlHex
+                : FormatRgba(red, green, blue, alpha);
+
+            normalizedColor = new NormalizedColor(normalized, htmlHex, alphaPercent);
+            return true;
         }
         catch
         {
             return false;
         }
     }
+
+    private static bool TryCreateNormalizedColor(string? htmlHex, int alphaPercent, out NormalizedColor normalizedColor)
+    {
+        normalizedColor = new NormalizedColor("#000000", "#000000", 100);
+
+        if (!TryNormalizeHtmlHex(htmlHex, out var normalizedHex))
+        {
+            return false;
+        }
+
+        alphaPercent = Math.Clamp(alphaPercent, 0, 100);
+        var red = byte.Parse(normalizedHex[1..3], System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture);
+        var green = byte.Parse(normalizedHex[3..5], System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture);
+        var blue = byte.Parse(normalizedHex[5..7], System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture);
+        var normalized = alphaPercent >= 100
+            ? normalizedHex
+            : FormatRgba(red, green, blue, alphaPercent / 100d);
+
+        normalizedColor = new NormalizedColor(normalized, normalizedHex, alphaPercent);
+        return true;
+    }
+
+    private static bool TryNormalizeHtmlHex(string? color, out string normalizedHex)
+    {
+        normalizedHex = "#000000";
+
+        if (string.IsNullOrWhiteSpace(color))
+        {
+            return false;
+        }
+
+        try
+        {
+            normalizedHex = new MudColor(color.Trim()).ToString(MudColorOutputFormats.Hex).ToUpperInvariant();
+            return normalizedHex.Length == 7 && normalizedHex.StartsWith('#');
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryParseRgbComponents(string value, out byte red, out byte green, out byte blue, out double alpha)
+    {
+        red = 0;
+        green = 0;
+        blue = 0;
+        alpha = 1d;
+
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        var color = value.Trim();
+        var isRgb = color.StartsWith("rgb(", StringComparison.OrdinalIgnoreCase);
+        var isRgba = color.StartsWith("rgba(", StringComparison.OrdinalIgnoreCase);
+
+        if (!isRgb && !isRgba)
+        {
+            return false;
+        }
+
+        var components = color[(color.IndexOf('(') + 1)..^1].Split(',', StringSplitOptions.TrimEntries);
+        if (components.Length < 3)
+        {
+            return false;
+        }
+
+        if (!byte.TryParse(components[0], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out red) ||
+            !byte.TryParse(components[1], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out green) ||
+            !byte.TryParse(components[2], System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out blue))
+        {
+            return false;
+        }
+
+        if (components.Length >= 4 &&
+            !double.TryParse(components[3], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out alpha))
+        {
+            return false;
+        }
+
+        alpha = Math.Clamp(alpha, 0d, 1d);
+        return true;
+    }
+
+    private static bool TryParseAlphaPercent(string? value, out int alphaPercent)
+    {
+        return int.TryParse(
+            value,
+            System.Globalization.NumberStyles.Integer,
+            System.Globalization.CultureInfo.InvariantCulture,
+            out alphaPercent);
+    }
+
+    private static string FormatRgba(byte red, byte green, byte blue, double alpha) =>
+        $"rgba({red},{green},{blue},{alpha.ToString("0.###", System.Globalization.CultureInfo.InvariantCulture)})";
 }
