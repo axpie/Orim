@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import {
+  Alert,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -20,10 +21,10 @@ import {
   Tooltip,
   Divider,
   InputAdornment,
-  Alert,
   FormControlLabel,
   Switch,
 } from '@mui/material';
+import type { AxiosError } from 'axios';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
 import {
@@ -35,11 +36,27 @@ import {
   removeMember,
   updateMemberRole,
 } from '../../api/boards';
-import { BoardVisibility, BoardRole } from '../../types/models';
+import { BoardVisibility, BoardRole, type User } from '../../types/models';
+import { ShareMemberSearchDialog } from './ShareMemberSearchDialog';
 
 interface ShareDialogProps {
   boardId: string;
   onClose: () => void;
+}
+
+function getErrorMessage(error: unknown, fallback: string): string {
+  const axiosError = error as AxiosError<{ message?: string } | string>;
+  const payload = axiosError.response?.data;
+
+  if (typeof payload === 'string' && payload.trim()) {
+    return payload;
+  }
+
+  if (payload && typeof payload === 'object' && 'message' in payload && typeof payload.message === 'string' && payload.message.trim()) {
+    return payload.message;
+  }
+
+  return fallback;
 }
 
 export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
@@ -52,14 +69,27 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
 
   const [shareLink, setShareLink] = useState('');
   const [copied, setCopied] = useState(false);
-  const [newMember, setNewMember] = useState('');
   const [password, setPassword] = useState('');
+  const [newMemberRole, setNewMemberRole] = useState(BoardRole.Editor);
+  const [memberSearchOpen, setMemberSearchOpen] = useState(false);
+  const [message, setMessage] = useState<{ severity: 'error' | 'success'; text: string } | null>(null);
 
   useEffect(() => {
     if (board?.shareLinkToken) {
       setShareLink(`${window.location.origin}/shared/${board.shareLinkToken}`);
+    } else {
+      setShareLink('');
     }
   }, [board?.shareLinkToken]);
+
+  useEffect(() => {
+    if (!message) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => setMessage(null), 4000);
+    return () => window.clearTimeout(timeoutId);
+  }, [message]);
 
   const visibilityMutation = useMutation({
     mutationFn: ({ visibility, allowAnonymousEditing }: { visibility: BoardVisibility; allowAnonymousEditing: boolean }) =>
@@ -82,22 +112,32 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
   });
 
   const addMemberMutation = useMutation({
-    mutationFn: (userId: string) => addMember(boardId, userId, BoardRole.Editor),
+    mutationFn: ({ username, role }: { username: string; role: BoardRole }) => addMember(boardId, username, role),
     onSuccess: () => {
-      setNewMember('');
+      setMemberSearchOpen(false);
+      setMessage({ severity: 'success', text: t('sharing.memberAdded') });
       refetch();
+    },
+    onError: (error) => {
+      setMessage({ severity: 'error', text: getErrorMessage(error, t('sharing.memberAddFailed')) });
     },
   });
 
   const removeMemberMutation = useMutation({
     mutationFn: (userId: string) => removeMember(boardId, userId),
     onSuccess: () => refetch(),
+    onError: (error) => {
+      setMessage({ severity: 'error', text: getErrorMessage(error, t('sharing.memberRemoveFailed')) });
+    },
   });
 
   const updateRoleMutation = useMutation({
     mutationFn: ({ userId, role }: { userId: string; role: BoardRole }) =>
       updateMemberRole(boardId, userId, role),
     onSuccess: () => refetch(),
+    onError: (error) => {
+      setMessage({ severity: 'error', text: getErrorMessage(error, t('sharing.memberRoleUpdateFailed')) });
+    },
   });
 
   const handleCopy = () => {
@@ -108,12 +148,39 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
 
   if (!board) return null;
 
+  const shareLinkAccessible = board.visibility === BoardVisibility.Public;
+  const visibilityDescriptionKey =
+    board.visibility === BoardVisibility.Private
+      ? 'sharing.privateDescription'
+      : board.visibility === BoardVisibility.Public
+        ? 'sharing.publicDescription'
+        : 'sharing.sharedDescription';
+
+  const shareLinkStatus = shareLinkAccessible
+    ? { severity: 'info' as const, text: t('sharing.shareLinkPublicHint') }
+    : board.visibility === BoardVisibility.Private
+      ? { severity: 'warning' as const, text: t('sharing.shareLinkPrivateHint') }
+      : { severity: 'warning' as const, text: t('sharing.shareLinkSharedHint') };
+
+  const shareableUserIds = (board.members ?? []).map((member) => member.userId);
+
+  const handleSelectUser = (user: User) => {
+    addMemberMutation.mutate({ username: user.username, role: newMemberRole });
+  };
+
   return (
-    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
-      <DialogTitle>{t('board.share')}</DialogTitle>
-      <DialogContent>
+    <>
+      <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
+        <DialogTitle>{t('board.share')}</DialogTitle>
+        <DialogContent>
+          {message && (
+            <Alert severity={message.severity} sx={{ mb: 2 }}>
+              {message.text}
+            </Alert>
+          )}
+
         {/* Visibility */}
-        <Box sx={{ mb: 3 }}>
+          <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
             {t('sharing.visibility')}
           </Typography>
@@ -130,12 +197,15 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
             <MenuItem value={BoardVisibility.Public}>{t('sharing.public')}</MenuItem>
             <MenuItem value={BoardVisibility.Shared}>{t('sharing.shared')}</MenuItem>
           </Select>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {t(visibilityDescriptionKey)}
+          </Typography>
           <FormControlLabel
             sx={{ mt: 1 }}
             control={
               <Switch
                 checked={board.sharedAllowAnonymousEditing}
-                disabled={board.visibility !== BoardVisibility.Shared}
+                disabled={board.visibility !== BoardVisibility.Public}
                 onChange={(e) => visibilityMutation.mutate({
                   visibility: board.visibility,
                   allowAnonymousEditing: e.target.checked,
@@ -144,12 +214,15 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
             }
             label={t('sharing.allowEditing')}
           />
-        </Box>
+          <Typography variant="body2" color="text.secondary">
+            {t('sharing.allowEditingHint')}
+          </Typography>
+          </Box>
 
-        <Divider sx={{ mb: 2 }} />
+          <Divider sx={{ mb: 2 }} />
 
         {/* Share link */}
-        <Box sx={{ mb: 3 }}>
+          <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
             {t('sharing.shareLink')}
           </Typography>
@@ -181,10 +254,13 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
               {t('sharing.copied')}
             </Alert>
           )}
-        </Box>
+          <Alert severity={shareLinkStatus.severity} sx={{ mt: 1 }}>
+            {shareLinkStatus.text}
+          </Alert>
+          </Box>
 
         {/* Password */}
-        <Box sx={{ mb: 3 }}>
+          <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
             {t('sharing.password')}
           </Typography>
@@ -195,10 +271,12 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
               placeholder={t('sharing.password')}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={!shareLinkAccessible}
               sx={{ flex: 1 }}
             />
             <Button
               variant="outlined"
+              disabled={!shareLinkAccessible}
               onClick={() => {
                 passwordMutation.mutate(password || null);
                 setPassword('');
@@ -207,31 +285,38 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
               {password ? t('sharing.setPassword') : t('sharing.removePassword')}
             </Button>
           </Box>
-        </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            {t('sharing.passwordHint')}
+          </Typography>
+          </Box>
 
-        <Divider sx={{ mb: 2 }} />
+          <Divider sx={{ mb: 2 }} />
 
         {/* Members */}
-        <Box>
+          <Box>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
             {t('sharing.members')}
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, mb: 1 }}>
-            <TextField
+            <Select
               size="small"
-              placeholder="User ID"
-              value={newMember}
-              onChange={(e) => setNewMember(e.target.value)}
-              sx={{ flex: 1 }}
-            />
+              value={newMemberRole}
+              onChange={(event) => setNewMemberRole(event.target.value as BoardRole)}
+              sx={{ minWidth: 160 }}
+            >
+              <MenuItem value={BoardRole.Editor}>{t('sharing.editor')}</MenuItem>
+              <MenuItem value={BoardRole.Viewer}>{t('sharing.viewer')}</MenuItem>
+            </Select>
             <Button
               variant="outlined"
-              onClick={() => addMemberMutation.mutate(newMember)}
-              disabled={!newMember}
+              onClick={() => setMemberSearchOpen(true)}
             >
-              {t('sharing.addMember')}
+              {t('sharing.searchUsers')}
             </Button>
           </Box>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+            {t('sharing.sharedMembersHint')}
+          </Typography>
           <List dense>
             {(board.members ?? []).map((m) => (
               <ListItem key={m.userId}>
@@ -259,11 +344,20 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
               </ListItem>
             ))}
           </List>
-        </Box>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onClose}>Close</Button>
-      </DialogActions>
-    </Dialog>
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={onClose}>{t('common.cancel')}</Button>
+        </DialogActions>
+      </Dialog>
+
+      <ShareMemberSearchDialog
+        boardId={boardId}
+        excludedUserIds={shareableUserIds}
+        open={memberSearchOpen}
+        onClose={() => setMemberSearchOpen(false)}
+        onSelect={handleSelectUser}
+      />
+    </>
   );
 }

@@ -226,6 +226,33 @@ app.MapDelete("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid i
     return Results.NoContent();
 });
 
+app.MapGet("/api/boards/{id:guid}/shareable-users", [Authorize] async (Guid id, string? query, HttpContext context, BoardService boardService, UserService userService) =>
+{
+    var board = await boardService.GetBoardAsync(id);
+    if (board is null) return Results.NotFound();
+
+    if (!boardService.HasAccess(board, GetUserId(context), BoardRole.Owner))
+        return Results.Forbid();
+
+    var memberIds = board.Members
+        .Select(member => member.UserId)
+        .Append(board.OwnerId)
+        .ToHashSet();
+
+    var normalizedQuery = query?.Trim();
+    var users = await userService.GetAllUsersAsync();
+    var results = users
+        .Where(user => user.IsActive)
+        .Where(user => !memberIds.Contains(user.Id))
+        .Where(user => string.IsNullOrWhiteSpace(normalizedQuery) ||
+                       user.Username.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase))
+        .OrderBy(user => user.Username, StringComparer.OrdinalIgnoreCase)
+        .Take(20)
+        .Select(user => new UserDto(user.Id, user.Username, user.Role, user.IsActive, user.CreatedAt));
+
+    return Results.Ok(results);
+});
+
 app.MapGet("/api/themes", [Authorize] async (ThemeCatalogApiService themeCatalogService) =>
 {
     var themes = await themeCatalogService.GetEnabledThemesAsync();
@@ -375,7 +402,7 @@ app.MapPut("/api/boards/{id:guid}/visibility", [Authorize] async (Guid id, SetVi
         return Results.Forbid();
 
     board.Visibility = request.Visibility;
-    board.SharedAllowAnonymousEditing = request.AllowAnonymousEditing;
+    board.SharedAllowAnonymousEditing = request.Visibility == BoardVisibility.Public && request.AllowAnonymousEditing;
     await boardService.UpdateBoardAsync(board, kind: BoardChangeKind.Metadata);
     return Results.Ok(board);
 });
@@ -397,7 +424,7 @@ app.MapGet("/api/boards/shared/{token}", async (string token, BoardService board
 {
     var board = await boardService.GetBoardByShareTokenAsync(token);
     if (board is null) return Results.NotFound();
-    if (board.Visibility != BoardVisibility.Shared) return Results.NotFound();
+    if (board.Visibility != BoardVisibility.Public) return Results.NotFound();
     if (boardService.IsSharePasswordProtected(board))
         return Results.Ok(new { requiresPassword = true, boardId = board.Id, title = board.Title });
     return Results.Ok(board);

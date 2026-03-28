@@ -11,6 +11,7 @@ import type {
   ChatMessageEntry,
   CreateBoardRequest,
   ImportBoardRequest,
+  User,
 } from '../types/models';
 
 // --- Board CRUD ---
@@ -107,6 +108,13 @@ export async function setSharePassword(id: string, password: string | null): Pro
 
 export async function addMember(id: string, username: string, role: BoardRole): Promise<BoardMember[]> {
   const { data } = await client.post<BoardMember[]>(`/api/boards/${id}/members`, { username, role });
+  return data;
+}
+
+export async function searchShareableUsers(id: string, query: string): Promise<User[]> {
+  const { data } = await client.get<User[]>(`/api/boards/${id}/shareable-users`, {
+    params: { query },
+  });
   return data;
 }
 
