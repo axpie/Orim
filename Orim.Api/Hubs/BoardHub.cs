@@ -9,6 +9,7 @@ public sealed class BoardHub : Hub
 {
     private const string JoinedBoardIdKey = "joined-board-id";
     private const string JoinedCanEditKey = "joined-can-edit";
+    private const string DisplayNameKey = "display-name";
     private readonly BoardPresenceService _presenceService;
     private readonly BoardService _boardService;
 
@@ -32,6 +33,7 @@ public sealed class BoardHub : Hub
         Context.Items[JoinedCanEditKey] = CanEditBoard(board, shareToken, sharePassword);
 
         var displayName = ResolveDisplayName(requestedDisplayName);
+    Context.Items[DisplayNameKey] = displayName;
         var clientId = Context.ConnectionId;
         var color = BoardPresenceIdentity.ResolveColor(clientId);
 
@@ -40,6 +42,33 @@ public sealed class BoardHub : Hub
 
         var snapshot = await GetPresenceSnapshot(boardId);
         await Clients.Group(groupName).SendAsync("PresenceUpdated", snapshot);
+    }
+
+    public async Task UpdateDisplayName(Guid boardId, string? requestedDisplayName)
+    {
+        if (!IsJoinedBoard(boardId))
+        {
+            return;
+        }
+
+        var displayName = ResolveDisplayName(requestedDisplayName);
+        Context.Items[DisplayNameKey] = displayName;
+
+        var existingPresence = _presenceService.GetCursor(boardId, Context.ConnectionId);
+        var color = existingPresence?.ColorHex ?? BoardPresenceIdentity.ResolveColor(Context.ConnectionId);
+
+        var presence = new BoardCursorPresence(
+            Context.ConnectionId,
+            displayName,
+            color,
+            existingPresence?.WorldX,
+            existingPresence?.WorldY,
+            DateTime.UtcNow);
+
+        await _presenceService.UpsertCursorAsync(boardId, presence);
+
+        var snapshot = await GetPresenceSnapshot(boardId);
+        await Clients.Group(BoardGroup(boardId)).SendAsync("PresenceUpdated", snapshot);
     }
 
     public async Task LeaveBoard(Guid boardId)
@@ -188,6 +217,13 @@ public sealed class BoardHub : Hub
         if (!string.IsNullOrWhiteSpace(requestedDisplayName))
         {
             return requestedDisplayName.Trim();
+        }
+
+        if (Context.Items.TryGetValue(DisplayNameKey, out var storedDisplayName)
+            && storedDisplayName is string persistedDisplayName
+            && !string.IsNullOrWhiteSpace(persistedDisplayName))
+        {
+            return persistedDisplayName;
         }
 
         return "Guest";

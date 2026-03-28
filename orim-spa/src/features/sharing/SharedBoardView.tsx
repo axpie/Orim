@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
+  Alert,
   Box,
   Card,
   CardContent,
@@ -10,6 +11,7 @@ import {
   Button,
   Typography,
   CircularProgress,
+  Stack,
 } from '@mui/material';
 import { getSharedBoard, replaceSharedBoardContent, validateSharePassword } from '../../api/boards';
 import { useBoardStore } from '../whiteboard/store/boardStore';
@@ -19,7 +21,11 @@ import { Toolbar } from '../whiteboard/tools/Toolbar';
 import { BoardTopBar } from '../whiteboard/tools/BoardTopBar';
 import { PropertiesPanel } from '../whiteboard/panels/PropertiesPanel';
 import { useSignalR } from '../../hooks/useSignalR';
+import { useAuthStore } from '../../stores/authStore';
 import type { Board } from '../../types/models';
+import { resolveInitialGuestDisplayName } from './guestDisplayNames';
+
+const guestNameStorageKey = 'orim_guest_name';
 
 function isProtectedBoardResponse(value: unknown): value is { requiresPassword: boolean; boardId: string; title: string } {
   return !!value && typeof value === 'object' && 'requiresPassword' in value;
@@ -27,7 +33,7 @@ function isProtectedBoardResponse(value: unknown): value is { requiresPassword: 
 
 export function SharedBoardView() {
   const { token } = useParams<{ token: string }>();
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const setBoard = useBoardStore((s) => s.setBoard);
   const setRemoteCursors = useBoardStore((s) => s.setRemoteCursors);
   const board = useBoardStore((s) => s.board);
@@ -35,24 +41,22 @@ export function SharedBoardView() {
   const isDirty = useBoardStore((s) => s.isDirty);
   const setDirty = useBoardStore((s) => s.setDirty);
   const clearCommandStack = useCommandStack((s) => s.clear);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const [password, setPassword] = useState('');
   const [validatedPassword, setValidatedPassword] = useState<string | null>(null);
   const [needsPassword, setNeedsPassword] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [guestDisplayName, setGuestDisplayName] = useState(() => {
+    const storedName = window.localStorage.getItem(guestNameStorageKey);
+    const initialName = resolveInitialGuestDisplayName(i18n.resolvedLanguage, storedName);
+    window.localStorage.setItem(guestNameStorageKey, initialName);
+    return initialName;
+  });
+  const [guestNameDraft, setGuestNameDraft] = useState(guestDisplayName);
+  const [guestNameSaved, setGuestNameSaved] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const guestDisplayName = useMemo(() => {
-    const existing = window.localStorage.getItem('orim_guest_name');
-    if (existing) {
-      return existing;
-    }
-
-    const generated = `Guest ${Math.floor(1000 + Math.random() * 9000)}`;
-    window.localStorage.setItem('orim_guest_name', generated);
-    return generated;
-  }, []);
 
   const { isLoading, isError } = useQuery({
     queryKey: ['shared-board', token],
@@ -79,7 +83,7 @@ export function SharedBoardView() {
     },
   });
 
-  const { sendBoardState, sendBoardStateThrottled, sendCursorUpdate, connectionId } = useSignalR({
+  const { sendBoardState, sendBoardStateThrottled, sendCursorUpdate, updateDisplayName, connectionId } = useSignalR({
     boardId: board?.id ?? null,
     shareToken: token ?? null,
     sharePassword: validatedPassword,
@@ -94,6 +98,19 @@ export function SharedBoardView() {
       setRemoteCursors([...current, cursor]);
     },
   });
+
+  useEffect(() => {
+    setGuestNameDraft(guestDisplayName);
+  }, [guestDisplayName]);
+
+  useEffect(() => {
+    if (!guestNameSaved) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => setGuestNameSaved(false), 2500);
+    return () => window.clearTimeout(timeoutId);
+  }, [guestNameSaved]);
 
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -142,6 +159,19 @@ export function SharedBoardView() {
     }
   }, [sendBoardStateThrottled]);
 
+  const handleGuestNameSave = useCallback(() => {
+    const trimmedName = guestNameDraft.trim();
+    if (!trimmedName || trimmedName === guestDisplayName) {
+      setGuestNameDraft(trimmedName || guestDisplayName);
+      return;
+    }
+
+    window.localStorage.setItem(guestNameStorageKey, trimmedName);
+    setGuestDisplayName(trimmedName);
+    updateDisplayName(trimmedName);
+    setGuestNameSaved(true);
+  }, [guestDisplayName, guestNameDraft, updateDisplayName]);
+
   if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
@@ -168,11 +198,11 @@ export function SharedBoardView() {
                 setPasswordError(false);
               }}
               error={passwordError}
-              helperText={passwordError ? 'Invalid password' : ''}
+              helperText={passwordError ? t('sharing.invalidPassword') : ''}
               sx={{ mb: 2 }}
             />
             <Button variant="contained" fullWidth onClick={handlePasswordSubmit}>
-              OK
+              {t('common.confirm')}
             </Button>
           </CardContent>
         </Card>
@@ -205,6 +235,41 @@ export function SharedBoardView() {
         collaborators={remoteCursors}
         localConnectionId={connectionId}
       />
+      {!isAuthenticated && (
+        <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>
+          <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems={{ xs: 'stretch', sm: 'center' }}>
+            <TextField
+              size="small"
+              label={t('sharing.guestDisplayName')}
+              placeholder={t('sharing.guestDisplayNamePlaceholder')}
+              value={guestNameDraft}
+              onChange={(event) => setGuestNameDraft(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  handleGuestNameSave();
+                }
+              }}
+              sx={{ minWidth: { sm: 280 } }}
+            />
+            <Button
+              variant="outlined"
+              onClick={handleGuestNameSave}
+              disabled={!guestNameDraft.trim() || guestNameDraft.trim() === guestDisplayName}
+            >
+              {t('sharing.saveGuestDisplayName')}
+            </Button>
+            <Typography variant="body2" color="text.secondary" sx={{ flex: 1 }}>
+              {t('sharing.guestDisplayNameHint')}
+            </Typography>
+          </Stack>
+          {guestNameSaved && (
+            <Alert severity="success" sx={{ mt: 1.5 }}>
+              {t('sharing.guestDisplayNameSaved')}
+            </Alert>
+          )}
+        </Box>
+      )}
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
         {board.sharedAllowAnonymousEditing && <Toolbar />}
         <Box sx={{ flex: 1, position: 'relative' }}>

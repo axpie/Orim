@@ -165,5 +165,15 @@ export function useSignalR({
     [sendBoardState],
   );
 
-  return { sendBoardUpdated, sendCursorUpdate, sendBoardState, sendBoardStateThrottled, connectionId };
+  const updateDisplayName = useCallback(
+    (nextDisplayName: string) => {
+      const conn = connectionRef.current;
+      if (conn?.state === signalR.HubConnectionState.Connected && boardIdRef.current) {
+        conn.invoke('UpdateDisplayName', boardIdRef.current, nextDisplayName).catch(console.error);
+      }
+    },
+    [],
+  );
+
+  return { sendBoardUpdated, sendCursorUpdate, sendBoardState, sendBoardStateThrottled, updateDisplayName, connectionId };
 }

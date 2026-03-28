@@ -13,7 +13,8 @@
     "lightMode": "Hellmodus"
   },
   "common": {
-    "cancel": "Abbrechen"
+    "cancel": "Abbrechen",
+    "confirm": "OK"
   },
   "auth": {
     "username": "Benutzername",
@@ -138,6 +139,12 @@
     "searchUsersEmpty": "Keine weiteren freigabefähigen Benutzer verfügbar.",
     "searchUsersFailed": "Die Benutzerliste konnte nicht geladen werden.",
     "sharedMembersHint": "Nutze \"Geteilt\", wenn nur ausgewählte Benutzer mit ORIM-Konto Zugriff erhalten sollen.",
+    "guestDisplayName": "Angezeigter Name",
+    "guestDisplayNamePlaceholder": "z. B. Akribischer Softwaretester",
+    "guestDisplayNameHint": "Du bist anonym unterwegs und kannst den Namen anpassen, unter dem andere dich sehen.",
+    "saveGuestDisplayName": "Namen ubernehmen",
+    "guestDisplayNameSaved": "Dein Anzeigename wurde aktualisiert.",
+    "invalidPassword": "Ungultiges Passwort.",
     "owner": "Besitzer",
     "editor": "Bearbeiter",
     "viewer": "Betrachter"

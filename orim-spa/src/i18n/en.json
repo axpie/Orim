@@ -13,7 +13,8 @@
     "lightMode": "Light mode"
   },
   "common": {
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "confirm": "OK"
   },
   "auth": {
     "username": "Username",
@@ -138,6 +139,12 @@
     "searchUsersEmpty": "No more shareable users available.",
     "searchUsersFailed": "The user list could not be loaded.",
     "sharedMembersHint": "Use \"Shared\" when only selected ORIM users should get access.",
+    "guestDisplayName": "Displayed name",
+    "guestDisplayNamePlaceholder": "e.g. Meticulous Software Tester",
+    "guestDisplayNameHint": "You are currently anonymous and can change the name other participants see.",
+    "saveGuestDisplayName": "Update name",
+    "guestDisplayNameSaved": "Your displayed name has been updated.",
+    "invalidPassword": "Invalid password.",
     "owner": "Owner",
     "editor": "Editor",
     "viewer": "Viewer"
