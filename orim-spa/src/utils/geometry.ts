@@ -126,6 +126,84 @@ export function snapToAlignmentGuides(
   return { dx, dy, guides };
 }
 
+export function snapResizeRectToAlignmentGuides(
+  resizing: Rect,
+  others: BoardElement[],
+  zoom: number,
+  handle: string,
+): { rect: Rect; guides: AlignmentGuide[] } {
+  const threshold = SNAP_THRESHOLD / zoom;
+  const right = resizing.x + resizing.width;
+  const bottom = resizing.y + resizing.height;
+  let nextLeft = resizing.x;
+  let nextRight = right;
+  let nextTop = resizing.y;
+  let nextBottom = bottom;
+  const guides: AlignmentGuide[] = [];
+
+  if (handle.includes('w') || handle.includes('e')) {
+    const movingX = handle.includes('w') ? resizing.x : right;
+    let bestDiff = Infinity;
+    let bestGuidePosition: number | null = null;
+
+    for (const other of others) {
+      const oe = edgesOf({ x: other.x, y: other.y, width: other.width, height: other.height });
+      for (const candidate of [oe.left, oe.right, oe.cx]) {
+        const diff = candidate - movingX;
+        if (Math.abs(diff) < Math.abs(bestDiff) && Math.abs(diff) < threshold) {
+          bestDiff = diff;
+          bestGuidePosition = candidate;
+        }
+      }
+    }
+
+    if (bestGuidePosition != null) {
+      if (handle.includes('w')) {
+        nextLeft += bestDiff;
+      } else {
+        nextRight += bestDiff;
+      }
+      guides.push({ orientation: 'vertical', position: bestGuidePosition });
+    }
+  }
+
+  if (handle.includes('n') || handle.includes('s')) {
+    const movingY = handle.includes('n') ? resizing.y : bottom;
+    let bestDiff = Infinity;
+    let bestGuidePosition: number | null = null;
+
+    for (const other of others) {
+      const oe = edgesOf({ x: other.x, y: other.y, width: other.width, height: other.height });
+      for (const candidate of [oe.top, oe.bottom, oe.cy]) {
+        const diff = candidate - movingY;
+        if (Math.abs(diff) < Math.abs(bestDiff) && Math.abs(diff) < threshold) {
+          bestDiff = diff;
+          bestGuidePosition = candidate;
+        }
+      }
+    }
+
+    if (bestGuidePosition != null) {
+      if (handle.includes('n')) {
+        nextTop += bestDiff;
+      } else {
+        nextBottom += bestDiff;
+      }
+      guides.push({ orientation: 'horizontal', position: bestGuidePosition });
+    }
+  }
+
+  return {
+    rect: {
+      x: nextLeft,
+      y: nextTop,
+      width: nextRight - nextLeft,
+      height: nextBottom - nextTop,
+    },
+    guides,
+  };
+}
+
 /** Snap a value to the nearest grid line. */
 export function snapToGrid(value: number, gridSize: number = GRID_SIZE): number {
   return Math.round(value / gridSize) * gridSize;

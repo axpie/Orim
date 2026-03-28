@@ -28,7 +28,7 @@ import {
   type ArrowElement,
   type IconElement,
 } from '../../../types/models';
-import { snapToAlignmentGuides, type AlignmentGuide, getBoundingRect } from '../../../utils/geometry';
+import { snapResizeRectToAlignmentGuides, snapToAlignmentGuides, type AlignmentGuide, getBoundingRect } from '../../../utils/geometry';
 import {
   computeArrowPolyline,
   findNearestDockTarget,
@@ -565,6 +565,7 @@ export function WhiteboardCanvas({
       const worldPos = getWorldPos();
       const screenPos = getScreenPos();
       if (!screenPos) return;
+      const snapTemporarilyDisabled = e.evt.ctrlKey;
       const nextHoveredResizeHandle = resizeState?.handle
         ?? (editable && activeTool === 'select' ? getResizeHandleFromTarget(e.target) : null);
       setHoveredResizeHandle((current) => (current === nextHoveredResizeHandle ? current : nextHoveredResizeHandle));
@@ -652,6 +653,41 @@ export function WhiteboardCanvas({
           nextBottom = Math.max(worldPos.y, resizeState.initialY + MIN_ELEMENT_SIZE);
         }
 
+        if (snapTemporarilyDisabled) {
+          setGuides([]);
+        } else {
+          const otherEls = elements.filter((element: BoardElement) => element.id !== resizeState.elementId);
+          const snappedResize = snapResizeRectToAlignmentGuides(
+            {
+              x: nextLeft,
+              y: nextTop,
+              width: nextRight - nextLeft,
+              height: nextBottom - nextTop,
+            },
+            otherEls,
+            zoom,
+            resizeState.handle,
+          );
+
+          const snappedRight = snappedResize.rect.x + snappedResize.rect.width;
+          const snappedBottom = snappedResize.rect.y + snappedResize.rect.height;
+
+          nextLeft = resizeState.handle.includes('w')
+            ? Math.min(snappedResize.rect.x, nextRight - MIN_ELEMENT_SIZE)
+            : nextLeft;
+          nextRight = resizeState.handle.includes('e')
+            ? Math.max(snappedRight, nextLeft + MIN_ELEMENT_SIZE)
+            : nextRight;
+          nextTop = resizeState.handle.includes('n')
+            ? Math.min(snappedResize.rect.y, nextBottom - MIN_ELEMENT_SIZE)
+            : nextTop;
+          nextBottom = resizeState.handle.includes('s')
+            ? Math.max(snappedBottom, nextTop + MIN_ELEMENT_SIZE)
+            : nextBottom;
+
+          setGuides(snappedResize.guides);
+        }
+
         updateElement(resizeState.elementId, {
           x: nextLeft,
           y: nextTop,
@@ -677,19 +713,27 @@ export function WhiteboardCanvas({
         const dx = worldPos.x - dragStart.x;
         const dy = worldPos.y - dragStart.y;
 
-        // Snap to alignment
         const selectedEls = elements.filter((el: BoardElement) => selectedIds.includes(el.id));
         const otherEls = elements.filter((el: BoardElement) => !selectedIds.includes(el.id));
         const selBounds = getBoundingRect(selectedEls);
         if (selBounds) {
-          const moved = { ...selBounds, x: selBounds.x + dx, y: selBounds.y + dy };
-          const snap = snapToAlignmentGuides(moved, otherEls, zoom);
-          setGuides(snap.guides);
+          let snapDx = 0;
+          let snapDy = 0;
+
+          if (snapTemporarilyDisabled) {
+            setGuides([]);
+          } else {
+            const moved = { ...selBounds, x: selBounds.x + dx, y: selBounds.y + dy };
+            const snap = snapToAlignmentGuides(moved, otherEls, zoom);
+            snapDx = snap.dx;
+            snapDy = snap.dy;
+            setGuides(snap.guides);
+          }
 
           for (const el of selectedEls) {
             updateElement(el.id, {
-              x: el.x + dx + snap.dx,
-              y: el.y + dy + snap.dy,
+              x: el.x + dx + snapDx,
+              y: el.y + dy + snapDy,
             });
           }
           onBoardLiveChanged?.('move');
@@ -831,6 +875,7 @@ export function WhiteboardCanvas({
         const before = resizeSnapshotRef.current;
         const after = [...useBoardStore.getState().board?.elements ?? []];
         setResizeState(null);
+        setGuides([]);
         resizeSnapshotRef.current = null;
 
         if (before && JSON.stringify(before) !== JSON.stringify(after)) {
