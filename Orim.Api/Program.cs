@@ -37,8 +37,19 @@ builder.Services.AddSignalR().AddJsonProtocol(options =>
 });
 
 // --- JWT Authentication ---
-var jwtKey = builder.Configuration["Jwt:Key"]
-    ?? throw new InvalidOperationException("Jwt:Key must be configured.");
+var jwtKey = builder.Configuration["Jwt:Key"]?.Trim();
+if (string.IsNullOrWhiteSpace(jwtKey))
+{
+    throw new InvalidOperationException(
+        "Jwt:Key is not configured. Set Jwt__Key in Azure App Service application settings or provide it via an Azure Key Vault reference before startup.");
+}
+
+if (Encoding.UTF8.GetByteCount(jwtKey) < 32)
+{
+    throw new InvalidOperationException(
+        "Jwt:Key is too short. Configure Jwt__Key with at least 32 characters for HMAC-SHA256 signing.");
+}
+
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "OrimApi";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "OrimSpa";
 var jwtExpiryMinutes = builder.Configuration.GetValue("Jwt:ExpiryMinutes", 480);
