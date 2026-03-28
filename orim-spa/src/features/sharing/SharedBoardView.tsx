@@ -7,12 +7,15 @@ import {
   Box,
   Card,
   CardContent,
+  Drawer,
   TextField,
   Button,
   Typography,
   CircularProgress,
   Stack,
+  useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { getSharedBoard, replaceSharedBoardContent, validateSharePassword } from '../../api/boards';
 import { useBoardStore } from '../whiteboard/store/boardStore';
 import { useCommandStack } from '../whiteboard/store/commandStack';
@@ -26,6 +29,7 @@ import type { Board } from '../../types/models';
 import { resolveInitialGuestDisplayName } from './guestDisplayNames';
 
 const guestNameStorageKey = 'orim_guest_name';
+const PROPERTIES_PANEL_WIDTH = 280;
 
 function isProtectedBoardResponse(value: unknown): value is { requiresPassword: boolean; boardId: string; title: string } {
   return !!value && typeof value === 'object' && 'requiresPassword' in value;
@@ -34,8 +38,11 @@ function isProtectedBoardResponse(value: unknown): value is { requiresPassword: 
 export function SharedBoardView() {
   const { token } = useParams<{ token: string }>();
   const { t, i18n } = useTranslation();
+  const theme = useTheme();
+  const isNarrowPanelMode = useMediaQuery(theme.breakpoints.down('sm'));
   const setBoard = useBoardStore((s) => s.setBoard);
   const setRemoteCursors = useBoardStore((s) => s.setRemoteCursors);
+  const setViewportInsets = useBoardStore((s) => s.setViewportInsets);
   const board = useBoardStore((s) => s.board);
   const remoteCursors = useBoardStore((s) => s.remoteCursors);
   const isDirty = useBoardStore((s) => s.isDirty);
@@ -111,6 +118,20 @@ export function SharedBoardView() {
     const timeoutId = window.setTimeout(() => setGuestNameSaved(false), 2500);
     return () => window.clearTimeout(timeoutId);
   }, [guestNameSaved]);
+
+  useEffect(() => {
+    if (!board?.sharedAllowAnonymousEditing || isNarrowPanelMode) {
+      setViewportInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+      return;
+    }
+
+    setViewportInsets({
+      top: 0,
+      right: propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0,
+      bottom: 0,
+      left: 0,
+    });
+  }, [board?.sharedAllowAnonymousEditing, isNarrowPanelMode, propertiesOpen, setViewportInsets]);
 
   const scheduleSave = useCallback(() => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
@@ -221,7 +242,7 @@ export function SharedBoardView() {
   return (
     <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', pb: 'env(safe-area-inset-bottom)' }}>
       <BoardTopBar
-        onOpenProperties={() => setPropertiesOpen(true)}
+        onOpenProperties={() => setPropertiesOpen((current) => !current)}
         onOpenChat={() => {}}
         propertiesOpen={propertiesOpen}
         chatOpen={false}
@@ -281,14 +302,14 @@ export function SharedBoardView() {
             onPointerPresenceChanged={sendCursorUpdate}
           />
 
-          {board.sharedAllowAnonymousEditing && propertiesOpen && (
+          {board.sharedAllowAnonymousEditing && !isNarrowPanelMode && propertiesOpen && (
             <Box
               sx={{
                 position: 'absolute',
                 top: 0,
                 bottom: 0,
                 right: 0,
-                width: 280,
+                width: PROPERTIES_PANEL_WIDTH,
                 zIndex: 5,
                 boxShadow: 6,
               }}
@@ -298,6 +319,23 @@ export function SharedBoardView() {
           )}
         </Box>
       </Box>
+
+      {board.sharedAllowAnonymousEditing && isNarrowPanelMode && (
+        <Drawer
+          anchor="right"
+          open={propertiesOpen}
+          onClose={() => setPropertiesOpen(false)}
+          ModalProps={{ keepMounted: true }}
+          PaperProps={{
+            sx: {
+              width: '100vw',
+              maxWidth: '100vw',
+            },
+          }}
+        >
+          <PropertiesPanel mobile onClose={() => setPropertiesOpen(false)} onBoardChanged={onBoardChanged} />
+        </Drawer>
+      )}
     </Box>
   );
 }

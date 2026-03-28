@@ -55,7 +55,23 @@ export const useBoardStore = create<BoardState>((set) => ({
   isDirty: false,
   pendingIconName: 'mdi-star',
 
-  setBoard: (board) => set({ board, isDirty: false, selectedElementIds: [] }),
+  setBoard: (board) =>
+    set((state) => {
+      if (!board) {
+        return { board: null, isDirty: false, selectedElementIds: [] };
+      }
+
+      const preserveSelection = state.board?.id === board.id;
+      const availableIds = new Set(board.elements.map((element) => element.id));
+
+      return {
+        board,
+        isDirty: false,
+        selectedElementIds: preserveSelection
+          ? state.selectedElementIds.filter((id) => availableIds.has(id))
+          : [],
+      };
+    }),
 
   updateBoard: (updater) =>
     set((state) => {
