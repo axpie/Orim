@@ -391,7 +391,7 @@ export function SettingsPage() {
                   <Switch
                     checked={theme.isEnabled}
                     onChange={(_, checked) => toggleMutation.mutate({ key: theme.key, enabled: checked })}
-                    disabled={Boolean(theme.isProtected) || toggleMutation.isPending}
+                    disabled={toggleMutation.isPending}
                   />
                 </TableCell>
                 <TableCell>

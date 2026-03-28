@@ -196,7 +196,7 @@
     "uploadThemeJson": "Theme-JSON hochladen",
     "themeManagement": "Theme-Verwaltung",
     "themeUploadReplaceHint": "Ein Upload mit demselben Key ersetzt ein bestehendes bearbeitbares Theme.",
-    "themeImmutableHint": "Das Standard-Light-Theme ist geschützt und kann weder deaktiviert noch gelöscht werden.",
+    "themeImmutableHint": "Die eingebauten Themes Light, Dark und Synthwave sind geschützt und können nicht gelöscht oder überschrieben werden. Sie lassen sich aber deaktivieren.",
     "themeName": "Theme-Name",
     "themeKey": "Theme-Key",
     "themeMode": "Modus",

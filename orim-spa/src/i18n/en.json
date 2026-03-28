@@ -193,7 +193,7 @@
     "uploadThemeJson": "Upload Theme JSON",
     "themeManagement": "Theme Management",
     "themeUploadReplaceHint": "Uploading a theme with the same key replaces an existing editable theme.",
-    "themeImmutableHint": "The default light theme is protected and cannot be disabled or deleted.",
+    "themeImmutableHint": "The built-in Light, Dark, and Synthwave themes are protected and cannot be deleted or overwritten. They can still be disabled.",
     "themeName": "Theme Name",
     "themeKey": "Theme Key",
     "themeMode": "Mode",

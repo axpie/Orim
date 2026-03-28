@@ -98,6 +98,13 @@ public sealed class ThemeBoardDefaults
 
 public sealed class ThemeCatalogService
 {
+    private static readonly HashSet<string> BuiltInThemeKeys = new(StringComparer.Ordinal)
+    {
+        "light",
+        "dark",
+        "synthwave",
+    };
+
     private static readonly string[] RequiredCssVariables =
     [
         "--orim-page-background",
@@ -196,7 +203,7 @@ public sealed class ThemeCatalogService
 
             if (existingTheme?.IsProtected == true)
             {
-                throw new InvalidOperationException("The default light theme is protected and cannot be changed.");
+                throw new InvalidOperationException("Built-in themes cannot be changed.");
             }
 
             themes.RemoveAll(candidate => candidate.Key == normalizedTheme.Key);
@@ -222,11 +229,6 @@ public sealed class ThemeCatalogService
             var theme = themes.FirstOrDefault(candidate => candidate.Key == normalizedKey)
                 ?? throw new InvalidOperationException("The selected theme does not exist.");
 
-            if (theme.IsProtected)
-            {
-                throw new InvalidOperationException("The default light theme is protected and cannot be changed.");
-            }
-
             theme.IsEnabled = enabled;
             await WriteThemeFileAsync(theme);
             SortThemes(themes);
@@ -250,7 +252,7 @@ public sealed class ThemeCatalogService
 
             if (theme.IsProtected)
             {
-                throw new InvalidOperationException("The default light theme is protected and cannot be deleted.");
+                throw new InvalidOperationException("Built-in themes cannot be deleted.");
             }
 
             themes.RemoveAll(candidate => candidate.Key == normalizedKey);
@@ -356,7 +358,7 @@ public sealed class ThemeCatalogService
         Name = "Dark",
         IsDarkMode = true,
         IsEnabled = true,
-        IsProtected = false,
+        IsProtected = true,
         FontFamily = ["Inter", "system-ui", "-apple-system", "sans-serif"],
         Palette = new ThemePaletteDefinition
         {
@@ -430,7 +432,7 @@ public sealed class ThemeCatalogService
         Name = "Synthwave",
         IsDarkMode = true,
         IsEnabled = true,
-        IsProtected = false,
+        IsProtected = true,
         FontFamily = ["Space Grotesk", "Inter", "system-ui", "sans-serif"],
         Palette = new ThemePaletteDefinition
         {
@@ -527,11 +529,9 @@ public sealed class ThemeCatalogService
         }
 
         Directory.CreateDirectory(_themesPath);
-        await EnsureSeedThemeAsync(CreateDefaultLightTheme());
-        await EnsureSeedThemeAsync(CreateDefaultDarkTheme());
-        await EnsureSeedThemeAsync(CreateDefaultSynthwaveTheme());
 
-        var themesByKey = new Dictionary<string, ThemeDefinition>(StringComparer.Ordinal);
+        var themesByKey = CreateBuiltInThemes()
+            .ToDictionary(theme => theme.Key, theme => theme, StringComparer.Ordinal);
         foreach (var filePath in Directory.GetFiles(_themesPath, "*.json", SearchOption.TopDirectoryOnly))
         {
             try
@@ -544,6 +544,12 @@ public sealed class ThemeCatalogService
                 }
 
                 var normalizedTheme = NormalizeAndValidate(theme);
+                if (normalizedTheme.IsProtected && themesByKey.TryGetValue(normalizedTheme.Key, out var builtInTheme))
+                {
+                    builtInTheme.IsEnabled = normalizedTheme.IsEnabled;
+                    continue;
+                }
+
                 themesByKey[normalizedTheme.Key] = normalizedTheme;
             }
             catch (Exception ex)
@@ -552,29 +558,18 @@ public sealed class ThemeCatalogService
             }
         }
 
-        if (!themesByKey.ContainsKey("light"))
-        {
-            var lightTheme = CreateDefaultLightTheme();
-            themesByKey[lightTheme.Key] = lightTheme;
-            await WriteThemeFileAsync(lightTheme);
-        }
-
         var themes = themesByKey.Values.ToList();
         SortThemes(themes);
         _cache = themes;
         return themes;
     }
 
-    private async Task EnsureSeedThemeAsync(ThemeDefinition theme)
-    {
-        var filePath = GetThemeFilePath(theme.Key);
-        if (File.Exists(filePath))
-        {
-            return;
-        }
-
-        await WriteThemeFileAsync(theme);
-    }
+    private static List<ThemeDefinition> CreateBuiltInThemes() =>
+    [
+        CreateDefaultLightTheme(),
+        CreateDefaultDarkTheme(),
+        CreateDefaultSynthwaveTheme(),
+    ];
 
     private async Task WriteThemeFileAsync(ThemeDefinition theme)
     {
@@ -589,19 +584,25 @@ public sealed class ThemeCatalogService
     {
         themes.Sort((left, right) =>
         {
-            if (left.Key == "light" && right.Key != "light")
-            {
-                return -1;
-            }
+            var leftRank = GetThemeSortRank(left.Key);
+            var rightRank = GetThemeSortRank(right.Key);
 
-            if (left.Key != "light" && right.Key == "light")
+            if (leftRank != rightRank)
             {
-                return 1;
+                return leftRank.CompareTo(rightRank);
             }
 
             return string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
         });
     }
+
+    private static int GetThemeSortRank(string key) => key switch
+    {
+        "light" => 0,
+        "dark" => 1,
+        "synthwave" => 2,
+        _ => 100,
+    };
 
     private static ThemeDefinition NormalizeAndValidate(ThemeDefinition source)
     {
@@ -628,17 +629,17 @@ public sealed class ThemeCatalogService
         var normalized = source.Clone();
         normalized.Key = normalizedKey;
         normalized.Name = source.Name.Trim();
-        normalized.IsProtected = normalizedKey == "light" || source.IsProtected;
-        normalized.IsEnabled = normalized.IsProtected || source.IsEnabled;
+        normalized.IsProtected = IsBuiltInThemeKey(normalizedKey) || source.IsProtected;
 
-        if (normalizedKey == "light")
+        if (normalized.IsProtected)
         {
             normalized.IsProtected = true;
-            normalized.IsEnabled = true;
         }
 
         return normalized;
     }
+
+    private static bool IsBuiltInThemeKey(string key) => BuiltInThemeKeys.Contains(key);
 
     private static void ValidatePalette(ThemePaletteDefinition palette)
     {

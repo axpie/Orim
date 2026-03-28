@@ -29,7 +29,6 @@ export function WhiteboardEditor() {
   const user = useAuthStore((s) => s.user);
   const board = useBoardStore((s) => s.board);
   const remoteCursors = useBoardStore((s) => s.remoteCursors);
-  const selectedIds = useBoardStore((s) => s.selectedElementIds);
   const isDirty = useBoardStore((s) => s.isDirty);
   const setDirty = useBoardStore((s) => s.setDirty);
   const clearCommandStack = useCommandStack((s) => s.clear);
@@ -120,12 +119,6 @@ export function WhiteboardEditor() {
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     };
   }, [isDirty, scheduleSave]);
-
-  useEffect(() => {
-    if (selectedIds.length > 0) {
-      setPropertiesOpen(true);
-    }
-  }, [selectedIds]);
 
   useEffect(() => {
     if (!canUseAssistant && chatOpen) {

@@ -788,6 +788,13 @@ record ThemeAvailabilityRequest(bool Enabled);
 
 sealed class ThemeCatalogApiService
 {
+    private static readonly HashSet<string> BuiltInThemeKeys = new(StringComparer.Ordinal)
+    {
+        "light",
+        "dark",
+        "synthwave",
+    };
+
     private readonly string _themesPath;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private List<ApiThemeDefinition>? _cache;
@@ -853,11 +860,6 @@ sealed class ThemeCatalogApiService
             var theme = themes.FirstOrDefault(candidate => candidate.Key == normalizedKey)
                 ?? throw new InvalidOperationException("The selected theme does not exist.");
 
-            if (theme.IsProtected)
-            {
-                throw new InvalidOperationException("The default light theme is protected and cannot be changed.");
-            }
-
             theme.IsEnabled = enabled;
             await WriteThemeFileAsync(theme);
             SortThemes(themes);
@@ -881,7 +883,7 @@ sealed class ThemeCatalogApiService
 
             if (theme.IsProtected)
             {
-                throw new InvalidOperationException("The default light theme is protected and cannot be deleted.");
+                throw new InvalidOperationException("Built-in themes cannot be deleted.");
             }
 
             themes.RemoveAll(candidate => candidate.Key == normalizedKey);
@@ -918,7 +920,7 @@ sealed class ThemeCatalogApiService
 
             if (existingTheme?.IsProtected == true)
             {
-                throw new InvalidOperationException("The default light theme is protected and cannot be changed.");
+                throw new InvalidOperationException("Built-in themes cannot be changed.");
             }
 
             themes.RemoveAll(candidate => candidate.Key == normalizedTheme.Key);
@@ -960,11 +962,13 @@ sealed class ThemeCatalogApiService
 
         if (!Directory.Exists(_themesPath))
         {
-            _cache = [CreateFallbackTheme()];
+            _cache = CreateBuiltInThemes();
             return _cache;
         }
 
-        var themes = new List<ApiThemeDefinition>();
+        var themesByKey = CreateBuiltInThemes()
+            .ToDictionary(theme => theme.Key, theme => theme, StringComparer.Ordinal);
+
         foreach (var filePath in Directory.EnumerateFiles(_themesPath, "*.json"))
         {
             try
@@ -975,8 +979,13 @@ sealed class ThemeCatalogApiService
                     continue;
 
                 var normalizedTheme = NormalizeAndValidate(theme);
-                themes.RemoveAll(candidate => candidate.Key == normalizedTheme.Key);
-                themes.Add(normalizedTheme);
+                if (normalizedTheme.IsProtected && themesByKey.TryGetValue(normalizedTheme.Key, out var builtInTheme))
+                {
+                    builtInTheme.IsEnabled = normalizedTheme.IsEnabled;
+                    continue;
+                }
+
+                themesByKey[normalizedTheme.Key] = normalizedTheme;
             }
             catch
             {
@@ -984,14 +993,19 @@ sealed class ThemeCatalogApiService
             }
         }
 
-        _cache = themes.Count > 0
-            ? SortThemes(themes)
-            : [CreateFallbackTheme()];
+        _cache = SortThemes(themesByKey.Values.ToList());
 
         return _cache;
     }
 
-    private static ApiThemeDefinition CreateFallbackTheme() => new()
+    private static List<ApiThemeDefinition> CreateBuiltInThemes() =>
+    [
+        CreateBuiltInLightTheme(),
+        CreateBuiltInDarkTheme(),
+        CreateBuiltInSynthwaveTheme(),
+    ];
+
+    private static ApiThemeDefinition CreateBuiltInLightTheme() => new()
     {
         Key = "light",
         Name = "Light",
@@ -1033,6 +1047,160 @@ sealed class ThemeCatalogApiService
         }
     };
 
+    private static ApiThemeDefinition CreateBuiltInDarkTheme() => new()
+    {
+        Key = "dark",
+        Name = "Dark",
+        IsDarkMode = true,
+        IsEnabled = true,
+        IsProtected = true,
+        FontFamily = ["Inter", "system-ui", "-apple-system", "sans-serif"],
+        Palette = new ApiThemePaletteDefinition
+        {
+            Primary = "#8B5CF6",
+            Secondary = "#22C55E",
+            Tertiary = "#38BDF8",
+            AppbarBackground = "#0B1220",
+            AppbarText = "#F8FAFC",
+            Background = "#09111F",
+            Surface = "#121A2B",
+            DrawerBackground = "#0F172A",
+            DrawerText = "#D7E0F2",
+            DrawerIcon = "#D7E0F2",
+            TextPrimary = "#E5EEF9",
+            TextSecondary = "#94A3B8",
+            LinesDefault = "#24324A",
+            Success = "#22C55E",
+            Warning = "#F59E0B",
+            Info = "#38BDF8"
+        },
+        CssVariables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["--orim-page-background"] = "#09111f",
+            ["--orim-body-text"] = "#e5eef9",
+            ["--orim-shell-appbar"] = "linear-gradient(135deg, #0b1220 0%, #111b2e 100%)",
+            ["--orim-shell-appbar-text"] = "#f8fafc",
+            ["--orim-shell-drawer"] = "#0f172a",
+            ["--orim-shell-drawer-text"] = "#d7e0f2",
+            ["--orim-shell-main"] = "#09111f",
+            ["--orim-brand"] = "#8b5cf6",
+            ["--orim-brand-muted"] = "#22c55e",
+            ["--orim-nav-hover"] = "rgba(139, 92, 246, 0.14)",
+            ["--orim-card-hover-shadow"] = "0 10px 28px rgba(139, 92, 246, 0.18)",
+            ["--orim-login-background"] = "linear-gradient(135deg, #07101d 0%, #0f172a 55%, #172554 100%)",
+            ["--orim-login-card-background"] = "rgba(18, 26, 43, 0.88)",
+            ["--orim-login-card-shadow"] = "0 34px 90px rgba(3, 7, 18, 0.45)",
+            ["--orim-login-subtitle"] = "#a8b4c8",
+            ["--orim-board-toolbar-bg"] = "rgba(18, 26, 43, 0.88)",
+            ["--orim-board-toolbar-border"] = "#24324a",
+            ["--orim-board-toolbar-text"] = "#e5eef9",
+            ["--orim-board-input-bg"] = "#10192a",
+            ["--orim-board-input-border"] = "#31415d",
+            ["--orim-board-input-text"] = "#e5eef9",
+            ["--orim-board-muted-text"] = "#94a3b8",
+            ["--orim-icon-card-bg"] = "rgba(16, 25, 42, 0.94)",
+            ["--orim-icon-card-border"] = "#31415d",
+            ["--orim-icon-card-text"] = "#b4c2d8",
+            ["--orim-icon-card-icon"] = "#e5eef9",
+            ["--orim-properties-panel-bg"] = "#10192a",
+            ["--orim-properties-panel-border"] = "#24324a",
+            ["--orim-properties-muted"] = "#94a3b8",
+            ["--orim-properties-input-bg"] = "#0c1423",
+            ["--orim-properties-input-border"] = "#31415d",
+            ["--orim-properties-input-text"] = "#e5eef9",
+            ["--orim-properties-preview-stroke"] = "#e5eef9"
+        },
+        BoardDefaults = new ApiThemeBoardDefaultsDefinition
+        {
+            SurfaceColor = "#10192A",
+            GridColor = "rgba(148, 163, 184, 0.16)",
+            ShapeFillColor = "#18253B",
+            StrokeColor = "#E5EEF9",
+            IconColor = "#E5EEF9",
+            SelectionColor = "#8B5CF6",
+            SelectionTintRgb = "139, 92, 246",
+            HandleSurfaceColor = "#10192A",
+            DockTargetColor = "#22C55E"
+        }
+    };
+
+    private static ApiThemeDefinition CreateBuiltInSynthwaveTheme() => new()
+    {
+        Key = "synthwave",
+        Name = "Synthwave",
+        IsDarkMode = true,
+        IsEnabled = true,
+        IsProtected = true,
+        FontFamily = ["Space Grotesk", "Inter", "system-ui", "sans-serif"],
+        Palette = new ApiThemePaletteDefinition
+        {
+            Primary = "#FF4FD8",
+            Secondary = "#35F2FF",
+            Tertiary = "#FFC857",
+            AppbarBackground = "#160A29",
+            AppbarText = "#FFF4FD",
+            Background = "#12051F",
+            Surface = "#1B0D33",
+            DrawerBackground = "#130720",
+            DrawerText = "#F6D6FF",
+            DrawerIcon = "#F6D6FF",
+            TextPrimary = "#FFF0FF",
+            TextSecondary = "#C6A9FF",
+            LinesDefault = "#39205E",
+            Success = "#41FFD9",
+            Warning = "#FFC857",
+            Info = "#35F2FF"
+        },
+        CssVariables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["--orim-page-background"] = "#12051f",
+            ["--orim-body-text"] = "#fff0ff",
+            ["--orim-shell-appbar"] = "linear-gradient(135deg, #14071f 0%, #24104a 55%, #3d145b 100%)",
+            ["--orim-shell-appbar-text"] = "#fff4fd",
+            ["--orim-shell-drawer"] = "#130720",
+            ["--orim-shell-drawer-text"] = "#f6d6ff",
+            ["--orim-shell-main"] = "radial-gradient(circle at top, rgba(53, 242, 255, 0.08), transparent 36%), #12051f",
+            ["--orim-brand"] = "#ff4fd8",
+            ["--orim-brand-muted"] = "#35f2ff",
+            ["--orim-nav-hover"] = "rgba(53, 242, 255, 0.16)",
+            ["--orim-card-hover-shadow"] = "0 12px 34px rgba(255, 79, 216, 0.28)",
+            ["--orim-login-background"] = "radial-gradient(circle at top, rgba(53, 242, 255, 0.2), transparent 32%), linear-gradient(135deg, #14051f 0%, #2c1250 52%, #ff4fd8 140%)",
+            ["--orim-login-card-background"] = "rgba(27, 13, 51, 0.86)",
+            ["--orim-login-card-shadow"] = "0 36px 110px rgba(255, 79, 216, 0.24)",
+            ["--orim-login-subtitle"] = "#d6c7ff",
+            ["--orim-board-toolbar-bg"] = "rgba(27, 13, 51, 0.84)",
+            ["--orim-board-toolbar-border"] = "rgba(53, 242, 255, 0.22)",
+            ["--orim-board-toolbar-text"] = "#fff0ff",
+            ["--orim-board-input-bg"] = "#160a29",
+            ["--orim-board-input-border"] = "rgba(53, 242, 255, 0.34)",
+            ["--orim-board-input-text"] = "#fff0ff",
+            ["--orim-board-muted-text"] = "#c6a9ff",
+            ["--orim-icon-card-bg"] = "rgba(22, 10, 41, 0.96)",
+            ["--orim-icon-card-border"] = "rgba(53, 242, 255, 0.24)",
+            ["--orim-icon-card-text"] = "#d6c7ff",
+            ["--orim-icon-card-icon"] = "#35f2ff",
+            ["--orim-properties-panel-bg"] = "#160a29",
+            ["--orim-properties-panel-border"] = "rgba(53, 242, 255, 0.24)",
+            ["--orim-properties-muted"] = "#c6a9ff",
+            ["--orim-properties-input-bg"] = "#12051f",
+            ["--orim-properties-input-border"] = "rgba(53, 242, 255, 0.34)",
+            ["--orim-properties-input-text"] = "#fff0ff",
+            ["--orim-properties-preview-stroke"] = "#35f2ff"
+        },
+        BoardDefaults = new ApiThemeBoardDefaultsDefinition
+        {
+            SurfaceColor = "#160A29",
+            GridColor = "rgba(53, 242, 255, 0.16)",
+            ShapeFillColor = "#261145",
+            StrokeColor = "#35F2FF",
+            IconColor = "#FFF0FF",
+            SelectionColor = "#FF4FD8",
+            SelectionTintRgb = "255, 79, 216",
+            HandleSurfaceColor = "#160A29",
+            DockTargetColor = "#35F2FF"
+        }
+    };
+
     private async Task WriteThemeFileAsync(ApiThemeDefinition theme)
     {
         Directory.CreateDirectory(_themesPath);
@@ -1046,14 +1214,12 @@ sealed class ThemeCatalogApiService
     {
         themes.Sort((left, right) =>
         {
-            if (left.Key == "light" && right.Key != "light")
-            {
-                return -1;
-            }
+            var leftRank = GetThemeSortRank(left.Key);
+            var rightRank = GetThemeSortRank(right.Key);
 
-            if (left.Key != "light" && right.Key == "light")
+            if (leftRank != rightRank)
             {
-                return 1;
+                return leftRank.CompareTo(rightRank);
             }
 
             return string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
@@ -1061,6 +1227,14 @@ sealed class ThemeCatalogApiService
 
         return themes;
     }
+
+    private static int GetThemeSortRank(string key) => key switch
+    {
+        "light" => 0,
+        "dark" => 1,
+        "synthwave" => 2,
+        _ => 100,
+    };
 
     private static ApiThemeDefinition NormalizeAndValidate(ApiThemeDefinition source)
     {
@@ -1086,17 +1260,17 @@ sealed class ThemeCatalogApiService
         var normalized = source.Clone();
         normalized.Key = normalizedKey;
         normalized.Name = source.Name.Trim();
-        normalized.IsProtected = normalizedKey == "light" || source.IsProtected;
-        normalized.IsEnabled = normalized.IsProtected || source.IsEnabled;
+        normalized.IsProtected = IsBuiltInThemeKey(normalizedKey) || source.IsProtected;
 
-        if (normalizedKey == "light")
+        if (normalized.IsProtected)
         {
             normalized.IsProtected = true;
-            normalized.IsEnabled = true;
         }
 
         return normalized;
     }
+
+    private static bool IsBuiltInThemeKey(string key) => BuiltInThemeKeys.Contains(key);
 
     private static void ValidatePalette(ApiThemePaletteDefinition palette)
     {

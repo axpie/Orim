@@ -66,12 +66,14 @@ public class ThemeCatalogServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task GetThemesAsync_Empty_ReturnsLightThemeOnly()
+    public async Task GetThemesAsync_Empty_ReturnsBuiltInThemes()
     {
         var themes = await _sut.GetThemesAsync();
 
-        // Light theme should always be present (bootstrapped)
         Assert.NotNull(themes);
+        Assert.Contains(themes, theme => theme.Key == "light");
+        Assert.Contains(themes, theme => theme.Key == "dark");
+        Assert.Contains(themes, theme => theme.Key == "synthwave");
     }
 
     [Fact]
@@ -90,9 +92,7 @@ public class ThemeCatalogServiceTests : IDisposable
     [Fact]
     public async Task SaveThemeAsync_ProtectedTheme_Throws()
     {
-        // First ensure light theme exists
         var lightTheme = ThemeCatalogService.CreateDefaultLightTheme();
-        // Save it first to populate cache
         try { await _sut.SaveThemeAsync(lightTheme); } catch { }
 
         var modifiedLight = ThemeCatalogService.CreateDefaultLightTheme();
@@ -100,6 +100,16 @@ public class ThemeCatalogServiceTests : IDisposable
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => _sut.SaveThemeAsync(modifiedLight));
+    }
+
+    [Fact]
+    public async Task SaveThemeAsync_BuiltInDarkTheme_Throws()
+    {
+        var modifiedDark = ThemeCatalogService.CreateDefaultDarkTheme();
+        modifiedDark.Name = "Modified Dark";
+
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.SaveThemeAsync(modifiedDark));
     }
 
     [Fact]
@@ -152,6 +162,29 @@ public class ThemeCatalogServiceTests : IDisposable
         var enabled = await _sut.GetThemeAsync("toggle-me");
         Assert.NotNull(enabled);
         Assert.True(enabled.IsEnabled);
+    }
+
+    [Fact]
+    public async Task SetEnabledAsync_BuiltInTheme_CanBeDisabledAndEnabled()
+    {
+        await _sut.SetEnabledAsync("synthwave", false);
+        var disabled = await _sut.GetThemeAsync("synthwave");
+
+        Assert.NotNull(disabled);
+        Assert.False(disabled.IsEnabled);
+
+        await _sut.SetEnabledAsync("synthwave", true);
+        var enabled = await _sut.GetThemeAsync("synthwave");
+
+        Assert.NotNull(enabled);
+        Assert.True(enabled.IsEnabled);
+    }
+
+    [Fact]
+    public async Task DeleteThemeAsync_BuiltInTheme_Throws()
+    {
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.DeleteThemeAsync("dark"));
     }
 
     [Fact]

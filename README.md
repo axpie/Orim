@@ -117,10 +117,11 @@ Danach sollte `SeedAdmin__ResetPasswordOnStartup` wieder entfernt oder auf `fals
 
 ### Azure App Service
 
-Für Azure App Service sollte das Seed-Passwort als Application Setting oder Key Vault Referenz gesetzt werden.
+Für Azure App Service sollten JWT-Schlüssel und Seed-Passwort als Application Settings oder Key Vault Referenzen gesetzt werden.
 
 Benötigte App Settings:
 
+- `Jwt__Key`
 - `SeedAdmin__Password`
 - optional `SeedAdmin__Username`
 - optional `SeedAdmin__ResetPasswordOnStartup`
@@ -128,11 +129,12 @@ Benötigte App Settings:
 
 Empfohlenes Vorgehen für das erste Deployment:
 
-1. `SeedAdmin__Password` mit einem langen zufälligen Passwort setzen.
-2. Falls ein bestehender Admin absichtlich überschrieben werden soll, zusätzlich `SeedAdmin__ResetPasswordOnStartup=true` setzen.
-3. Anwendung starten und den ersten Login durchführen.
-4. Danach `SeedAdmin__ResetPasswordOnStartup` wieder auf `false` setzen.
-5. Wenn kein weiterer Seed mehr nötig ist, `SeedAdmin__Password` aus der App-Konfiguration entfernen.
+1. `Jwt__Key` mit einem langen zufälligen Secret von mindestens 32 Zeichen setzen.
+2. `SeedAdmin__Password` mit einem langen zufälligen Passwort setzen.
+3. Falls ein bestehender Admin absichtlich überschrieben werden soll, zusätzlich `SeedAdmin__ResetPasswordOnStartup=true` setzen.
+4. Anwendung starten und den ersten Login durchführen.
+5. Danach `SeedAdmin__ResetPasswordOnStartup` wieder auf `false` setzen.
+6. Wenn kein weiterer Seed mehr nötig ist, `SeedAdmin__Password` aus der App-Konfiguration entfernen.
 
 Beispiel mit Azure CLI:
 
@@ -140,7 +142,7 @@ Beispiel mit Azure CLI:
 az webapp config appsettings set \
   --resource-group <resource-group> \
   --name <app-name> \
-  --settings SeedAdmin__Password="EinSehrSicheresPasswort!"
+  --settings Jwt__Key="EinSehrLangesJwtSecretMitMindestens32Zeichen!" SeedAdmin__Password="EinSehrSicheresPasswort!"
 ```
 
 ### Sicherheits-Hinweise
