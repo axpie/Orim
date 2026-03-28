@@ -6,9 +6,11 @@ import { getThemes } from './api/themes';
 import { useThemeStore } from './stores/themeStore';
 import { useAuthStore } from './stores/authStore';
 import { AppLayout } from './components/Layout/AppLayout';
+import { AdminRoute } from './components/Layout/AdminRoute';
 import { ProtectedRoute } from './components/Layout/ProtectedRoute';
 import { LoginPage } from './features/auth/LoginPage';
 import { DashboardPage } from './features/dashboard/DashboardPage';
+import { SettingsPage } from './features/admin/SettingsPage';
 import { WhiteboardEditor } from './features/whiteboard/WhiteboardEditor';
 import { SharedBoardView } from './features/sharing/SharedBoardView';
 import { UsersPage } from './features/admin/UsersPage';
@@ -33,7 +35,10 @@ function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/" element={<DashboardPage />} />
-          <Route path="/admin/users" element={<UsersPage />} />
+          <Route element={<AdminRoute />}>
+            <Route path="/admin/users" element={<UsersPage />} />
+            <Route path="/admin/settings" element={<SettingsPage />} />
+          </Route>
         </Route>
         <Route path="/board/:id" element={<WhiteboardEditor />} />
       </Route>

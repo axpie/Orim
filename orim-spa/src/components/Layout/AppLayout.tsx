@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Outlet, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -20,47 +19,32 @@ import {
 } from '@mui/material';
 import DashboardIcon from '@mui/icons-material/Dashboard';
 import PeopleIcon from '@mui/icons-material/People';
+import PaletteIcon from '@mui/icons-material/Palette';
 import MenuIcon from '@mui/icons-material/Menu';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import CheckIcon from '@mui/icons-material/Check';
-import PaletteIcon from '@mui/icons-material/Palette';
-import TranslateIcon from '@mui/icons-material/Translate';
+import SettingsIcon from '@mui/icons-material/Settings';
 import LogoutIcon from '@mui/icons-material/Logout';
-import { getThemes } from '../../api/themes';
 import { OrimLogo } from '../Brand/OrimLogo';
+import { AppSettingsDialog } from '../dialogs/AppSettingsDialog';
 import { useAuthStore } from '../../stores/authStore';
-import { useThemeStore } from '../../stores/themeStore';
 import { UserRole } from '../../types/models';
 
 const DRAWER_WIDTH = 240;
 
 export function AppLayout() {
-  const { t, i18n } = useTranslation();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const themeKey = useThemeStore((s) => s.themeKey);
-  const setTheme = useThemeStore((s) => s.setTheme);
-  const { data: themes = [] } = useQuery({
-    queryKey: ['themes'],
-    queryFn: getThemes,
-    staleTime: 60_000,
-  });
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [themeAnchorEl, setThemeAnchorEl] = useState<null | HTMLElement>(null);
-
-  const activeTheme = themes.find((theme) => theme.key === themeKey) ?? themes[0] ?? null;
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleLogout = () => {
     setAnchorEl(null);
     logout();
     navigate('/login');
-  };
-
-  const toggleLanguage = () => {
-    i18n.changeLanguage(i18n.language === 'de' ? 'en' : 'de');
   };
 
   return (
@@ -79,38 +63,11 @@ export function AppLayout() {
             <OrimLogo textColor="inherit" />
           </Box>
 
-          <Tooltip title={t('app.language')}>
-            <IconButton color="inherit" onClick={toggleLanguage}>
-              <TranslateIcon />
+          <Tooltip title={t('app.settings')}>
+            <IconButton color="inherit" onClick={() => setSettingsOpen(true)}>
+              <SettingsIcon />
             </IconButton>
           </Tooltip>
-
-          <Tooltip title={activeTheme?.name ?? t('app.theme')}>
-            <IconButton color="inherit" onClick={(e) => setThemeAnchorEl(e.currentTarget)}>
-              <PaletteIcon />
-            </IconButton>
-          </Tooltip>
-          <Menu
-            anchorEl={themeAnchorEl}
-            open={Boolean(themeAnchorEl)}
-            onClose={() => setThemeAnchorEl(null)}
-          >
-            {themes.map((theme) => (
-              <MenuItem
-                key={theme.key}
-                selected={theme.key === themeKey}
-                onClick={() => {
-                  setTheme(theme.key);
-                  setThemeAnchorEl(null);
-                }}
-              >
-                <ListItemIcon>
-                  {theme.key === themeKey ? <CheckIcon fontSize="small" /> : <Box sx={{ width: 20 }} />}
-                </ListItemIcon>
-                {theme.name}
-              </MenuItem>
-            ))}
-          </Menu>
 
           <IconButton color="inherit" onClick={(e) => setAnchorEl(e.currentTarget)}>
             <AccountCircleIcon />
@@ -150,10 +107,16 @@ export function AppLayout() {
             <ListItemText primary={t('app.dashboard')} />
           </ListItemButton>
           {user?.role === UserRole.Admin && (
-            <ListItemButton onClick={() => navigate('/admin/users')}>
-              <ListItemIcon><PeopleIcon /></ListItemIcon>
-              <ListItemText primary={t('app.users')} />
-            </ListItemButton>
+            <>
+              <ListItemButton onClick={() => navigate('/admin/users')}>
+                <ListItemIcon><PeopleIcon /></ListItemIcon>
+                <ListItemText primary={t('app.users')} />
+              </ListItemButton>
+              <ListItemButton onClick={() => navigate('/admin/settings')}>
+                <ListItemIcon><PaletteIcon /></ListItemIcon>
+                <ListItemText primary={t('admin.orimSettings')} />
+              </ListItemButton>
+            </>
           )}
         </List>
       </Drawer>
@@ -175,10 +138,16 @@ export function AppLayout() {
             <ListItemText primary={t('app.dashboard')} />
           </ListItemButton>
           {user?.role === UserRole.Admin && (
-            <ListItemButton onClick={() => { navigate('/admin/users'); setDrawerOpen(false); }}>
-              <ListItemIcon><PeopleIcon /></ListItemIcon>
-              <ListItemText primary={t('app.users')} />
-            </ListItemButton>
+            <>
+              <ListItemButton onClick={() => { navigate('/admin/users'); setDrawerOpen(false); }}>
+                <ListItemIcon><PeopleIcon /></ListItemIcon>
+                <ListItemText primary={t('app.users')} />
+              </ListItemButton>
+              <ListItemButton onClick={() => { navigate('/admin/settings'); setDrawerOpen(false); }}>
+                <ListItemIcon><PaletteIcon /></ListItemIcon>
+                <ListItemText primary={t('admin.orimSettings')} />
+              </ListItemButton>
+            </>
           )}
         </List>
       </Drawer>
@@ -194,6 +163,8 @@ export function AppLayout() {
       >
         <Outlet />
       </Box>
+
+      <AppSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </Box>
   );
 }

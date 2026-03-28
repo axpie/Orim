@@ -232,6 +232,72 @@ app.MapGet("/api/themes", [Authorize] async (ThemeCatalogApiService themeCatalog
     return Results.Ok(themes);
 }).AllowAnonymous();
 
+app.MapGet("/api/admin/themes", [Authorize(Roles = "Admin")] async (ThemeCatalogApiService themeCatalogService) =>
+{
+    var themes = await themeCatalogService.GetThemesAsync();
+    return Results.Ok(themes);
+});
+
+app.MapPost("/api/admin/themes/import", [Authorize(Roles = "Admin")] async (HttpRequest request, ThemeCatalogApiService themeCatalogService) =>
+{
+    var form = await request.ReadFormAsync();
+    var file = form.Files["file"];
+    if (file is null || file.Length == 0)
+    {
+        return Results.BadRequest("No theme file uploaded.");
+    }
+
+    try
+    {
+        await using var stream = file.OpenReadStream();
+        var theme = await themeCatalogService.ImportThemeAsync(stream);
+        return Results.Ok(theme);
+    }
+    catch (Exception ex) when (ex is InvalidOperationException or JsonException)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+app.MapPut("/api/admin/themes/{key}/enabled", [Authorize(Roles = "Admin")] async (string key, ThemeAvailabilityRequest request, ThemeCatalogApiService themeCatalogService) =>
+{
+    try
+    {
+        await themeCatalogService.SetEnabledAsync(key, request.Enabled);
+        return Results.NoContent();
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+app.MapGet("/api/admin/themes/{key}/export", [Authorize(Roles = "Admin")] async (string key, ThemeCatalogApiService themeCatalogService) =>
+{
+    try
+    {
+        var json = await themeCatalogService.ExportThemeJsonAsync(key);
+        return Results.File(Encoding.UTF8.GetBytes(json), "application/json", $"{key}.json");
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+app.MapDelete("/api/admin/themes/{key}", [Authorize(Roles = "Admin")] async (string key, ThemeCatalogApiService themeCatalogService) =>
+{
+    try
+    {
+        await themeCatalogService.DeleteThemeAsync(key);
+        return Results.NoContent();
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
 // ==========================================================================
 // BOARD ENDPOINTS
 // ==========================================================================
@@ -640,12 +706,13 @@ record CreateSnapshotRequest(string? Name);
 record ImportBoardRequest(string BoardJson, string? Title);
 record AssistantRequest(IReadOnlyList<ChatMessageEntry> Messages);
 record PresenceLeaveRequest(Guid BoardId, string ClientId);
+record ThemeAvailabilityRequest(bool Enabled);
 
 sealed class ThemeCatalogApiService
 {
     private readonly string _themesPath;
     private readonly SemaphoreSlim _gate = new(1, 1);
-    private IReadOnlyList<ApiThemeDefinition>? _cache;
+    private List<ApiThemeDefinition>? _cache;
 
     public ThemeCatalogApiService(string themesPath)
     {
@@ -662,13 +729,134 @@ sealed class ThemeCatalogApiService
         return Directory.Exists(webThemesPath) ? webThemesPath : apiThemesPath;
     }
 
+    public async Task<IReadOnlyList<ApiThemeDefinition>> GetThemesAsync()
+    {
+        var themes = await EnsureCacheAsync();
+        return themes.Select(theme => theme.Clone()).ToList();
+    }
+
     public async Task<IReadOnlyList<ApiThemeDefinition>> GetEnabledThemesAsync()
     {
         var themes = await EnsureCacheAsync();
-        return themes.Where(theme => theme.IsEnabled).ToList();
+        return themes.Where(theme => theme.IsEnabled).Select(theme => theme.Clone()).ToList();
     }
 
-    private async Task<IReadOnlyList<ApiThemeDefinition>> EnsureCacheAsync()
+    public async Task<ApiThemeDefinition?> GetThemeAsync(string key)
+    {
+        var themes = await EnsureCacheAsync();
+        var normalizedKey = NormalizeKey(key);
+        return themes.FirstOrDefault(theme => theme.Key == normalizedKey)?.Clone();
+    }
+
+    public async Task<ApiThemeDefinition> ImportThemeAsync(Stream stream, string? expectedKey = null)
+    {
+        var importedTheme = await JsonSerializer.DeserializeAsync<ApiThemeDefinition>(stream, OrimJsonOptions.Default);
+        if (importedTheme is null)
+        {
+            throw new InvalidOperationException("The uploaded theme JSON could not be read.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(expectedKey)
+            && !string.Equals(NormalizeKey(importedTheme.Key), NormalizeKey(expectedKey), StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException("The uploaded theme key does not match the selected theme.");
+        }
+
+        return await SaveThemeAsync(importedTheme);
+    }
+
+    public async Task SetEnabledAsync(string key, bool enabled)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            var themes = await EnsureCacheCoreAsync();
+            var normalizedKey = NormalizeKey(key);
+            var theme = themes.FirstOrDefault(candidate => candidate.Key == normalizedKey)
+                ?? throw new InvalidOperationException("The selected theme does not exist.");
+
+            if (theme.IsProtected)
+            {
+                throw new InvalidOperationException("The default light theme is protected and cannot be changed.");
+            }
+
+            theme.IsEnabled = enabled;
+            await WriteThemeFileAsync(theme);
+            SortThemes(themes);
+            _cache = themes;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task DeleteThemeAsync(string key)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            var themes = await EnsureCacheCoreAsync();
+            var normalizedKey = NormalizeKey(key);
+            var theme = themes.FirstOrDefault(candidate => candidate.Key == normalizedKey)
+                ?? throw new InvalidOperationException("The selected theme does not exist.");
+
+            if (theme.IsProtected)
+            {
+                throw new InvalidOperationException("The default light theme is protected and cannot be deleted.");
+            }
+
+            themes.RemoveAll(candidate => candidate.Key == normalizedKey);
+            var filePath = GetThemeFilePath(normalizedKey);
+            if (File.Exists(filePath))
+            {
+                File.Delete(filePath);
+            }
+
+            SortThemes(themes);
+            _cache = themes;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<string> ExportThemeJsonAsync(string key)
+    {
+        var theme = await GetThemeAsync(key)
+            ?? throw new InvalidOperationException("The selected theme does not exist.");
+        return JsonSerializer.Serialize(theme, OrimJsonOptions.Indented);
+    }
+
+    private async Task<ApiThemeDefinition> SaveThemeAsync(ApiThemeDefinition theme)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            var themes = await EnsureCacheCoreAsync();
+            var normalizedTheme = NormalizeAndValidate(theme);
+            var existingTheme = themes.FirstOrDefault(candidate => candidate.Key == normalizedTheme.Key);
+
+            if (existingTheme?.IsProtected == true)
+            {
+                throw new InvalidOperationException("The default light theme is protected and cannot be changed.");
+            }
+
+            themes.RemoveAll(candidate => candidate.Key == normalizedTheme.Key);
+            themes.Add(normalizedTheme);
+            SortThemes(themes);
+            await WriteThemeFileAsync(normalizedTheme);
+            _cache = themes;
+            return normalizedTheme.Clone();
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    private async Task<List<ApiThemeDefinition>> EnsureCacheAsync()
     {
         if (_cache is not null)
             return _cache;
@@ -679,36 +867,50 @@ sealed class ThemeCatalogApiService
             if (_cache is not null)
                 return _cache;
 
-            if (!Directory.Exists(_themesPath))
-            {
-                _cache = [CreateFallbackTheme()];
-                return _cache;
-            }
-
-            var themes = new List<ApiThemeDefinition>();
-            foreach (var filePath in Directory.EnumerateFiles(_themesPath, "*.json"))
-            {
-                await using var stream = File.OpenRead(filePath);
-                var theme = await JsonSerializer.DeserializeAsync<ApiThemeDefinition>(stream, OrimJsonOptions.Default);
-                if (theme is null || string.IsNullOrWhiteSpace(theme.Key) || string.IsNullOrWhiteSpace(theme.Name))
-                    continue;
-
-                theme.FontFamily = theme.FontFamily.Count > 0
-                    ? theme.FontFamily
-                    : ["Inter", "system-ui", "-apple-system", "sans-serif"];
-                themes.Add(theme);
-            }
-
-            _cache = themes.Count > 0
-                ? themes.OrderBy(theme => theme.Name, StringComparer.OrdinalIgnoreCase).ToList()
-                : [CreateFallbackTheme()];
-
-            return _cache;
+            return await EnsureCacheCoreAsync();
         }
         finally
         {
             _gate.Release();
         }
+    }
+
+    private async Task<List<ApiThemeDefinition>> EnsureCacheCoreAsync()
+    {
+        if (_cache is not null)
+            return _cache;
+
+        if (!Directory.Exists(_themesPath))
+        {
+            _cache = [CreateFallbackTheme()];
+            return _cache;
+        }
+
+        var themes = new List<ApiThemeDefinition>();
+        foreach (var filePath in Directory.EnumerateFiles(_themesPath, "*.json"))
+        {
+            try
+            {
+                await using var stream = File.OpenRead(filePath);
+                var theme = await JsonSerializer.DeserializeAsync<ApiThemeDefinition>(stream, OrimJsonOptions.Default);
+                if (theme is null)
+                    continue;
+
+                var normalizedTheme = NormalizeAndValidate(theme);
+                themes.RemoveAll(candidate => candidate.Key == normalizedTheme.Key);
+                themes.Add(normalizedTheme);
+            }
+            catch
+            {
+                continue;
+            }
+        }
+
+        _cache = themes.Count > 0
+            ? SortThemes(themes)
+            : [CreateFallbackTheme()];
+
+        return _cache;
     }
 
     private static ApiThemeDefinition CreateFallbackTheme() => new()
@@ -717,6 +919,7 @@ sealed class ThemeCatalogApiService
         Name = "Light",
         IsDarkMode = false,
         IsEnabled = true,
+        IsProtected = true,
         FontFamily = ["Inter", "system-ui", "-apple-system", "sans-serif"],
         Palette = new ApiThemePaletteDefinition
         {
@@ -737,6 +940,7 @@ sealed class ThemeCatalogApiService
             Warning = "#EA580C",
             Info = "#6E40C9"
         },
+        CssVariables = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
         BoardDefaults = new ApiThemeBoardDefaultsDefinition
         {
             SurfaceColor = "#FFFFFF",
@@ -750,6 +954,158 @@ sealed class ThemeCatalogApiService
             DockTargetColor = "#0F766E"
         }
     };
+
+    private async Task WriteThemeFileAsync(ApiThemeDefinition theme)
+    {
+        Directory.CreateDirectory(_themesPath);
+        var filePath = GetThemeFilePath(theme.Key);
+        await File.WriteAllTextAsync(filePath, JsonSerializer.Serialize(theme, OrimJsonOptions.Indented));
+    }
+
+    private string GetThemeFilePath(string key) => Path.Combine(_themesPath, $"{NormalizeKey(key)}.json");
+
+    private static List<ApiThemeDefinition> SortThemes(List<ApiThemeDefinition> themes)
+    {
+        themes.Sort((left, right) =>
+        {
+            if (left.Key == "light" && right.Key != "light")
+            {
+                return -1;
+            }
+
+            if (left.Key != "light" && right.Key == "light")
+            {
+                return 1;
+            }
+
+            return string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
+        });
+
+        return themes;
+    }
+
+    private static ApiThemeDefinition NormalizeAndValidate(ApiThemeDefinition source)
+    {
+        var normalizedKey = NormalizeKey(source.Key);
+        if (string.IsNullOrWhiteSpace(normalizedKey))
+        {
+            throw new InvalidOperationException("A theme key is required.");
+        }
+
+        if (string.IsNullOrWhiteSpace(source.Name))
+        {
+            throw new InvalidOperationException("A theme name is required.");
+        }
+
+        if (source.FontFamily.Count == 0)
+        {
+            source.FontFamily = ["Inter", "system-ui", "-apple-system", "sans-serif"];
+        }
+
+        ValidatePalette(source.Palette);
+        ValidateBoardDefaults(source.BoardDefaults);
+
+        var normalized = source.Clone();
+        normalized.Key = normalizedKey;
+        normalized.Name = source.Name.Trim();
+        normalized.IsProtected = normalizedKey == "light" || source.IsProtected;
+        normalized.IsEnabled = normalized.IsProtected || source.IsEnabled;
+
+        if (normalizedKey == "light")
+        {
+            normalized.IsProtected = true;
+            normalized.IsEnabled = true;
+        }
+
+        return normalized;
+    }
+
+    private static void ValidatePalette(ApiThemePaletteDefinition palette)
+    {
+        var values = new Dictionary<string, string?>
+        {
+            [nameof(palette.Primary)] = palette.Primary,
+            [nameof(palette.Secondary)] = palette.Secondary,
+            [nameof(palette.Tertiary)] = palette.Tertiary,
+            [nameof(palette.AppbarBackground)] = palette.AppbarBackground,
+            [nameof(palette.AppbarText)] = palette.AppbarText,
+            [nameof(palette.Background)] = palette.Background,
+            [nameof(palette.Surface)] = palette.Surface,
+            [nameof(palette.DrawerBackground)] = palette.DrawerBackground,
+            [nameof(palette.DrawerText)] = palette.DrawerText,
+            [nameof(palette.DrawerIcon)] = palette.DrawerIcon,
+            [nameof(palette.TextPrimary)] = palette.TextPrimary,
+            [nameof(palette.TextSecondary)] = palette.TextSecondary,
+            [nameof(palette.LinesDefault)] = palette.LinesDefault,
+        };
+
+        foreach (var entry in values)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Value))
+            {
+                throw new InvalidOperationException($"Palette value '{entry.Key}' is required.");
+            }
+        }
+    }
+
+    private static void ValidateBoardDefaults(ApiThemeBoardDefaultsDefinition defaults)
+    {
+        var values = new Dictionary<string, string?>
+        {
+            [nameof(defaults.SurfaceColor)] = defaults.SurfaceColor,
+            [nameof(defaults.GridColor)] = defaults.GridColor,
+            [nameof(defaults.ShapeFillColor)] = defaults.ShapeFillColor,
+            [nameof(defaults.StrokeColor)] = defaults.StrokeColor,
+            [nameof(defaults.IconColor)] = defaults.IconColor,
+            [nameof(defaults.SelectionColor)] = defaults.SelectionColor,
+            [nameof(defaults.SelectionTintRgb)] = defaults.SelectionTintRgb,
+            [nameof(defaults.HandleSurfaceColor)] = defaults.HandleSurfaceColor,
+            [nameof(defaults.DockTargetColor)] = defaults.DockTargetColor,
+        };
+
+        foreach (var entry in values)
+        {
+            if (string.IsNullOrWhiteSpace(entry.Value))
+            {
+                throw new InvalidOperationException($"Board default '{entry.Key}' is required.");
+            }
+        }
+    }
+
+    private static string NormalizeKey(string? key)
+    {
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return string.Empty;
+        }
+
+        Span<char> buffer = stackalloc char[key.Length];
+        var length = 0;
+        var previousWasDash = false;
+
+        foreach (var character in key.Trim().ToLowerInvariant())
+        {
+            if (char.IsLetterOrDigit(character))
+            {
+                buffer[length++] = character;
+                previousWasDash = false;
+                continue;
+            }
+
+            if ((character == '-' || character == '_' || char.IsWhiteSpace(character)) && !previousWasDash && length > 0)
+            {
+                buffer[length++] = '-';
+                previousWasDash = true;
+            }
+        }
+
+        if (length > 0 && buffer[length - 1] == '-')
+        {
+            length--;
+        }
+
+        return new string(buffer[..length]);
+    }
 }
 
 sealed class ApiThemeDefinition
@@ -758,9 +1114,24 @@ sealed class ApiThemeDefinition
     public string Name { get; set; } = string.Empty;
     public bool IsDarkMode { get; set; }
     public bool IsEnabled { get; set; } = true;
+    public bool IsProtected { get; set; }
     public List<string> FontFamily { get; set; } = [];
     public ApiThemePaletteDefinition Palette { get; set; } = new();
+    public Dictionary<string, string> CssVariables { get; set; } = new(StringComparer.OrdinalIgnoreCase);
     public ApiThemeBoardDefaultsDefinition BoardDefaults { get; set; } = new();
+
+    public ApiThemeDefinition Clone() => new()
+    {
+        Key = Key,
+        Name = Name,
+        IsDarkMode = IsDarkMode,
+        IsEnabled = IsEnabled,
+        IsProtected = IsProtected,
+        FontFamily = [.. FontFamily],
+        Palette = Palette.Clone(),
+        CssVariables = CssVariables.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase),
+        BoardDefaults = BoardDefaults.Clone(),
+    };
 }
 
 sealed class ApiThemePaletteDefinition
@@ -781,6 +1152,26 @@ sealed class ApiThemePaletteDefinition
     public string? Success { get; set; }
     public string? Warning { get; set; }
     public string? Info { get; set; }
+
+    public ApiThemePaletteDefinition Clone() => new()
+    {
+        Primary = Primary,
+        Secondary = Secondary,
+        Tertiary = Tertiary,
+        AppbarBackground = AppbarBackground,
+        AppbarText = AppbarText,
+        Background = Background,
+        Surface = Surface,
+        DrawerBackground = DrawerBackground,
+        DrawerText = DrawerText,
+        DrawerIcon = DrawerIcon,
+        TextPrimary = TextPrimary,
+        TextSecondary = TextSecondary,
+        LinesDefault = LinesDefault,
+        Success = Success,
+        Warning = Warning,
+        Info = Info,
+    };
 }
 
 sealed class ApiThemeBoardDefaultsDefinition
@@ -794,4 +1185,17 @@ sealed class ApiThemeBoardDefaultsDefinition
     public string SelectionTintRgb { get; set; } = "37, 99, 235";
     public string HandleSurfaceColor { get; set; } = "#FFFFFF";
     public string DockTargetColor { get; set; } = "#0F766E";
+
+    public ApiThemeBoardDefaultsDefinition Clone() => new()
+    {
+        SurfaceColor = SurfaceColor,
+        GridColor = GridColor,
+        ShapeFillColor = ShapeFillColor,
+        StrokeColor = StrokeColor,
+        IconColor = IconColor,
+        SelectionColor = SelectionColor,
+        SelectionTintRgb = SelectionTintRgb,
+        HandleSurfaceColor = HandleSurfaceColor,
+        DockTargetColor = DockTargetColor,
+    };
 }

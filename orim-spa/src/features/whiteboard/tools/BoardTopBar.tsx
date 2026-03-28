@@ -17,11 +17,13 @@ import {
 } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChatIcon from '@mui/icons-material/Chat';
+import SettingsIcon from '@mui/icons-material/Settings';
 import TuneIcon from '@mui/icons-material/Tune';
 import ShareIcon from '@mui/icons-material/Share';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import { useBoardStore } from '../store/boardStore';
+import { AppSettingsDialog } from '../../../components/dialogs/AppSettingsDialog';
 import { exportBoardJson, exportBoardPdf } from '../../../api/boards';
 import { ShareDialog } from '../../sharing/ShareDialog';
 import type { CursorPresence } from '../../../types/models';
@@ -69,6 +71,7 @@ export function BoardTopBar({
   const [title, setTitle] = useState('');
   const [exportAnchor, setExportAnchor] = useState<null | HTMLElement>(null);
   const [shareOpen, setShareOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const handleTitleFocus = () => {
     if (!titleEditable) {
@@ -200,6 +203,15 @@ export function BoardTopBar({
             </Tooltip>
           )}
 
+          <Tooltip title={t('app.settings')}>
+            <IconButton
+              onClick={() => setSettingsOpen(true)}
+              sx={{ color: 'inherit', bgcolor: settingsOpen ? 'rgba(255,255,255,0.14)' : undefined }}
+            >
+              <SettingsIcon />
+            </IconButton>
+          </Tooltip>
+
           {showProperties && (
             <Tooltip title={t('properties.title', 'Eigenschaften')}>
               <IconButton
@@ -236,6 +248,8 @@ export function BoardTopBar({
       {shareOpen && board && (
         <ShareDialog boardId={board.id} onClose={() => setShareOpen(false)} />
       )}
+
+      <AppSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>
   );
 }

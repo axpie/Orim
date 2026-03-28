@@ -264,6 +264,7 @@ export interface ThemeDefinition {
   name: string;
   isDarkMode: boolean;
   isEnabled: boolean;
+  isProtected?: boolean;
   fontFamily: string[];
   palette: ThemePaletteDefinition;
   boardDefaults: ThemeBoardDefaultsDefinition;

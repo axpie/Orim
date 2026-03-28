@@ -12,6 +12,9 @@
     "darkMode": "Dark mode",
     "lightMode": "Light mode"
   },
+  "common": {
+    "cancel": "Cancel"
+  },
   "auth": {
     "username": "Username",
     "password": "Password",
@@ -140,7 +143,32 @@
     "active": "Active",
     "inactive": "Inactive",
     "changePassword": "Change Password",
-    "newPassword": "New Password"
+    "newPassword": "New Password",
+    "orimSettings": "ORIM Settings",
+    "themeManagementDescription": "Manage the themes available in ORIM, upload or download JSON files, and enable the variants that should be offered to users.",
+    "uploadThemeJson": "Upload Theme JSON",
+    "themeManagement": "Theme Management",
+    "themeUploadReplaceHint": "Uploading a theme with the same key replaces an existing editable theme.",
+    "themeImmutableHint": "The default light theme is protected and cannot be disabled or deleted.",
+    "themeName": "Theme Name",
+    "themeKey": "Theme Key",
+    "themeMode": "Mode",
+    "themeAvailability": "Availability",
+    "themeProtection": "Protection",
+    "currentTheme": "Current Theme",
+    "protected": "Protected",
+    "editable": "Editable",
+    "downloadThemeJson": "Download Theme JSON",
+    "deleteTheme": "Delete Theme",
+    "themeUploaded": "Theme uploaded.",
+    "themeDeleted": "Theme deleted.",
+    "themeDeleteConfirmation": "Do you really want to delete the theme \"{{name}}\"?",
+    "themeUploadFailed": "The theme could not be uploaded.",
+    "themeLoadFailed": "Themes could not be loaded.",
+    "themeUpdateFailed": "The theme could not be updated.",
+    "themeDeleteFailed": "The theme could not be deleted.",
+    "actions": "Actions",
+    "noThemes": "No themes found."
   },
   "templates": {
     "TemplateBlankTitle": "Blank Board",

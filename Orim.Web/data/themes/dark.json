@@ -23,7 +23,10 @@
     "drawerIcon": "#D7E0F2",
     "textPrimary": "#E5EEF9",
     "textSecondary": "#94A3B8",
-    "linesDefault": "#24324A"
+    "linesDefault": "#24324A",
+    "success": null,
+    "warning": null,
+    "info": null
   },
   "cssVariables": {
     "--orim-page-background": "#09111f",
