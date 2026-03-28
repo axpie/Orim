@@ -347,7 +347,7 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={onClose}>{t('common.cancel')}</Button>
+          <Button onClick={onClose}>{t('sharing.close')}</Button>
         </DialogActions>
       </Dialog>
 

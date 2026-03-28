@@ -149,7 +149,8 @@
     "invalidPassword": "Ungultiges Passwort.",
     "owner": "Besitzer",
     "editor": "Bearbeiter",
-    "viewer": "Betrachter"
+    "viewer": "Betrachter",
+    "close": "Schließen"
   },
   "assistant": {
     "title": "KI-Assistent",
