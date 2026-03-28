@@ -13,7 +13,7 @@ export interface Rect {
 }
 
 export const GRID_SIZE = 24;
-export const SNAP_THRESHOLD = 10; // screen-px
+export const SNAP_THRESHOLD = 4; // screen-px
 
 export interface AlignmentGuide {
   orientation: 'horizontal' | 'vertical';
