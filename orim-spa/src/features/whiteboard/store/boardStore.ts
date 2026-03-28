@@ -3,6 +3,13 @@ import type { Board, BoardElement, CursorPresence } from '../../../types/models'
 
 export type ToolType = 'select' | 'hand' | 'rectangle' | 'ellipse' | 'triangle' | 'text' | 'icon' | 'arrow';
 
+interface ViewportInsets {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
 interface BoardState {
   board: Board | null;
   selectedElementIds: string[];
@@ -10,6 +17,9 @@ interface BoardState {
   zoom: number;
   cameraX: number;
   cameraY: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  viewportInsets: ViewportInsets;
   remoteCursors: CursorPresence[];
   isDirty: boolean;
   pendingIconName: string | null;
@@ -24,6 +34,8 @@ interface BoardState {
   setActiveTool: (tool: ToolType) => void;
   setZoom: (zoom: number) => void;
   setCamera: (x: number, y: number) => void;
+  setViewportSize: (width: number, height: number) => void;
+  setViewportInsets: (insets: ViewportInsets) => void;
   setRemoteCursors: (cursors: CursorPresence[]) => void;
   setDirty: (dirty: boolean) => void;
   setPendingIconName: (iconName: string | null) => void;
@@ -36,6 +48,9 @@ export const useBoardStore = create<BoardState>((set) => ({
   zoom: 1,
   cameraX: 0,
   cameraY: 0,
+  viewportWidth: 800,
+  viewportHeight: 600,
+  viewportInsets: { top: 0, right: 0, bottom: 0, left: 0 },
   remoteCursors: [],
   isDirty: false,
   pendingIconName: 'mdi-star',
@@ -106,6 +121,8 @@ export const useBoardStore = create<BoardState>((set) => ({
   setActiveTool: (tool) => set({ activeTool: tool }),
   setZoom: (zoom) => set({ zoom: Math.max(0.2, Math.min(3.5, zoom)) }),
   setCamera: (x, y) => set({ cameraX: x, cameraY: y }),
+  setViewportSize: (width, height) => set({ viewportWidth: width, viewportHeight: height }),
+  setViewportInsets: (viewportInsets) => set({ viewportInsets }),
   setRemoteCursors: (cursors) => set({ remoteCursors: cursors }),
   setDirty: (dirty) => set({ isDirty: dirty }),
   setPendingIconName: (iconName) => set({ pendingIconName: iconName }),

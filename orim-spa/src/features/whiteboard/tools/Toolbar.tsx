@@ -46,6 +46,9 @@ export function Toolbar() {
   const zoom = useBoardStore((s) => s.zoom);
   const setZoom = useBoardStore((s) => s.setZoom);
   const setCamera = useBoardStore((s) => s.setCamera);
+  const viewportWidth = useBoardStore((s) => s.viewportWidth);
+  const viewportHeight = useBoardStore((s) => s.viewportHeight);
+  const viewportInsets = useBoardStore((s) => s.viewportInsets);
   const selectedIds = useBoardStore((s) => s.selectedElementIds);
   const removeElements = useBoardStore((s) => s.removeElements);
   const setSelectedElementIds = useBoardStore((s) => s.setSelectedElementIds);
@@ -154,21 +157,23 @@ export function Toolbar() {
       maxX = Math.max(maxX, el.x + el.width);
       maxY = Math.max(maxY, el.y + el.height);
     }
-    const contentW = maxX - minX;
-    const contentH = maxY - minY;
-    // Assuming 800x600 viewport — in practice read from container
-    const viewW = 800;
-    const viewH = 600;
+    const contentW = Math.max(1, maxX - minX);
+    const contentH = Math.max(1, maxY - minY);
+    const visibleWidth = Math.max(1, viewportWidth - viewportInsets.left - viewportInsets.right);
+    const visibleHeight = Math.max(1, viewportHeight - viewportInsets.top - viewportInsets.bottom);
     const margin = 64;
-    const newZoom = Math.min(
-      (viewW - margin * 2) / contentW,
-      (viewH - margin * 2) / contentH,
+    const clampedZoom = Math.max(0.2, Math.min(
+      (Math.max(1, visibleWidth - margin * 2)) / contentW,
+      (Math.max(1, visibleHeight - margin * 2)) / contentH,
       3.5,
-    );
+    ));
     const cxContent = minX + contentW / 2;
     const cyContent = minY + contentH / 2;
-    setZoom(Math.max(0.2, newZoom));
-    setCamera(viewW / 2 - cxContent * newZoom, viewH / 2 - cyContent * newZoom);
+    const visibleCenterX = viewportInsets.left + visibleWidth / 2;
+    const visibleCenterY = viewportInsets.top + visibleHeight / 2;
+
+    setZoom(clampedZoom);
+    setCamera(visibleCenterX - cxContent * clampedZoom, visibleCenterY - cyContent * clampedZoom);
   };
 
   const actionButtons = (

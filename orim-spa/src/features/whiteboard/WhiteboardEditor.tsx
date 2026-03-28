@@ -26,6 +26,7 @@ export function WhiteboardEditor() {
   const isNarrowPanelMode = useMediaQuery(theme.breakpoints.down('sm'));
   const setBoard = useBoardStore((s) => s.setBoard);
   const setRemoteCursors = useBoardStore((s) => s.setRemoteCursors);
+  const setViewportInsets = useBoardStore((s) => s.setViewportInsets);
   const user = useAuthStore((s) => s.user);
   const board = useBoardStore((s) => s.board);
   const remoteCursors = useBoardStore((s) => s.remoteCursors);
@@ -125,6 +126,20 @@ export function WhiteboardEditor() {
       setChatOpen(false);
     }
   }, [canUseAssistant, chatOpen]);
+
+  useEffect(() => {
+    if (!canEdit || isNarrowPanelMode) {
+      setViewportInsets({ top: 0, right: 0, bottom: 0, left: 0 });
+      return;
+    }
+
+    setViewportInsets({
+      top: 0,
+      right: (chatOpen ? CHAT_PANEL_WIDTH : 0) + (propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0),
+      bottom: 0,
+      left: 0,
+    });
+  }, [canEdit, chatOpen, isNarrowPanelMode, propertiesOpen, setViewportInsets]);
 
   const { sendBoardState, sendBoardStateThrottled, sendCursorUpdate, connectionId } = useSignalR({
     boardId: id ?? null,

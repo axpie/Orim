@@ -118,6 +118,7 @@ export function WhiteboardCanvas({
   const zoom = useBoardStore((s) => s.zoom);
   const cameraX = useBoardStore((s) => s.cameraX);
   const cameraY = useBoardStore((s) => s.cameraY);
+  const setViewportSize = useBoardStore((s) => s.setViewportSize);
   const setSelectedElementIds = useBoardStore((s) => s.setSelectedElementIds);
   const setActiveTool = useBoardStore((s) => s.setActiveTool);
   const setZoom = useBoardStore((s) => s.setZoom);
@@ -194,13 +195,23 @@ export function WhiteboardCanvas({
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
+
+    const updateViewportSize = (width: number, height: number) => {
+      const nextWidth = Math.max(1, Math.round(width));
+      const nextHeight = Math.max(1, Math.round(height));
+      setStageSize({ width: nextWidth, height: nextHeight });
+      setViewportSize(nextWidth, nextHeight);
+    };
+
+    updateViewportSize(container.clientWidth, container.clientHeight);
+
     const observer = new ResizeObserver((entries) => {
       const { width, height } = entries[0].contentRect;
-      setStageSize({ width, height });
+      updateViewportSize(width, height);
     });
     observer.observe(container);
     return () => observer.disconnect();
-  }, []);
+  }, [setViewportSize]);
 
   // Keyboard shortcuts
   useEffect(() => {
