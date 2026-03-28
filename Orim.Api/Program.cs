@@ -123,6 +123,8 @@ using (var scope = app.Services.CreateScope())
 app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
+app.UseDefaultFiles();
+app.UseStaticFiles();
 
 // --- Helper to generate JWT ---
 string GenerateJwtToken(User user)
@@ -695,6 +697,7 @@ app.MapPost("/api/presence/leave", async (PresenceLeaveRequest request, BoardPre
 // ==========================================================================
 
 app.MapHub<BoardHub>("/hubs/board");
+app.MapFallbackToFile("/index.html");
 
 app.Run();
 
