@@ -39,7 +39,9 @@ Standard-URLs in der Entwicklung:
 
 ## Datenhaltung
 
-Standardmäßig speichert die Anwendung ihre Daten unter `Orim.Web/data`.
+Standardmäßig speichert die Anwendung ihre Daten lokal unter `Orim.Web/data`.
+
+Auf Azure App Service werden relative `DataPath`-Werte automatisch unter dem persistenten `%HOME%`-Verzeichnis aufgelöst, also standardmäßig nach `%HOME%/data` statt ins Deploy-Verzeichnis.
 
 Im Debug-Build werden getrennte Dateien verwendet:
 
@@ -126,6 +128,12 @@ Benötigte App Settings:
 - optional `SeedAdmin__Username`
 - optional `SeedAdmin__ResetPasswordOnStartup`
 - optional `DataPath`
+
+Wichtig für Azure App Service:
+
+- Relative `DataPath`-Werte werden automatisch unter `%HOME%` aufgelöst und bleiben damit über Deployments hinweg erhalten.
+- Absolute `DataPath`-Werte werden unverändert verwendet.
+- `DataPath` darf nicht auf `site/wwwroot` oder einen anderen Deployment-Ordner zeigen, weil dieser bei neuen Veröffentlichungen ersetzt werden kann.
 
 Empfohlenes Vorgehen für das erste Deployment:
 
