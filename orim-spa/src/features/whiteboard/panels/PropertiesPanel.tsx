@@ -215,9 +215,10 @@ function AlignmentControls({
 interface PropertiesPanelProps {
   onClose: () => void;
   onBoardChanged?: (changeKind: string) => void;
+  mobile?: boolean;
 }
 
-export function PropertiesPanel({ onClose, onBoardChanged }: PropertiesPanelProps) {
+export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: PropertiesPanelProps) {
   const { t } = useTranslation();
   const board = useBoardStore((s) => s.board);
   const selectedIds = useBoardStore((s) => s.selectedElementIds);
@@ -289,14 +290,16 @@ export function PropertiesPanel({ onClose, onBoardChanged }: PropertiesPanelProp
     <Paper
       elevation={3}
       sx={{
-        width: 280,
+        width: mobile ? '100%' : 280,
         height: '100%',
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
         overflow: 'auto',
         borderRadius: 0,
-        borderLeft: (theme) => `1px solid ${theme.palette.divider}`,
+        borderLeft: mobile ? 'none' : (theme) => `1px solid ${theme.palette.divider}`,
+        pt: mobile ? 'env(safe-area-inset-top)' : 0,
+        pb: mobile ? 'env(safe-area-inset-bottom)' : 0,
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1 }}>

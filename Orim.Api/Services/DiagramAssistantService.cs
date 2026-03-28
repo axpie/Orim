@@ -9,42 +9,49 @@ namespace Orim.Api.Services;
 
 public sealed class DiagramAssistantService
 {
-    private readonly ChatClient? _chatClient;
+    private readonly AssistantSettingsService _assistantSettingsService;
     private readonly ILogger<DiagramAssistantService> _logger;
-    private readonly bool _isConfigured;
 
-    public DiagramAssistantService(IConfiguration configuration, ILogger<DiagramAssistantService> logger)
+    public DiagramAssistantService(AssistantSettingsService assistantSettingsService, ILogger<DiagramAssistantService> logger)
     {
+        _assistantSettingsService = assistantSettingsService;
         _logger = logger;
-
-        var endpoint = configuration["AzureOpenAI:Endpoint"];
-        var apiKey = configuration["AzureOpenAI:ApiKey"];
-        var deploymentName = configuration["AzureOpenAI:DeploymentName"] ?? "gpt-4.1";
-
-        if (string.IsNullOrWhiteSpace(endpoint) || string.IsNullOrWhiteSpace(apiKey))
-        {
-            _logger.LogWarning("AzureOpenAI is not configured. Chat assistant will be unavailable.");
-            _isConfigured = false;
-            return;
-        }
-
-        var azureClient = new AzureOpenAIClient(new Uri(endpoint), new AzureKeyCredential(apiKey));
-        _chatClient = azureClient.GetChatClient(deploymentName);
-        _isConfigured = true;
     }
 
-    public bool IsConfigured => _isConfigured;
+    public bool IsConfigured => _assistantSettingsService.GetSnapshot().IsConfigured;
+
+    public string? GetUnavailableReason()
+    {
+        var settings = _assistantSettingsService.GetSnapshot();
+
+        if (!settings.IsEnabled)
+        {
+            return "AI assistant is disabled.";
+        }
+
+        if (!settings.IsConfigured)
+        {
+            return "AI assistant is not configured.";
+        }
+
+        return null;
+    }
 
     public async IAsyncEnumerable<DiagramAssistantEvent> StreamDiagramAsync(
         Board board,
         IReadOnlyList<ChatMessageEntry> conversationHistory,
         [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
-        if (_chatClient is null)
+        var settings = _assistantSettingsService.GetSnapshot();
+        var unavailableReason = GetUnavailableReason();
+        if (unavailableReason is not null)
         {
-            yield return new DiagramAssistantEvent { Type = EventType.Error, Content = "AI assistant is not configured." };
+            yield return new DiagramAssistantEvent { Type = EventType.Error, Content = unavailableReason };
             yield break;
         }
+
+        var azureClient = new AzureOpenAIClient(new Uri(settings.Endpoint), new AzureKeyCredential(settings.ApiKey));
+        var chatClient = azureClient.GetChatClient(settings.DeploymentName);
 
         var systemPrompt = BuildSystemPrompt(board);
 
@@ -81,7 +88,7 @@ public sealed class DiagramAssistantService
             ChatCompletion completion;
             try
             {
-                completion = await _chatClient.CompleteChatAsync(messages, options, cancellationToken);
+                completion = await chatClient.CompleteChatAsync(messages, options, cancellationToken);
             }
             catch (Exception ex)
             {

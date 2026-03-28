@@ -28,6 +28,10 @@ const bool useDebugStorage = false;
 
 // --- Services ---
 builder.Services.AddOrimInfrastructure(dataPath, useDebugStorage);
+builder.Services.AddSingleton(sp => new AssistantSettingsService(
+    Path.Combine(dataPath, "assistant-settings.json"),
+    builder.Configuration,
+    sp.GetRequiredService<ILogger<AssistantSettingsService>>()));
 builder.Services.AddSingleton<DiagramAssistantService>();
 builder.Services.AddSingleton(new ThemeCatalogApiService(ThemeCatalogApiService.ResolveThemesPath(dataPath, builder.Environment.ContentRootPath)));
 builder.Services.AddSignalR().AddJsonProtocol(options =>
@@ -331,6 +335,37 @@ app.MapDelete("/api/admin/themes/{key}", [Authorize(Roles = "Admin")] async (str
     {
         await themeCatalogService.DeleteThemeAsync(key);
         return Results.NoContent();
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+app.MapGet("/api/admin/assistant-settings", [Authorize(Roles = "Admin")] (AssistantSettingsService assistantSettingsService) =>
+{
+    return Results.Ok(assistantSettingsService.GetAdminSettings());
+});
+
+app.MapGet("/api/assistant/status", [Authorize] (AssistantSettingsService assistantSettingsService) =>
+{
+    var snapshot = assistantSettingsService.GetSnapshot();
+    return Results.Ok(new AssistantAvailability(snapshot.IsEnabled, snapshot.IsConfigured));
+});
+
+app.MapPut("/api/admin/assistant-settings", [Authorize(Roles = "Admin")] async (AssistantSettingsRequest request, AssistantSettingsService assistantSettingsService, HttpContext context) =>
+{
+    try
+    {
+        var updated = await assistantSettingsService.UpdateAsync(
+            new AssistantSettingsUpdate(
+                request.Enabled,
+                request.Endpoint,
+                request.DeploymentName,
+                request.ApiKey),
+            context.RequestAborted);
+
+        return Results.Ok(updated);
     }
     catch (InvalidOperationException ex)
     {
@@ -672,8 +707,9 @@ app.MapPost("/api/boards/{id:guid}/assistant", [Authorize] async (Guid id, Assis
     if (!boardService.HasAccess(board, GetUserId(context), BoardRole.Editor))
         return Results.Forbid();
 
-    if (!assistantService.IsConfigured)
-        return Results.Json(new { error = "AI assistant is not configured." }, statusCode: 503);
+    var unavailableReason = assistantService.GetUnavailableReason();
+    if (unavailableReason is not null)
+        return Results.Json(new { error = unavailableReason }, statusCode: 503);
 
     var events = new List<DiagramAssistantEvent>();
     await foreach (var evt in assistantService.StreamDiagramAsync(board, request.Messages, context.RequestAborted))
@@ -746,6 +782,7 @@ record UpdateMemberRoleRequest(BoardRole Role);
 record CreateSnapshotRequest(string? Name);
 record ImportBoardRequest(string BoardJson, string? Title);
 record AssistantRequest(IReadOnlyList<ChatMessageEntry> Messages);
+record AssistantSettingsRequest(bool Enabled, string Endpoint, string DeploymentName, string? ApiKey);
 record PresenceLeaveRequest(Guid BoardId, string ClientId);
 record ThemeAvailabilityRequest(bool Enabled);
 

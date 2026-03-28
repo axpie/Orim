@@ -10,6 +10,7 @@ interface SelectionOverlayProps {
   zoom: number;
   handleSurfaceColor?: string;
   selectionColor?: string;
+  touchMode?: boolean;
 }
 
 export function SelectionOverlay({
@@ -18,19 +19,20 @@ export function SelectionOverlay({
   zoom,
   handleSurfaceColor = '#ffffff',
   selectionColor = '#1976d2',
+  touchMode = false,
 }: SelectionOverlayProps) {
   if (selectedIds.length === 0) return null;
 
   const selected = elements.filter((el) => selectedIds.includes(el.id));
   const borderWidth = 1.5 / zoom;
-  const handleSize = 8 / zoom;
+  const handleSize = (touchMode ? 16 : 8) / zoom;
 
   if (selected.length === 1) {
     const el = selected[0];
     if (el.$type === 'arrow') {
       const points = computeArrowPolyline(el, elements);
       const flat = flattenPoints(points);
-      const handleRadius = 7 / zoom;
+      const handleRadius = (touchMode ? 11 : 7) / zoom;
 
       if (points.length < 2) {
         return null;

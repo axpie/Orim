@@ -1,5 +1,6 @@
 import { useRef, useCallback, useState, useEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { useMediaQuery } from '@mui/material';
 import { Stage, Layer, Rect, Line, Circle, Group, Text } from 'react-konva';
 import type Konva from 'konva';
 import { getThemes } from '../../../api/themes';
@@ -73,6 +74,13 @@ type DockTargetState = {
 
 type ArrowEndpointHandleKind = 'source' | 'target';
 
+type TouchGestureState = {
+  initialDistance: number;
+  initialZoom: number;
+  anchorWorldX: number;
+  anchorWorldY: number;
+};
+
 function getResizeCursor(handle: ResizeHandle | null | undefined): string | null {
   switch (handle) {
     case 'n':
@@ -121,6 +129,8 @@ export function WhiteboardCanvas({
   const remoteCursors = useBoardStore((s) => s.remoteCursors);
   const pendingIconName = useBoardStore((s) => s.pendingIconName);
   const themeKey = useThemeStore((s) => s.themeKey);
+  const isCoarsePointer = useMediaQuery('(pointer: coarse)');
+  const dockSnapRadius = isCoarsePointer ? DOCK_SNAP_RADIUS * 1.6 : DOCK_SNAP_RADIUS;
 
   const { data: themes = [] } = useQuery({
     queryKey: ['themes'],
@@ -140,6 +150,7 @@ export function WhiteboardCanvas({
   const [guides, setGuides] = useState<AlignmentGuide[]>([]);
   const dragSnapshotRef = useRef<BoardElement[] | null>(null);
   const resizeSnapshotRef = useRef<BoardElement[] | null>(null);
+  const touchGestureRef = useRef<TouchGestureState | null>(null);
 
   // Drawing state
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
@@ -248,6 +259,24 @@ export function WhiteboardCanvas({
   const getScreenPos = useCallback((): { x: number; y: number } | null => {
     const stage = stageRef.current;
     return stage?.getPointerPosition() ?? null;
+  }, []);
+
+  const getTouchGestureInfo = useCallback((touches: TouchList) => {
+    if (touches.length < 2 || !containerRef.current) {
+      return null;
+    }
+
+    const bounds = containerRef.current.getBoundingClientRect();
+    const firstTouch = touches[0];
+    const secondTouch = touches[1];
+    const centerX = ((firstTouch.clientX + secondTouch.clientX) / 2) - bounds.left;
+    const centerY = ((firstTouch.clientY + secondTouch.clientY) / 2) - bounds.top;
+    const distance = Math.hypot(
+      firstTouch.clientX - secondTouch.clientX,
+      firstTouch.clientY - secondTouch.clientY,
+    );
+
+    return { centerX, centerY, distance };
   }, []);
 
   const getElementIdFromTarget = useCallback((target: Konva.Node | null): string | null => {
@@ -593,7 +622,7 @@ export function WhiteboardCanvas({
 
       // Drawing arrow
       if (draftArrowStart) {
-        const hoverTarget = findNearestDockTarget(elements, worldPos, draftArrowStart.elementId, DOCK_SNAP_RADIUS);
+        const hoverTarget = findNearestDockTarget(elements, worldPos, draftArrowStart.elementId, dockSnapRadius);
         const nextPointer = hoverTarget?.point ?? getMagneticArrowPoint(
           { x: draftArrowStart.x, y: draftArrowStart.y },
           worldPos,
@@ -607,7 +636,7 @@ export function WhiteboardCanvas({
 
       if (arrowEndpointDrag) {
         const arrow = elements.find((candidate): candidate is ArrowElement => candidate.id === arrowEndpointDrag.arrowId && candidate.$type === 'arrow');
-        const hoverTarget = findNearestDockTarget(elements, worldPos, undefined, DOCK_SNAP_RADIUS);
+        const hoverTarget = findNearestDockTarget(elements, worldPos, undefined, dockSnapRadius);
         const nextPointer = hoverTarget?.point ?? getMagneticArrowPoint(
           arrowEndpointDrag.fixedPoint,
           worldPos,
@@ -741,7 +770,7 @@ export function WhiteboardCanvas({
         setDragStart(worldPos);
       }
     },
-    [isPanning, panStart, drawStart, draftRect, draftArrowStart, arrowEndpointDrag, resizeState, marquee, isDragging, dragStart, elements, selectedIds, zoom, editable, activeTool, getWorldPos, getScreenPos, getResizeHandleFromTarget, setCamera, updateElement, applyDraggedArrowEndpoint, onBoardLiveChanged, onPointerPresenceChanged],
+    [isPanning, panStart, drawStart, draftRect, draftArrowStart, arrowEndpointDrag, resizeState, marquee, isDragging, dragStart, elements, selectedIds, zoom, editable, activeTool, getWorldPos, getScreenPos, getResizeHandleFromTarget, setCamera, updateElement, applyDraggedArrowEndpoint, onBoardLiveChanged, onPointerPresenceChanged, dockSnapRadius],
   );
 
   const handleMouseLeave = useCallback(() => {
@@ -919,6 +948,86 @@ export function WhiteboardCanvas({
     [isPanning, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, zoom, getResizeHandleFromTarget, getWorldPos, setCamera, addElement, pushCommand, setSelectedElementIds, setActiveTool, onBoardChanged, updateElement, boardDefaults],
   );
 
+  const handleTouchStart = useCallback(
+    (e: Konva.KonvaEventObject<TouchEvent>) => {
+      if (e.evt.touches.length >= 2) {
+        e.evt.preventDefault();
+        const gesture = getTouchGestureInfo(e.evt.touches);
+        if (!gesture) {
+          return;
+        }
+
+        touchGestureRef.current = {
+          initialDistance: Math.max(gesture.distance, 1),
+          initialZoom: zoom,
+          anchorWorldX: (gesture.centerX - cameraX) / zoom,
+          anchorWorldY: (gesture.centerY - cameraY) / zoom,
+        };
+
+        setIsPanning(false);
+        setPanStart(null);
+        setGuides([]);
+        return;
+      }
+
+      handleMouseDown(e as unknown as Konva.KonvaEventObject<MouseEvent>);
+    },
+    [cameraX, cameraY, getTouchGestureInfo, handleMouseDown, zoom],
+  );
+
+  const handleTouchMove = useCallback(
+    (e: Konva.KonvaEventObject<TouchEvent>) => {
+      const gestureState = touchGestureRef.current;
+      if (gestureState && e.evt.touches.length >= 2) {
+        e.evt.preventDefault();
+        const gesture = getTouchGestureInfo(e.evt.touches);
+        if (!gesture) {
+          return;
+        }
+
+        const scaleFactor = gesture.distance / gestureState.initialDistance;
+        const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, gestureState.initialZoom * scaleFactor));
+        const nextCameraX = gesture.centerX - gestureState.anchorWorldX * nextZoom;
+        const nextCameraY = gesture.centerY - gestureState.anchorWorldY * nextZoom;
+
+        setZoom(nextZoom);
+        setCamera(nextCameraX, nextCameraY);
+        return;
+      }
+
+      e.evt.preventDefault();
+      handleMouseMove(e as unknown as Konva.KonvaEventObject<MouseEvent>);
+    },
+    [getTouchGestureInfo, handleMouseMove, setCamera, setZoom],
+  );
+
+  const handleTouchEnd = useCallback(
+    (e: Konva.KonvaEventObject<TouchEvent>) => {
+      if (touchGestureRef.current) {
+        e.evt.preventDefault();
+        if (e.evt.touches.length >= 2) {
+          const gesture = getTouchGestureInfo(e.evt.touches);
+          if (gesture) {
+            touchGestureRef.current = {
+              initialDistance: Math.max(gesture.distance, 1),
+              initialZoom: zoom,
+              anchorWorldX: (gesture.centerX - cameraX) / zoom,
+              anchorWorldY: (gesture.centerY - cameraY) / zoom,
+            };
+          }
+          return;
+        }
+
+        touchGestureRef.current = null;
+      }
+
+      if (e.evt.touches.length === 0) {
+        handleMouseUp(e as unknown as Konva.KonvaEventObject<MouseEvent>);
+      }
+    },
+    [cameraX, cameraY, getTouchGestureInfo, handleMouseUp, zoom],
+  );
+
   // ── Wheel (zoom) ──
   const handleWheel = useCallback(
     (e: Konva.KonvaEventObject<WheelEvent>) => {
@@ -1080,6 +1189,10 @@ export function WhiteboardCanvas({
         width: '100%',
         height: '100%',
         background: boardDefaults.surfaceColor,
+        touchAction: 'none',
+        overscrollBehavior: 'none',
+        WebkitUserSelect: 'none',
+        WebkitTouchCallout: 'none',
         cursor:
           resizeCursor
             ? resizeCursor
@@ -1108,6 +1221,10 @@ export function WhiteboardCanvas({
         onMouseLeave={handleMouseLeave}
         onWheel={handleWheel}
         onDblClick={handleDblClick}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
         {/* Grid layer */}
         <Layer listening={false}>
@@ -1174,7 +1291,7 @@ export function WhiteboardCanvas({
                 key={key}
                 x={point.x}
                 y={point.y}
-                radius={(isHover ? 6 : 4) / zoom}
+                radius={(isHover ? (isCoarsePointer ? 10 : 6) : (isCoarsePointer ? 7 : 4)) / zoom}
                 fill={isHover ? boardDefaults.dockTargetColor : boardDefaults.handleSurfaceColor}
                 stroke={isStart ? boardDefaults.selectionColor : boardDefaults.dockTargetColor}
                 strokeWidth={(isHover ? 2 : 1.5) / zoom}
@@ -1206,6 +1323,7 @@ export function WhiteboardCanvas({
             zoom={zoom}
             handleSurfaceColor={boardDefaults.handleSurfaceColor}
             selectionColor={boardDefaults.selectionColor}
+            touchMode={isCoarsePointer}
           />
 
           {remoteCursors

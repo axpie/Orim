@@ -174,7 +174,7 @@ export function SharedBoardView() {
 
   if (isLoading) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100dvh' }}>
         <CircularProgress />
       </Box>
     );
@@ -182,7 +182,7 @@ export function SharedBoardView() {
 
   if (needsPassword) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100dvh' }}>
         <Card sx={{ width: 400, maxWidth: '90vw' }}>
           <CardContent>
             <Typography variant="h6" gutterBottom>
@@ -212,14 +212,14 @@ export function SharedBoardView() {
 
   if (isError || !board) {
     return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100dvh' }}>
         <Typography>Board not found.</Typography>
       </Box>
     );
   }
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', pb: 'env(safe-area-inset-bottom)' }}>
       <BoardTopBar
         onOpenProperties={() => setPropertiesOpen(true)}
         onOpenChat={() => {}}

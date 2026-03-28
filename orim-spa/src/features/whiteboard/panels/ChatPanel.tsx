@@ -21,9 +21,36 @@ interface ChatPanelProps {
   boardId: string;
   onClose: () => void;
   onBoardChanged?: (changeKind: string) => void;
+  mobile?: boolean;
 }
 
-export function ChatPanel({ boardId, onClose, onBoardChanged }: ChatPanelProps) {
+function getAssistantErrorMessage(error: unknown): string {
+  if (typeof error === 'object' && error !== null) {
+    const candidate = error as {
+      response?: { data?: unknown };
+      message?: string;
+    };
+
+    if (typeof candidate.response?.data === 'string' && candidate.response.data.trim().length > 0) {
+      return candidate.response.data;
+    }
+
+    if (typeof candidate.response?.data === 'object' && candidate.response.data !== null) {
+      const payload = candidate.response.data as { error?: unknown };
+      if (typeof payload.error === 'string' && payload.error.trim().length > 0) {
+        return payload.error;
+      }
+    }
+
+    if (typeof candidate.message === 'string' && candidate.message.trim().length > 0) {
+      return candidate.message;
+    }
+  }
+
+  return 'Error communicating with assistant.';
+}
+
+export function ChatPanel({ boardId, onClose, onBoardChanged, mobile = false }: ChatPanelProps) {
   const { t } = useTranslation();
   const [messages, setMessages] = useState<ChatMessageEntry[]>([]);
   const [input, setInput] = useState('');
@@ -62,10 +89,10 @@ export function ChatPanel({ boardId, onClose, onBoardChanged }: ChatPanelProps) 
         content: response.events.map((event) => event.content).join('\n') || 'Done.',
       };
       setMessages([...updatedMessages, assistantMsg]);
-    } catch {
+    } catch (error) {
       const errorMsg: ChatMessageEntry = {
         role: 'assistant',
-        content: 'Error communicating with assistant.',
+        content: getAssistantErrorMessage(error),
       };
       setMessages([...updatedMessages, errorMsg]);
     } finally {
@@ -77,13 +104,15 @@ export function ChatPanel({ boardId, onClose, onBoardChanged }: ChatPanelProps) 
     <Paper
       elevation={3}
       sx={{
-        width: 320,
+        width: mobile ? '100%' : 320,
         height: '100%',
         flexShrink: 0,
         display: 'flex',
         flexDirection: 'column',
         borderRadius: 0,
-        borderLeft: (theme) => `1px solid ${theme.palette.divider}`,
+        borderLeft: mobile ? 'none' : (theme) => `1px solid ${theme.palette.divider}`,
+        pt: mobile ? 'env(safe-area-inset-top)' : 0,
+        pb: mobile ? 'env(safe-area-inset-bottom)' : 0,
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1 }}>

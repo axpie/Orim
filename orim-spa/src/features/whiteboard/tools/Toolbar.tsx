@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -13,7 +13,9 @@ import {
   TextField,
   Tooltip,
   Typography,
+  useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import NearMeIcon from '@mui/icons-material/NearMe';
 import PanToolIcon from '@mui/icons-material/PanTool';
 import RectangleOutlinedIcon from '@mui/icons-material/RectangleOutlined';
@@ -28,12 +30,17 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import FitScreenIcon from '@mui/icons-material/FitScreen';
+import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
+import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { filterIconDefinitions, getIconDefinition } from '../icons/iconCatalog';
 import { useBoardStore, type ToolType } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
 
 export function Toolbar() {
   const { t } = useTranslation();
+  const theme = useTheme();
+  const isTouchDevice = useMediaQuery('(pointer: coarse)');
+  const isCompactLayout = isTouchDevice || useMediaQuery(theme.breakpoints.down('md'));
   const activeTool = useBoardStore((s) => s.activeTool);
   const setActiveTool = useBoardStore((s) => s.setActiveTool);
   const zoom = useBoardStore((s) => s.zoom);
@@ -55,6 +62,16 @@ export function Toolbar() {
   const pushCommand = useCommandStack((s) => s.push);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [iconSearch, setIconSearch] = useState('');
+  const [collapsed, setCollapsed] = useState(isCompactLayout);
+
+  useEffect(() => {
+    if (!isCompactLayout) {
+      setCollapsed(false);
+      return;
+    }
+
+    setCollapsed(true);
+  }, [isCompactLayout]);
 
   const selectedIcon = getIconDefinition(pendingIconName);
   const filteredIcons = useMemo(() => filterIconDefinitions(iconSearch), [iconSearch]);
@@ -154,29 +171,17 @@ export function Toolbar() {
     setCamera(viewW / 2 - cxContent * newZoom, viewH / 2 - cyContent * newZoom);
   };
 
-  return (
-    <Paper
-      elevation={2}
-      sx={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        py: 1,
-        px: 0.5,
-        gap: 0.5,
-        borderRadius: 0,
-        flexShrink: 0,
-        width: 48,
-      }}
-    >
+  const actionButtons = (
+    <>
       {tools.map(({ tool, icon, label }) => (
-        <Tooltip key={tool} title={label} placement="right">
+        <Tooltip key={tool} title={label} placement={isCompactLayout ? 'top' : 'right'}>
           <IconButton
-            size="small"
+            size={isCompactLayout ? 'medium' : 'small'}
             color={activeTool === tool ? 'primary' : 'default'}
             onClick={() => handleToolClick(tool)}
             sx={{
               bgcolor: activeTool === tool ? 'action.selected' : undefined,
+              flexShrink: 0,
             }}
           >
             {icon}
@@ -184,51 +189,111 @@ export function Toolbar() {
         </Tooltip>
       ))}
 
-      <Divider flexItem sx={{ my: 0.5 }} />
+      <Divider flexItem orientation={isCompactLayout ? 'vertical' : 'horizontal'} sx={{ my: isCompactLayout ? 0 : 0.5, mx: isCompactLayout ? 0.5 : 0 }} />
 
-      <Tooltip title={t('tools.undo')} placement="right">
+      <Tooltip title={t('tools.undo')} placement={isCompactLayout ? 'top' : 'right'}>
         <span>
-          <IconButton size="small" onClick={handleUndo} disabled={!canUndo}>
+          <IconButton size={isCompactLayout ? 'medium' : 'small'} onClick={handleUndo} disabled={!canUndo} sx={{ flexShrink: 0 }}>
             <UndoIcon />
           </IconButton>
         </span>
       </Tooltip>
-      <Tooltip title={t('tools.redo')} placement="right">
+      <Tooltip title={t('tools.redo')} placement={isCompactLayout ? 'top' : 'right'}>
         <span>
-          <IconButton size="small" onClick={handleRedo} disabled={!canRedo}>
+          <IconButton size={isCompactLayout ? 'medium' : 'small'} onClick={handleRedo} disabled={!canRedo} sx={{ flexShrink: 0 }}>
             <RedoIcon />
           </IconButton>
         </span>
       </Tooltip>
-      <Tooltip title={t('tools.delete')} placement="right">
+      <Tooltip title={t('tools.delete')} placement={isCompactLayout ? 'top' : 'right'}>
         <span>
           <IconButton
-            size="small"
+            size={isCompactLayout ? 'medium' : 'small'}
             onClick={handleDelete}
             disabled={selectedIds.length === 0}
+            sx={{ flexShrink: 0 }}
           >
             <DeleteIcon />
           </IconButton>
         </span>
       </Tooltip>
 
-      <Divider flexItem sx={{ my: 0.5 }} />
+      <Divider flexItem orientation={isCompactLayout ? 'vertical' : 'horizontal'} sx={{ my: isCompactLayout ? 0 : 0.5, mx: isCompactLayout ? 0.5 : 0 }} />
 
-      <Tooltip title={t('tools.zoomIn')} placement="right">
-        <IconButton size="small" onClick={handleZoomIn}>
+      <Tooltip title={t('tools.zoomIn')} placement={isCompactLayout ? 'top' : 'right'}>
+        <IconButton size={isCompactLayout ? 'medium' : 'small'} onClick={handleZoomIn} sx={{ flexShrink: 0 }}>
           <ZoomInIcon />
         </IconButton>
       </Tooltip>
-      <Tooltip title={t('tools.zoomOut')} placement="right">
-        <IconButton size="small" onClick={handleZoomOut}>
+      <Tooltip title={t('tools.zoomOut')} placement={isCompactLayout ? 'top' : 'right'}>
+        <IconButton size={isCompactLayout ? 'medium' : 'small'} onClick={handleZoomOut} sx={{ flexShrink: 0 }}>
           <ZoomOutIcon />
         </IconButton>
       </Tooltip>
-      <Tooltip title={t('tools.fitToScreen')} placement="right">
-        <IconButton size="small" onClick={handleFitToScreen}>
+      <Tooltip title={t('tools.fitToScreen')} placement={isCompactLayout ? 'top' : 'right'}>
+        <IconButton size={isCompactLayout ? 'medium' : 'small'} onClick={handleFitToScreen} sx={{ flexShrink: 0 }}>
           <FitScreenIcon />
         </IconButton>
       </Tooltip>
+    </>
+  );
+
+  return (
+    <Paper
+      elevation={2}
+      sx={{
+        display: 'flex',
+        flexDirection: isCompactLayout ? 'column' : 'column',
+        alignItems: 'center',
+        py: isCompactLayout ? 0.75 : 1,
+        px: isCompactLayout ? 0.75 : 0.5,
+        gap: 0.5,
+        borderRadius: isCompactLayout ? 3 : 0,
+        flexShrink: 0,
+        width: isCompactLayout ? 'auto' : 48,
+        maxWidth: isCompactLayout ? 'calc(100% - 24px)' : 48,
+        position: isCompactLayout ? 'absolute' : 'relative',
+        left: isCompactLayout ? 12 : 'auto',
+        right: isCompactLayout ? 12 : 'auto',
+        bottom: isCompactLayout ? 'calc(12px + env(safe-area-inset-bottom))' : 'auto',
+        zIndex: isCompactLayout ? 6 : 'auto',
+        overflow: 'hidden',
+      }}
+    >
+      {isCompactLayout ? (
+        <>
+          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 1 }}>
+            <Tooltip title={collapsed ? t('tools.expandToolbar', 'Werkzeugleiste öffnen') : t('tools.collapseToolbar', 'Werkzeugleiste einklappen')} placement="top">
+              <IconButton onClick={() => setCollapsed((current) => !current)} size="medium" sx={{ flexShrink: 0 }}>
+                {collapsed ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+              </IconButton>
+            </Tooltip>
+            <Typography variant="caption" noWrap sx={{ flex: 1, minWidth: 0 }}>
+              {tools.find((tool) => tool.tool === activeTool)?.label}
+            </Typography>
+          </Box>
+          {!collapsed && (
+            <Box
+              sx={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 0.5,
+                width: '100%',
+                overflowX: 'auto',
+                pb: 0.25,
+                '&::-webkit-scrollbar': {
+                  display: 'none',
+                },
+                scrollbarWidth: 'none',
+              }}
+            >
+              {actionButtons}
+            </Box>
+          )}
+        </>
+      ) : (
+        actionButtons
+      )}
 
       <Dialog
         open={iconPickerOpen}

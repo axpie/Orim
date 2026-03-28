@@ -1,7 +1,8 @@
 import { useEffect, useCallback, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
-import { Box } from '@mui/material';
+import { Box, Drawer, useMediaQuery, useTheme } from '@mui/material';
+import { getAssistantAvailability } from '../../api/assistantSettings';
 import { getBoard, updateBoard } from '../../api/boards';
 import { useBoardStore } from './store/boardStore';
 import { useCommandStack } from './store/commandStack';
@@ -21,6 +22,8 @@ const CHAT_PANEL_WIDTH = 320;
 export function WhiteboardEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isNarrowPanelMode = useMediaQuery(theme.breakpoints.down('sm'));
   const setBoard = useBoardStore((s) => s.setBoard);
   const setRemoteCursors = useBoardStore((s) => s.setRemoteCursors);
   const user = useAuthStore((s) => s.user);
@@ -34,6 +37,45 @@ export function WhiteboardEditor() {
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const currentMembership = user && board
+    ? board.members.find((member) => member.userId === user.id) ?? (board.ownerId === user.id
+      ? { userId: user.id, username: user.username, role: BoardRole.Owner }
+      : null)
+    : null;
+  const canEdit = currentMembership != null && currentMembership.role !== BoardRole.Viewer;
+  const canShare = currentMembership?.role === BoardRole.Owner;
+
+  const { data: assistantAvailability } = useQuery({
+    queryKey: ['assistant-availability'],
+    queryFn: getAssistantAvailability,
+    enabled: canEdit,
+    staleTime: 30_000,
+  });
+
+  const canUseAssistant = canEdit && Boolean(assistantAvailability?.isConfigured);
+
+  const openPropertiesPanel = useCallback(() => {
+    setPropertiesOpen((current) => {
+      const next = !current;
+      if (next && isNarrowPanelMode) {
+        setChatOpen(false);
+      }
+
+      return next;
+    });
+  }, [isNarrowPanelMode]);
+
+  const openChatPanel = useCallback(() => {
+    setChatOpen((current) => {
+      const next = !current;
+      if (next && isNarrowPanelMode) {
+        setPropertiesOpen(false);
+      }
+
+      return next;
+    });
+  }, [isNarrowPanelMode]);
 
   const { data, isError } = useQuery({
     queryKey: ['board', id],
@@ -85,13 +127,11 @@ export function WhiteboardEditor() {
     }
   }, [selectedIds]);
 
-  const currentMembership = user && board
-    ? board.members.find((member) => member.userId === user.id) ?? (board.ownerId === user.id
-      ? { userId: user.id, username: user.username, role: BoardRole.Owner }
-      : null)
-    : null;
-  const canEdit = currentMembership != null && currentMembership.role !== BoardRole.Viewer;
-  const canShare = currentMembership?.role === BoardRole.Owner;
+  useEffect(() => {
+    if (!canUseAssistant && chatOpen) {
+      setChatOpen(false);
+    }
+  }, [canUseAssistant, chatOpen]);
 
   const { sendBoardState, sendBoardStateThrottled, sendCursorUpdate, connectionId } = useSignalR({
     boardId: id ?? null,
@@ -138,17 +178,17 @@ export function WhiteboardEditor() {
   if (!board) return null;
 
   return (
-    <Box sx={{ height: '100vh', display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', pb: 'env(safe-area-inset-bottom)' }}>
       <BoardTopBar
-        onOpenProperties={() => setPropertiesOpen(true)}
-        onOpenChat={() => setChatOpen(true)}
+        onOpenProperties={openPropertiesPanel}
+        onOpenChat={openChatPanel}
         propertiesOpen={propertiesOpen}
         chatOpen={chatOpen}
         saving={saveMutation.isPending}
         titleEditable={canEdit}
         showShare={canShare}
         showProperties={canEdit}
-        showChat={canEdit}
+        showChat={canUseAssistant}
         collaborators={remoteCursors}
         localConnectionId={connectionId}
       />
@@ -163,7 +203,7 @@ export function WhiteboardEditor() {
             onPointerPresenceChanged={sendCursorUpdate}
           />
 
-          {canEdit && chatOpen && (
+          {canEdit && !isNarrowPanelMode && chatOpen && (
             <Box
               sx={{
                 position: 'absolute',
@@ -179,7 +219,7 @@ export function WhiteboardEditor() {
             </Box>
           )}
 
-          {canEdit && propertiesOpen && (
+          {canEdit && !isNarrowPanelMode && propertiesOpen && (
             <Box
               sx={{
                 position: 'absolute',
@@ -196,6 +236,45 @@ export function WhiteboardEditor() {
           )}
         </Box>
       </Box>
+
+      {canEdit && isNarrowPanelMode && (
+        <Drawer
+          anchor="right"
+          open={chatOpen}
+          onClose={() => setChatOpen(false)}
+          ModalProps={{ keepMounted: true }}
+          PaperProps={{
+            sx: {
+              width: '100vw',
+              maxWidth: '100vw',
+            },
+          }}
+        >
+          <ChatPanel
+            boardId={id!}
+            mobile
+            onClose={() => setChatOpen(false)}
+            onBoardChanged={onBoardChanged}
+          />
+        </Drawer>
+      )}
+
+      {canEdit && isNarrowPanelMode && (
+        <Drawer
+          anchor="right"
+          open={propertiesOpen}
+          onClose={() => setPropertiesOpen(false)}
+          ModalProps={{ keepMounted: true }}
+          PaperProps={{
+            sx: {
+              width: '100vw',
+              maxWidth: '100vw',
+            },
+          }}
+        >
+          <PropertiesPanel mobile onClose={() => setPropertiesOpen(false)} onBoardChanged={onBoardChanged} />
+        </Drawer>
+      )}
     </Box>
   );
 }

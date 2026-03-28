@@ -48,9 +48,9 @@ export function AppLayout() {
   };
 
   return (
-    <Box sx={{ display: 'flex', minHeight: '100vh' }}>
+    <Box sx={{ display: 'flex', minHeight: '100dvh' }}>
       <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-        <Toolbar>
+        <Toolbar sx={{ pt: 'env(safe-area-inset-top)' }}>
           <IconButton
             edge="start"
             color="inherit"
@@ -157,8 +157,9 @@ export function AppLayout() {
         sx={{
           flexGrow: 1,
           p: 3,
-          mt: 8,
+          mt: 'calc(64px + env(safe-area-inset-top))',
           width: { md: `calc(100% - ${DRAWER_WIDTH}px)` },
+          pb: 'calc(24px + env(safe-area-inset-bottom))',
         }}
       >
         <Outlet />

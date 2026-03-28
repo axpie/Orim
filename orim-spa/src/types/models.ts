@@ -296,6 +296,27 @@ export interface AssistantResponse {
   board: Board;
 }
 
+export interface AssistantAdminSettings {
+  enabled: boolean;
+  endpoint: string;
+  deploymentName: string;
+  hasApiKey: boolean;
+  isConfigured: boolean;
+  provider: string;
+}
+
+export interface AssistantAvailability {
+  isEnabled: boolean;
+  isConfigured: boolean;
+}
+
+export interface AssistantSettingsUpdateRequest {
+  enabled: boolean;
+  endpoint: string;
+  deploymentName: string;
+  apiKey?: string;
+}
+
 // --- Cursor Presence ---
 
 export interface CursorPresence {
