@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "Orim",
+    "title": "ORIM",
     "dashboard": "Dashboard",
     "admin": "Verwaltung",
     "users": "Benutzer",
@@ -17,7 +17,7 @@
     "password": "Passwort",
     "loginButton": "Anmelden",
     "loginError": "Benutzername oder Passwort ungültig.",
-    "welcome": "Willkommen bei Orim"
+    "welcome": "Willkommen bei ORIM"
   },
   "dashboard": {
     "newBoard": "Neues Board",
@@ -68,6 +68,7 @@
     "fitToScreen": "Einpassen"
   },
   "properties": {
+    "title": "Eigenschaften",
     "position": "Position",
     "size": "Größe",
     "label": "Beschriftung",
@@ -95,7 +96,9 @@
     "targetDock": "End-Dock",
     "routeStyle": "Routenstil",
     "straight": "Gerade",
-    "orthogonal": "Rechtwinklig"
+    "orthogonal": "Rechtwinklig",
+    "noElementSelected": "Kein Element ausgewählt.",
+    "elementsSelected": "{{count}} Elemente ausgewählt."
   },
   "sharing": {
     "visibility": "Sichtbarkeit",

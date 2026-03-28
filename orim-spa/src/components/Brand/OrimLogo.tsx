@@ -26,8 +26,8 @@ export function OrimLogo({ compact = false, textColor = 'currentColor' }: OrimLo
       </Box>
       {!compact && (
         <Box sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1 }}>
-          <Box component="span" sx={{ color: textColor, fontSize: 26, fontWeight: 800, letterSpacing: '-0.06em', textTransform: 'lowercase' }}>
-            orim
+          <Box component="span" sx={{ color: textColor, fontSize: 26, fontWeight: 800, letterSpacing: '-0.06em', textTransform: 'uppercase' }}>
+            ORIM
           </Box>
           <Box sx={{ width: 18, height: 4, borderRadius: 99, background: 'linear-gradient(135deg, #FF6B2C 0%, #FF3D7F 50%, #7B2FFF 100%)' }} />
         </Box>

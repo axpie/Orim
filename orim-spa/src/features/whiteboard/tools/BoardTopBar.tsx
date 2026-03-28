@@ -201,7 +201,7 @@ export function BoardTopBar({
           )}
 
           {showProperties && (
-            <Tooltip title={t('properties.position')}>
+            <Tooltip title={t('properties.title', 'Eigenschaften')}>
               <IconButton
                 onClick={onOpenProperties}
                 sx={{ color: 'inherit', bgcolor: propertiesOpen ? 'rgba(255,255,255,0.14)' : undefined }}

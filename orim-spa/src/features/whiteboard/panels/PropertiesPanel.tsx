@@ -301,7 +301,7 @@ export function PropertiesPanel({ onClose, onBoardChanged }: PropertiesPanelProp
     >
       <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1 }}>
         <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
-          {t('properties.position')}
+          {t('properties.title', 'Eigenschaften')}
         </Typography>
         <IconButton size="small" onClick={onClose}>
           <CloseIcon fontSize="small" />
@@ -313,8 +313,8 @@ export function PropertiesPanel({ onClose, onBoardChanged }: PropertiesPanelProp
         <Box sx={{ p: 2 }}>
           <Typography variant="body2" color="text.secondary">
             {selected.length === 0
-              ? 'No element selected.'
-              : `${selected.length} elements selected.`}
+              ? t('properties.noElementSelected', 'Kein Element ausgewählt.')
+              : t('properties.elementsSelected', { count: selected.length, defaultValue: '{{count}} Elemente ausgewählt.' })}
           </Typography>
         </Box>
       ) : (
