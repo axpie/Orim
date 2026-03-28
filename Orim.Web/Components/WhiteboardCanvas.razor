@@ -91,6 +91,17 @@
         }
     </div>
 
+        @if (GetInlineEditingElement() is BoardElement editingElement)
+        {
+            <textarea id="whiteboard-inline-editor"
+                      @ref="_inlineEditorRef"
+                      value="@_inlineEditorText"
+                      @oninput="HandleInlineEditorInput"
+                      @onkeydown="HandleInlineEditorKeyDown"
+                      @onblur="CommitInlineTextEditAsync"
+                      style="@GetInlineEditorStyle(editingElement)"></textarea>
+        }
+
     @foreach (var cursor in RemoteCursors.Where(cursor => cursor.WorldX is not null && cursor.WorldY is not null))
     {
         <div style="@GetRemoteCursorStyle(cursor)">
@@ -133,6 +144,7 @@
     [Parameter] public EventCallback<BoardPointerPosition?> OnPointerPresenceChanged { get; set; }
     [Parameter] public string? PendingIconName { get; set; }
     [Parameter] public BoardEditor.Tool SelectedTool { get; set; }
+    [Parameter] public bool TemporaryPanActive { get; set; }
     [Parameter] public double FitRightInset { get; set; }
     [Parameter] public IReadOnlyList<BoardCursorPresence> RemoteCursors { get; set; } = [];
 
@@ -174,6 +186,15 @@
     private ResizeHandle _activeResizeHandle;
     private ResizeHandle _hoverResizeHandle;
     private ElementBounds _resizeStartBounds;
+    private bool _isTouchGestureActive;
+    private double _touchGestureStartDistance;
+    private double _touchGestureStartZoom = 1;
+    private Point _touchGestureAnchorWorld;
+    private Guid? _editingElementId;
+    private bool _editingElementUsesLabel;
+    private string _inlineEditorText = string.Empty;
+    private ElementReference _inlineEditorRef;
+    private bool _focusInlineEditor;
 
     internal record struct Point(double X, double Y);
     internal record struct Size(double Width, double Height);
@@ -300,6 +321,12 @@
                 await NotifyZoomChangedAsync();
                 StateHasChanged();
             }
+        }
+
+        if (_focusInlineEditor)
+        {
+            _focusInlineEditor = false;
+            await JS.InvokeVoidAsync("orimWhiteboard.focusElementById", "whiteboard-inline-editor");
         }
     }
 

@@ -116,7 +116,9 @@
   <data name="DrawRectangleTooltip" xml:space="preserve"><value>Draw rectangle</value></data>
   <data name="DrawCircleTooltip" xml:space="preserve"><value>Draw circle</value></data>
   <data name="DrawTriangleTooltip" xml:space="preserve"><value>Draw triangle</value></data>
+  <data name="InsertTextTooltip" xml:space="preserve"><value>Insert text</value></data>
   <data name="ConnectArrowTooltip" xml:space="preserve"><value>Connect arrow</value></data>
+  <data name="HandToolTooltip" xml:space="preserve"><value>Hand tool</value></data>
   <data name="InsertIconTooltip" xml:space="preserve"><value>Insert icon</value></data>
   <data name="ZoomOut" xml:space="preserve"><value>Zoom out</value></data>
   <data name="ZoomLevelPercent" xml:space="preserve"><value>Zoom level in percent</value></data>
@@ -135,17 +137,20 @@
   <data name="SelectionGroupsSectionTitle" xml:space="preserve"><value>Selection and groups</value></data>
   <data name="ShortcutsSectionTitle" xml:space="preserve"><value>Shortcuts</value></data>
   <data name="HelpToolsSelect" xml:space="preserve"><value>Select: click, move, and edit elements.</value></data>
+  <data name="HelpToolsHand" xml:space="preserve"><value>Hand: drag the canvas directly or hold Space temporarily while another tool is active.</value></data>
   <data name="HelpToolsShapes" xml:space="preserve"><value>Shapes: draw rectangles, circles, and triangles by clicking and dragging.</value></data>
+  <data name="HelpToolsText" xml:space="preserve"><value>Text: click once to place a text box, then type inline.</value></data>
   <data name="HelpToolsArrow" xml:space="preserve"><value>Arrow: drag from one dock point to another to connect elements.</value></data>
   <data name="HelpToolsIcon" xml:space="preserve"><value>Icon: choose an icon and place it on the board with a click.</value></data>
-  <data name="HelpSelectionMarquee" xml:space="preserve"><value>Hold Shift and drag on empty space to create a selection marquee.</value></data>
-  <data name="HelpSelectionAdditive" xml:space="preserve"><value>Cmd/Ctrl + click adds or removes elements from the selection.</value></data>
+  <data name="HelpSelectionMarquee" xml:space="preserve"><value>Drag on empty space to create a selection marquee.</value></data>
+  <data name="HelpSelectionAdditive" xml:space="preserve"><value>Hold Shift while clicking to add or remove elements from the selection.</value></data>
   <data name="HelpSelectionGroupMove" xml:space="preserve"><value>Grouped elements are selected and moved together.</value></data>
-  <data name="HelpSelectionSingleEdit" xml:space="preserve"><value>Resize handles and arrow endpoints stay available for single-element selections.</value></data>
+  <data name="HelpSelectionSingleEdit" xml:space="preserve"><value>Resize handles, arrow endpoints, and double-click text editing stay available for single-element selections.</value></data>
   <data name="HelpSelectionZoom" xml:space="preserve"><value>Use the +/- buttons or the percentage field to set the zoom directly.</value></data>
-  <data name="HelpSelectionSnapDisable" xml:space="preserve"><value>Hold Ctrl to temporarily disable all snapping while dragging, resizing, or connecting arrows.</value></data>
+  <data name="HelpSelectionSnapDisable" xml:space="preserve"><value>Hold Ctrl to temporarily disable all snapping while dragging, resizing, or connecting arrows. Hold Alt while dragging to duplicate.</value></data>
   <data name="ShortcutUndo" xml:space="preserve"><value>Cmd/Ctrl + Z: Undo</value></data>
   <data name="ShortcutRedo" xml:space="preserve"><value>Cmd/Ctrl + Shift + Z or Cmd/Ctrl + Y: Redo</value></data>
+  <data name="ShortcutDuplicate" xml:space="preserve"><value>Cmd/Ctrl + D or Alt + drag: Duplicate selection</value></data>
   <data name="ShortcutSelectAll" xml:space="preserve"><value>Cmd/Ctrl + A: Select all</value></data>
   <data name="ShortcutCopy" xml:space="preserve"><value>Cmd/Ctrl + C: Copy selection</value></data>
   <data name="ShortcutCut" xml:space="preserve"><value>Cmd/Ctrl + X: Cut selection</value></data>
@@ -153,6 +158,11 @@
   <data name="ShortcutGroup" xml:space="preserve"><value>Cmd/Ctrl + G: Group selection</value></data>
   <data name="ShortcutUngroup" xml:space="preserve"><value>Cmd/Ctrl + Shift + G: Ungroup</value></data>
   <data name="ShortcutDelete" xml:space="preserve"><value>Delete or Backspace: Delete selection</value></data>
+  <data name="ShortcutToolSelect" xml:space="preserve"><value>V: Select tool</value></data>
+  <data name="ShortcutToolRectangle" xml:space="preserve"><value>R: Rectangle tool</value></data>
+  <data name="ShortcutToolText" xml:space="preserve"><value>T: Text tool</value></data>
+  <data name="ShortcutToolHand" xml:space="preserve"><value>H or Space: Hand tool and temporary pan</value></data>
+  <data name="ShortcutStartInlineEdit" xml:space="preserve"><value>Enter or double-click: Start inline text editing</value></data>
   <data name="Close" xml:space="preserve"><value>Close</value></data>
   <data name="MaterialIconsLoadError" xml:space="preserve"><value>The embedded Material Design Icons could not be loaded.</value></data>
   <data name="RenameBoard" xml:space="preserve"><value>Rename board</value></data>
@@ -174,6 +184,8 @@
   <data name="BoardMemberRemoved" xml:space="preserve"><value>Member was removed from the board.</value></data>
   <data name="BoardOnboardingDescription" xml:space="preserve"><value>Start with the key tools or share your board with others.</value></data>
   <data name="BoardOnboardingTipDraw" xml:space="preserve"><value>Use shapes and arrows to capture your first ideas quickly.</value></data>
+  <data name="BoardOnboardingTipPan" xml:space="preserve"><value>Hold Space to pan quickly or switch to the hand tool for navigation.</value></data>
+  <data name="BoardOnboardingTipEditText" xml:space="preserve"><value>Use the text tool for notes and double-click shapes to edit labels inline.</value></data>
   <data name="BoardOnboardingTipImport" xml:space="preserve"><value>Import existing JSON boards and continue working on them.</value></data>
   <data name="BoardOnboardingTipShare" xml:space="preserve"><value>Share your board with members or via link.</value></data>
   <data name="BoardOnboardingTitle" xml:space="preserve"><value>Quick start</value></data>

@@ -116,7 +116,9 @@
   <data name="DrawRectangleTooltip" xml:space="preserve"><value>Rechteck zeichnen</value></data>
   <data name="DrawCircleTooltip" xml:space="preserve"><value>Kreis zeichnen</value></data>
   <data name="DrawTriangleTooltip" xml:space="preserve"><value>Dreieck zeichnen</value></data>
+  <data name="InsertTextTooltip" xml:space="preserve"><value>Text einfügen</value></data>
   <data name="ConnectArrowTooltip" xml:space="preserve"><value>Pfeil verbinden</value></data>
+  <data name="HandToolTooltip" xml:space="preserve"><value>Hand-Werkzeug</value></data>
   <data name="InsertIconTooltip" xml:space="preserve"><value>Symbol einfügen</value></data>
   <data name="ZoomOut" xml:space="preserve"><value>Zoom verkleinern</value></data>
   <data name="ZoomLevelPercent" xml:space="preserve"><value>Zoomstufe in Prozent</value></data>
@@ -135,17 +137,20 @@
   <data name="SelectionGroupsSectionTitle" xml:space="preserve"><value>Auswahl und Gruppen</value></data>
   <data name="ShortcutsSectionTitle" xml:space="preserve"><value>Shortcuts</value></data>
   <data name="HelpToolsSelect" xml:space="preserve"><value>Auswahl: Elemente anklicken, verschieben und bearbeiten.</value></data>
+  <data name="HelpToolsHand" xml:space="preserve"><value>Hand: Die Fläche direkt ziehen oder Space gedrückt halten, solange ein anderes Werkzeug aktiv ist.</value></data>
   <data name="HelpToolsShapes" xml:space="preserve"><value>Formen: Rechteck, Kreis und Dreieck mit Klick und Ziehen aufziehen.</value></data>
+  <data name="HelpToolsText" xml:space="preserve"><value>Text: Einmal klicken, um ein Textfeld zu platzieren, und direkt inline schreiben.</value></data>
   <data name="HelpToolsArrow" xml:space="preserve"><value>Pfeil: Von einem Andockpunkt zum anderen ziehen, um Elemente zu verbinden.</value></data>
   <data name="HelpToolsIcon" xml:space="preserve"><value>Symbol: Symbol wählen und danach per Klick auf dem Board platzieren.</value></data>
-  <data name="HelpSelectionMarquee" xml:space="preserve"><value>Shift gedrückt halten und auf leerer Fläche ziehen: Selektionsrahmen aufziehen.</value></data>
-  <data name="HelpSelectionAdditive" xml:space="preserve"><value>Cmd/Ctrl + Klick: Mehrere Elemente zur Auswahl hinzufügen oder entfernen.</value></data>
+  <data name="HelpSelectionMarquee" xml:space="preserve"><value>Auf leerer Fläche ziehen: Selektionsrahmen aufziehen.</value></data>
+  <data name="HelpSelectionAdditive" xml:space="preserve"><value>Shift + Klick: Mehrere Elemente zur Auswahl hinzufügen oder entfernen.</value></data>
   <data name="HelpSelectionGroupMove" xml:space="preserve"><value>Gruppierte Elemente werden gemeinsam ausgewählt und gemeinsam verschoben.</value></data>
-  <data name="HelpSelectionSingleEdit" xml:space="preserve"><value>Größe ändern und Pfeil-Endpunkte ziehen funktioniert weiterhin bei Einzelauswahl.</value></data>
+  <data name="HelpSelectionSingleEdit" xml:space="preserve"><value>Größe ändern, Pfeil-Endpunkte ziehen und Inline-Textbearbeitung bleiben bei Einzelauswahl verfügbar.</value></data>
   <data name="HelpSelectionZoom" xml:space="preserve"><value>Mit den +/- Buttons oder der Prozentanzeige oben kann die Zoomstufe direkt gesetzt werden.</value></data>
-  <data name="HelpSelectionSnapDisable" xml:space="preserve"><value>Strg gedrückt halten deaktiviert das Snapping vorübergehend beim Verschieben, Größenändern und Verbinden von Pfeilen.</value></data>
+  <data name="HelpSelectionSnapDisable" xml:space="preserve"><value>Strg gedrückt halten deaktiviert das Snapping vorübergehend beim Verschieben, Größenändern und Verbinden von Pfeilen. Alt + Ziehen dupliziert die Auswahl.</value></data>
   <data name="ShortcutUndo" xml:space="preserve"><value>Cmd/Ctrl + Z: Rückgängig</value></data>
   <data name="ShortcutRedo" xml:space="preserve"><value>Cmd/Ctrl + Shift + Z oder Cmd/Ctrl + Y: Wiederholen</value></data>
+  <data name="ShortcutDuplicate" xml:space="preserve"><value>Cmd/Ctrl + D oder Alt + Ziehen: Auswahl duplizieren</value></data>
   <data name="ShortcutSelectAll" xml:space="preserve"><value>Cmd/Ctrl + A: Alles auswählen</value></data>
   <data name="ShortcutCopy" xml:space="preserve"><value>Cmd/Ctrl + C: Auswahl kopieren</value></data>
   <data name="ShortcutCut" xml:space="preserve"><value>Cmd/Ctrl + X: Auswahl ausschneiden</value></data>
@@ -153,6 +158,11 @@
   <data name="ShortcutGroup" xml:space="preserve"><value>Cmd/Ctrl + G: Auswahl gruppieren</value></data>
   <data name="ShortcutUngroup" xml:space="preserve"><value>Cmd/Ctrl + Shift + G: Gruppe auflösen</value></data>
   <data name="ShortcutDelete" xml:space="preserve"><value>Entf oder Backspace: Auswahl löschen</value></data>
+  <data name="ShortcutToolSelect" xml:space="preserve"><value>V: Auswahlwerkzeug</value></data>
+  <data name="ShortcutToolRectangle" xml:space="preserve"><value>R: Rechteck-Werkzeug</value></data>
+  <data name="ShortcutToolText" xml:space="preserve"><value>T: Text-Werkzeug</value></data>
+  <data name="ShortcutToolHand" xml:space="preserve"><value>H oder Space: Hand-Werkzeug und temporäres Schwenken</value></data>
+  <data name="ShortcutStartInlineEdit" xml:space="preserve"><value>Enter oder Doppelklick: Inline-Textbearbeitung starten</value></data>
   <data name="Close" xml:space="preserve"><value>Schließen</value></data>
   <data name="MaterialIconsLoadError" xml:space="preserve"><value>Die lokal eingebetteten MaterialDesignIcons konnten nicht geladen werden.</value></data>
   <data name="RenameBoard" xml:space="preserve"><value>Board umbenennen</value></data>
@@ -174,6 +184,8 @@
   <data name="BoardMemberRemoved" xml:space="preserve"><value>Mitglied wurde vom Board entfernt.</value></data>
   <data name="BoardOnboardingDescription" xml:space="preserve"><value>Starte mit den wichtigsten Werkzeugen oder teile dein Board mit anderen.</value></data>
   <data name="BoardOnboardingTipDraw" xml:space="preserve"><value>Nutze Formen und Pfeile, um schnell erste Ideen festzuhalten.</value></data>
+  <data name="BoardOnboardingTipPan" xml:space="preserve"><value>Halte Space gedrückt oder nutze das Hand-Werkzeug, um dich schnell über das Board zu bewegen.</value></data>
+  <data name="BoardOnboardingTipEditText" xml:space="preserve"><value>Nutze das Text-Werkzeug für Notizen und bearbeite Shape-Beschriftungen per Doppelklick direkt im Board.</value></data>
   <data name="BoardOnboardingTipImport" xml:space="preserve"><value>Importiere vorhandene JSON-Boards und arbeite daran weiter.</value></data>
   <data name="BoardOnboardingTipShare" xml:space="preserve"><value>Teile dein Board per Link oder über Mitgliederrollen.</value></data>
   <data name="BoardOnboardingTitle" xml:space="preserve"><value>Schnellstart</value></data>

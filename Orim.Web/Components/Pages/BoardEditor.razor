@@ -70,6 +70,11 @@ else
                                        Color="@(_selectedTool == Tool.Select ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SelectTool(Tool.Select))" />
                     </MudTooltip>
+                    <MudTooltip Text="@Localizer["HandToolTooltip"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.PanTool"
+                                       Color="@(_selectedTool == Tool.Hand ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SelectTool(Tool.Hand))" />
+                    </MudTooltip>
                     <MudTooltip Text="@Localizer["DrawRectangleTooltip"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.Rectangle"
                                        Color="@(_selectedTool == Tool.Rectangle ? Color.Primary : Color.Default)"
@@ -84,6 +89,11 @@ else
                         <MudIconButton Icon="@Icons.Material.Filled.ChangeHistory"
                                        Color="@(_selectedTool == Tool.Triangle ? Color.Primary : Color.Default)"
                                        OnClick="@(() => SelectTool(Tool.Triangle))" />
+                    </MudTooltip>
+                    <MudTooltip Text="@Localizer["InsertTextTooltip"]" Arrow="true">
+                        <MudIconButton Icon="@Icons.Material.Filled.TextFields"
+                                       Color="@(_selectedTool == Tool.Text ? Color.Primary : Color.Default)"
+                                       OnClick="@(() => SelectTool(Tool.Text))" />
                     </MudTooltip>
                     <MudTooltip Text="@Localizer["ConnectArrowTooltip"]" Arrow="true">
                         <MudIconButton Icon="@Icons.Material.Filled.NorthEast"
@@ -240,6 +250,13 @@ else
                                    OnClick="@(() => SelectTool(Tool.Select))" />
                 </MudTooltip>
 
+                <MudTooltip Text="@Localizer["HandToolTooltip"]" Arrow="true">
+                    <MudIconButton Icon="@Icons.Material.Filled.PanTool"
+                                   Size="Size.Small"
+                                   Color="@(_selectedTool == Tool.Hand ? Color.Primary : Color.Default)"
+                                   OnClick="@(() => SelectTool(Tool.Hand))" />
+                </MudTooltip>
+
                 @* Shapes popover *@
                 <MudMenu Icon="@GetMobileShapeIcon()" Size="Size.Small"
                          Color="@(IsShapeTool(_selectedTool) ? Color.Primary : Color.Default)"
@@ -250,6 +267,8 @@ else
                                  OnClick="@(() => SelectTool(Tool.Circle))">@Localizer["DrawCircleTooltip"]</MudMenuItem>
                     <MudMenuItem Icon="@Icons.Material.Filled.ChangeHistory"
                                  OnClick="@(() => SelectTool(Tool.Triangle))">@Localizer["DrawTriangleTooltip"]</MudMenuItem>
+                    <MudMenuItem Icon="@Icons.Material.Filled.TextFields"
+                                 OnClick="@(() => SelectTool(Tool.Text))">@Localizer["InsertTextTooltip"]</MudMenuItem>
                     <MudMenuItem Icon="@Icons.Material.Filled.AddReaction"
                                  OnClick="@OpenIconPickerAsync">@Localizer["InsertIconTooltip"]</MudMenuItem>
                 </MudMenu>
@@ -299,6 +318,7 @@ else
                  style="flex: 1; min-width: 0; min-height: 0; overflow: hidden; position: relative; outline: none;"
                   @onmousedown="FocusEditorSurfaceAsync"
                   @onkeydown="HandleKeyDown"
+                @onkeyup="HandleKeyUp"
                  role="region"
                  aria-label="@Localizer["BoardCanvasRegionLabel"]"
                  aria-describedby="board-editor-shortcuts board-editor-status"
@@ -324,6 +344,7 @@ else
                                           OnToolChanged="@HandleToolChanged"
                                           OnElementDoubleTapped="@OnCanvasElementDoubleTapped"
                                           PendingIconName="@_pendingIconName"
+                                          TemporaryPanActive="@_temporaryPanActive"
                                           SelectedTool="@_selectedTool" />
                     </ChildContent>
                     <ErrorContent>
@@ -380,12 +401,17 @@ else
                         <MudText Typo="Typo.body2" Class="orim-board-muted-text mt-2">@Localizer["BoardOnboardingDescription"]</MudText>
                         <ul class="orim-empty-state-list">
                             <li>@Localizer["BoardOnboardingTipDraw"]</li>
+                            <li>@Localizer["BoardOnboardingTipPan"]</li>
+                            <li>@Localizer["BoardOnboardingTipEditText"]</li>
                             <li>@Localizer["BoardOnboardingTipShare"]</li>
                             <li>@Localizer["BoardOnboardingTipImport"]</li>
                         </ul>
                         <div class="d-flex flex-wrap mt-4" style="gap: 12px;">
                             <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="@(() => SelectTool(Tool.Rectangle))">
                                 @Localizer["DrawRectangleTooltip"]
+                            </MudButton>
+                            <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@(() => SelectTool(Tool.Text))">
+                                @Localizer["InsertTextTooltip"]
                             </MudButton>
                             <MudButton Variant="Variant.Outlined" Color="Color.Primary" OnClick="@OpenHelpDialog">
                                 @Localizer["OpenHelp"]
@@ -450,7 +476,9 @@ else
             <MudText Typo="Typo.subtitle2" Class="mb-2">@Localizer["ToolsSectionTitle"]</MudText>
             <ul style="margin:0 0 16px 18px; padding:0; color:#334155; line-height:1.5;">
                 <li>@Localizer["HelpToolsSelect"]</li>
+                <li>@Localizer["HelpToolsHand"]</li>
                 <li>@Localizer["HelpToolsShapes"]</li>
+                <li>@Localizer["HelpToolsText"]</li>
                 <li>@Localizer["HelpToolsArrow"]</li>
                 <li>@Localizer["HelpToolsIcon"]</li>
             </ul>
@@ -469,6 +497,7 @@ else
             <ul style="margin:0 0 0 18px; padding:0; color:#334155; line-height:1.5;">
                 <li>@Localizer["ShortcutUndo"]</li>
                 <li>@Localizer["ShortcutRedo"]</li>
+                <li>@Localizer["ShortcutDuplicate"]</li>
                 <li>@Localizer["ShortcutSelectAll"]</li>
                 <li>@Localizer["ShortcutCopy"]</li>
                 <li>@Localizer["ShortcutCut"]</li>
@@ -476,6 +505,11 @@ else
                 <li>@Localizer["ShortcutGroup"]</li>
                 <li>@Localizer["ShortcutUngroup"]</li>
                 <li>@Localizer["ShortcutDelete"]</li>
+                <li>@Localizer["ShortcutToolSelect"]</li>
+                <li>@Localizer["ShortcutToolRectangle"]</li>
+                <li>@Localizer["ShortcutToolText"]</li>
+                <li>@Localizer["ShortcutToolHand"]</li>
+                <li>@Localizer["ShortcutStartInlineEdit"]</li>
             </ul>
         </DialogContent>
         <DialogActions>
@@ -761,6 +795,7 @@ else
     private bool _mobilePropertiesDialogVisible;
     private bool _chatPanelOpen;
     private bool _propertiesPanelOpen = false;
+    private bool _temporaryPanActive;
     private bool _boardLabelOutlineEnabled = true;
     private bool _boardArrowOutlineEnabled = true;
     private BoardVisibility _boardVisibility = BoardVisibility.Private;
@@ -895,11 +930,6 @@ else
             await _editorSurface.FocusAsync();
             var viewport = await JS.InvokeAsync<ViewportProfile>("orimWhiteboard.getViewportProfile");
             _useCompactLayout = viewport.IsCompact;
-            if (!_useCompactLayout)
-            {
-                _propertiesPanelOpen = true;
-            }
-
             StateHasChanged();
         }
     }
@@ -908,7 +938,11 @@ else
         ? "orim-board-editor orim-board-editor--compact"
         : "orim-board-editor";
 
-    private void SelectTool(Tool tool) => _selectedTool = tool;
+    private void SelectTool(Tool tool)
+    {
+        _temporaryPanActive = false;
+        _selectedTool = tool;
+    }
 
     private void ToggleFormatTransfer()
     {
@@ -961,7 +995,7 @@ else
     {
         if (_board is null) return;
         _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
-        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId);
+        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId, BoardChangeKind.Content);
         if (_canvas is not null)
         {
             _canvas.ForceRerender();
@@ -994,10 +1028,23 @@ else
 
     private void CloseMobilePropertiesDialog() => _mobilePropertiesDialogVisible = false;
 
-    private void OnCanvasElementDoubleTapped()
+    private async Task OnCanvasElementDoubleTapped()
     {
-        if (_selectedElement is not null && _canEdit)
+        if (_selectedElement is null || !_canEdit)
+        {
+            return;
+        }
+
+        if (_useCompactLayout)
+        {
             OpenMobilePropertiesDialog();
+            return;
+        }
+
+        if (_canvas is not null)
+        {
+            await _canvas.BeginInlineTextEditingAsync();
+        }
     }
 
     private async Task OnMobilePropertyChanged()
@@ -1008,13 +1055,16 @@ else
 
     private string GetMobileShapeIcon() => _selectedTool switch
     {
+        Tool.Hand => Icons.Material.Filled.PanTool,
         Tool.Circle => Icons.Material.Filled.PanoramaFishEye,
         Tool.Triangle => Icons.Material.Filled.ChangeHistory,
+        Tool.Text => Icons.Material.Filled.TextFields,
+        Tool.Icon => Icons.Material.Filled.AddReaction,
         _ => Icons.Material.Filled.Rectangle
     };
 
     private static bool IsShapeTool(Tool tool) =>
-        tool is Tool.Rectangle or Tool.Circle or Tool.Triangle;
+        tool is Tool.Rectangle or Tool.Circle or Tool.Triangle or Tool.Text or Tool.Icon;
 
     private void CloseBoardSettingsDialog()
     {
@@ -1096,7 +1146,7 @@ else
         }
 
         _boardSettingsDialogVisible = false;
-        await SaveBoard();
+        await SaveBoard(kind: BoardChangeKind.Presentation);
         UpdateScreenReaderStatus(Localizer["BoardSettingsSavedAnnouncement"]);
         _canvas?.ForceRerender();
         StateHasChanged();
@@ -1132,7 +1182,7 @@ else
         }
 
         _board.Title = _renameBoardTitle.Trim();
-        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId);
+        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId, BoardChangeKind.Metadata);
         _renameDialogVisible = false;
         StateHasChanged();
     }
@@ -1238,6 +1288,7 @@ else
 
     private Task HandleToolChanged(Tool tool)
     {
+        _temporaryPanActive = false;
         _selectedTool = tool;
         UpdateScreenReaderStatus(Localizer["ToolSelectedAnnouncement", GetToolLabel(tool)]);
         StateHasChanged();
@@ -1254,10 +1305,17 @@ else
 
     private async Task HandleKeyDown(KeyboardEventArgs e)
     {
-        if (_board is null || !_canEdit) return;
-
         var hasModifier = e.CtrlKey || e.MetaKey;
         var key = e.Key?.ToLowerInvariant();
+
+        if (e.Key == " " || string.Equals(e.Code, "Space", StringComparison.OrdinalIgnoreCase))
+        {
+            _temporaryPanActive = true;
+            StateHasChanged();
+            return;
+        }
+
+        if (_board is null || !_canEdit) return;
 
         if (hasModifier)
         {
@@ -1284,6 +1342,9 @@ else
                 case "v":
                     await PasteClipboardElementAsync();
                     return;
+                case "d":
+                    await DuplicateSelectedElementAsync();
+                    return;
                 case "g" when e.ShiftKey:
                     await UngroupSelectedElementsAsync();
                     return;
@@ -1299,6 +1360,32 @@ else
             return;
         }
 
+        switch (key)
+        {
+            case "v":
+                SelectTool(Tool.Select);
+                StateHasChanged();
+                return;
+            case "r":
+                SelectTool(Tool.Rectangle);
+                StateHasChanged();
+                return;
+            case "t":
+                SelectTool(Tool.Text);
+                StateHasChanged();
+                return;
+            case "h":
+                SelectTool(Tool.Hand);
+                StateHasChanged();
+                return;
+        }
+
+        if (e.Key == "Enter" && _canvas is not null)
+        {
+            await _canvas.BeginInlineTextEditingAsync();
+            return;
+        }
+
         if (TryGetKeyboardMoveDelta(e, out var deltaX, out var deltaY))
         {
             await MoveSelectedElementsAsync(deltaX, deltaY);
@@ -1309,6 +1396,17 @@ else
         {
             await DeleteSelectedElementAsync();
         }
+    }
+
+    private Task HandleKeyUp(KeyboardEventArgs e)
+    {
+        if (e.Key == " " || string.Equals(e.Code, "Space", StringComparison.OrdinalIgnoreCase))
+        {
+            _temporaryPanActive = false;
+            StateHasChanged();
+        }
+
+        return Task.CompletedTask;
     }
 
     private async Task FocusEditorSurfaceAsync()
@@ -1389,6 +1487,27 @@ else
         }
 
         await SaveBoard();
+        StateHasChanged();
+    }
+
+    private async Task DuplicateSelectedElementAsync()
+    {
+        if (_board is null || _selectedElements.Count == 0)
+        {
+            return;
+        }
+
+        var duplicatedElements = CloneForPaste(_selectedElements.OrderBy(element => element.ZIndex).ToList(), _board.Elements.Count, 1);
+        _board.Elements.AddRange(duplicatedElements);
+        _selectedElements = duplicatedElements;
+        _selectedElement = duplicatedElements.LastOrDefault();
+        if (_canvas is not null)
+        {
+            await _canvas.SelectElementsAsync(duplicatedElements);
+        }
+
+        await SaveBoard();
+        UpdateScreenReaderStatus(Localizer["SelectionCountAnnouncement", duplicatedElements.Count]);
         StateHasChanged();
     }
 
@@ -1481,7 +1600,7 @@ else
 
     private Task HandleBoardChanged() => SaveBoard();
 
-    private async Task SaveBoard(bool recordHistory = true)
+    private async Task SaveBoard(bool recordHistory = true, BoardChangeKind kind = BoardChangeKind.Content)
     {
         if (_board is null) return;
 
@@ -1501,7 +1620,7 @@ else
             await SyncSelectionToBoardAsync();
         }
 
-        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId);
+        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId, kind);
     }
 
     private async Task PersistBoardStateAsync()
@@ -1513,7 +1632,7 @@ else
 
         _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
         await SyncSelectionToBoardAsync();
-        await SaveBoard(recordHistory: false);
+        await SaveBoard(recordHistory: false, kind: BoardChangeKind.Content);
         StateHasChanged();
     }
 
@@ -1841,7 +1960,7 @@ else
         }
 
         var snapshot = BoardService.CreateSnapshot(_board, _snapshotName, _userId, _username);
-        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId);
+        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId, BoardChangeKind.Metadata);
         _snapshotName = string.Empty;
         SetBoardSettingsMessage(Localizer["SnapshotCreated", snapshot.Name], Severity.Success, announce: true);
     }
@@ -1884,7 +2003,7 @@ else
         _selectedElement = null;
         _canvas?.ClearSelection();
         _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
-        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId);
+        await BoardService.UpdateBoardAsync(_board, _boardSyncClientId, BoardChangeKind.Content);
         _canvas?.ForceRerender();
         if (fitToContent && _canvas is not null)
         {
@@ -1937,7 +2056,7 @@ else
     {
         deltaX = 0;
         deltaY = 0;
-        var step = e.ShiftKey ? 20 : 10;
+        var step = e.ShiftKey ? 10 : 1;
         if (e.CtrlKey || e.MetaKey || e.AltKey)
         {
             return false;
@@ -1996,10 +2115,13 @@ else
             _boardLabelOutlineEnabled = _board.LabelOutlineEnabled;
             _boardArrowOutlineEnabled = _board.ArrowOutlineEnabled;
             _boardVisibility = _board.Visibility;
-            _commandStack.Clear();
+            if (notification.Kind == BoardChangeKind.Content)
+            {
+                _commandStack.Clear();
+                _formatTransferActive = false;
+                _formatTransferSourceId = null;
+            }
             _lastCommittedBoardSnapshot = CaptureBoardSnapshot(_board);
-            _formatTransferActive = false;
-            _formatTransferSourceId = null;
             if (!_canEdit)
             {
                 _selectedTool = Tool.Select;
@@ -2047,9 +2169,11 @@ else
     private string GetToolLabel(Tool tool) => tool switch
     {
         Tool.Select => Localizer["Select"],
+        Tool.Hand => Localizer["HandToolTooltip"],
         Tool.Rectangle => Localizer["Rectangle"],
         Tool.Circle => Localizer["Ellipse"],
         Tool.Triangle => Localizer["Triangle"],
+        Tool.Text => Localizer["Text"],
         Tool.Arrow => Localizer["Arrow"],
         Tool.Icon => Localizer["InsertIconTooltip"],
         _ => tool.ToString()
@@ -2223,9 +2347,11 @@ else
     public enum Tool
     {
         Select,
+        Hand,
         Rectangle,
         Circle,
         Triangle,
+        Text,
         Arrow,
         Icon
     }

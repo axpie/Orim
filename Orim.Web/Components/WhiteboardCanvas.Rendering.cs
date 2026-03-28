@@ -99,10 +99,13 @@ public partial class WhiteboardCanvas
     private string GetCursor() => SelectedTool switch
     {
         _ when _isPanning => "grabbing",
+        _ when TemporaryPanActive => "grab",
         _ when _isMarqueeSelecting => "crosshair",
         _ when _isResizingSelection => GetResizeCursor(_activeResizeHandle),
         BoardEditor.Tool.Rectangle or BoardEditor.Tool.Circle or BoardEditor.Tool.Triangle => "crosshair",
         BoardEditor.Tool.Arrow => "crosshair",
+        BoardEditor.Tool.Text => "text",
+        BoardEditor.Tool.Hand => "grab",
         _ when _arrowEndpointDrag is not null || _hoverArrowEndpointHandle is not null => "pointer",
         _ when _hoverResizeHandle != ResizeHandle.None => GetResizeCursor(_hoverResizeHandle),
         _ when _isDraggingSelection => "grabbing",

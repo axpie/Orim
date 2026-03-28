@@ -167,12 +167,12 @@ public class BoardService
         ).ToList();
     }
 
-    public async Task UpdateBoardAsync(Board board, string? sourceClientId = null)
+    public async Task UpdateBoardAsync(Board board, string? sourceClientId = null, BoardChangeKind kind = BoardChangeKind.Content)
     {
         EnsureOwnerMembership(board);
         board.UpdatedAt = DateTime.UtcNow;
         await _boardRepository.SaveAsync(board);
-        await _boardChangeNotifier.NotifyBoardChangedAsync(board.Id, sourceClientId);
+        await _boardChangeNotifier.NotifyBoardChangedAsync(board.Id, sourceClientId, kind);
     }
 
     public async Task DeleteBoardAsync(Guid boardId)

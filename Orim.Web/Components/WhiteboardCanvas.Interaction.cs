@@ -50,6 +50,27 @@ public partial class WhiteboardCanvas
         (point.X - _cameraOffset.X) / _zoom,
         (point.Y - _cameraOffset.Y) / _zoom);
 
+    private bool IsPanToolActive() => SelectedTool == BoardEditor.Tool.Hand || TemporaryPanActive;
+
+    private bool HasActiveInteraction() =>
+        _isDraggingSelection
+        || _isDrawingRectangle
+        || _isMarqueeSelecting
+        || _isPanning
+        || _isResizingSelection
+        || _draftArrow is not null
+        || _arrowEndpointDrag is not null
+        || _isTouchGestureActive;
+
+    private void BeginPan(Point screenPoint, bool clearSelectionOnRelease, bool treatAsDrag)
+    {
+        _isPanning = true;
+        _panStartScreen = screenPoint;
+        _panPointerOrigin = screenPoint;
+        _clearSelectionOnPanRelease = clearSelectionOnRelease;
+        _panExceededClickThreshold = treatAsDrag;
+    }
+
     private async Task OnSurfaceMouseDown(MouseEventArgs e)
     {
         if (e.Button != 0 && e.Button != 1)
@@ -64,16 +85,18 @@ public partial class WhiteboardCanvas
 
         if (e.Button == 1)
         {
-            _isPanning = true;
-            _panStartScreen = screenPoint;
-            _panPointerOrigin = screenPoint;
-            _clearSelectionOnPanRelease = false;
-            _panExceededClickThreshold = true;
+            BeginPan(screenPoint, clearSelectionOnRelease: false, treatAsDrag: true);
             return;
         }
 
         var worldPoint = ScreenToWorld(screenPoint);
         await NotifyPointerPresenceAsync(worldPoint, force: true);
+
+        if (IsPanToolActive())
+        {
+            BeginPan(screenPoint, clearSelectionOnRelease: false, treatAsDrag: false);
+            return;
+        }
 
         if (CanEdit && TryGetShapeTypeFromTool(SelectedTool, out var shapeType))
         {
@@ -92,6 +115,12 @@ public partial class WhiteboardCanvas
                 StrokeColor = GetDefaultStrokeColor(),
                 StrokeWidth = 2
             };
+            return;
+        }
+
+        if (CanEdit && SelectedTool == BoardEditor.Tool.Text && Board is not null)
+        {
+            await CreateTextElementAtAsync(worldPoint);
             return;
         }
 
@@ -172,10 +201,8 @@ public partial class WhiteboardCanvas
         }
 
         var clicked = HitTest(worldPoint);
-        var isAdditiveSelection = e.CtrlKey || e.MetaKey;
-        var shouldStartMarqueeSelection = e.ShiftKey && clicked is null;
+        var isAdditiveSelection = e.ShiftKey || e.CtrlKey || e.MetaKey;
 
-        // Selection is only allowed in edit mode
         if (CanEdit && clicked is not null)
         {
             var selectionScope = ResolveSelectionScope(clicked);
@@ -187,24 +214,27 @@ public partial class WhiteboardCanvas
             {
                 await SetSelectionAsync(selectionScope);
             }
+
+            if (e.Detail >= 2 && SelectedTool == BoardEditor.Tool.Select && ResolveInlineEditableElement(clicked) is not null)
+            {
+                await SetSelectionAsync(selectionScope);
+                await OnElementDoubleTapped.InvokeAsync();
+                return;
+            }
         }
+
         _hoverResizeHandle = ResizeHandle.None;
 
         if (!CanEdit || SelectedTool != BoardEditor.Tool.Select)
         {
-            // Panning is always allowed (read-only viewers, shared boards)
             if (clicked is null)
             {
-                _isPanning = true;
-                _panStartScreen = screenPoint;
-                _panPointerOrigin = screenPoint;
-                _clearSelectionOnPanRelease = false;
-                _panExceededClickThreshold = false;
+                BeginPan(screenPoint, clearSelectionOnRelease: false, treatAsDrag: false);
             }
             return;
         }
 
-        if (shouldStartMarqueeSelection)
+        if (clicked is null)
         {
             _isMarqueeSelecting = true;
             _marqueeStart = worldPoint;
@@ -213,19 +243,14 @@ public partial class WhiteboardCanvas
             return;
         }
 
-        if (clicked is null)
-        {
-            _isPanning = true;
-            _panStartScreen = screenPoint;
-            _panPointerOrigin = screenPoint;
-            _clearSelectionOnPanRelease = true;
-            _panExceededClickThreshold = false;
-            return;
-        }
-
         if (clicked is ArrowElement)
         {
             return;
+        }
+
+        if (e.AltKey)
+        {
+            await DuplicateSelectionForDragAsync();
         }
 
         _dragStartPositions.Clear();
@@ -240,7 +265,7 @@ public partial class WhiteboardCanvas
         }
 
         _isDraggingSelection = true;
-        _hasInteractionChanged = false;
+        _hasInteractionChanged = e.AltKey;
         _dragStartPointer = worldPoint;
     }
 
@@ -368,7 +393,9 @@ public partial class WhiteboardCanvas
     private async Task OnSurfaceMouseLeave(MouseEventArgs _)
     {
         await ClearPointerPresenceAsync();
-        await FinalizeInteractionAsync(null);
+        _hoverResizeHandle = ResizeHandle.None;
+        _hoverArrowEndpointHandle = null;
+        StateHasChanged();
     }
 
     private async Task OnSurfaceWheel(WheelEventArgs e)
@@ -383,12 +410,24 @@ public partial class WhiteboardCanvas
     [JSInvokable]
     public async Task OnTouchStartFromJs(double clientX, double clientY)
     {
+        if (_isTouchGestureActive)
+        {
+            return;
+        }
+
         await RefreshSurfaceRectAsync();
         var screenPoint = GetScreenPointerFromCoords(clientX, clientY);
         var worldPoint = ScreenToWorld(screenPoint);
         _lastTouchWorldPoint = worldPoint;
         await NotifyPointerPresenceAsync(worldPoint, force: true);
         ClearAlignmentGuides();
+
+        if (IsPanToolActive())
+        {
+            BeginPan(screenPoint, clearSelectionOnRelease: false, treatAsDrag: false);
+            StateHasChanged();
+            return;
+        }
 
         if (CanEdit && TryGetShapeTypeFromTool(SelectedTool, out var shapeType))
         {
@@ -407,6 +446,13 @@ public partial class WhiteboardCanvas
                 StrokeColor = GetDefaultStrokeColor(),
                 StrokeWidth = 2
             };
+            StateHasChanged();
+            return;
+        }
+
+        if (CanEdit && SelectedTool == BoardEditor.Tool.Text && Board is not null)
+        {
+            await CreateTextElementAtAsync(worldPoint);
             StateHasChanged();
             return;
         }
@@ -515,11 +561,7 @@ public partial class WhiteboardCanvas
         {
             if (clicked is null)
             {
-                _isPanning = true;
-                _panStartScreen = screenPoint;
-                _panPointerOrigin = screenPoint;
-                _clearSelectionOnPanRelease = true;
-                _panExceededClickThreshold = false;
+                BeginPan(screenPoint, clearSelectionOnRelease: true, treatAsDrag: false);
             }
             StateHasChanged();
             return;
@@ -527,11 +569,7 @@ public partial class WhiteboardCanvas
 
         if (clicked is null)
         {
-            _isPanning = true;
-            _panStartScreen = screenPoint;
-            _panPointerOrigin = screenPoint;
-            _clearSelectionOnPanRelease = true;
-            _panExceededClickThreshold = false;
+            BeginPan(screenPoint, clearSelectionOnRelease: true, treatAsDrag: false);
             StateHasChanged();
             return;
         }
@@ -561,6 +599,11 @@ public partial class WhiteboardCanvas
     [JSInvokable]
     public async Task OnTouchMoveFromJs(double clientX, double clientY)
     {
+        if (_isTouchGestureActive)
+        {
+            return;
+        }
+
         var screenPoint = GetScreenPointerFromCoords(clientX, clientY);
         await NotifyPointerPresenceAsync(ScreenToWorld(screenPoint));
 
@@ -657,8 +700,78 @@ public partial class WhiteboardCanvas
     [JSInvokable]
     public async Task OnTouchEndFromJs()
     {
+        if (_isTouchGestureActive)
+        {
+            return;
+        }
+
         await ClearPointerPresenceAsync();
         await FinalizeInteractionAsync(_lastTouchWorldPoint);
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnTouchGestureStartFromJs(double centerX, double centerY, double distance)
+    {
+        if (_isTouchGestureActive)
+        {
+            return;
+        }
+
+        await FinalizeInteractionAsync(_lastTouchWorldPoint);
+        await RefreshSurfaceRectAsync();
+
+        var center = GetScreenPointerFromCoords(centerX, centerY);
+        _isTouchGestureActive = true;
+        _touchGestureStartDistance = Math.Max(distance, 1);
+        _touchGestureStartZoom = _zoom;
+        _touchGestureAnchorWorld = ScreenToWorld(center);
+    }
+
+    [JSInvokable]
+    public async Task OnTouchGestureChangeFromJs(double centerX, double centerY, double distance)
+    {
+        if (!_isTouchGestureActive)
+        {
+            return;
+        }
+
+        var center = GetScreenPointerFromCoords(centerX, centerY);
+        var scale = Math.Max(distance, 1) / _touchGestureStartDistance;
+        _zoom = Math.Clamp(_touchGestureStartZoom * scale, MinZoom, MaxZoom);
+        _cameraOffset = new Point(
+            center.X - _touchGestureAnchorWorld.X * _zoom,
+            center.Y - _touchGestureAnchorWorld.Y * _zoom);
+
+        await NotifyPointerPresenceAsync(ScreenToWorld(center));
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnTouchGestureEndFromJs()
+    {
+        if (!_isTouchGestureActive)
+        {
+            return;
+        }
+
+        _isTouchGestureActive = false;
+        await NotifyZoomChangedAsync();
+        await ClearPointerPresenceAsync();
+        StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnGlobalMouseUpFromJs(double clientX, double clientY)
+    {
+        if (!HasActiveInteraction() || _isTouchGestureActive)
+        {
+            return;
+        }
+
+        await RefreshSurfaceRectAsync();
+        var worldPoint = ScreenToWorld(GetScreenPointerFromCoords(clientX, clientY));
+        await FinalizeInteractionAsync(worldPoint);
         StateHasChanged();
     }
 
@@ -862,6 +975,10 @@ public partial class WhiteboardCanvas
                 var selection = GetElementsInSelectionBounds(selectionBounds);
                 await SetSelectionAsync(selection);
             }
+            else
+            {
+                await SetSelectionAsync([]);
+            }
 
             _hasInteractionChanged = false;
         }
@@ -976,6 +1093,185 @@ public partial class WhiteboardCanvas
         {
             _hoverResizeHandle = ResizeHandle.None;
         }
+    }
+
+    private async Task CreateTextElementAtAsync(Point worldPoint)
+    {
+        if (Board is null)
+        {
+            return;
+        }
+
+        var textElement = new TextElement
+        {
+            X = SanitizeCoordinate(worldPoint.X),
+            Y = SanitizeCoordinate(worldPoint.Y),
+            Width = 220,
+            Height = 56,
+            Text = string.Empty,
+            FontSize = 18,
+            Color = GetDefaultStrokeColor(),
+            ZIndex = Board.Elements.Count
+        };
+
+        Board.Elements.Add(textElement);
+        InvalidateElementOrder();
+        await SetSelectionAsync([textElement]);
+        await OnBoardChanged.InvokeAsync();
+        await OnToolChanged.InvokeAsync(BoardEditor.Tool.Select);
+        await BeginInlineTextEditingAsync();
+    }
+
+    private async Task DuplicateSelectionForDragAsync()
+    {
+        if (Board is null || _selectedElements.Count == 0)
+        {
+            return;
+        }
+
+        var duplicatedElements = CloneSelectionForDrag(_selectedElements.OrderBy(element => element.ZIndex).ToList(), Board.Elements.Count);
+        if (duplicatedElements.Count == 0)
+        {
+            return;
+        }
+
+        Board.Elements.AddRange(duplicatedElements);
+        InvalidateElementOrder();
+        await SetSelectionAsync(duplicatedElements);
+    }
+
+    private static List<BoardElement> CloneSelectionForDrag(IReadOnlyList<BoardElement> sources, int startingZIndex)
+    {
+        var clones = sources.Select(CloneElement).ToList();
+        var idMap = new Dictionary<Guid, Guid>();
+        var groupMap = new Dictionary<Guid, Guid>();
+
+        for (var index = 0; index < sources.Count; index++)
+        {
+            var source = sources[index];
+            var clone = clones[index];
+            var newId = Guid.NewGuid();
+            idMap[source.Id] = newId;
+            clone.Id = newId;
+            clone.ZIndex = startingZIndex + index;
+
+            if (source.GroupId is Guid groupId)
+            {
+                if (!groupMap.TryGetValue(groupId, out var newGroupId))
+                {
+                    newGroupId = Guid.NewGuid();
+                    groupMap[groupId] = newGroupId;
+                }
+
+                clone.GroupId = newGroupId;
+            }
+        }
+
+        foreach (var arrow in clones.OfType<ArrowElement>())
+        {
+            if (arrow.SourceElementId is Guid sourceId && idMap.TryGetValue(sourceId, out var mappedSourceId))
+            {
+                arrow.SourceElementId = mappedSourceId;
+            }
+
+            if (arrow.TargetElementId is Guid targetId && idMap.TryGetValue(targetId, out var mappedTargetId))
+            {
+                arrow.TargetElementId = mappedTargetId;
+            }
+        }
+
+        return clones;
+    }
+
+    private static BoardElement CloneElement(BoardElement element) => element switch
+    {
+        ShapeElement shape => CloneShape(shape),
+        TextElement text => CloneText(text),
+        ArrowElement arrow => CloneArrow(arrow),
+        IconElement icon => CloneIcon(icon),
+        _ => throw new InvalidOperationException($"Unsupported element type '{element.GetType().Name}'.")
+    };
+
+    private static ShapeElement CloneShape(ShapeElement shape)
+    {
+        var clone = new ShapeElement
+        {
+            ShapeType = shape.ShapeType,
+            FillColor = shape.FillColor,
+            StrokeColor = shape.StrokeColor,
+            StrokeWidth = shape.StrokeWidth,
+            BorderLineStyle = shape.BorderLineStyle
+        };
+
+        CopySharedElementProperties(shape, clone);
+        return clone;
+    }
+
+    private static TextElement CloneText(TextElement text)
+    {
+        var clone = new TextElement
+        {
+            Text = text.Text,
+            FontSize = text.FontSize,
+            Color = text.Color,
+            IsBold = text.IsBold,
+            IsItalic = text.IsItalic
+        };
+
+        CopySharedElementProperties(text, clone);
+        return clone;
+    }
+
+    private static ArrowElement CloneArrow(ArrowElement arrow)
+    {
+        var clone = new ArrowElement
+        {
+            SourceElementId = arrow.SourceElementId,
+            TargetElementId = arrow.TargetElementId,
+            SourceX = arrow.SourceX,
+            SourceY = arrow.SourceY,
+            TargetX = arrow.TargetX,
+            TargetY = arrow.TargetY,
+            SourceDock = arrow.SourceDock,
+            TargetDock = arrow.TargetDock,
+            StrokeColor = arrow.StrokeColor,
+            StrokeWidth = arrow.StrokeWidth,
+            LineStyle = arrow.LineStyle,
+            SourceHeadStyle = arrow.SourceHeadStyle,
+            TargetHeadStyle = arrow.TargetHeadStyle,
+            RouteStyle = arrow.RouteStyle,
+            OrthogonalMiddleCoordinate = arrow.OrthogonalMiddleCoordinate
+        };
+
+        CopySharedElementProperties(arrow, clone);
+        return clone;
+    }
+
+    private static IconElement CloneIcon(IconElement icon)
+    {
+        var clone = new IconElement
+        {
+            IconName = icon.IconName,
+            Color = icon.Color
+        };
+
+        CopySharedElementProperties(icon, clone);
+        return clone;
+    }
+
+    private static void CopySharedElementProperties(BoardElement source, BoardElement target)
+    {
+        target.GroupId = source.GroupId;
+        target.X = source.X;
+        target.Y = source.Y;
+        target.Width = source.Width;
+        target.Height = source.Height;
+        target.ZIndex = source.ZIndex;
+        target.Rotation = source.Rotation;
+        target.Label = source.Label;
+        target.LabelFontSize = source.LabelFontSize;
+        target.LabelHorizontalAlignment = source.LabelHorizontalAlignment;
+        target.LabelVerticalAlignment = source.LabelVerticalAlignment;
     }
 
     private SelectionBounds GetSelectionBounds()
