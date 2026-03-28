@@ -1,0 +1,242 @@
+using System.Security.Claims;
+using Microsoft.AspNetCore.SignalR;
+using Orim.Core.Models;
+using Orim.Core.Services;
+
+namespace Orim.Api.Hubs;
+
+public sealed class BoardHub : Hub
+{
+    private const string JoinedBoardIdKey = "joined-board-id";
+    private const string JoinedCanEditKey = "joined-can-edit";
+    private readonly BoardPresenceService _presenceService;
+    private readonly BoardService _boardService;
+
+    public BoardHub(BoardPresenceService presenceService, BoardService boardService)
+    {
+        _presenceService = presenceService;
+        _boardService = boardService;
+    }
+
+    public async Task JoinBoard(Guid boardId, string? shareToken = null, string? sharePassword = null, string? requestedDisplayName = null)
+    {
+        var board = await AuthorizeBoardAccessAsync(boardId, shareToken, sharePassword, BoardRole.Viewer);
+        if (board is null)
+        {
+            throw new HubException("Board access denied.");
+        }
+
+        var groupName = BoardGroup(boardId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+        Context.Items[JoinedBoardIdKey] = boardId;
+        Context.Items[JoinedCanEditKey] = CanEditBoard(board, shareToken, sharePassword);
+
+        var displayName = ResolveDisplayName(requestedDisplayName);
+        var clientId = Context.ConnectionId;
+        var color = BoardPresenceIdentity.ResolveColor(clientId);
+
+        var presence = new BoardCursorPresence(clientId, displayName, color, null, null, DateTime.UtcNow);
+        await _presenceService.UpsertCursorAsync(boardId, presence);
+
+        var snapshot = await GetPresenceSnapshot(boardId);
+        await Clients.Group(groupName).SendAsync("PresenceUpdated", snapshot);
+    }
+
+    public async Task LeaveBoard(Guid boardId)
+    {
+        if (!IsJoinedBoard(boardId))
+        {
+            return;
+        }
+
+        var groupName = BoardGroup(boardId);
+        await _presenceService.RemoveCursorAsync(boardId, Context.ConnectionId);
+        await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
+        Context.Items.Remove(JoinedBoardIdKey);
+        Context.Items.Remove(JoinedCanEditKey);
+
+        var snapshot = await GetPresenceSnapshot(boardId);
+        await Clients.Group(groupName).SendAsync("PresenceUpdated", snapshot);
+    }
+
+    public async Task BoardUpdated(Guid boardId, string? sourceClientId, string changeKind)
+    {
+        if (!IsJoinedBoard(boardId))
+        {
+            return;
+        }
+
+        if (!CanEditJoinedBoard())
+        {
+            return;
+        }
+
+        var groupName = BoardGroup(boardId);
+        await Clients.OthersInGroup(groupName).SendAsync("BoardChanged", new
+        {
+            boardId,
+            sourceClientId,
+            changedAtUtc = DateTime.UtcNow,
+            kind = changeKind
+        });
+    }
+
+    public async Task SyncBoardState(Guid boardId, Board board, string changeKind)
+    {
+        if (!IsJoinedBoard(boardId))
+        {
+            return;
+        }
+
+        if (!CanEditJoinedBoard())
+        {
+            return;
+        }
+
+        await Clients.OthersInGroup(BoardGroup(boardId)).SendAsync("BoardStateUpdated", new
+        {
+            boardId,
+            sourceClientId = Context.ConnectionId,
+            changedAtUtc = DateTime.UtcNow,
+            kind = changeKind,
+            board
+        });
+    }
+
+    public async Task UpdateCursor(Guid boardId, double? worldX, double? worldY)
+    {
+        if (!IsJoinedBoard(boardId))
+        {
+            return;
+        }
+
+        var displayName = ResolveDisplayName(null);
+        var clientId = Context.ConnectionId;
+        var color = BoardPresenceIdentity.ResolveColor(clientId);
+
+        var presence = new BoardCursorPresence(clientId, displayName, color, worldX, worldY, DateTime.UtcNow);
+        await _presenceService.UpsertCursorAsync(boardId, presence);
+
+        var groupName = BoardGroup(boardId);
+        await Clients.OthersInGroup(groupName).SendAsync("CursorUpdated", new
+        {
+            clientId,
+            displayName,
+            colorHex = color,
+            worldX,
+            worldY,
+            updatedAtUtc = DateTime.UtcNow
+        });
+    }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        if (TryGetJoinedBoardId(out var boardId))
+        {
+            var groupName = BoardGroup(boardId);
+            await _presenceService.RemoveCursorAsync(boardId, Context.ConnectionId);
+            await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
+
+            var snapshot = await GetPresenceSnapshot(boardId);
+            await Clients.Group(groupName).SendAsync("PresenceUpdated", snapshot);
+        }
+
+        await base.OnDisconnectedAsync(exception);
+    }
+
+    private async Task<Board?> AuthorizeBoardAccessAsync(Guid boardId, string? shareToken, string? sharePassword, BoardRole minimumRole)
+    {
+        var board = await _boardService.GetBoardAsync(boardId);
+        if (board is null)
+        {
+            return null;
+        }
+
+        var userId = ResolveUserId();
+        if (_boardService.HasAccess(board, userId, minimumRole))
+        {
+            return board;
+        }
+
+        var resolvedShareToken = shareToken ?? Context.GetHttpContext()?.Request.Query["shareToken"].ToString();
+        var resolvedSharePassword = sharePassword ?? Context.GetHttpContext()?.Request.Query["sharePassword"].ToString();
+
+        if (!string.IsNullOrWhiteSpace(resolvedShareToken)
+            && string.Equals(board.ShareLinkToken, resolvedShareToken, StringComparison.Ordinal)
+            && _boardService.HasSharedLinkAccess(board, resolvedSharePassword, minimumRole))
+        {
+            return board;
+        }
+
+        return null;
+    }
+
+    private Guid? ResolveUserId()
+    {
+        var raw = Context.User?.FindFirstValue(ClaimTypes.NameIdentifier);
+        return Guid.TryParse(raw, out var userId) ? userId : null;
+    }
+
+    private string ResolveDisplayName(string? requestedDisplayName)
+    {
+        var authenticatedName = Context.User?.FindFirstValue(ClaimTypes.Name);
+        if (!string.IsNullOrWhiteSpace(authenticatedName))
+        {
+            return authenticatedName;
+        }
+
+        if (!string.IsNullOrWhiteSpace(requestedDisplayName))
+        {
+            return requestedDisplayName.Trim();
+        }
+
+        return "Guest";
+    }
+
+    private bool TryGetJoinedBoardId(out Guid boardId)
+    {
+        if (Context.Items.TryGetValue(JoinedBoardIdKey, out var rawValue) && rawValue is Guid parsed)
+        {
+            boardId = parsed;
+            return true;
+        }
+
+        boardId = Guid.Empty;
+        return false;
+    }
+
+    private bool IsJoinedBoard(Guid boardId) => TryGetJoinedBoardId(out var joinedBoardId) && joinedBoardId == boardId;
+
+    private bool CanEditJoinedBoard() => Context.Items.TryGetValue(JoinedCanEditKey, out var rawValue) && rawValue is true;
+
+    private bool CanEditBoard(Board board, string? shareToken, string? sharePassword)
+    {
+        var userId = ResolveUserId();
+        if (_boardService.HasAccess(board, userId, BoardRole.Editor))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(shareToken)
+            && string.Equals(board.ShareLinkToken, shareToken, StringComparison.Ordinal)
+            && _boardService.HasSharedLinkAccess(board, sharePassword, BoardRole.Editor);
+    }
+
+    private Task<IReadOnlyList<BoardCursorPresence>> GetPresenceSnapshot(Guid boardId)
+    {
+        var tcs = new TaskCompletionSource<IReadOnlyList<BoardCursorPresence>>();
+        var sub = _presenceService.Subscribe(boardId, $"hub-snapshot-{Guid.NewGuid()}", snapshot =>
+        {
+            tcs.TrySetResult(snapshot);
+            return Task.CompletedTask;
+        });
+        sub.Dispose();
+
+        if (!tcs.Task.IsCompleted)
+            tcs.TrySetResult([]);
+
+        return tcs.Task;
+    }
+
+    private static string BoardGroup(Guid boardId) => $"board-{boardId}";
+}
