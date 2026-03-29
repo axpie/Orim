@@ -46,6 +46,7 @@ const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 3.5;
 const MIN_ELEMENT_SIZE = 24;
 const DOCK_SNAP_RADIUS = 28;
+const KEYBOARD_DUPLICATE_OFFSET = 32;
 const FALLBACK_BOARD_DEFAULTS = {
   surfaceColor: '#FFFFFF',
   gridColor: '#EEF2F7',
@@ -80,6 +81,77 @@ type TouchGestureState = {
   anchorWorldX: number;
   anchorWorldY: number;
 };
+
+let whiteboardClipboard: BoardElement[] = [];
+
+function isInteractiveTextTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement
+    || target instanceof HTMLTextAreaElement
+    || target instanceof HTMLSelectElement
+    || (target instanceof HTMLElement && target.isContentEditable);
+}
+
+function isTrackpadPanWheelEvent(event: WheelEvent): boolean {
+  const absDeltaX = Math.abs(event.deltaX);
+  const absDeltaY = Math.abs(event.deltaY);
+
+  return event.deltaMode === WheelEvent.DOM_DELTA_PIXEL
+    && !event.ctrlKey
+    && !event.metaKey
+    && (absDeltaX > 0 || absDeltaY < 24);
+}
+
+function cloneElementsForInsertion(
+  sourceElements: BoardElement[],
+  baseZIndex: number,
+  offsetX: number,
+  offsetY: number,
+): BoardElement[] {
+  const idMap = new Map<string, string>();
+  const groupMap = new Map<string, string>();
+
+  for (const element of sourceElements) {
+    idMap.set(element.id, uuidv4());
+    if (element.groupId && !groupMap.has(element.groupId)) {
+      groupMap.set(element.groupId, uuidv4());
+    }
+  }
+
+  return sourceElements.map((element, index) => {
+    const clone = structuredClone(element) as BoardElement;
+    clone.id = idMap.get(element.id) ?? uuidv4();
+    clone.x += offsetX;
+    clone.y += offsetY;
+    clone.zIndex = baseZIndex + index;
+
+    if (clone.groupId) {
+      clone.groupId = groupMap.get(clone.groupId) ?? clone.groupId;
+    }
+
+    if (clone.$type === 'arrow') {
+      if (clone.sourceElementId && idMap.has(clone.sourceElementId)) {
+        clone.sourceElementId = idMap.get(clone.sourceElementId) ?? clone.sourceElementId;
+      }
+      if (clone.targetElementId && idMap.has(clone.targetElementId)) {
+        clone.targetElementId = idMap.get(clone.targetElementId) ?? clone.targetElementId;
+      }
+      if (clone.sourceX != null) {
+        clone.sourceX += offsetX;
+      }
+      if (clone.sourceY != null) {
+        clone.sourceY += offsetY;
+      }
+      if (clone.targetX != null) {
+        clone.targetX += offsetX;
+      }
+      if (clone.targetY != null) {
+        clone.targetY += offsetY;
+      }
+    }
+
+    return clone;
+  });
+}
 
 function getResizeCursor(handle: ResizeHandle | null | undefined): string | null {
   switch (handle) {
@@ -125,7 +197,6 @@ export function WhiteboardCanvas({
   const setCamera = useBoardStore((s) => s.setCamera);
   const addElement = useBoardStore((s) => s.addElement);
   const updateElement = useBoardStore((s) => s.updateElement);
-  const removeElements = useBoardStore((s) => s.removeElements);
   const setElements = useBoardStore((s) => s.setElements);
   const remoteCursors = useBoardStore((s) => s.remoteCursors);
   const pendingIconName = useBoardStore((s) => s.pendingIconName);
@@ -190,6 +261,7 @@ export function WhiteboardCanvas({
   // Panning
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number; cx: number; cy: number } | null>(null);
+  const [spacePanActive, setSpacePanActive] = useState(false);
 
   const expandSelectionWithGroups = useCallback((ids: string[]): string[] => {
     if (ids.length === 0) {
@@ -216,6 +288,170 @@ export function WhiteboardCanvas({
     return [...selection];
   }, [elements]);
 
+  const getSelectedElements = useCallback(() => {
+    const selectedIdSet = new Set(selectedIds);
+    return elements
+      .filter((element) => selectedIdSet.has(element.id))
+      .sort((left, right) => (left.zIndex ?? 0) - (right.zIndex ?? 0));
+  }, [elements, selectedIds]);
+
+  const deleteSelectedElements = useCallback(() => {
+    if (!editable || selectedIds.length === 0) {
+      return;
+    }
+
+    const before = [...elements];
+    const selectedIdSet = new Set(selectedIds);
+    const after = elements.filter((element) => !selectedIdSet.has(element.id));
+
+    setElements(after);
+    pushCommand(before, after);
+    setSelectedElementIds([]);
+    onBoardChanged('delete');
+  }, [editable, elements, onBoardChanged, pushCommand, selectedIds, setElements, setSelectedElementIds]);
+
+  const copySelectedElementsToClipboard = useCallback(() => {
+    const selection = getSelectedElements();
+    if (selection.length === 0) {
+      return false;
+    }
+
+    whiteboardClipboard = structuredClone(selection);
+    return true;
+  }, [getSelectedElements]);
+
+  const pasteClipboardElements = useCallback(() => {
+    if (!editable || whiteboardClipboard.length === 0) {
+      return;
+    }
+
+    const before = [...elements];
+    const pasted = cloneElementsForInsertion(
+      whiteboardClipboard,
+      before.length,
+      KEYBOARD_DUPLICATE_OFFSET,
+      KEYBOARD_DUPLICATE_OFFSET,
+    );
+    const after = [...before, ...pasted];
+
+    setElements(after);
+    pushCommand(before, after);
+    setSelectedElementIds(pasted.map((element) => element.id));
+    onBoardChanged('paste');
+  }, [editable, elements, onBoardChanged, pushCommand, setElements, setSelectedElementIds]);
+
+  const duplicateSelectedElements = useCallback(() => {
+    if (!editable) {
+      return;
+    }
+
+    const selection = getSelectedElements();
+    if (selection.length === 0) {
+      return;
+    }
+
+    const before = [...elements];
+    const duplicated = cloneElementsForInsertion(
+      selection,
+      before.length,
+      KEYBOARD_DUPLICATE_OFFSET,
+      KEYBOARD_DUPLICATE_OFFSET,
+    );
+    const after = [...before, ...duplicated];
+
+    whiteboardClipboard = structuredClone(selection);
+    setElements(after);
+    pushCommand(before, after);
+    setSelectedElementIds(duplicated.map((element) => element.id));
+    onBoardChanged('duplicate');
+  }, [editable, elements, getSelectedElements, onBoardChanged, pushCommand, setElements, setSelectedElementIds]);
+
+  const groupSelectedElements = useCallback(() => {
+    if (!editable) {
+      return;
+    }
+
+    const selection = getSelectedElements();
+    if (selection.length < 2) {
+      return;
+    }
+
+    const before = [...elements];
+    const nextGroupId = uuidv4();
+    const selectedIdSet = new Set(selection.map((element) => element.id));
+    const after = elements.map((element) => (
+      selectedIdSet.has(element.id)
+        ? { ...element, groupId: nextGroupId }
+        : element
+    ));
+
+    setElements(after);
+    pushCommand(before, after);
+    setSelectedElementIds(after.filter((element) => element.groupId === nextGroupId).map((element) => element.id));
+    onBoardChanged('group');
+  }, [editable, elements, getSelectedElements, onBoardChanged, pushCommand, setElements, setSelectedElementIds]);
+
+  const ungroupSelectedElements = useCallback(() => {
+    if (!editable) {
+      return;
+    }
+
+    const groupedSelection = new Set(
+      getSelectedElements()
+        .flatMap((element) => element.groupId ? [element.groupId] : []),
+    );
+
+    if (groupedSelection.size === 0) {
+      return;
+    }
+
+    const before = [...elements];
+    const after = elements.map((element) => (
+      element.groupId && groupedSelection.has(element.groupId)
+        ? { ...element, groupId: null }
+        : element
+    ));
+
+    setElements(after);
+    pushCommand(before, after);
+    setSelectedElementIds(selectedIds.filter((id) => after.some((element) => element.id === id)));
+    onBoardChanged('ungroup');
+  }, [editable, elements, getSelectedElements, onBoardChanged, pushCommand, selectedIds, setElements, setSelectedElementIds]);
+
+  const moveSelectedElementsBy = useCallback((deltaX: number, deltaY: number) => {
+    if (!editable || selectedIds.length === 0) {
+      return;
+    }
+
+    const selectedIdSet = new Set(selectedIds);
+    const movable = elements.filter((element) => selectedIdSet.has(element.id) && element.$type !== 'arrow');
+    if (movable.length === 0) {
+      return;
+    }
+
+    const before = [...elements];
+    const after = elements.map((element) => (
+      selectedIdSet.has(element.id) && element.$type !== 'arrow'
+        ? { ...element, x: element.x + deltaX, y: element.y + deltaY }
+        : element
+    ));
+
+    setElements(after);
+    pushCommand(before, after);
+    onBoardChanged('move');
+  }, [editable, elements, onBoardChanged, pushCommand, selectedIds, setElements]);
+
+  const beginInlineEditingSelection = useCallback(() => {
+    if (selectedIds.length !== 1) {
+      return;
+    }
+
+    const selected = elements.find((element) => element.id === selectedIds[0]);
+    if (editable && selected && (selected.$type === 'text' || selected.$type === 'shape')) {
+      setEditingElement(selected);
+    }
+  }, [editable, elements, selectedIds]);
+
   // Resize observer
   useEffect(() => {
     const container = containerRef.current;
@@ -241,51 +477,227 @@ export function WhiteboardCanvas({
   // Keyboard shortcuts
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      const target = e.target;
-      if (
-        target instanceof HTMLInputElement
-        || target instanceof HTMLTextAreaElement
-        || target instanceof HTMLSelectElement
-        || (target instanceof HTMLElement && target.isContentEditable)
-      ) {
+      if (isInteractiveTextTarget(e.target)) {
         return;
       }
 
-      if (editingElement) return; // don't intercept while editing text
-      if (!editable) return;
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedIds.length > 0) {
-          const before = [...elements];
-          removeElements(selectedIds);
-          pushCommand(before, elements.filter((el: BoardElement) => !selectedIds.includes(el.id)));
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        setSpacePanActive(true);
+        return;
+      }
+
+      if (editingElement) {
+        return;
+      }
+
+      const hasModifier = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+
+      if (hasModifier) {
+        switch (key) {
+          case 'z':
+            e.preventDefault();
+            if (e.shiftKey) {
+              const redoResult = redo();
+              if (redoResult) {
+                setElements(redoResult);
+                onBoardChanged('redo');
+              }
+            } else {
+              const undoResult = undo();
+              if (undoResult) {
+                setElements(undoResult);
+                onBoardChanged('undo');
+              }
+            }
+            return;
+          case 'y':
+            e.preventDefault();
+            {
+              const redoResult = redo();
+              if (redoResult) {
+                setElements(redoResult);
+                onBoardChanged('redo');
+              }
+            }
+            return;
+          case 'a':
+            if (!editable) {
+              return;
+            }
+            e.preventDefault();
+            setSelectedElementIds(expandSelectionWithGroups(elements.map((element) => element.id)));
+            return;
+          case 'c':
+            if (!editable) {
+              return;
+            }
+            e.preventDefault();
+            copySelectedElementsToClipboard();
+            return;
+          case 'x':
+            if (!editable) {
+              return;
+            }
+            e.preventDefault();
+            if (copySelectedElementsToClipboard()) {
+              deleteSelectedElements();
+            }
+            return;
+          case 'v':
+            if (!editable) {
+              return;
+            }
+            e.preventDefault();
+            pasteClipboardElements();
+            return;
+          case 'd':
+            if (!editable) {
+              return;
+            }
+            e.preventDefault();
+            duplicateSelectedElements();
+            return;
+          case 'g':
+            if (!editable) {
+              return;
+            }
+            e.preventDefault();
+            if (e.shiftKey) {
+              ungroupSelectedElements();
+            } else {
+              groupSelectedElements();
+            }
+            return;
+          default:
+            break;
+        }
+      }
+
+      if (!editable) {
+        if (e.key === 'Escape') {
           setSelectedElementIds([]);
-          onBoardChanged('delete');
+          setActiveTool('select');
         }
+        return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+
+      switch (key) {
+        case 'v':
+          setActiveTool('select');
+          return;
+        case 'r':
+          setActiveTool('rectangle');
+          return;
+        case 't':
+          setActiveTool('text');
+          return;
+        case 'h':
+          setActiveTool('hand');
+          return;
+        default:
+          break;
+      }
+
+      if (e.key === 'Enter') {
         e.preventDefault();
-        const result = undo();
-        if (result) {
-          setElements(result);
-          onBoardChanged('undo');
-        }
+        beginInlineEditingSelection();
+        return;
       }
-      if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.key === 'z' && e.shiftKey))) {
+
+      if (e.key === 'Delete' || e.key === 'Backspace') {
         e.preventDefault();
-        const result = redo();
-        if (result) {
-          setElements(result);
-          onBoardChanged('redo');
-        }
+        deleteSelectedElements();
+        return;
       }
+
+      const keyboardStep = e.shiftKey ? 10 : 1;
+      switch (e.key) {
+        case 'ArrowLeft':
+          e.preventDefault();
+          moveSelectedElementsBy(-keyboardStep, 0);
+          return;
+        case 'ArrowRight':
+          e.preventDefault();
+          moveSelectedElementsBy(keyboardStep, 0);
+          return;
+        case 'ArrowUp':
+          e.preventDefault();
+          moveSelectedElementsBy(0, -keyboardStep);
+          return;
+        case 'ArrowDown':
+          e.preventDefault();
+          moveSelectedElementsBy(0, keyboardStep);
+          return;
+        default:
+          break;
+      }
+
       if (e.key === 'Escape') {
         setSelectedElementIds([]);
         setActiveTool('select');
       }
     };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (isInteractiveTextTarget(e.target)) {
+        return;
+      }
+
+      if (e.key === ' ' || e.code === 'Space') {
+        e.preventDefault();
+        setSpacePanActive(false);
+      }
+    };
+
+    const handleWindowBlur = () => {
+      setSpacePanActive(false);
+    };
+
     window.addEventListener('keydown', handleKey);
-    return () => window.removeEventListener('keydown', handleKey);
-  }, [editable, selectedIds, elements, editingElement, removeElements, setSelectedElementIds, setActiveTool, pushCommand, undo, redo, setElements, onBoardChanged]);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleWindowBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKey);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [
+    beginInlineEditingSelection,
+    copySelectedElementsToClipboard,
+    deleteSelectedElements,
+    duplicateSelectedElements,
+    editable,
+    editingElement,
+    elements,
+    expandSelectionWithGroups,
+    groupSelectedElements,
+    moveSelectedElementsBy,
+    onBoardChanged,
+    pasteClipboardElements,
+    redo,
+    selectedIds.length,
+    setActiveTool,
+    setElements,
+    setSelectedElementIds,
+    undo,
+    ungroupSelectedElements,
+  ]);
+
+  useEffect(() => {
+    if (!spacePanActive || activeTool === 'hand' || isPanning) {
+      return;
+    }
+
+    const clearPanState = () => {
+      setIsPanning(false);
+      setPanStart(null);
+    };
+
+    window.addEventListener('mouseup', clearPanState);
+    return () => window.removeEventListener('mouseup', clearPanState);
+  }, [activeTool, isPanning, spacePanActive]);
 
   /** Convert stage pointer event position to world coords. */
   const getWorldPos = useCallback(
@@ -449,7 +861,7 @@ export function WhiteboardCanvas({
       if (!screenPos) return;
 
       // Middle mouse or hand tool → pan
-      if (e.evt.button === 1 || activeTool === 'hand') {
+      if (e.evt.button === 1 || activeTool === 'hand' || spacePanActive) {
         setIsPanning(true);
         setPanStart({ x: screenPos.x, y: screenPos.y, cx: cameraX, cy: cameraY });
         return;
@@ -636,7 +1048,7 @@ export function WhiteboardCanvas({
         }
       }
     },
-    [editable, activeTool, elements, selectedIds, cameraX, cameraY, zoom, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pushCommand, onBoardChanged, boardDefaults],
+    [editable, activeTool, elements, selectedIds, cameraX, cameraY, zoom, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pushCommand, onBoardChanged, boardDefaults, spacePanActive],
   );
 
   // ── Mouse Move ──
@@ -1088,6 +1500,11 @@ export function WhiteboardCanvas({
       const pointer = stage.getPointerPosition();
       if (!pointer) return;
 
+      if (isTrackpadPanWheelEvent(e.evt)) {
+        setCamera(cameraX - e.evt.deltaX, cameraY - e.evt.deltaY);
+        return;
+      }
+
       const direction = e.evt.deltaY < 0 ? 1 : -1;
       const factor = 1.1;
       const newZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * (direction > 0 ? factor : 1 / factor)));
@@ -1249,7 +1666,7 @@ export function WhiteboardCanvas({
             ? resizeCursor
             : isPanning
               ? 'grabbing'
-              : activeTool === 'hand'
+              : activeTool === 'hand' || spacePanActive
                 ? 'grab'
                 : activeTool === 'arrow'
                   ? 'crosshair'

@@ -37,6 +37,7 @@ export function WhiteboardEditor() {
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mobileOverlayOpen = isNarrowPanelMode && (propertiesOpen || chatOpen);
 
   const currentMembership = user && board
     ? board.members.find((member) => member.userId === user.id) ?? (board.ownerId === user.id
@@ -201,7 +202,7 @@ export function WhiteboardEditor() {
         localConnectionId={connectionId}
       />
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
-        {canEdit && <Toolbar />}
+        {canEdit && !mobileOverlayOpen && <Toolbar />}
         <Box sx={{ flex: 1, position: 'relative' }}>
           <WhiteboardCanvas
             editable={canEdit}

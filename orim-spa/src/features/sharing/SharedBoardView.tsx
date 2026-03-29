@@ -64,6 +64,7 @@ export function SharedBoardView() {
   const [guestNameDraft, setGuestNameDraft] = useState(guestDisplayName);
   const [guestNameSaved, setGuestNameSaved] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const mobileOverlayOpen = isNarrowPanelMode && propertiesOpen;
 
   const { isLoading, isError } = useQuery({
     queryKey: ['shared-board', token],
@@ -292,7 +293,7 @@ export function SharedBoardView() {
         </Box>
       )}
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
-        {board.sharedAllowAnonymousEditing && <Toolbar />}
+        {board.sharedAllowAnonymousEditing && !mobileOverlayOpen && <Toolbar />}
         <Box sx={{ flex: 1, position: 'relative' }}>
           <WhiteboardCanvas
             editable={board.sharedAllowAnonymousEditing}
