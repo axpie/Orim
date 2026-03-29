@@ -1,9 +1,10 @@
-import { useEffect, useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type Konva from 'konva';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Box, Drawer, useMediaQuery, useTheme } from '@mui/material';
 import { getAssistantAvailability } from '../../api/assistantSettings';
-import { getBoard, updateBoard } from '../../api/boards';
+import { createSnapshot, getBoard, restoreSnapshot, updateBoard } from '../../api/boards';
 import { useBoardStore } from './store/boardStore';
 import { useCommandStack } from './store/commandStack';
 import { useSignalR } from '../../hooks/useSignalR';
@@ -11,17 +12,29 @@ import { WhiteboardCanvas } from './canvas/WhiteboardCanvas';
 import { Toolbar } from './tools/Toolbar';
 import { PropertiesPanel } from './panels/PropertiesPanel';
 import { ChatPanel } from './panels/ChatPanel';
+import { SnapshotDialog } from './panels/SnapshotDialog';
 import { BoardTopBar } from './tools/BoardTopBar';
-import type { Board } from '../../types/models';
+import { deriveBoardSyncStatus } from './boardSyncStatus';
+import type { Board, BoardSnapshot } from '../../types/models';
 import { BoardRole } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
 
 const PROPERTIES_PANEL_WIDTH = 280;
 const CHAT_PANEL_WIDTH = 320;
 
+function sortSnapshots(snapshots: BoardSnapshot[]) {
+  return [...snapshots].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
+}
+
+function createBoardFileName(title: string | undefined, extension: string) {
+  const baseName = (title?.trim() || 'board').replace(/[\\/:*?"<>|]+/g, '-');
+  return `${baseName}.${extension}`;
+}
+
 export function WhiteboardEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const theme = useTheme();
   const isNarrowPanelMode = useMediaQuery(theme.breakpoints.down('sm'));
   const isMediumDown = useMediaQuery(theme.breakpoints.down('md'));
@@ -39,7 +52,10 @@ export function WhiteboardEditor() {
 
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [snapshotsOpen, setSnapshotsOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
+  const stageRef = useRef<Konva.Stage | null>(null);
   const compactOverlayOpen = isCompactToolbarLayout && (propertiesOpen || chatOpen);
 
   const currentMembership = user && board
@@ -89,41 +105,102 @@ export function WhiteboardEditor() {
 
   useEffect(() => {
     if (data) {
-      setBoard(data as Board);
+      setBoard(data as Board, { preserveSelection: false });
       setRemoteCursors([]);
       clearCommandStack();
     }
-  }, [data, setBoard, setRemoteCursors, clearCommandStack]);
+  }, [clearCommandStack, data, setBoard, setRemoteCursors]);
 
   useEffect(() => {
-    if (isError) navigate('/');
+    if (isError) {
+      navigate('/');
+    }
   }, [isError, navigate]);
 
   const saveMutation = useMutation({
-    mutationFn: (b: Partial<Board>) => updateBoard(id!, b),
-    onSuccess: () => setDirty(false),
+    mutationFn: (boardPatch: Partial<Board>) => updateBoard(id!, boardPatch),
   });
 
-  // Auto-save with debounce
-  const scheduleSave = useCallback(() => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      const current = useBoardStore.getState().board;
-      if (current) {
-        saveMutation.mutate({
-          title: current.title,
-          elements: current.elements,
-        });
+  const clearScheduledSave = useCallback(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+  }, []);
+
+  const persistCurrentBoard = useCallback(async (): Promise<Board | null> => {
+    if (activeSavePromiseRef.current) {
+      try {
+        await activeSavePromiseRef.current;
+      } catch {
+        // Keep the latest mutation error in React Query state.
       }
+
+      if (!useBoardStore.getState().isDirty) {
+        return useBoardStore.getState().board;
+      }
+    }
+
+    const current = useBoardStore.getState().board;
+    if (!current || !id) {
+      return null;
+    }
+
+    const savePromise = saveMutation.mutateAsync({
+      title: current.title,
+      elements: current.elements,
+    }).then((nextBoard) => {
+      setBoard(nextBoard, { preserveSelection: true });
+      setDirty(false);
+      queryClient.setQueryData(['board', id], nextBoard);
+      return nextBoard;
+    });
+
+    activeSavePromiseRef.current = savePromise;
+
+    try {
+      return await savePromise;
+    } finally {
+      if (activeSavePromiseRef.current === savePromise) {
+        activeSavePromiseRef.current = null;
+      }
+    }
+  }, [id, queryClient, saveMutation, setBoard, setDirty]);
+
+  const waitForActiveSave = useCallback(async () => {
+    const activeSavePromise = activeSavePromiseRef.current;
+    if (!activeSavePromise) {
+      return;
+    }
+
+    try {
+      await activeSavePromise;
+    } catch {
+      // The current UI already surfaces the mutation error state.
+    }
+  }, []);
+
+  const scheduleSave = useCallback(() => {
+    clearScheduledSave();
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      void persistCurrentBoard();
     }, 1500);
-  }, [saveMutation]);
+  }, [clearScheduledSave, persistCurrentBoard]);
 
   useEffect(() => {
-    if (isDirty) scheduleSave();
+    if (!canEdit || !isDirty || !board) {
+      return;
+    }
+
+    scheduleSave();
+  }, [board?.elements, board?.title, canEdit, isDirty, scheduleSave]);
+
+  useEffect(() => {
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      clearScheduledSave();
     };
-  }, [isDirty, scheduleSave]);
+  }, [clearScheduledSave]);
 
   useEffect(() => {
     if (!canUseAssistant && chatOpen) {
@@ -145,11 +222,21 @@ export function WhiteboardEditor() {
     });
   }, [canEdit, chatOpen, isNarrowPanelMode, propertiesOpen, setViewportInsets]);
 
-  const { sendBoardState, sendBoardStateThrottled, sendCursorUpdate, connectionId } = useSignalR({
+  const {
+    sendBoardState,
+    sendBoardStateThrottled,
+    sendCursorUpdate,
+    connectionId,
+    connectionState,
+    lastError,
+  } = useSignalR({
     boardId: id ?? null,
     onBoardStateUpdated: (notification) => {
       setBoard(notification.board);
       clearCommandStack();
+      if (id) {
+        queryClient.setQueryData(['board', id], notification.board);
+      }
     },
     onPresenceUpdated: (cursors) => setRemoteCursors(cursors),
     onCursorUpdated: (cursor) => {
@@ -158,34 +245,116 @@ export function WhiteboardEditor() {
     },
   });
 
-  const onBoardChanged = useCallback(
-    (changeKind: string) => {
-      if (!canEdit) {
-        return;
-      }
+  const boardSyncStatus = useMemo(() => deriveBoardSyncStatus({
+    connectionState,
+    lastError,
+    isDirty,
+    isSaving: saveMutation.isPending,
+    saveError: saveMutation.error,
+  }), [connectionState, isDirty, lastError, saveMutation.error, saveMutation.isPending]);
 
-      setDirty(true);
-      const current = useBoardStore.getState().board;
-      if (current) {
-        sendBoardState(current, changeKind);
-      }
-    },
-    [canEdit, setDirty, sendBoardState],
-  );
+  const handleStageReady = useCallback((stage: Konva.Stage | null) => {
+    stageRef.current = stage;
+  }, []);
 
-  const onBoardLiveChanged = useCallback(
-    (changeKind: string) => {
-      if (!canEdit) {
-        return;
-      }
+  const handleExportPng = useCallback(async () => {
+    const stage = stageRef.current;
+    const current = useBoardStore.getState().board;
+    if (!stage || !current) {
+      return;
+    }
 
-      const current = useBoardStore.getState().board;
-      if (current) {
-        sendBoardStateThrottled(current, changeKind);
+    const transientLayer = stage.findOne('.whiteboard-export-hidden') as Konva.Layer | null;
+    const previousVisibility = transientLayer?.visible() ?? true;
+
+    if (transientLayer) {
+      transientLayer.visible(false);
+      stage.batchDraw();
+    }
+
+    try {
+      const anchor = document.createElement('a');
+      anchor.href = stage.toDataURL({
+        pixelRatio: Math.max(window.devicePixelRatio || 1, 2),
+        mimeType: 'image/png',
+      });
+      anchor.download = createBoardFileName(current.title, 'png');
+      anchor.click();
+    } finally {
+      if (transientLayer) {
+        transientLayer.visible(previousVisibility);
+        stage.batchDraw();
       }
-    },
-    [canEdit, sendBoardStateThrottled],
-  );
+    }
+  }, []);
+
+  const handleCreateSnapshot = useCallback(async (name?: string) => {
+    clearScheduledSave();
+    await waitForActiveSave();
+
+    if (useBoardStore.getState().isDirty) {
+      await persistCurrentBoard();
+    }
+
+    if (!id) {
+      return;
+    }
+
+    const snapshot = await createSnapshot(id, name);
+    const current = useBoardStore.getState().board;
+    if (!current) {
+      return;
+    }
+
+    const nextBoard = {
+      ...current,
+      snapshots: sortSnapshots([
+        ...current.snapshots.filter((entry) => entry.id !== snapshot.id),
+        snapshot,
+      ]),
+    };
+
+    setBoard(nextBoard, { preserveSelection: true });
+    queryClient.setQueryData(['board', id], nextBoard);
+  }, [clearScheduledSave, id, persistCurrentBoard, queryClient, setBoard, waitForActiveSave]);
+
+  const handleRestoreSnapshot = useCallback(async (snapshotId: string) => {
+    clearScheduledSave();
+    await waitForActiveSave();
+
+    if (!id) {
+      return;
+    }
+
+    const restoredBoard = await restoreSnapshot(id, snapshotId);
+    setBoard(restoredBoard, { preserveSelection: false, resetTool: true });
+    clearCommandStack();
+    setDirty(false);
+    queryClient.setQueryData(['board', id], restoredBoard);
+  }, [clearCommandStack, clearScheduledSave, id, queryClient, setBoard, setDirty, waitForActiveSave]);
+
+  const onBoardChanged = useCallback((changeKind: string) => {
+    if (!canEdit) {
+      return;
+    }
+
+    setDirty(true);
+    const current = useBoardStore.getState().board;
+    if (current) {
+      sendBoardState(current, changeKind);
+    }
+  }, [canEdit, sendBoardState, setDirty]);
+
+  const onBoardLiveChanged = useCallback((changeKind: string) => {
+    if (!canEdit) {
+      return;
+    }
+
+    const current = useBoardStore.getState().board;
+    if (current) {
+      sendBoardStateThrottled(current, changeKind);
+    }
+  }, [canEdit, sendBoardStateThrottled]);
 
   if (!board) return null;
 
@@ -196,11 +365,14 @@ export function WhiteboardEditor() {
         onOpenChat={openChatPanel}
         propertiesOpen={propertiesOpen}
         chatOpen={chatOpen}
-        saving={saveMutation.isPending}
+        syncStatus={boardSyncStatus}
         titleEditable={canEdit}
         showShare={canShare}
         showProperties={canEdit}
         showChat={canUseAssistant}
+        showSnapshots={canEdit}
+        onOpenSnapshots={() => setSnapshotsOpen(true)}
+        onExportPng={handleExportPng}
         collaborators={remoteCursors}
         localConnectionId={connectionId}
       />
@@ -213,6 +385,7 @@ export function WhiteboardEditor() {
             onBoardChanged={onBoardChanged}
             onBoardLiveChanged={onBoardLiveChanged}
             onPointerPresenceChanged={sendCursorUpdate}
+            onStageReady={handleStageReady}
           />
 
           {canEdit && !isNarrowPanelMode && chatOpen && (
@@ -286,6 +459,16 @@ export function WhiteboardEditor() {
         >
           <PropertiesPanel mobile onClose={() => setPropertiesOpen(false)} onBoardChanged={onBoardChanged} />
         </Drawer>
+      )}
+
+      {canEdit && (
+        <SnapshotDialog
+          open={snapshotsOpen}
+          snapshots={board.snapshots}
+          onClose={() => setSnapshotsOpen(false)}
+          onCreateSnapshot={handleCreateSnapshot}
+          onRestoreSnapshot={handleRestoreSnapshot}
+        />
       )}
     </Box>
   );

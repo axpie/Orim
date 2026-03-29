@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
   Alert,
@@ -23,6 +23,7 @@ import { WhiteboardCanvas } from '../whiteboard/canvas/WhiteboardCanvas';
 import { Toolbar } from '../whiteboard/tools/Toolbar';
 import { BoardTopBar } from '../whiteboard/tools/BoardTopBar';
 import { PropertiesPanel } from '../whiteboard/panels/PropertiesPanel';
+import { deriveBoardSyncStatus } from '../whiteboard/boardSyncStatus';
 import { useSignalR } from '../../hooks/useSignalR';
 import { useAuthStore } from '../../stores/authStore';
 import type { Board } from '../../types/models';
@@ -38,6 +39,7 @@ function isProtectedBoardResponse(value: unknown): value is { requiresPassword: 
 export function SharedBoardView() {
   const { token } = useParams<{ token: string }>();
   const { t, i18n } = useTranslation();
+  const queryClient = useQueryClient();
   const theme = useTheme();
   const isNarrowPanelMode = useMediaQuery(theme.breakpoints.down('sm'));
   const isMediumDown = useMediaQuery(theme.breakpoints.down('md'));
@@ -67,6 +69,7 @@ export function SharedBoardView() {
   const [guestNameDraft, setGuestNameDraft] = useState(guestDisplayName);
   const [guestNameSaved, setGuestNameSaved] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
   const compactOverlayOpen = isCompactToolbarLayout && propertiesOpen;
 
   const { isLoading, isError } = useQuery({
@@ -75,10 +78,14 @@ export function SharedBoardView() {
       const data = await getSharedBoard(token!);
       if (isProtectedBoardResponse(data)) {
         setNeedsPassword(true);
+        setBoard(null, { preserveSelection: false, resetTool: true });
+        setRemoteCursors([]);
+        clearCommandStack();
         return null;
       }
 
-      setBoard(data);
+      setNeedsPassword(false);
+      setBoard(data, { preserveSelection: false });
       setRemoteCursors([]);
       clearCommandStack();
       return data;
@@ -86,15 +93,15 @@ export function SharedBoardView() {
     enabled: !!token,
   });
 
-  const saveMutation = useMutation({
-    mutationFn: (currentBoard: Board) => replaceSharedBoardContent(token!, currentBoard, validatedPassword, connectionId),
-    onSuccess: (nextBoard) => {
-      setBoard(nextBoard);
-      setDirty(false);
-    },
-  });
-
-  const { sendBoardState, sendBoardStateThrottled, sendCursorUpdate, updateDisplayName, connectionId } = useSignalR({
+  const {
+    sendBoardState,
+    sendBoardStateThrottled,
+    sendCursorUpdate,
+    updateDisplayName,
+    connectionId,
+    connectionState,
+    lastError,
+  } = useSignalR({
     boardId: board?.id ?? null,
     shareToken: token ?? null,
     sharePassword: validatedPassword,
@@ -102,6 +109,9 @@ export function SharedBoardView() {
     onBoardStateUpdated: (notification) => {
       setBoard(notification.board);
       clearCommandStack();
+      if (token) {
+        queryClient.setQueryData(['shared-board', token], notification.board);
+      }
     },
     onPresenceUpdated: (cursors) => setRemoteCursors(cursors),
     onCursorUpdated: (cursor) => {
@@ -109,6 +119,69 @@ export function SharedBoardView() {
       setRemoteCursors([...current, cursor]);
     },
   });
+
+  const saveMutation = useMutation({
+    mutationFn: (currentBoard: Board) => replaceSharedBoardContent(token!, currentBoard, validatedPassword, connectionId),
+  });
+
+  const clearScheduledSave = useCallback(() => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+  }, []);
+
+  const persistCurrentBoard = useCallback(async (): Promise<Board | null> => {
+    if (activeSavePromiseRef.current) {
+      try {
+        await activeSavePromiseRef.current;
+      } catch {
+        // Keep the latest mutation error in React Query state.
+      }
+
+      if (!useBoardStore.getState().isDirty) {
+        return useBoardStore.getState().board;
+      }
+    }
+
+    const current = useBoardStore.getState().board;
+    if (!current?.sharedAllowAnonymousEditing || !token) {
+      return null;
+    }
+
+    const savePromise = saveMutation.mutateAsync(current).then((nextBoard) => {
+      setBoard(nextBoard, { preserveSelection: true });
+      setDirty(false);
+      queryClient.setQueryData(['shared-board', token], nextBoard);
+      return nextBoard;
+    });
+
+    activeSavePromiseRef.current = savePromise;
+
+    try {
+      return await savePromise;
+    } finally {
+      if (activeSavePromiseRef.current === savePromise) {
+        activeSavePromiseRef.current = null;
+      }
+    }
+  }, [queryClient, saveMutation, setBoard, setDirty, token]);
+
+  const scheduleSave = useCallback(() => {
+    clearScheduledSave();
+    saveTimerRef.current = setTimeout(() => {
+      saveTimerRef.current = null;
+      void persistCurrentBoard();
+    }, 1200);
+  }, [clearScheduledSave, persistCurrentBoard]);
+
+  const boardSyncStatus = useMemo(() => deriveBoardSyncStatus({
+    connectionState,
+    lastError,
+    isDirty,
+    isSaving: saveMutation.isPending,
+    saveError: saveMutation.error,
+  }), [connectionState, isDirty, lastError, saveMutation.error, saveMutation.isPending]);
 
   useEffect(() => {
     setGuestNameDraft(guestDisplayName);
@@ -137,33 +210,29 @@ export function SharedBoardView() {
     });
   }, [board?.sharedAllowAnonymousEditing, isNarrowPanelMode, propertiesOpen, setViewportInsets]);
 
-  const scheduleSave = useCallback(() => {
-    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    saveTimerRef.current = setTimeout(() => {
-      const current = useBoardStore.getState().board;
-      if (current && current.sharedAllowAnonymousEditing) {
-        saveMutation.mutate(current);
-      }
-    }, 1200);
-  }, [saveMutation]);
-
   useEffect(() => {
-    if (isDirty && board?.sharedAllowAnonymousEditing) {
-      scheduleSave();
+    if (!board?.sharedAllowAnonymousEditing || !isDirty) {
+      return;
     }
 
+    scheduleSave();
+  }, [board?.elements, board?.sharedAllowAnonymousEditing, board?.title, isDirty, scheduleSave]);
+
+  useEffect(() => {
     return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      clearScheduledSave();
     };
-  }, [board?.sharedAllowAnonymousEditing, isDirty, scheduleSave]);
+  }, [clearScheduledSave]);
 
   const handlePasswordSubmit = async () => {
     try {
       const result = await validateSharePassword(token!, password);
-      setBoard(result);
+      setBoard(result, { preserveSelection: false });
       clearCommandStack();
       setNeedsPassword(false);
       setValidatedPassword(password);
+      setPasswordError(false);
+      queryClient.setQueryData(['shared-board', token], result);
     } catch {
       setPasswordError(true);
     }
@@ -226,7 +295,7 @@ export function SharedBoardView() {
               helperText={passwordError ? t('sharing.invalidPassword') : ''}
               sx={{ mb: 2 }}
             />
-            <Button variant="contained" fullWidth onClick={handlePasswordSubmit}>
+            <Button variant="contained" fullWidth onClick={() => { void handlePasswordSubmit(); }}>
               {t('common.confirm')}
             </Button>
           </CardContent>
@@ -250,7 +319,7 @@ export function SharedBoardView() {
         onOpenChat={() => {}}
         propertiesOpen={propertiesOpen}
         chatOpen={false}
-        saving={saveMutation.isPending}
+        syncStatus={boardSyncStatus}
         titleEditable={false}
         showShare={false}
         showExport={false}

@@ -1,8 +1,13 @@
-import { useEffect, useRef, useCallback } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import * as signalR from '@microsoft/signalr';
 import { API_BASE_URL } from '../api/client';
-import type { Board, CursorPresence, BoardChangeNotification, BoardStateUpdateNotification } from '../types/models';
+import type {
+  Board,
+  CursorPresence,
+  BoardChangeNotification,
+  BoardStateUpdateNotification,
+  RealtimeConnectionState,
+} from '../types/models';
 
 interface UseSignalROptions {
   boardId: string | null;
@@ -13,6 +18,18 @@ interface UseSignalROptions {
   onBoardStateUpdated?: (notification: BoardStateUpdateNotification) => void;
   onCursorUpdated?: (cursor: CursorPresence) => void;
   onPresenceUpdated?: (cursors: CursorPresence[]) => void;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message.trim()) {
+    return error.message;
+  }
+
+  if (typeof error === 'string' && error.trim()) {
+    return error;
+  }
+
+  return 'SignalR connection error';
 }
 
 export function useSignalR({
@@ -35,14 +52,45 @@ export function useSignalR({
   const sharePasswordRef = useRef(sharePassword ?? null);
   const displayNameRef = useRef(displayName ?? null);
   const [connectionId, setConnectionId] = useState<string | null>(null);
+  const [connectionState, setConnectionState] = useState<RealtimeConnectionState>('disconnected');
+  const [lastError, setLastError] = useState<string | null>(null);
   boardIdRef.current = boardId;
   shareTokenRef.current = shareToken ?? null;
   sharePasswordRef.current = sharePassword ?? null;
   displayNameRef.current = displayName ?? null;
 
+  const handleInvokeError = useCallback((error: unknown) => {
+    setLastError(getErrorMessage(error));
+    console.error(error);
+  }, []);
+
+  const invokeIfConnected = useCallback(
+    async (methodName: string, ...args: unknown[]) => {
+      const conn = connectionRef.current;
+      if (conn?.state !== signalR.HubConnectionState.Connected) {
+        return false;
+      }
+
+      try {
+        await conn.invoke(methodName, ...args);
+        setLastError(null);
+        return true;
+      } catch (error) {
+        handleInvokeError(error);
+        return false;
+      }
+    },
+    [handleInvokeError],
+  );
+
   useEffect(() => {
     const token = localStorage.getItem('orim_token');
-    if (!boardId) return;
+    if (!boardId) {
+      setConnectionId(null);
+      setConnectionState('disconnected');
+      setLastError(null);
+      return;
+    }
 
     const hubUrl = API_BASE_URL ? `${API_BASE_URL}/hubs/board` : '/hubs/board';
 
@@ -55,6 +103,24 @@ export function useSignalR({
       .build();
 
     connectionRef.current = connection;
+    setConnectionState('connecting');
+    setLastError(null);
+    let isDisposed = false;
+    let isIntentionalClose = false;
+
+    const joinCurrentBoard = async () => {
+      if (!boardIdRef.current) {
+        return;
+      }
+
+      await connection.invoke(
+        'JoinBoard',
+        boardIdRef.current,
+        shareTokenRef.current,
+        sharePasswordRef.current,
+        displayNameRef.current,
+      );
+    };
 
     connection.on('BoardChanged', (notification: BoardChangeNotification) => {
       onBoardChanged?.(notification);
@@ -75,19 +141,75 @@ export function useSignalR({
     connection
       .start()
       .then(async () => {
-        setConnectionId(connection.connectionId ?? null);
-        await connection.invoke('JoinBoard', boardId, shareTokenRef.current, sharePasswordRef.current, displayNameRef.current);
-      })
-      .catch(console.error);
+        await joinCurrentBoard();
+        if (isDisposed) {
+          return;
+        }
 
-    connection.onreconnected(() => {
-      setConnectionId(connection.connectionId ?? null);
-      if (boardIdRef.current) {
-        connection.invoke('JoinBoard', boardIdRef.current, shareTokenRef.current, sharePasswordRef.current, displayNameRef.current).catch(console.error);
+        setConnectionId(connection.connectionId ?? null);
+        setConnectionState('connected');
+        setLastError(null);
+      })
+      .catch((error) => {
+        if (isDisposed) {
+          return;
+        }
+
+        setConnectionId(null);
+        setConnectionState('disconnected');
+        handleInvokeError(error);
+      });
+
+    connection.onreconnecting((error) => {
+      if (isDisposed) {
+        return;
+      }
+
+      setConnectionId(null);
+      setConnectionState('reconnecting');
+      setLastError(error ? getErrorMessage(error) : null);
+    });
+
+    connection.onreconnected(async () => {
+      if (isDisposed) {
+        return;
+      }
+
+      try {
+        await joinCurrentBoard();
+        if (isDisposed) {
+          return;
+        }
+
+        setConnectionId(connection.connectionId ?? null);
+        setConnectionState('connected');
+        setLastError(null);
+      } catch (error) {
+        if (isDisposed) {
+          return;
+        }
+
+        setConnectionId(null);
+        setConnectionState('disconnected');
+        handleInvokeError(error);
+        isIntentionalClose = true;
+        void connection.stop().catch(() => {});
       }
     });
 
+    connection.onclose((error) => {
+      if (isDisposed || isIntentionalClose) {
+        return;
+      }
+
+      setConnectionId(null);
+      setConnectionState('disconnected');
+      setLastError(error ? getErrorMessage(error) : null);
+    });
+
     return () => {
+      isDisposed = true;
+      isIntentionalClose = true;
       if (liveSyncTimerRef.current != null) {
         window.clearTimeout(liveSyncTimerRef.current);
         liveSyncTimerRef.current = null;
@@ -99,21 +221,23 @@ export function useSignalR({
       if (connection.state === signalR.HubConnectionState.Connected) {
         connection.invoke('LeaveBoard', boardId).catch(() => {});
       }
-      connection.stop();
+      void connection.stop().catch(() => {});
       connectionRef.current = null;
       setConnectionId(null);
+      setConnectionState('disconnected');
+      setLastError(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardId]);
+  }, [boardId, handleInvokeError]);
 
   const sendBoardUpdated = useCallback(
     (sourceClientId?: string, changeKind = 'Content') => {
       const conn = connectionRef.current;
       if (conn?.state === signalR.HubConnectionState.Connected && boardIdRef.current) {
-        conn.invoke('BoardUpdated', boardIdRef.current, sourceClientId, changeKind).catch(console.error);
+        void invokeIfConnected('BoardUpdated', boardIdRef.current, sourceClientId, changeKind);
       }
     },
-    []
+    [invokeIfConnected],
   );
 
   const sendCursorUpdate = useCallback(
@@ -127,23 +251,22 @@ export function useSignalR({
         cursorTimerRef.current = null;
         const pending = latestCursorRef.current;
         latestCursorRef.current = null;
-        const conn = connectionRef.current;
-        if (pending && conn?.state === signalR.HubConnectionState.Connected && boardIdRef.current) {
-          conn.invoke('UpdateCursor', boardIdRef.current, pending.x, pending.y).catch(console.error);
+        if (pending && boardIdRef.current) {
+          void invokeIfConnected('UpdateCursor', boardIdRef.current, pending.x, pending.y);
         }
       }, 60);
     },
-    [],
+    [invokeIfConnected],
   );
 
   const sendBoardState = useCallback(
     (board: Board, changeKind = 'Content') => {
       const conn = connectionRef.current;
       if (conn?.state === signalR.HubConnectionState.Connected && boardIdRef.current) {
-        conn.invoke('SyncBoardState', boardIdRef.current, board, changeKind).catch(console.error);
+        void invokeIfConnected('SyncBoardState', boardIdRef.current, board, changeKind);
       }
     },
-    [],
+    [invokeIfConnected],
   );
 
   const sendBoardStateThrottled = useCallback(
@@ -169,11 +292,20 @@ export function useSignalR({
     (nextDisplayName: string) => {
       const conn = connectionRef.current;
       if (conn?.state === signalR.HubConnectionState.Connected && boardIdRef.current) {
-        conn.invoke('UpdateDisplayName', boardIdRef.current, nextDisplayName).catch(console.error);
+        void invokeIfConnected('UpdateDisplayName', boardIdRef.current, nextDisplayName);
       }
     },
-    [],
+    [invokeIfConnected],
   );
 
-  return { sendBoardUpdated, sendCursorUpdate, sendBoardState, sendBoardStateThrottled, updateDisplayName, connectionId };
+  return {
+    sendBoardUpdated,
+    sendCursorUpdate,
+    sendBoardState,
+    sendBoardStateThrottled,
+    updateDisplayName,
+    connectionId,
+    connectionState,
+    lastError,
+  };
 }

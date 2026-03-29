@@ -161,6 +161,24 @@ export interface BoardSnapshot {
   contentJson: string;
 }
 
+export type RealtimeConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
+
+export type BoardSyncStatusKind =
+  | 'connecting'
+  | 'saving'
+  | 'saved'
+  | 'unsaved'
+  | 'reconnecting'
+  | 'offline'
+  | 'saveError'
+  | 'connectionError';
+
+export interface BoardSyncStatus {
+  kind: BoardSyncStatusKind;
+  hasPendingChanges: boolean;
+  detail?: string | null;
+}
+
 export interface Board {
   id: string;
   title: string;

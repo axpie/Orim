@@ -10,6 +10,11 @@ interface ViewportInsets {
   left: number;
 }
 
+interface SetBoardOptions {
+  preserveSelection?: boolean;
+  resetTool?: boolean;
+}
+
 interface BoardState {
   board: Board | null;
   selectedElementIds: string[];
@@ -24,7 +29,7 @@ interface BoardState {
   isDirty: boolean;
   pendingIconName: string | null;
 
-  setBoard: (board: Board | null) => void;
+  setBoard: (board: Board | null, options?: SetBoardOptions) => void;
   updateBoard: (updater: ((board: Board) => Board) | Partial<Board>) => void;
   setElements: (elements: BoardElement[]) => void;
   addElement: (element: BoardElement) => void;
@@ -55,13 +60,18 @@ export const useBoardStore = create<BoardState>((set) => ({
   isDirty: false,
   pendingIconName: 'mdi-star',
 
-  setBoard: (board) =>
+  setBoard: (board, options) =>
     set((state) => {
       if (!board) {
-        return { board: null, isDirty: false, selectedElementIds: [] };
+        return {
+          board: null,
+          isDirty: false,
+          selectedElementIds: [],
+          activeTool: options?.resetTool ? 'select' : state.activeTool,
+        };
       }
 
-      const preserveSelection = state.board?.id === board.id;
+      const preserveSelection = options?.preserveSelection ?? state.board?.id === board.id;
       const availableIds = new Set(board.elements.map((element) => element.id));
 
       return {
@@ -70,6 +80,7 @@ export const useBoardStore = create<BoardState>((set) => ({
         selectedElementIds: preserveSelection
           ? state.selectedElementIds.filter((id) => availableIds.has(id))
           : [],
+        activeTool: options?.resetTool ? 'select' : state.activeTool,
       };
     }),
 

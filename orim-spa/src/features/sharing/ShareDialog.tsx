@@ -13,11 +13,11 @@ import {
   TextField,
   Typography,
   Box,
+  Chip,
   IconButton,
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
   Tooltip,
   Divider,
   InputAdornment,
@@ -44,6 +44,15 @@ interface ShareDialogProps {
   onClose: () => void;
 }
 
+interface ShareMemberViewModel {
+  userId: string;
+  username: string;
+  role: BoardRole;
+  isOwner: boolean;
+  canEditRole: boolean;
+  canRemove: boolean;
+}
+
 function getErrorMessage(error: unknown, fallback: string): string {
   const axiosError = error as AxiosError<{ message?: string } | string>;
   const payload = axiosError.response?.data;
@@ -67,20 +76,11 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
     queryFn: () => getBoard(boardId),
   });
 
-  const [shareLink, setShareLink] = useState('');
   const [copied, setCopied] = useState(false);
   const [password, setPassword] = useState('');
   const [newMemberRole, setNewMemberRole] = useState(BoardRole.Editor);
   const [memberSearchOpen, setMemberSearchOpen] = useState(false);
   const [message, setMessage] = useState<{ severity: 'error' | 'success'; text: string } | null>(null);
-
-  useEffect(() => {
-    if (board?.shareLinkToken) {
-      setShareLink(`${window.location.origin}/shared/${board.shareLinkToken}`);
-    } else {
-      setShareLink('');
-    }
-  }, [board?.shareLinkToken]);
 
   useEffect(() => {
     if (!message) {
@@ -99,11 +99,7 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
 
   const shareTokenMutation = useMutation({
     mutationFn: () => generateShareToken(boardId),
-    onSuccess: (data) => {
-      const url = `${window.location.origin}/shared/${data.shareLinkToken}`;
-      setShareLink(url);
-      refetch();
-    },
+    onSuccess: () => refetch(),
   });
 
   const passwordMutation = useMutation({
@@ -148,6 +144,8 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
 
   if (!board) return null;
 
+  const shareLink = board.shareLinkToken ? `${window.location.origin}/shared/${board.shareLinkToken}` : '';
+
   const shareLinkAccessible = board.visibility === BoardVisibility.Public;
   const visibilityDescriptionKey =
     board.visibility === BoardVisibility.Private
@@ -162,10 +160,38 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
       ? { severity: 'warning' as const, text: t('sharing.shareLinkPrivateHint') }
       : { severity: 'warning' as const, text: t('sharing.shareLinkSharedHint') };
 
-  const shareableUserIds = (board.members ?? []).map((member) => member.userId);
+  const members = board.members ?? [];
+  const ownerMembership = members.find((member) => member.userId === board.ownerId);
+  const memberViewModels: ShareMemberViewModel[] = [
+    {
+      userId: board.ownerId,
+      username: ownerMembership?.username || board.ownerId,
+      role: BoardRole.Owner,
+      isOwner: true,
+      canEditRole: false,
+      canRemove: false,
+    },
+    ...members
+      .filter((member) => member.userId !== board.ownerId)
+      .map((member) => ({
+        ...member,
+        isOwner: false,
+        canEditRole: true,
+        canRemove: true,
+      })),
+  ];
+  const shareableUserIds = memberViewModels.map((member) => member.userId);
 
   const handleSelectUser = (user: User) => {
     addMemberMutation.mutate({ username: user.username, role: newMemberRole });
+  };
+
+  const handleRoleChange = (member: ShareMemberViewModel, role: BoardRole) => {
+    if (!member.canEditRole || role === BoardRole.Owner) {
+      return;
+    }
+
+    updateRoleMutation.mutate({ userId: member.userId, role });
   };
 
   return (
@@ -318,29 +344,48 @@ export function ShareDialog({ boardId, onClose }: ShareDialogProps) {
             {t('sharing.sharedMembersHint')}
           </Typography>
           <List dense>
-            {(board.members ?? []).map((m) => (
-              <ListItem key={m.userId}>
-                <ListItemText primary={m.username || m.userId} />
-                <Select
-                  size="small"
-                  value={m.role}
-                  onChange={(e) =>
-                    updateRoleMutation.mutate({ userId: m.userId, role: e.target.value as BoardRole })
-                  }
-                  sx={{ mr: 1, minWidth: 100 }}
-                >
-                  <MenuItem value={BoardRole.Owner}>{t('sharing.owner')}</MenuItem>
-                  <MenuItem value={BoardRole.Editor}>{t('sharing.editor')}</MenuItem>
-                  <MenuItem value={BoardRole.Viewer}>{t('sharing.viewer')}</MenuItem>
-                </Select>
-                <ListItemSecondaryAction>
+            {memberViewModels.map((member) => (
+              <ListItem key={member.userId} sx={{ gap: 1 }}>
+                <ListItemText
+                  disableTypography
+                  primary={(
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                      <Typography>{member.username || member.userId}</Typography>
+                      {member.isOwner && (
+                        <Chip
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          label={t('sharing.owner')}
+                        />
+                      )}
+                    </Box>
+                  )}
+                />
+                {member.canEditRole && (
+                  <Select
+                    size="small"
+                    value={member.role}
+                    onChange={(event) => handleRoleChange(member, event.target.value as BoardRole)}
+                    sx={{ minWidth: 100 }}
+                  >
+                    {member.role === BoardRole.Owner && (
+                      <MenuItem value={BoardRole.Owner} disabled>
+                        {t('sharing.owner')}
+                      </MenuItem>
+                    )}
+                    <MenuItem value={BoardRole.Editor}>{t('sharing.editor')}</MenuItem>
+                    <MenuItem value={BoardRole.Viewer}>{t('sharing.viewer')}</MenuItem>
+                  </Select>
+                )}
+                {member.canRemove && (
                   <IconButton
                     size="small"
-                    onClick={() => removeMemberMutation.mutate(m.userId)}
+                    onClick={() => removeMemberMutation.mutate(member.userId)}
                   >
                     <DeleteIcon fontSize="small" />
                   </IconButton>
-                </ListItemSecondaryAction>
+                )}
               </ListItem>
             ))}
           </List>

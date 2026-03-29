@@ -67,6 +67,7 @@ interface WhiteboardCanvasProps {
   onBoardLiveChanged?: (changeKind: string) => void;
   onPointerPresenceChanged?: (worldX: number | null, worldY: number | null) => void;
   localPresenceClientId?: string | null;
+  onStageReady?: (stage: Konva.Stage | null) => void;
 }
 
 type DockTargetState = {
@@ -238,6 +239,7 @@ export function WhiteboardCanvas({
   onBoardLiveChanged,
   onPointerPresenceChanged,
   localPresenceClientId = null,
+  onStageReady,
 }: WhiteboardCanvasProps) {
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -275,6 +277,14 @@ export function WhiteboardCanvas({
   const pushCommand = useCommandStack((s) => s.push);
   const undo = useCommandStack((s) => s.undo);
   const redo = useCommandStack((s) => s.redo);
+
+  useEffect(() => {
+    onStageReady?.(stageRef.current);
+
+    return () => {
+      onStageReady?.(null);
+    };
+  }, [onStageReady]);
 
   // Dragging state
   const [isDragging, setIsDragging] = useState(false);
@@ -1769,15 +1779,15 @@ export function WhiteboardCanvas({
     : arrowEndpointDrag?.hoverElementId && arrowEndpointDrag.hoverDock
       ? `${arrowEndpointDrag.hoverElementId}:${arrowEndpointDrag.hoverDock}`
       : null;
+  const worldLeft = -cameraX / zoom;
+  const worldTop = -cameraY / zoom;
+  const worldRight = worldLeft + stageSize.width / zoom;
+  const worldBottom = worldTop + stageSize.height / zoom;
 
   // Grid pattern
   const gridLines: ReactNode[] = [];
   if (zoom > 0.3) {
     const step = GRID_SIZE;
-    const worldLeft = -cameraX / zoom;
-    const worldTop = -cameraY / zoom;
-    const worldRight = worldLeft + stageSize.width / zoom;
-    const worldBottom = worldTop + stageSize.height / zoom;
     const startX = Math.floor(worldLeft / step) * step;
     const startY = Math.floor(worldTop / step) * step;
 
@@ -1851,6 +1861,14 @@ export function WhiteboardCanvas({
       >
         {/* Grid layer */}
         <Layer listening={false}>
+          <Rect
+            x={worldLeft}
+            y={worldTop}
+            width={worldRight - worldLeft}
+            height={worldBottom - worldTop}
+            fill={boardDefaults.surfaceColor}
+            listening={false}
+          />
           {gridLines}
         </Layer>
 
@@ -1870,7 +1888,9 @@ export function WhiteboardCanvas({
                 return null;
             }
           })}
+        </Layer>
 
+        <Layer name="whiteboard-export-hidden">
           {/* Draft shape */}
           {draftRect && (
             <Rect
@@ -1996,7 +2016,7 @@ export function WhiteboardCanvas({
       </Stage>
 
       {/* Inline text editor (DOM overlay) */}
-      {editingElement && stageRef.current && (
+      {editingElement && (
         <InlineTextEditor
           element={editingElement}
           zoom={zoom}
