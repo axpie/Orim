@@ -17,3 +17,6 @@ Thumbs.db
 /Orim.Web/appsettings.Development.json
 /Orim.Web/Properties/PublishProfiles/orim - Zip Deploy.pubxml
 /artifacts
+/.artifacts
+/Orim.Api/wwwroot/index.html
+/Orim.Api/wwwroot/assets

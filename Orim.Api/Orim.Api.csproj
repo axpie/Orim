@@ -12,6 +12,13 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="data\**" />
+    <Content Remove="data\**" />
+    <EmbeddedResource Remove="data\**" />
+    <None Remove="data\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <ProjectReference Include="..\Orim.Core\Orim.Core.csproj" />
     <ProjectReference Include="..\Orim.Infrastructure\Orim.Infrastructure.csproj" />
   </ItemGroup>
@@ -23,28 +30,23 @@
     <PackageReference Include="PDFsharp" Version="6.2.0" />
   </ItemGroup>
 
-  <Target Name="BuildSpaAssets"
-          BeforeTargets="BeforeBuild"
-          Condition="'$(Configuration)' == 'Release' and Exists('$(SpaRoot)package.json')">
+  <ItemGroup>
+    <Folder Include="wwwroot\assets\" />
+  </ItemGroup>
+
+  <Target Name="BuildSpaAssets" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Release' and Exists('$(SpaRoot)package.json')">
     <Message Text="Building SPA assets into wwwroot for Release configuration." Importance="high" />
-    <Exec WorkingDirectory="$(SpaRoot)"
-          Command="$(NpmExecutable) ci"
-          Condition="!Exists('$(SpaRoot)node_modules')" />
-    <Exec WorkingDirectory="$(SpaRoot)"
-          Command="$(NpmExecutable) run build" />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="$(NpmExecutable) ci" Condition="!Exists('$(SpaRoot)node_modules')" />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="$(NpmExecutable) run build" />
     <RemoveDir Directories="$(SpaWwwRoot)" Condition="Exists('$(SpaWwwRoot)')" />
     <MakeDir Directories="$(SpaWwwRoot)" />
     <ItemGroup>
       <SpaDistFiles Include="$(SpaDistRoot)**\*" />
     </ItemGroup>
-    <Copy SourceFiles="@(SpaDistFiles)"
-          DestinationFiles="@(SpaDistFiles->'$(SpaWwwRoot)%(RecursiveDir)%(Filename)%(Extension)')"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(SpaDistFiles)" DestinationFiles="@(SpaDistFiles->'$(SpaWwwRoot)%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
   </Target>
 
-  <Target Name="EnsureSpaAssetsIncludedInPublish"
-          BeforeTargets="ComputeFilesToPublish"
-          Condition="'$(Configuration)' == 'Release' and Exists('$(SpaWwwRoot)index.html')">
+  <Target Name="EnsureSpaAssetsIncludedInPublish" BeforeTargets="ComputeFilesToPublish" Condition="'$(Configuration)' == 'Release' and Exists('$(SpaWwwRoot)index.html')">
     <ItemGroup>
       <Content Include="wwwroot\**\*" CopyToPublishDirectory="PreserveNewest" />
     </ItemGroup>

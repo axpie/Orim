@@ -90,6 +90,7 @@ export function InlineTextEditor({
           ignoreBlurRef.current = true;
           onCancel();
         }
+        e.nativeEvent.stopImmediatePropagation?.();
         e.stopPropagation(); // don't trigger canvas shortcuts
       }}
       onBlur={(e) => {

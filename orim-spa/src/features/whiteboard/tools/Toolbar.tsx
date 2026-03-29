@@ -27,6 +27,8 @@ import AddReactionIcon from '@mui/icons-material/AddReaction';
 import UndoIcon from '@mui/icons-material/Undo';
 import RedoIcon from '@mui/icons-material/Redo';
 import DeleteIcon from '@mui/icons-material/Delete';
+import GroupWorkIcon from '@mui/icons-material/GroupWork';
+import CallSplitIcon from '@mui/icons-material/CallSplit';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import FitScreenIcon from '@mui/icons-material/FitScreen';
@@ -66,6 +68,17 @@ export function Toolbar() {
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [iconSearch, setIconSearch] = useState('');
   const [collapsed, setCollapsed] = useState(isCompactLayout);
+
+  const selectedElements = useMemo(
+    () => board?.elements.filter((element) => selectedIds.includes(element.id)) ?? [],
+    [board?.elements, selectedIds],
+  );
+  const selectedGroupIds = useMemo(
+    () => new Set(selectedElements.flatMap((element) => element.groupId ? [element.groupId] : [])),
+    [selectedElements],
+  );
+  const canGroup = selectedElements.length >= 2;
+  const canUngroup = selectedGroupIds.size > 0;
 
   useEffect(() => {
     if (!isCompactLayout) {
@@ -126,6 +139,42 @@ export function Toolbar() {
     removeElements(selectedIds);
     pushCommand(before, board.elements.filter((el) => !selectedIds.includes(el.id)));
     setSelectedElementIds([]);
+    setDirty(true);
+  };
+
+  const handleGroup = () => {
+    if (!board || selectedElements.length < 2) return;
+
+    const nextGroupId = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+      ? crypto.randomUUID()
+      : `group-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const selectedIdSet = new Set(selectedElements.map((element) => element.id));
+    const before = [...board.elements];
+    const after = board.elements.map((element) => (
+      selectedIdSet.has(element.id)
+        ? { ...element, groupId: nextGroupId }
+        : element
+    ));
+
+    setElements(after);
+    pushCommand(before, after);
+    setSelectedElementIds(after.filter((element) => element.groupId === nextGroupId).map((element) => element.id));
+    setDirty(true);
+  };
+
+  const handleUngroup = () => {
+    if (!board || selectedGroupIds.size === 0) return;
+
+    const before = [...board.elements];
+    const after = board.elements.map((element) => (
+      element.groupId && selectedGroupIds.has(element.groupId)
+        ? { ...element, groupId: null }
+        : element
+    ));
+
+    setElements(after);
+    pushCommand(before, after);
+    setSelectedElementIds(selectedIds.filter((id) => after.some((element) => element.id === id)));
     setDirty(true);
   };
 
@@ -219,6 +268,30 @@ export function Toolbar() {
             sx={{ flexShrink: 0 }}
           >
             <DeleteIcon />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title={t('tools.group')} placement={isCompactLayout ? 'top' : 'right'}>
+        <span>
+          <IconButton
+            size={isCompactLayout ? 'medium' : 'small'}
+            onClick={handleGroup}
+            disabled={!canGroup}
+            sx={{ flexShrink: 0 }}
+          >
+            <GroupWorkIcon />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title={t('tools.ungroup')} placement={isCompactLayout ? 'top' : 'right'}>
+        <span>
+          <IconButton
+            size={isCompactLayout ? 'medium' : 'small'}
+            onClick={handleUngroup}
+            disabled={!canUngroup}
+            sx={{ flexShrink: 0 }}
+          >
+            <CallSplitIcon />
           </IconButton>
         </span>
       </Tooltip>

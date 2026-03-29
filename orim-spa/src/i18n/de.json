@@ -67,6 +67,8 @@
     "undo": "Rückgängig",
     "redo": "Wiederholen",
     "delete": "Löschen",
+    "group": "Gruppieren",
+    "ungroup": "Gruppierung aufheben",
     "zoomIn": "Vergrößern",
     "zoomOut": "Verkleinern",
     "fitToScreen": "Einpassen",

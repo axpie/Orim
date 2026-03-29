@@ -67,6 +67,8 @@
     "undo": "Undo",
     "redo": "Redo",
     "delete": "Delete",
+    "group": "Group",
+    "ungroup": "Ungroup",
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out",
     "fitToScreen": "Fit to Screen",

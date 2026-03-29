@@ -191,6 +191,31 @@ export function WhiteboardCanvas({
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number; cx: number; cy: number } | null>(null);
 
+  const expandSelectionWithGroups = useCallback((ids: string[]): string[] => {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const selection = new Set(ids);
+    const groupedIds = new Set(
+      elements
+        .filter((element) => selection.has(element.id) && element.groupId)
+        .map((element) => element.groupId as string),
+    );
+
+    if (groupedIds.size === 0) {
+      return [...selection];
+    }
+
+    for (const element of elements) {
+      if (element.groupId && groupedIds.has(element.groupId)) {
+        selection.add(element.id);
+      }
+    }
+
+    return [...selection];
+  }, [elements]);
+
   // Resize observer
   useEffect(() => {
     const container = containerRef.current;
@@ -216,6 +241,16 @@ export function WhiteboardCanvas({
   // Keyboard shortcuts
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
+      const target = e.target;
+      if (
+        target instanceof HTMLInputElement
+        || target instanceof HTMLTextAreaElement
+        || target instanceof HTMLSelectElement
+        || (target instanceof HTMLElement && target.isContentEditable)
+      ) {
+        return;
+      }
+
       if (editingElement) return; // don't intercept while editing text
       if (!editable) return;
       if (e.key === 'Delete' || e.key === 'Backspace') {
@@ -577,15 +612,20 @@ export function WhiteboardCanvas({
         // Find the element id from the target
         const elementId = getElementIdFromTarget(target);
         if (elementId) {
+          const groupedSelectionIds = expandSelectionWithGroups([elementId]);
+
           if (e.evt.shiftKey) {
-            // Toggle in selection
+            const hasGroupedSelection = groupedSelectionIds.some((id) => selectedIds.includes(id));
             setSelectedElementIds(
-              selectedIds.includes(elementId)
-                ? selectedIds.filter((id) => id !== elementId)
-                : [...selectedIds, elementId],
+              hasGroupedSelection
+                ? selectedIds.filter((id) => !groupedSelectionIds.includes(id))
+                : [...selectedIds, ...groupedSelectionIds.filter((id) => !selectedIds.includes(id))],
             );
-          } else if (!selectedIds.includes(elementId)) {
-            setSelectedElementIds([elementId]);
+          } else if (
+            selectedIds.length !== groupedSelectionIds.length
+            || groupedSelectionIds.some((id) => !selectedIds.includes(id))
+          ) {
+            setSelectedElementIds(groupedSelectionIds);
           }
           // Start drag
           if (editable) {
@@ -596,7 +636,7 @@ export function WhiteboardCanvas({
         }
       }
     },
-    [editable, activeTool, elements, selectedIds, cameraX, cameraY, zoom, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pushCommand, onBoardChanged, boardDefaults],
+    [editable, activeTool, elements, selectedIds, cameraX, cameraY, zoom, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pushCommand, onBoardChanged, boardDefaults],
   );
 
   // ── Mouse Move ──
@@ -936,7 +976,7 @@ export function WhiteboardCanvas({
           if (el.$type === 'arrow') return false;
           return el.x >= mx && el.y >= my && el.x + el.width <= mx2 && el.y + el.height <= my2;
         });
-        setSelectedElementIds(enclosed.map((el: BoardElement) => el.id));
+        setSelectedElementIds(expandSelectionWithGroups(enclosed.map((el: BoardElement) => el.id)));
       }
       setMarquee(null);
 
@@ -956,7 +996,7 @@ export function WhiteboardCanvas({
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, zoom, getResizeHandleFromTarget, getWorldPos, setCamera, addElement, pushCommand, setSelectedElementIds, setActiveTool, onBoardChanged, updateElement, boardDefaults],
+    [isPanning, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, zoom, getResizeHandleFromTarget, getWorldPos, setCamera, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, onBoardChanged, updateElement, boardDefaults],
   );
 
   const handleTouchStart = useCallback(
