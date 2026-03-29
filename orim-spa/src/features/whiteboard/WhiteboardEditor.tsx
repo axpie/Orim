@@ -24,6 +24,9 @@ export function WhiteboardEditor() {
   const navigate = useNavigate();
   const theme = useTheme();
   const isNarrowPanelMode = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMediumDown = useMediaQuery(theme.breakpoints.down('md'));
+  const isCoarsePointer = useMediaQuery('(pointer: coarse)');
+  const isCompactToolbarLayout = isMediumDown || isCoarsePointer;
   const setBoard = useBoardStore((s) => s.setBoard);
   const setRemoteCursors = useBoardStore((s) => s.setRemoteCursors);
   const setViewportInsets = useBoardStore((s) => s.setViewportInsets);
@@ -37,7 +40,7 @@ export function WhiteboardEditor() {
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mobileOverlayOpen = isNarrowPanelMode && (propertiesOpen || chatOpen);
+  const compactOverlayOpen = isCompactToolbarLayout && (propertiesOpen || chatOpen);
 
   const currentMembership = user && board
     ? board.members.find((member) => member.userId === user.id) ?? (board.ownerId === user.id
@@ -202,7 +205,7 @@ export function WhiteboardEditor() {
         localConnectionId={connectionId}
       />
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
-        {canEdit && !mobileOverlayOpen && <Toolbar />}
+        {canEdit && !compactOverlayOpen && <Toolbar />}
         <Box sx={{ flex: 1, position: 'relative' }}>
           <WhiteboardCanvas
             editable={canEdit}

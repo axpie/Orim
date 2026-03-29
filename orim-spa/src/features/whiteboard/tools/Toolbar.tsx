@@ -42,7 +42,8 @@ export function Toolbar() {
   const { t } = useTranslation();
   const theme = useTheme();
   const isTouchDevice = useMediaQuery('(pointer: coarse)');
-  const isCompactLayout = isTouchDevice || useMediaQuery(theme.breakpoints.down('md'));
+  const isMediumDown = useMediaQuery(theme.breakpoints.down('md'));
+  const isCompactLayout = isTouchDevice || isMediumDown;
   const activeTool = useBoardStore((s) => s.activeTool);
   const setActiveTool = useBoardStore((s) => s.setActiveTool);
   const zoom = useBoardStore((s) => s.zoom);

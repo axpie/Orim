@@ -27,10 +27,12 @@ import ShareIcon from '@mui/icons-material/Share';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
+import KeyboardIcon from '@mui/icons-material/Keyboard';
 import { useBoardStore } from '../store/boardStore';
 import { AppSettingsDialog } from '../../../components/dialogs/AppSettingsDialog';
 import { exportBoardJson, exportBoardPdf } from '../../../api/boards';
 import { ShareDialog } from '../../sharing/ShareDialog';
+import { ShortcutHelpDialog } from './ShortcutHelpDialog';
 import type { CursorPresence } from '../../../types/models';
 
 interface BoardTopBarProps {
@@ -79,6 +81,7 @@ export function BoardTopBar({
   const [exportAnchor, setExportAnchor] = useState<null | HTMLElement>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [mobileActionsAnchor, setMobileActionsAnchor] = useState<null | HTMLElement>(null);
 
   const handleTitleFocus = () => {
@@ -243,6 +246,12 @@ export function BoardTopBar({
                 </Tooltip>
               )}
 
+              <Tooltip title={t('shortcuts.open')}>
+                <IconButton onClick={() => setShortcutsOpen(true)} sx={{ color: 'inherit' }}>
+                  <KeyboardIcon />
+                </IconButton>
+              </Tooltip>
+
               <Tooltip title={t('app.settings')}>
                 <IconButton
                   onClick={() => setSettingsOpen(true)}
@@ -310,6 +319,10 @@ export function BoardTopBar({
             <ListItemText>{t('board.exportPdf')}</ListItemText>
           </MenuItem>
         )}
+        <MenuItem onClick={() => { closeMobileActions(); setShortcutsOpen(true); }}>
+          <ListItemIcon><KeyboardIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{t('shortcuts.open')}</ListItemText>
+        </MenuItem>
         <MenuItem onClick={() => { closeMobileActions(); setSettingsOpen(true); }}>
           <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
           <ListItemText>{t('app.settings')}</ListItemText>
@@ -331,6 +344,8 @@ export function BoardTopBar({
       {shareOpen && board && (
         <ShareDialog boardId={board.id} onClose={() => setShareOpen(false)} />
       )}
+
+      <ShortcutHelpDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       <AppSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </>

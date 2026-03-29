@@ -161,6 +161,29 @@
     "notConfigured": "KI-Assistent ist nicht konfiguriert.",
     "emptyState": "Beschreiben Sie ein Diagramm und der Assistent erstellt es für Sie."
   },
+  "shortcuts": {
+    "title": "Tastaturkürzel",
+    "open": "Tastaturkürzel anzeigen",
+    "description": "Die wichtigsten Aktionen im Whiteboard lassen sich direkt über Tastatur, Trackpad und temporäre Gesten auslösen.",
+    "selectAll": "Alles auswählen",
+    "copySelection": "Auswahl kopieren",
+    "cutSelection": "Auswahl ausschneiden",
+    "pasteSelection": "Auswahl einfügen",
+    "duplicateSelection": "Auswahl duplizieren",
+    "deleteSelection": "Auswahl löschen",
+    "startInlineEdit": "Inline-Textbearbeitung starten",
+    "clearSelection": "Auswahl aufheben und zum Auswahlwerkzeug wechseln",
+    "temporaryPan": "Temporär schwenken, ohne das aktive Werkzeug zu wechseln",
+    "trackpadPan": "Board mit Zwei-Finger-Scrollen verschieben",
+    "trackpadZoom": "Board mit Pinch-Geste zoomen",
+    "moveSelection": "Auswahl verschieben",
+    "moveSelectionFast": "Auswahl schneller verschieben",
+    "sections": {
+      "editing": "Bearbeiten",
+      "tools": "Werkzeuge",
+      "navigation": "Navigation"
+    }
+  },
   "admin": {
     "userManagement": "Benutzerverwaltung",
     "createUser": "Benutzer erstellen",

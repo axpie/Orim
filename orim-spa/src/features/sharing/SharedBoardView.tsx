@@ -40,6 +40,9 @@ export function SharedBoardView() {
   const { t, i18n } = useTranslation();
   const theme = useTheme();
   const isNarrowPanelMode = useMediaQuery(theme.breakpoints.down('sm'));
+  const isMediumDown = useMediaQuery(theme.breakpoints.down('md'));
+  const isCoarsePointer = useMediaQuery('(pointer: coarse)');
+  const isCompactToolbarLayout = isMediumDown || isCoarsePointer;
   const setBoard = useBoardStore((s) => s.setBoard);
   const setRemoteCursors = useBoardStore((s) => s.setRemoteCursors);
   const setViewportInsets = useBoardStore((s) => s.setViewportInsets);
@@ -64,7 +67,7 @@ export function SharedBoardView() {
   const [guestNameDraft, setGuestNameDraft] = useState(guestDisplayName);
   const [guestNameSaved, setGuestNameSaved] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const mobileOverlayOpen = isNarrowPanelMode && propertiesOpen;
+  const compactOverlayOpen = isCompactToolbarLayout && propertiesOpen;
 
   const { isLoading, isError } = useQuery({
     queryKey: ['shared-board', token],
@@ -293,7 +296,7 @@ export function SharedBoardView() {
         </Box>
       )}
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
-        {board.sharedAllowAnonymousEditing && !mobileOverlayOpen && <Toolbar />}
+        {board.sharedAllowAnonymousEditing && !compactOverlayOpen && <Toolbar />}
         <Box sx={{ flex: 1, position: 'relative' }}>
           <WhiteboardCanvas
             editable={board.sharedAllowAnonymousEditing}

@@ -161,6 +161,29 @@
     "notConfigured": "AI assistant is not configured.",
     "emptyState": "Describe a diagram and the assistant will create it for you."
   },
+  "shortcuts": {
+    "title": "Keyboard Shortcuts",
+    "open": "Show keyboard shortcuts",
+    "description": "The main whiteboard actions are available directly from the keyboard, trackpad, and temporary gestures.",
+    "selectAll": "Select all",
+    "copySelection": "Copy selection",
+    "cutSelection": "Cut selection",
+    "pasteSelection": "Paste selection",
+    "duplicateSelection": "Duplicate selection",
+    "deleteSelection": "Delete selection",
+    "startInlineEdit": "Start inline text editing",
+    "clearSelection": "Clear selection and return to the select tool",
+    "temporaryPan": "Temporarily pan without switching the active tool",
+    "trackpadPan": "Pan the board with two-finger scrolling",
+    "trackpadZoom": "Zoom the board with a pinch gesture",
+    "moveSelection": "Move selection",
+    "moveSelectionFast": "Move selection faster",
+    "sections": {
+      "editing": "Editing",
+      "tools": "Tools",
+      "navigation": "Navigation"
+    }
+  },
   "admin": {
     "userManagement": "User Management",
     "createUser": "Create User",
