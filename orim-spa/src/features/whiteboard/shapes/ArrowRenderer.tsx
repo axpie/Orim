@@ -103,17 +103,30 @@ function trimArrowLinePoints(points: { x: number; y: number }[], arrow: ArrowEle
   }
 
   const trimmed = [...points];
-  const radius = Math.max(10, (arrow.strokeWidth ?? 2) * 4) / 2;
+  const sourceTrim = getArrowEndpointTrimDistance(arrow.sourceHeadStyle, arrow.strokeWidth ?? 2, Boolean(arrow.sourceElementId));
+  const targetTrim = getArrowEndpointTrimDistance(arrow.targetHeadStyle, arrow.strokeWidth ?? 2, Boolean(arrow.targetElementId));
 
-  if (arrow.sourceHeadStyle === ArrowHeadStyle.OpenCircle || arrow.sourceHeadStyle === ArrowHeadStyle.FilledCircle) {
-    trimmed[0] = movePointToward(points[0], points[1], radius);
+  if (sourceTrim > 0) {
+    trimmed[0] = movePointToward(points[0], points[1], sourceTrim);
   }
 
-  if (arrow.targetHeadStyle === ArrowHeadStyle.OpenCircle || arrow.targetHeadStyle === ArrowHeadStyle.FilledCircle) {
-    trimmed[trimmed.length - 1] = movePointToward(points[points.length - 1], points[points.length - 2], radius);
+  if (targetTrim > 0) {
+    trimmed[trimmed.length - 1] = movePointToward(points[points.length - 1], points[points.length - 2], targetTrim);
   }
 
   return trimmed;
+}
+
+function getArrowEndpointTrimDistance(style: ArrowHeadStyle | string | undefined, strokeWidth: number, isDocked: boolean) {
+  const dockTrim = isDocked ? Math.max(0.75, strokeWidth / 2) : 0;
+  const size = Math.max(10, strokeWidth * 4);
+  const headTrim = style === ArrowHeadStyle.FilledTriangle || style === ArrowHeadStyle.OpenTriangle
+    ? size * Math.cos(Math.PI / 6)
+    : style === ArrowHeadStyle.OpenCircle || style === ArrowHeadStyle.FilledCircle
+      ? size
+      : 0;
+
+  return Math.max(dockTrim, headTrim);
 }
 
 function movePointToward(from: { x: number; y: number }, to: { x: number; y: number }, distance: number) {
