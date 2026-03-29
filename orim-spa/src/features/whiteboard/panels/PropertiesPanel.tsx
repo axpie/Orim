@@ -8,6 +8,7 @@ import {
   TextField,
   MenuItem,
   FormControlLabel,
+  Slider,
   Switch,
   ToggleButton,
   ToggleButtonGroup,
@@ -212,6 +213,50 @@ function AlignmentControls({
   );
 }
 
+function NumericSliderField({
+  label,
+  value,
+  min,
+  max,
+  step = 1,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step?: number;
+  onChange: (value: number) => void;
+}) {
+  const safeValue = Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : min;
+
+  return (
+    <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 88px', gap: 1, alignItems: 'center' }}>
+      <Box sx={{ px: 0.5 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.25 }}>
+          {label}
+        </Typography>
+        <Slider
+          size="small"
+          value={safeValue}
+          min={min}
+          max={max}
+          step={step}
+          onChange={(_, nextValue) => onChange(Number(Array.isArray(nextValue) ? nextValue[0] : nextValue))}
+        />
+      </Box>
+      <TextField
+        aria-label={label}
+        size="small"
+        type="number"
+        value={safeValue}
+        onChange={(e) => onChange(Number(e.target.value))}
+        inputProps={{ min, max, step }}
+      />
+    </Box>
+  );
+}
+
 interface PropertiesPanelProps {
   onClose: () => void;
   onBoardChanged?: (changeKind: string) => void;
@@ -387,13 +432,12 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 label={t('properties.automaticFontSize')}
               />
               {(el as ShapeElement).labelFontSize != null && (
-                <TextField
+                <NumericSliderField
                   label={t('properties.fontSize')}
-                  type="number"
-                  size="small"
                   value={Math.round((el as ShapeElement).labelFontSize ?? getDefaultLabelFontSize(el as ShapeElement))}
-                  onChange={(e) => update(el.id, { labelFontSize: Number(e.target.value) })}
-                  inputProps={{ min: 8, max: 200 }}
+                  min={8}
+                  max={200}
+                  onChange={(value) => update(el.id, { labelFontSize: value })}
                 />
               )}
               <TextField
@@ -436,13 +480,12 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 value={(el as ShapeElement).strokeColor ?? '#333333'}
                 onChange={(value) => update(el.id, { strokeColor: value })}
               />
-              <TextField
+              <NumericSliderField
                 label={t('properties.strokeWidth')}
-                type="number"
-                size="small"
                 value={(el as ShapeElement).strokeWidth ?? 2}
-                onChange={(e) => update(el.id, { strokeWidth: Number(e.target.value) })}
-                inputProps={{ min: 0, max: 20 }}
+                min={0}
+                max={20}
+                onChange={(value) => update(el.id, { strokeWidth: value })}
               />
               <PreviewSelect
                 label={t('properties.lineStyle')}
@@ -480,13 +523,12 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 label={t('properties.automaticFontSize')}
               />
               {!(el as TextElement).autoFontSize && (
-                <TextField
+                <NumericSliderField
                   label={t('properties.fontSize')}
-                  type="number"
-                  size="small"
                   value={Math.round((el as TextElement).fontSize ?? 18)}
-                  onChange={(e) => update(el.id, { fontSize: Number(e.target.value), autoFontSize: false })}
-                  inputProps={{ min: 8, max: 200 }}
+                  min={8}
+                  max={200}
+                  onChange={(value) => update(el.id, { fontSize: value, autoFontSize: false })}
                 />
               )}
               <TextField
@@ -546,13 +588,12 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 value={(el as ArrowElement).strokeColor ?? '#333333'}
                 onChange={(value) => update(el.id, { strokeColor: value })}
               />
-              <TextField
+              <NumericSliderField
                 label={t('properties.strokeWidth')}
-                type="number"
-                size="small"
                 value={(el as ArrowElement).strokeWidth ?? 2}
-                onChange={(e) => update(el.id, { strokeWidth: Number(e.target.value) })}
-                inputProps={{ min: 1, max: 20 }}
+                min={1}
+                max={20}
+                onChange={(value) => update(el.id, { strokeWidth: value })}
               />
               <PreviewSelect
                 label={t('properties.lineStyle')}

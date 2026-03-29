@@ -6,12 +6,18 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.IdentityModel.Tokens;
+using PdfSharp.Fonts;
 using Orim.Api.Hubs;
 using Orim.Api.Services;
 using Orim.Core;
 using Orim.Core.Models;
 using Orim.Core.Services;
 using Orim.Infrastructure;
+
+if (OperatingSystem.IsWindows())
+{
+    GlobalFontSettings.UseWindowsFontsUnderWindows = true;
+}
 
 var builder = WebApplication.CreateBuilder(args);
 

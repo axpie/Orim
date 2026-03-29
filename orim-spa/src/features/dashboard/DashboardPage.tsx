@@ -39,6 +39,97 @@ import {
 } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
 
+function TemplatePreview({ templateId }: { templateId: string }) {
+  const frameSx = {
+    width: '100%',
+    aspectRatio: '16 / 9',
+    borderRadius: 2,
+    border: '1px solid',
+    borderColor: 'divider',
+    bgcolor: 'rgba(148, 163, 184, 0.08)',
+    backgroundImage: 'linear-gradient(135deg, rgba(255,255,255,0.95), rgba(241,245,249,0.78))',
+    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  } as const;
+
+  const svg = (() => {
+    switch (templateId) {
+      case 'process-flow':
+        return (
+          <svg viewBox="0 0 160 90" width="100%" height="100%" aria-hidden="true" focusable="false">
+            <line x1="34" y1="45" x2="62" y2="45" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <line x1="94" y1="45" x2="124" y2="45" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <ellipse cx="22" cy="45" rx="14" ry="10" fill="#DCFCE7" stroke="#16A34A" strokeWidth="2" />
+            <rect x="62" y="30" width="32" height="30" rx="7" fill="#DBEAFE" stroke="#2563EB" strokeWidth="2" />
+            <polygon points="124,45 138,31 152,45 138,59" fill="#FEF3C7" stroke="#D97706" strokeWidth="2" />
+          </svg>
+        );
+      case 'org-chart':
+        return (
+          <svg viewBox="0 0 160 90" width="100%" height="100%" aria-hidden="true" focusable="false">
+            <rect x="55" y="10" width="50" height="18" rx="6" fill="#E0E7FF" stroke="#4F46E5" strokeWidth="2" />
+            <line x1="80" y1="28" x2="80" y2="44" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <line x1="35" y1="44" x2="125" y2="44" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <line x1="35" y1="44" x2="35" y2="56" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <line x1="80" y1="44" x2="80" y2="56" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <line x1="125" y1="44" x2="125" y2="56" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <rect x="15" y="56" width="40" height="18" rx="6" fill="#DBEAFE" stroke="#2563EB" strokeWidth="2" />
+            <rect x="60" y="56" width="40" height="18" rx="6" fill="#DCFCE7" stroke="#16A34A" strokeWidth="2" />
+            <rect x="105" y="56" width="40" height="18" rx="6" fill="#FCE7F3" stroke="#DB2777" strokeWidth="2" />
+          </svg>
+        );
+      case 'swimlane':
+        return (
+          <svg viewBox="0 0 160 90" width="100%" height="100%" aria-hidden="true" focusable="false">
+            <rect x="10" y="12" width="140" height="26" rx="8" fill="#F8FAFC" stroke="#94A3B8" strokeWidth="2" />
+            <rect x="10" y="52" width="140" height="26" rx="8" fill="#F8FAFC" stroke="#94A3B8" strokeWidth="2" />
+            <rect x="28" y="18" width="30" height="14" rx="5" fill="#DBEAFE" stroke="#2563EB" strokeWidth="2" />
+            <rect x="72" y="18" width="30" height="14" rx="5" fill="#FEF3C7" stroke="#D97706" strokeWidth="2" />
+            <rect x="110" y="58" width="30" height="14" rx="5" fill="#DCFCE7" stroke="#16A34A" strokeWidth="2" />
+            <line x1="58" y1="25" x2="72" y2="25" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <line x1="102" y1="25" x2="125" y2="58" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+          </svg>
+        );
+      case 'decision-tree':
+        return (
+          <svg viewBox="0 0 160 90" width="100%" height="100%" aria-hidden="true" focusable="false">
+            <rect x="55" y="10" width="50" height="18" rx="6" fill="#DBEAFE" stroke="#2563EB" strokeWidth="2" />
+            <line x1="80" y1="28" x2="80" y2="38" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <polygon points="80,38 96,52 80,66 64,52" fill="#FEF3C7" stroke="#D97706" strokeWidth="2" />
+            <line x1="64" y1="52" x2="35" y2="70" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <line x1="96" y1="52" x2="125" y2="70" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <rect x="15" y="66" width="38" height="14" rx="5" fill="#DCFCE7" stroke="#16A34A" strokeWidth="2" />
+            <rect x="107" y="66" width="38" height="14" rx="5" fill="#FCE7F3" stroke="#DB2777" strokeWidth="2" />
+          </svg>
+        );
+      case 'workshop-board':
+        return (
+          <svg viewBox="0 0 160 90" width="100%" height="100%" aria-hidden="true" focusable="false">
+            <rect x="18" y="14" width="34" height="22" rx="6" fill="#FCE7F3" stroke="#DB2777" strokeWidth="2" />
+            <rect x="62" y="14" width="34" height="22" rx="6" fill="#DBEAFE" stroke="#2563EB" strokeWidth="2" />
+            <rect x="106" y="14" width="36" height="22" rx="6" fill="#DCFCE7" stroke="#16A34A" strokeWidth="2" />
+            <rect x="18" y="50" width="34" height="22" rx="6" fill="#FEF3C7" stroke="#D97706" strokeWidth="2" />
+            <rect x="62" y="50" width="34" height="22" rx="6" fill="#FEE2E2" stroke="#DC2626" strokeWidth="2" />
+            <rect x="106" y="50" width="36" height="22" rx="6" fill="#E0E7FF" stroke="#4F46E5" strokeWidth="2" />
+          </svg>
+        );
+      default:
+        return (
+          <svg viewBox="0 0 160 90" width="100%" height="100%" aria-hidden="true" focusable="false">
+            <rect x="16" y="14" width="128" height="62" rx="12" fill="#FFFFFF" stroke="#CBD5E1" strokeWidth="2" strokeDasharray="6 6" />
+            <circle cx="42" cy="33" r="4" fill="#94A3B8" />
+            <circle cx="80" cy="45" r="4" fill="#94A3B8" />
+            <circle cx="118" cy="57" r="4" fill="#94A3B8" />
+          </svg>
+        );
+    }
+  })();
+
+  return <Box sx={frameSx}>{svg}</Box>;
+}
+
 export function DashboardPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -191,20 +282,21 @@ export function DashboardPage() {
           <Grid container spacing={2}>
             {templates.map((tmpl) => (
               <Grid size={{ xs: 6, sm: 4, md: 2 }} key={tmpl.id}>
-                <Card variant="outlined" sx={{ textAlign: 'center' }}>
+                <Card variant="outlined" sx={{ height: '100%', textAlign: 'left' }}>
                   <CardActionArea
-                    sx={{ p: 2 }}
+                    sx={{ p: 2, height: '100%', display: 'grid', gap: 1.25, alignContent: 'start' }}
                     onClick={() => {
                       setNewTemplate(tmpl.id);
                       setNewTitle(getTemplateTitle(tmpl));
                       setCreateOpen(true);
                     }}
                   >
+                    <TemplatePreview templateId={tmpl.id} />
                     <Typography variant="body2" fontWeight={600}>
                       {getTemplateTitle(tmpl)}
                     </Typography>
                     {getTemplateDescription(tmpl) && (
-                      <Typography variant="caption" color="text.secondary">
+                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
                         {getTemplateDescription(tmpl)}
                       </Typography>
                     )}

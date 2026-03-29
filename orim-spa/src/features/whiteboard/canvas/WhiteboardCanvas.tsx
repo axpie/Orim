@@ -1075,23 +1075,33 @@ export function WhiteboardCanvas({
 
       // Arrow tool
       if (editable && activeTool === 'arrow') {
-        // Find nearest dock
-        const hitEl = elements.find(
-          (el: BoardElement) =>
-            el.$type !== 'arrow' &&
-            worldPos.x >= el.x &&
-            worldPos.x <= el.x + el.width &&
-            worldPos.y >= el.y &&
-            worldPos.y <= el.y + el.height,
-        );
-        if (hitEl) {
+        const startDockTarget = findNearestDockTarget(elements, worldPos, undefined, dockSnapRadius);
+        const hitEl = startDockTarget
+          ? elements.find((element) => element.id === startDockTarget.elementId && element.$type !== 'arrow')
+          : elements.find(
+            (el: BoardElement) =>
+              el.$type !== 'arrow' &&
+              worldPos.x >= el.x &&
+              worldPos.x <= el.x + el.width &&
+              worldPos.y >= el.y &&
+              worldPos.y <= el.y + el.height,
+          );
+
+        if (startDockTarget) {
+          setDraftArrowStart({
+            x: startDockTarget.point.x,
+            y: startDockTarget.point.y,
+            elementId: startDockTarget.elementId,
+            dock: startDockTarget.dock,
+          });
+        } else if (hitEl) {
           const dock = nearestDock(hitEl, worldPos);
           const dockPos = getDockPosition(hitEl, dock);
           setDraftArrowStart({ x: dockPos.x, y: dockPos.y, elementId: hitEl.id, dock });
         } else {
           setDraftArrowStart({ x: worldPos.x, y: worldPos.y });
         }
-        setDraftArrowEnd(worldPos);
+        setDraftArrowEnd(startDockTarget?.point ?? worldPos);
         setDraftArrowHover(null);
         return;
       }

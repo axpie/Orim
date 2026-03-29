@@ -244,7 +244,16 @@ export function Toolbar() {
         </Tooltip>
       ))}
 
-      <Divider flexItem orientation={isCompactLayout ? 'vertical' : 'horizontal'} sx={{ my: isCompactLayout ? 0 : 0.5, mx: isCompactLayout ? 0.5 : 0 }} />
+      <Divider
+        flexItem
+        orientation={isCompactLayout ? 'horizontal' : 'horizontal'}
+        sx={{
+          my: isCompactLayout ? 0.25 : 0.5,
+          mx: isCompactLayout ? 0 : 0,
+          flexBasis: isCompactLayout ? '100%' : 'auto',
+          width: isCompactLayout ? '100%' : 'auto',
+        }}
+      />
 
       <Tooltip title={t('tools.undo')} placement={isCompactLayout ? 'top' : 'right'}>
         <span>
@@ -297,7 +306,16 @@ export function Toolbar() {
         </span>
       </Tooltip>
 
-      <Divider flexItem orientation={isCompactLayout ? 'vertical' : 'horizontal'} sx={{ my: isCompactLayout ? 0 : 0.5, mx: isCompactLayout ? 0.5 : 0 }} />
+      <Divider
+        flexItem
+        orientation={isCompactLayout ? 'horizontal' : 'horizontal'}
+        sx={{
+          my: isCompactLayout ? 0.25 : 0.5,
+          mx: isCompactLayout ? 0 : 0,
+          flexBasis: isCompactLayout ? '100%' : 'auto',
+          width: isCompactLayout ? '100%' : 'auto',
+        }}
+      />
 
       <Tooltip title={t('tools.zoomIn')} placement={isCompactLayout ? 'top' : 'right'}>
         <IconButton size={isCompactLayout ? 'medium' : 'small'} onClick={handleZoomIn} sx={{ flexShrink: 0 }}>
@@ -356,14 +374,12 @@ export function Toolbar() {
               sx={{
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'center',
+                flexWrap: 'wrap',
                 gap: 0.5,
                 width: '100%',
-                overflowX: 'auto',
+                overflowX: 'visible',
                 pb: 0.25,
-                '&::-webkit-scrollbar': {
-                  display: 'none',
-                },
-                scrollbarWidth: 'none',
               }}
             >
               {actionButtons}
