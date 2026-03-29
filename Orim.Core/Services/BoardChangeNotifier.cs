@@ -2,7 +2,14 @@ using System.Collections.Concurrent;
 
 namespace Orim.Core.Services;
 
-public sealed record BoardChangeNotification(Guid BoardId, string? SourceClientId, DateTime ChangedAtUtc);
+public enum BoardChangeKind
+{
+    Content,
+    Presentation,
+    Metadata
+}
+
+public sealed record BoardChangeNotification(Guid BoardId, string? SourceClientId, DateTime ChangedAtUtc, BoardChangeKind Kind);
 
 public sealed class BoardChangeNotifier
 {
@@ -18,14 +25,14 @@ public sealed class BoardChangeNotifier
         return new Subscription(this, boardId, subscriberId);
     }
 
-    public Task NotifyBoardChangedAsync(Guid boardId, string? sourceClientId = null)
+    public Task NotifyBoardChangedAsync(Guid boardId, string? sourceClientId = null, BoardChangeKind kind = BoardChangeKind.Content)
     {
         if (!_subscriptions.TryGetValue(boardId, out var boardSubscriptions) || boardSubscriptions.Count == 0)
         {
             return Task.CompletedTask;
         }
 
-        var notification = new BoardChangeNotification(boardId, sourceClientId, DateTime.UtcNow);
+        var notification = new BoardChangeNotification(boardId, sourceClientId, DateTime.UtcNow, kind);
         var handlers = boardSubscriptions.Values.ToArray();
         return Task.WhenAll(handlers.Select(handler => InvokeHandlerSafelyAsync(handler, notification)));
     }

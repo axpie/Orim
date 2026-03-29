@@ -18,6 +18,12 @@ public abstract class BoardElement
     public double Rotation { get; set; }
     public string Label { get; set; } = string.Empty;
     public double? LabelFontSize { get; set; }
+    public string? LabelColor { get; set; }
+    public string? FontFamily { get; set; }
+    public bool IsBold { get; set; }
+    public bool IsItalic { get; set; }
+    public bool IsUnderline { get; set; }
+    public bool IsStrikethrough { get; set; }
     public HorizontalLabelAlignment LabelHorizontalAlignment { get; set; } = HorizontalLabelAlignment.Center;
     public VerticalLabelAlignment LabelVerticalAlignment { get; set; } = VerticalLabelAlignment.Middle;
 }
@@ -66,9 +72,8 @@ public class TextElement : BoardElement
 {
     public string Text { get; set; } = string.Empty;
     public double FontSize { get; set; } = 16;
+    public bool AutoFontSize { get; set; }
     public string Color { get; set; } = "#000000";
-    public bool IsBold { get; set; }
-    public bool IsItalic { get; set; }
 }
 
 public class ArrowElement : BoardElement

@@ -18,7 +18,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Orim.Core\Orim.Core.csproj" />
     <ProjectReference Include="..\Orim.Infrastructure\Orim.Infrastructure.csproj" />
-    <ProjectReference Include="..\Orim.Web\Orim.Web.csproj" />
+    <ProjectReference Include="..\Orim.Api\Orim.Api.csproj" />
   </ItemGroup>
 
 </Project>

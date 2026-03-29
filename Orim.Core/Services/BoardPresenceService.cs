@@ -60,6 +60,17 @@ public sealed class BoardPresenceService
         return NotifySubscribersAsync(boardId);
     }
 
+    public BoardCursorPresence? GetCursor(Guid boardId, string clientId)
+    {
+        if (_presence.TryGetValue(boardId, out var boardPresence)
+            && boardPresence.TryGetValue(clientId, out var presence))
+        {
+            return presence;
+        }
+
+        return null;
+    }
+
     private IReadOnlyList<BoardCursorPresence> GetSnapshot(Guid boardId)
     {
         PruneExpiredSuppressions(boardId);

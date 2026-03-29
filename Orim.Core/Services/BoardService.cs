@@ -143,7 +143,7 @@ public class BoardService
     {
         ArgumentNullException.ThrowIfNull(board);
 
-        if (board.Visibility != BoardVisibility.Shared)
+        if (board.Visibility != BoardVisibility.Public)
             return false;
 
         if (!ValidateSharePassword(board, password))
@@ -167,12 +167,12 @@ public class BoardService
         ).ToList();
     }
 
-    public async Task UpdateBoardAsync(Board board, string? sourceClientId = null)
+    public async Task UpdateBoardAsync(Board board, string? sourceClientId = null, BoardChangeKind kind = BoardChangeKind.Content)
     {
         EnsureOwnerMembership(board);
         board.UpdatedAt = DateTime.UtcNow;
         await _boardRepository.SaveAsync(board);
-        await _boardChangeNotifier.NotifyBoardChangedAsync(board.Id, sourceClientId);
+        await _boardChangeNotifier.NotifyBoardChangedAsync(board.Id, sourceClientId, kind);
     }
 
     public async Task DeleteBoardAsync(Guid boardId)
@@ -292,10 +292,6 @@ public class BoardService
 
     public bool HasAccess(Board board, Guid? userId, BoardRole minimumRole = BoardRole.Viewer)
     {
-        // Shared visibility grants viewer-only access (share-link read mode)
-        if (board.Visibility == BoardVisibility.Shared && minimumRole == BoardRole.Viewer)
-            return true;
-
         if (userId is null)
             return false;
 
@@ -311,10 +307,6 @@ public class BoardService
 
     public bool HasAccess(BoardSummary summary, Guid? userId, BoardRole minimumRole = BoardRole.Viewer)
     {
-        // Shared visibility grants viewer-only access (share-link read mode)
-        if (summary.Visibility == BoardVisibility.Shared && minimumRole == BoardRole.Viewer)
-            return true;
-
         if (userId is null)
             return false;
 

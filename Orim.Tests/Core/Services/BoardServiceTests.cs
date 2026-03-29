@@ -208,33 +208,33 @@ public class BoardServiceTests
     }
 
     [Fact]
-    public void HasSharedLinkAccess_SharedBoard_ViewerAccess_ReturnsTrue()
+    public void HasSharedLinkAccess_PublicBoard_ViewerAccess_ReturnsTrue()
     {
-        var board = new Board { Visibility = BoardVisibility.Shared };
+        var board = new Board { Visibility = BoardVisibility.Public };
 
         Assert.True(_sut.HasSharedLinkAccess(board, null, BoardRole.Viewer));
     }
 
     [Fact]
-    public void HasSharedLinkAccess_SharedBoard_EditorAccess_NotAllowed_ReturnsFalse()
+    public void HasSharedLinkAccess_PublicBoard_EditorAccess_NotAllowed_ReturnsFalse()
     {
-        var board = new Board { Visibility = BoardVisibility.Shared, SharedAllowAnonymousEditing = false };
+        var board = new Board { Visibility = BoardVisibility.Public, SharedAllowAnonymousEditing = false };
 
         Assert.False(_sut.HasSharedLinkAccess(board, null, BoardRole.Editor));
     }
 
     [Fact]
-    public void HasSharedLinkAccess_SharedBoard_EditorAccess_Allowed_ReturnsTrue()
+    public void HasSharedLinkAccess_PublicBoard_EditorAccess_Allowed_ReturnsTrue()
     {
-        var board = new Board { Visibility = BoardVisibility.Shared, SharedAllowAnonymousEditing = true };
+        var board = new Board { Visibility = BoardVisibility.Public, SharedAllowAnonymousEditing = true };
 
         Assert.True(_sut.HasSharedLinkAccess(board, null, BoardRole.Editor));
     }
 
     [Fact]
-    public void HasSharedLinkAccess_SharedBoard_OwnerAccess_ReturnsFalse()
+    public void HasSharedLinkAccess_PublicBoard_OwnerAccess_ReturnsFalse()
     {
-        var board = new Board { Visibility = BoardVisibility.Shared, SharedAllowAnonymousEditing = true };
+        var board = new Board { Visibility = BoardVisibility.Public, SharedAllowAnonymousEditing = true };
 
         Assert.False(_sut.HasSharedLinkAccess(board, null, BoardRole.Owner));
     }
@@ -242,7 +242,7 @@ public class BoardServiceTests
     [Fact]
     public void HasSharedLinkAccess_PasswordProtected_WrongPassword_ReturnsFalse()
     {
-        var board = new Board { Visibility = BoardVisibility.Shared };
+        var board = new Board { Visibility = BoardVisibility.Public };
         _sut.SetSharePassword(board, "secret");
 
         Assert.False(_sut.HasSharedLinkAccess(board, "wrong"));
@@ -251,7 +251,7 @@ public class BoardServiceTests
     [Fact]
     public void HasSharedLinkAccess_PasswordProtected_CorrectPassword_ReturnsTrue()
     {
-        var board = new Board { Visibility = BoardVisibility.Shared };
+        var board = new Board { Visibility = BoardVisibility.Public };
         _sut.SetSharePassword(board, "secret");
 
         Assert.True(_sut.HasSharedLinkAccess(board, "secret"));
@@ -453,11 +453,11 @@ public class BoardServiceTests
     #region HasAccess
 
     [Fact]
-    public void HasAccess_SharedBoard_ViewerRole_ReturnsTrue()
+    public void HasAccess_SharedBoard_ViewerRole_ReturnsFalseForAnonymousUser()
     {
         var board = new Board { Visibility = BoardVisibility.Shared };
 
-        Assert.True(_sut.HasAccess(board, null, BoardRole.Viewer));
+        Assert.False(_sut.HasAccess(board, null, BoardRole.Viewer));
     }
 
     [Fact]

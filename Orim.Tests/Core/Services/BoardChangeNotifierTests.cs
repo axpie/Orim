@@ -118,6 +118,24 @@ public class BoardChangeNotifierTests
     }
 
     [Fact]
+    public async Task Notify_IncludesChangeKind()
+    {
+        var notifier = new BoardChangeNotifier();
+        var boardId = Guid.NewGuid();
+        BoardChangeKind? receivedKind = null;
+
+        notifier.Subscribe(boardId, "sub1", n =>
+        {
+            receivedKind = n.Kind;
+            return Task.CompletedTask;
+        });
+
+        await notifier.NotifyBoardChangedAsync(boardId, "client-42", BoardChangeKind.Metadata);
+
+        Assert.Equal(BoardChangeKind.Metadata, receivedKind);
+    }
+
+    [Fact]
     public void Subscribe_NullSubscriberId_Throws()
     {
         var notifier = new BoardChangeNotifier();

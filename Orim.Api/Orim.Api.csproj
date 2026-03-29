@@ -1,0 +1,55 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SpaRoot>..\orim-spa\</SpaRoot>
+    <SpaDistRoot>$(SpaRoot)dist\</SpaDistRoot>
+    <SpaWwwRoot>$(MSBuildProjectDirectory)\wwwroot\</SpaWwwRoot>
+    <NpmExecutable Condition="$([MSBuild]::IsOSPlatform('Windows'))">npm.cmd</NpmExecutable>
+    <NpmExecutable Condition="'$(NpmExecutable)' == ''">npm</NpmExecutable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="data\**" />
+    <Content Remove="data\**" />
+    <EmbeddedResource Remove="data\**" />
+    <None Remove="data\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Orim.Core\Orim.Core.csproj" />
+    <ProjectReference Include="..\Orim.Infrastructure\Orim.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
+    <PackageReference Include="Azure.Core" Version="1.51.1" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
+    <PackageReference Include="PDFsharp" Version="6.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="wwwroot\assets\" />
+  </ItemGroup>
+
+  <Target Name="BuildSpaAssets" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Release' and Exists('$(SpaRoot)package.json')">
+    <Message Text="Building SPA assets into wwwroot for Release configuration." Importance="high" />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="$(NpmExecutable) ci" Condition="!Exists('$(SpaRoot)node_modules')" />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="$(NpmExecutable) run build" />
+    <RemoveDir Directories="$(SpaWwwRoot)" Condition="Exists('$(SpaWwwRoot)')" />
+    <MakeDir Directories="$(SpaWwwRoot)" />
+    <ItemGroup>
+      <SpaDistFiles Include="$(SpaDistRoot)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SpaDistFiles)" DestinationFiles="@(SpaDistFiles->'$(SpaWwwRoot)%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="EnsureSpaAssetsIncludedInPublish" BeforeTargets="ComputeFilesToPublish" Condition="'$(Configuration)' == 'Release' and Exists('$(SpaWwwRoot)index.html')">
+    <ItemGroup>
+      <Content Include="wwwroot\**\*" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+</Project>

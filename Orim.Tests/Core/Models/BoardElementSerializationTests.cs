@@ -12,6 +12,10 @@ public class BoardElementSerializationTests
         BoardElement element = new ShapeElement
         {
             Label = "Test",
+            LabelColor = "#112233",
+            FontFamily = "Georgia, serif",
+            IsBold = true,
+            IsUnderline = true,
             ShapeType = ShapeType.Ellipse,
             FillColor = "#FF0000",
             StrokeColor = "#00FF00",
@@ -23,6 +27,10 @@ public class BoardElementSerializationTests
 
         var shape = Assert.IsType<ShapeElement>(deserialized);
         Assert.Equal("Test", shape.Label);
+        Assert.Equal("#112233", shape.LabelColor);
+        Assert.Equal("Georgia, serif", shape.FontFamily);
+        Assert.True(shape.IsBold);
+        Assert.True(shape.IsUnderline);
         Assert.Equal(ShapeType.Ellipse, shape.ShapeType);
         Assert.Equal("#FF0000", shape.FillColor);
     }
@@ -34,9 +42,15 @@ public class BoardElementSerializationTests
         {
             Text = "Hello World",
             FontSize = 24,
+            AutoFontSize = true,
+            FontFamily = "Courier New, monospace",
+            LabelHorizontalAlignment = HorizontalLabelAlignment.Center,
+            LabelVerticalAlignment = VerticalLabelAlignment.Middle,
             Color = "#333333",
             IsBold = true,
-            IsItalic = true
+            IsItalic = true,
+            IsUnderline = true,
+            IsStrikethrough = true
         };
 
         var json = JsonSerializer.Serialize(element, OrimJsonOptions.Default);
@@ -45,8 +59,14 @@ public class BoardElementSerializationTests
         var text = Assert.IsType<TextElement>(deserialized);
         Assert.Equal("Hello World", text.Text);
         Assert.Equal(24, text.FontSize);
+        Assert.True(text.AutoFontSize);
+        Assert.Equal("Courier New, monospace", text.FontFamily);
+        Assert.Equal(HorizontalLabelAlignment.Center, text.LabelHorizontalAlignment);
+        Assert.Equal(VerticalLabelAlignment.Middle, text.LabelVerticalAlignment);
         Assert.True(text.IsBold);
         Assert.True(text.IsItalic);
+        Assert.True(text.IsUnderline);
+        Assert.True(text.IsStrikethrough);
     }
 
     [Fact]
