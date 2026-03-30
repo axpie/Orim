@@ -38,13 +38,14 @@ public class JsonUserRepositoryTests : IDisposable
     [Fact]
     public async Task SaveAsync_NewUser_CanBeRetrieved()
     {
-        var user = new User { Username = "alice", PasswordHash = "hash123" };
+        var user = new User { Username = "alice", DisplayName = "Alice Example", PasswordHash = "hash123" };
 
         await _sut.SaveAsync(user);
         var retrieved = await _sut.GetByIdAsync(user.Id);
 
         Assert.NotNull(retrieved);
         Assert.Equal("alice", retrieved.Username);
+        Assert.Equal("Alice Example", retrieved.DisplayName);
     }
 
     [Fact]

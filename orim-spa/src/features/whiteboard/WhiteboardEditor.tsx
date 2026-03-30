@@ -322,6 +322,8 @@ export function WhiteboardEditor() {
     lastError,
   } = useSignalR({
     boardId: id ?? null,
+    displayName: user?.displayName ?? user?.username ?? null,
+    syncProfileDisplayNameChanges: true,
     onBoardOperationApplied: (notification) => {
       applyRemoteOperation(notification.operation);
       const nextBoard = useBoardStore.getState().board;

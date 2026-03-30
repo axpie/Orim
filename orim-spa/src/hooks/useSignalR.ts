@@ -14,12 +14,14 @@ import type {
 } from '../types/models';
 import type { BoardOperationPayload } from '../features/whiteboard/realtime/boardOperations';
 import { useOperationOutboxStore } from '../features/whiteboard/store/outboxStore';
+import { useAuthStore } from '../stores/authStore';
 
 interface UseSignalROptions {
   boardId: string | null;
   shareToken?: string | null;
   sharePassword?: string | null;
   displayName?: string | null;
+  syncProfileDisplayNameChanges?: boolean;
   onBoardChanged?: (notification: BoardChangeNotification) => void;
   onBoardOperationApplied?: (notification: BoardOperationNotification) => void;
   onBoardStateUpdated?: (notification: BoardStateUpdateNotification) => void;
@@ -52,6 +54,7 @@ export function useSignalR({
   shareToken,
   sharePassword,
   displayName,
+  syncProfileDisplayNameChanges = false,
   onBoardChanged,
   onBoardOperationApplied,
   onBoardStateUpdated,
@@ -69,6 +72,7 @@ export function useSignalR({
   const latestCursorRef = useRef<{ x: number | null; y: number | null } | null>(null);
   const lastCursorSentAtRef = useRef(0);
   const isFlushingOutboxRef = useRef(false);
+  const lastSyncedDisplayNameRef = useRef<string | null>(displayName?.trim() || null);
   const boardIdRef = useRef(boardId);
   const shareTokenRef = useRef(shareToken ?? null);
   const sharePasswordRef = useRef(sharePassword ?? null);
@@ -103,6 +107,25 @@ export function useSignalR({
       }
     },
     [handleInvokeError],
+  );
+
+  const syncDisplayName = useCallback(
+    async (nextDisplayName: string | null | undefined) => {
+      const normalizedDisplayName = nextDisplayName?.trim() || null;
+      if (!normalizedDisplayName) {
+        return false;
+      }
+
+      displayNameRef.current = normalizedDisplayName;
+      lastSyncedDisplayNameRef.current = normalizedDisplayName;
+      const currentBoardId = boardIdRef.current;
+      if (!currentBoardId) {
+        return false;
+      }
+
+      return invokeIfConnected('UpdateDisplayName', currentBoardId, normalizedDisplayName);
+    },
+    [invokeIfConnected],
   );
 
   const enqueueOperations = useCallback((operations: BoardOperation[]) => {
@@ -142,7 +165,6 @@ export function useSignalR({
   }, [invokeIfConnected]);
 
   useEffect(() => {
-    const token = localStorage.getItem('orim_token');
     if (!boardId) {
       setConnectionId(null);
       setConnectionState('disconnected');
@@ -154,7 +176,7 @@ export function useSignalR({
 
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(hubUrl, {
-        accessTokenFactory: () => token ?? '',
+        accessTokenFactory: () => localStorage.getItem('orim_token') ?? '',
       })
       .withAutomaticReconnect()
       .configureLogging(signalR.LogLevel.Warning)
@@ -207,6 +229,25 @@ export function useSignalR({
     connection.on('PresenceUpdated', (cursors: CursorPresence[]) => {
       onPresenceUpdated?.(cursors);
     });
+
+    if (syncProfileDisplayNameChanges) {
+      connection.on('ProfileDisplayNameChanged', (nextDisplayName: string) => {
+        const normalizedDisplayName = nextDisplayName.trim();
+        if (!normalizedDisplayName) {
+          return;
+        }
+
+        const currentUser = useAuthStore.getState().user;
+        if (currentUser && currentUser.displayName !== normalizedDisplayName) {
+          useAuthStore.getState().setUser({
+            ...currentUser,
+            displayName: normalizedDisplayName,
+          });
+        }
+
+        void syncDisplayName(normalizedDisplayName);
+      });
+    }
 
     connection
       .start()
@@ -306,7 +347,20 @@ export function useSignalR({
       setLastError(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardId, flushOutbox, handleInvokeError]);
+  }, [boardId, flushOutbox, handleInvokeError, syncDisplayName, syncProfileDisplayNameChanges]);
+
+  useEffect(() => {
+    const normalizedDisplayName = displayName?.trim() || null;
+    if (
+      !boardId
+      || normalizedDisplayName == null
+      || normalizedDisplayName === lastSyncedDisplayNameRef.current
+    ) {
+      return;
+    }
+
+    void syncDisplayName(normalizedDisplayName);
+  }, [boardId, displayName, syncDisplayName]);
 
   const sendBoardUpdated = useCallback(
     (sourceClientId?: string, changeKind = 'Content') => {
@@ -437,12 +491,9 @@ export function useSignalR({
 
   const updateDisplayName = useCallback(
     (nextDisplayName: string) => {
-      const conn = connectionRef.current;
-      if (conn?.state === signalR.HubConnectionState.Connected && boardIdRef.current) {
-        void invokeIfConnected('UpdateDisplayName', boardIdRef.current, nextDisplayName);
-      }
+      void syncDisplayName(nextDisplayName);
     },
-    [invokeIfConnected],
+    [syncDisplayName],
   );
 
   return {

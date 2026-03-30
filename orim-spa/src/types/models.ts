@@ -263,6 +263,7 @@ export interface BoardSummary {
 export interface User {
   id: string;
   username: string;
+  displayName: string;
   role: UserRole;
   isActive: boolean;
   createdAt: string;
@@ -271,6 +272,15 @@ export interface User {
 export interface CreateUserRequest {
   username: string;
   password: string;
+  role: UserRole;
+}
+
+export interface UpdateProfileRequest {
+  displayName: string;
+}
+
+export interface UpdateUserRequest {
+  username: string;
   role: UserRole;
 }
 
@@ -342,6 +352,7 @@ export interface LoginResponse {
   token: string;
   userId: string;
   username: string;
+  displayName: string;
   role: UserRole;
 }
 

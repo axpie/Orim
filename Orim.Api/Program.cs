@@ -101,6 +101,30 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     context.Token = accessToken;
                 }
                 return Task.CompletedTask;
+            },
+            OnTokenValidated = async context =>
+            {
+                var principal = context.Principal;
+                var userIdClaim = principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!Guid.TryParse(userIdClaim, out var userId))
+                {
+                    context.Fail("The token does not contain a valid user identifier.");
+                    return;
+                }
+
+                var userService = context.HttpContext.RequestServices.GetRequiredService<UserService>();
+                var user = await userService.GetByIdAsync(userId);
+                if (user is null || !user.IsActive)
+                {
+                    context.Fail("The user account is no longer active.");
+                    return;
+                }
+
+                if (principal?.Identity is ClaimsIdentity identity)
+                {
+                    ReplaceClaim(identity, ClaimTypes.Name, user.Username);
+                    ReplaceClaim(identity, ClaimTypes.Role, user.Role.ToString());
+                }
             }
         };
     });
@@ -186,6 +210,25 @@ string GenerateJwtToken(User user)
     return new JwtSecurityTokenHandler().WriteToken(token);
 }
 
+void ReplaceClaim(ClaimsIdentity identity, string claimType, string value)
+{
+    foreach (var existingClaim in identity.FindAll(claimType).ToArray())
+    {
+        identity.RemoveClaim(existingClaim);
+    }
+
+    identity.AddClaim(new Claim(claimType, value));
+}
+
+string ResolveDisplayName(User user) =>
+    string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName.Trim();
+
+LoginResponse CreateLoginResponse(User user) =>
+    new(GenerateJwtToken(user), user.Id, user.Username, ResolveDisplayName(user), user.Role);
+
+UserDto ToUserDto(User user) =>
+    new(user.Id, user.Username, ResolveDisplayName(user), user.Role, user.IsActive, user.CreatedAt);
+
 Guid GetUserId(HttpContext context) =>
     Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -205,8 +248,7 @@ app.MapPost("/api/auth/login", async (LoginRequest request, UserService userServ
     if (user is null)
         return Results.Unauthorized();
 
-    var token = GenerateJwtToken(user);
-    return Results.Ok(new LoginResponse(token, user.Id, user.Username, user.Role));
+    return Results.Ok(CreateLoginResponse(user));
 });
 
 app.MapGet("/api/auth/providers", (IOptions<MicrosoftEntraOptions> msOptions, IOptions<GoogleOAuthOptions> googleOptions) =>
@@ -264,8 +306,7 @@ app.MapPost(
             identity.Username,
             identity.TenantId));
 
-        var token = GenerateJwtToken(user);
-        return Results.Ok(new LoginResponse(token, user.Id, user.Username, user.Role));
+        return Results.Ok(CreateLoginResponse(user));
     }
     catch (InvalidOperationException ex)
     {
@@ -309,8 +350,7 @@ app.MapPost(
             identity.Username,
             string.IsNullOrWhiteSpace(identity.HostedDomain) ? null : identity.HostedDomain));
 
-        var token = GenerateJwtToken(user);
-        return Results.Ok(new LoginResponse(token, user.Id, user.Username, user.Role));
+        return Results.Ok(CreateLoginResponse(user));
     }
     catch (InvalidOperationException ex)
     {
@@ -326,8 +366,7 @@ app.MapPost("/api/auth/refresh", [Authorize] async (HttpContext context, UserSer
     if (user is null || !user.IsActive)
         return Results.Unauthorized();
 
-    var token = GenerateJwtToken(user);
-    return Results.Ok(new LoginResponse(token, user.Id, user.Username, user.Role));
+    return Results.Ok(CreateLoginResponse(user));
 });
 
 // ==========================================================================
@@ -337,7 +376,7 @@ app.MapPost("/api/auth/refresh", [Authorize] async (HttpContext context, UserSer
 app.MapGet("/api/users", [Authorize(Roles = "Admin")] async (UserService userService) =>
 {
     var users = await userService.GetAllUsersAsync();
-    return Results.Ok(users.Select(u => new UserDto(u.Id, u.Username, u.Role, u.IsActive, u.CreatedAt)));
+    return Results.Ok(users.Select(ToUserDto));
 });
 
 app.MapGet("/api/users/{id:guid}", [Authorize] async (Guid id, HttpContext context, UserService userService) =>
@@ -346,34 +385,102 @@ app.MapGet("/api/users/{id:guid}", [Authorize] async (Guid id, HttpContext conte
         return Results.Forbid();
 
     var user = await userService.GetByIdAsync(id);
-    return user is null ? Results.NotFound() : Results.Ok(new UserDto(user.Id, user.Username, user.Role, user.IsActive, user.CreatedAt));
+    return user is null ? Results.NotFound() : Results.Ok(ToUserDto(user));
 });
 
 app.MapPost("/api/users", [Authorize(Roles = "Admin")] async (CreateUserRequest request, UserService userService) =>
 {
-    var user = await userService.CreateUserAsync(request.Username, request.Password, request.Role);
-    return Results.Created($"/api/users/{user.Id}", new UserDto(user.Id, user.Username, user.Role, user.IsActive, user.CreatedAt));
+    try
+    {
+        var user = await userService.CreateUserAsync(request.Username, request.Password, request.Role);
+        return Results.Created($"/api/users/{user.Id}", ToUserDto(user));
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+    {
+        return Results.BadRequest(ex.Message);
+    }
 });
 
-app.MapPut("/api/users/{id:guid}/password", [Authorize] async (Guid id, ChangePasswordRequest request, HttpContext context, UserService userService) =>
+app.MapPut("/api/users/{id:guid}/profile", [Authorize] async (Guid id, UpdateProfileRequest request, HttpContext context, UserService userService, IHubContext<BoardHub> boardHubContext) =>
 {
     if (!IsAdmin(context) && GetUserId(context) != id)
         return Results.Forbid();
 
-    await userService.SetPasswordAsync(id, request.NewPassword);
-    return Results.NoContent();
+    try
+    {
+        var user = await userService.UpdateDisplayNameAsync(id, request.DisplayName);
+        await boardHubContext.Clients.Group(BoardHub.GetUserGroupName(user.Id))
+            .SendAsync("ProfileDisplayNameChanged", ResolveDisplayName(user));
+        return Results.Ok(ToUserDto(user));
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+app.MapPut("/api/users/{id:guid}/password", [Authorize] async (Guid id, ChangePasswordRequest request, HttpContext context, UserService userService) =>
+{
+    var isAdmin = IsAdmin(context);
+    if (!isAdmin && GetUserId(context) != id)
+        return Results.Forbid();
+
+    try
+    {
+        if (isAdmin)
+        {
+            await userService.SetPasswordAsync(id, request.NewPassword);
+        }
+        else
+        {
+            await userService.ChangePasswordAsync(id, request.CurrentPassword ?? string.Empty, request.NewPassword);
+        }
+
+        return Results.NoContent();
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+app.MapPut("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UpdateUserRequest request, UserService userService) =>
+{
+    try
+    {
+        var user = await userService.UpdateAdminUserAsync(id, request.Username, request.Role);
+        return Results.Ok(ToUserDto(user));
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+    {
+        return Results.BadRequest(ex.Message);
+    }
 });
 
 app.MapPut("/api/users/{id:guid}/deactivate", [Authorize(Roles = "Admin")] async (Guid id, UserService userService) =>
 {
-    await userService.DeactivateUserAsync(id);
-    return Results.NoContent();
+    try
+    {
+        await userService.DeactivateUserAsync(id);
+        return Results.NoContent();
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
 });
 
 app.MapDelete("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UserService userService) =>
 {
-    await userService.DeleteUserAsync(id);
-    return Results.NoContent();
+    try
+    {
+        await userService.DeleteUserAsync(id);
+        return Results.NoContent();
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
 });
 
 app.MapGet("/api/boards/{id:guid}/shareable-users", [Authorize] async (Guid id, string? query, HttpContext context, BoardService boardService, UserService userService) =>
@@ -398,7 +505,7 @@ app.MapGet("/api/boards/{id:guid}/shareable-users", [Authorize] async (Guid id, 
                        user.Username.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase))
         .OrderBy(user => user.Username, StringComparer.OrdinalIgnoreCase)
         .Take(20)
-        .Select(user => new UserDto(user.Id, user.Username, user.Role, user.IsActive, user.CreatedAt));
+        .Select(ToUserDto);
 
     return Results.Ok(results);
 });

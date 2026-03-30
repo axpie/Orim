@@ -100,6 +100,7 @@ public class UserServiceTests
         var user = await _sut.CreateUserAsync("alice", "password123", UserRole.Admin);
 
         Assert.Equal("alice", user.Username);
+        Assert.Equal("alice", user.DisplayName);
         Assert.Equal(UserRole.Admin, user.Role);
         Assert.NotEmpty(user.PasswordHash);
         Assert.True(BCrypt.Net.BCrypt.Verify("password123", user.PasswordHash));
@@ -146,6 +147,139 @@ public class UserServiceTests
     {
         await Assert.ThrowsAnyAsync<ArgumentException>(
             () => _sut.SetPasswordAsync(Guid.NewGuid(), password!));
+    }
+
+    [Fact]
+    public async Task UpdateDisplayNameAsync_ValidDisplayName_UpdatesUser()
+    {
+        var user = new User { Username = "alice", DisplayName = "Alice" };
+        _userRepo.GetByIdAsync(user.Id).Returns(user);
+
+        var result = await _sut.UpdateDisplayNameAsync(user.Id, " Alice Example ");
+
+        Assert.Same(user, result);
+        Assert.Equal("Alice Example", user.DisplayName);
+        await _userRepo.Received(1).SaveAsync(user);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ValidCurrentPassword_UpdatesPassword()
+    {
+        var user = new User
+        {
+            Username = "alice",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("old-password", workFactor: 4),
+            AuthenticationProvider = AuthenticationProvider.Local,
+            IsActive = true
+        };
+        _userRepo.GetByIdAsync(user.Id).Returns(user);
+
+        await _sut.ChangePasswordAsync(user.Id, "old-password", "new-password");
+
+        Assert.True(BCrypt.Net.BCrypt.Verify("new-password", user.PasswordHash));
+        await _userRepo.Received(1).SaveAsync(user);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_WrongCurrentPassword_Throws()
+    {
+        var user = new User
+        {
+            Username = "alice",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("old-password", workFactor: 4),
+            AuthenticationProvider = AuthenticationProvider.Local,
+            IsActive = true
+        };
+        _userRepo.GetByIdAsync(user.Id).Returns(user);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.ChangePasswordAsync(user.Id, "wrong-password", "new-password"));
+
+        Assert.Contains("current password", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task ChangePasswordAsync_ExternalOnlyAccount_Throws()
+    {
+        var user = new User
+        {
+            Username = "alice",
+            PasswordHash = string.Empty,
+            AuthenticationProvider = AuthenticationProvider.Google,
+            IsActive = true
+        };
+        _userRepo.GetByIdAsync(user.Id).Returns(user);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.ChangePasswordAsync(user.Id, "anything", "new-password"));
+
+        Assert.Contains("local password", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task UpdateAdminUserAsync_UpdatesUsernameRoleAndBoardMemberships()
+    {
+        var user = new User
+        {
+            Username = "alice",
+            DisplayName = "alice",
+            Role = UserRole.User,
+            IsActive = true
+        };
+        var board = new Board
+        {
+            OwnerId = Guid.NewGuid(),
+            Title = "Shared",
+            Members =
+            [
+                new BoardMember { UserId = user.Id, Username = "alice", Role = BoardRole.Editor }
+            ]
+        };
+
+        _userRepo.GetByIdAsync(user.Id).Returns(user);
+        _userRepo.GetByUsernameAsync("alice-renamed").Returns((User?)null);
+        _boardRepo.GetAllAsync().Returns([board]);
+
+        var result = await _sut.UpdateAdminUserAsync(user.Id, " alice-renamed ", UserRole.Admin);
+
+        Assert.Same(user, result);
+        Assert.Equal("alice-renamed", user.Username);
+        Assert.Equal("alice-renamed", user.DisplayName);
+        Assert.Equal(UserRole.Admin, user.Role);
+        Assert.Equal("alice-renamed", board.Members[0].Username);
+        await _userRepo.Received(1).SaveAsync(user);
+        await _boardRepo.Received(1).SaveAsync(board);
+    }
+
+    [Fact]
+    public async Task UpdateAdminUserAsync_DuplicateUsername_Throws()
+    {
+        var user = new User { Username = "alice", Role = UserRole.User };
+        var duplicate = new User { Id = Guid.NewGuid(), Username = "bob", Role = UserRole.User };
+
+        _userRepo.GetByIdAsync(user.Id).Returns(user);
+        _userRepo.GetByUsernameAsync("bob").Returns(duplicate);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.UpdateAdminUserAsync(user.Id, "bob", UserRole.User));
+
+        Assert.Contains("already exists", ex.Message, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task UpdateAdminUserAsync_LastActiveAdminCannotBeDemoted()
+    {
+        var user = new User { Username = "alice", Role = UserRole.Admin, IsActive = true };
+        var inactiveAdmin = new User { Username = "bob", Role = UserRole.Admin, IsActive = false };
+
+        _userRepo.GetByIdAsync(user.Id).Returns(user);
+        _userRepo.GetByUsernameAsync("alice").Returns(user);
+        _userRepo.GetAllAsync().Returns([user, inactiveAdmin]);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.UpdateAdminUserAsync(user.Id, "alice", UserRole.User));
+
+        Assert.Contains("active admin", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -306,6 +440,7 @@ public class UserServiceTests
             "tenant-1"));
 
         Assert.Equal("alice@contoso.com", result.Username);
+        Assert.Equal("alice@contoso.com", result.DisplayName);
         Assert.Equal("alice@contoso.com", result.Email);
         Assert.Equal(AuthenticationProvider.MicrosoftEntraId, result.AuthenticationProvider);
         Assert.Equal("oid-123", result.ExternalSubject);
@@ -359,6 +494,19 @@ public class UserServiceTests
 
         Assert.False(user.IsActive);
         await _userRepo.Received(1).SaveAsync(user);
+    }
+
+    [Fact]
+    public async Task DeactivateUserAsync_LastActiveAdmin_Throws()
+    {
+        var user = new User { Username = "alice", Role = UserRole.Admin, IsActive = true };
+        _userRepo.GetByIdAsync(user.Id).Returns(user);
+        _userRepo.GetAllAsync().Returns([user]);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.DeactivateUserAsync(user.Id));
+
+        Assert.Contains("active admin", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -420,6 +568,19 @@ public class UserServiceTests
         Assert.DoesNotContain(board.Members, member => member.UserId == user.Id);
         await _boardRepo.Received(1).SaveAsync(board);
         await _userRepo.Received(1).DeleteAsync(user.Id);
+    }
+
+    [Fact]
+    public async Task DeleteUserAsync_LastAdmin_Throws()
+    {
+        var user = new User { Username = "alice", Role = UserRole.Admin, IsActive = false };
+        _userRepo.GetByIdAsync(user.Id).Returns(user);
+        _userRepo.GetAllAsync().Returns([user]);
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => _sut.DeleteUserAsync(user.Id));
+
+        Assert.Contains("admin account", ex.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     // -------------------------------------------------------------------------

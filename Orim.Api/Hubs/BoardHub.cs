@@ -13,12 +13,16 @@ public sealed class BoardHub : Hub
     private const string DisplayNameKey = "display-name";
     private readonly BoardPresenceService _presenceService;
     private readonly BoardService _boardService;
+    private readonly UserService _userService;
 
-    public BoardHub(BoardPresenceService presenceService, BoardService boardService)
+    public BoardHub(BoardPresenceService presenceService, BoardService boardService, UserService userService)
     {
         _presenceService = presenceService;
         _boardService = boardService;
+        _userService = userService;
     }
+
+    public static string GetUserGroupName(Guid userId) => $"user:{userId:D}";
 
     public async Task JoinBoard(Guid boardId, string? shareToken = null, string? sharePassword = null, string? requestedDisplayName = null)
     {
@@ -30,10 +34,16 @@ public sealed class BoardHub : Hub
 
         var groupName = BoardGroup(boardId);
         await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+        var userId = ResolveUserId();
+        if (userId.HasValue)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(userId.Value));
+        }
+
         Context.Items[JoinedBoardIdKey] = boardId;
         Context.Items[JoinedCanEditKey] = CanEditBoard(board, shareToken, sharePassword);
 
-        var displayName = ResolveDisplayName(requestedDisplayName);
+        var displayName = await ResolveDisplayNameAsync(requestedDisplayName);
         Context.Items[DisplayNameKey] = displayName;
         var clientId = Context.ConnectionId;
         var color = BoardPresenceIdentity.ResolveColor(clientId);
@@ -52,7 +62,7 @@ public sealed class BoardHub : Hub
             return;
         }
 
-        var displayName = ResolveDisplayName(requestedDisplayName);
+        var displayName = await ResolveDisplayNameAsync(requestedDisplayName);
         Context.Items[DisplayNameKey] = displayName;
 
         var existingPresence = _presenceService.GetCursor(boardId, Context.ConnectionId);
@@ -161,7 +171,8 @@ public sealed class BoardHub : Hub
             return;
         }
 
-        var displayName = ResolveDisplayName(null);
+        var displayName = await ResolveDisplayNameAsync(null, preferCachedDisplayName: true);
+        Context.Items[DisplayNameKey] = displayName;
         var clientId = Context.ConnectionId;
         var color = BoardPresenceIdentity.ResolveColor(clientId);
 
@@ -228,12 +239,31 @@ public sealed class BoardHub : Hub
         return Guid.TryParse(raw, out var userId) ? userId : null;
     }
 
-    private string ResolveDisplayName(string? requestedDisplayName)
+    private async Task<string> ResolveDisplayNameAsync(string? requestedDisplayName, bool preferCachedDisplayName = false)
     {
-        var authenticatedName = Context.User?.FindFirstValue(ClaimTypes.Name);
-        if (!string.IsNullOrWhiteSpace(authenticatedName))
+        if (preferCachedDisplayName
+            && Context.Items.TryGetValue(DisplayNameKey, out var cachedDisplayName)
+            && cachedDisplayName is string cachedPersistedDisplayName
+            && !string.IsNullOrWhiteSpace(cachedPersistedDisplayName))
         {
-            return authenticatedName;
+            return cachedPersistedDisplayName;
+        }
+
+        var userId = ResolveUserId();
+        if (userId.HasValue)
+        {
+            var user = await _userService.GetByIdAsync(userId.Value);
+            if (user is not null)
+            {
+                var resolved = string.IsNullOrWhiteSpace(user.DisplayName)
+                    ? user.Username
+                    : user.DisplayName.Trim();
+
+                if (!string.IsNullOrWhiteSpace(resolved))
+                {
+                    return resolved;
+                }
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(requestedDisplayName))
@@ -246,6 +276,12 @@ public sealed class BoardHub : Hub
             && !string.IsNullOrWhiteSpace(persistedDisplayName))
         {
             return persistedDisplayName;
+        }
+
+        var authenticatedName = Context.User?.FindFirstValue(ClaimTypes.Name);
+        if (!string.IsNullOrWhiteSpace(authenticatedName))
+        {
+            return authenticatedName;
         }
 
         return "Guest";

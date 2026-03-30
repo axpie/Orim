@@ -4,6 +4,7 @@ public class User
 {
     public Guid Id { get; set; } = Guid.NewGuid();
     public string Username { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string? Email { get; set; }
     public AuthenticationProvider AuthenticationProvider { get; set; } = AuthenticationProvider.Local;

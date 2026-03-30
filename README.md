@@ -151,6 +151,24 @@ $Env:SeedAdmin__Password = "EinSehrSicheresPasswort!"
 dotnet run --project .\Orim.Api\Orim.Api.csproj
 ```
 
+## Profil- und Benutzerverwaltung
+
+ORIM enthaelt eine integrierte Konto- und Benutzerverwaltung:
+
+- Benutzer koennen unter `/profile` ihren Anzeigenamen und ihr eigenes Passwort aendern.
+- Administratoren koennen unter `/admin/users` Benutzer anlegen, deaktivieren, loeschen, Benutzernamen aendern, Rollen zwischen `User` und `Admin` wechseln und Passwoerter neu setzen.
+- Zum Schutz vor Aussperrung verhindert ORIM, dass der letzte aktive Administrator deaktiviert, geloescht oder zu einem normalen Benutzer herabgestuft wird.
+
+## Anzeigenamen in der Live-Zusammenarbeit
+
+Die Live-Praesenz im Whiteboard basiert auf SignalR. Anzeigenamen werden fuer aktive Board-Sitzungen synchron gehalten:
+
+- neue oder aktualisierte Anzeigenamen werden bei Board-Beitritt serverseitig aus dem Benutzerprofil aufgeloest
+- geoeffnete Browser-Tabs uebernehmen Profil-Aenderungen per Storage-Sync
+- laufende Board-Verbindungen aktualisieren ihre Presence-Eintraege automatisch, damit andere aktive Teilnehmer den neuen Anzeigenamen sehen
+
+Hinweis: Kommentare, Snapshots und Board-Mitgliedschaften verwenden weiterhin den Benutzernamen als stabile technische Kennung.
+
 ## Nützliche Befehle
 
 Gesamtlösung bauen:

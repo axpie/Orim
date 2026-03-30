@@ -5,6 +5,8 @@ namespace Orim.Core.Services;
 
 public class UserService
 {
+    private const int MaxUsernameLength = 100;
+    private const int MaxDisplayNameLength = 100;
     private static readonly SemaphoreSlim ExternalAuthenticationLock = new(1, 1);
     private readonly IUserRepository _userRepository;
     private readonly IBoardRepository _boardRepository;
@@ -28,20 +30,18 @@ public class UserService
 
     public async Task<User> CreateUserAsync(string username, string password, UserRole role)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+        var normalizedUsername = NormalizeUsername(username);
         ArgumentException.ThrowIfNullOrWhiteSpace(password);
 
-        if (username.Length > 100)
-            throw new ArgumentException("Username must not exceed 100 characters.", nameof(username));
-
-        var existing = await _userRepository.GetByUsernameAsync(username);
+        var existing = await _userRepository.GetByUsernameAsync(normalizedUsername);
         if (existing is not null)
-            throw new InvalidOperationException($"User '{username}' already exists.");
+            throw new InvalidOperationException($"User '{normalizedUsername}' already exists.");
 
         var user = new User
         {
-            Username = username,
-            PasswordHash = BCrypt.Net.BCrypt.HashPassword(password, workFactor: 12),
+            Username = normalizedUsername,
+            DisplayName = normalizedUsername,
+            PasswordHash = HashPassword(password),
             AuthenticationProvider = AuthenticationProvider.Local,
             Role = role
         };
@@ -55,19 +55,98 @@ public class UserService
         await _userRepository.SaveAsync(user);
     }
 
+    public async Task<User> UpdateDisplayNameAsync(Guid userId, string displayName)
+    {
+        var normalizedDisplayName = NormalizeDisplayName(displayName);
+        var user = await _userRepository.GetByIdAsync(userId)
+                   ?? throw new InvalidOperationException("User not found.");
+
+        EnsureActive(user);
+
+        user.DisplayName = normalizedDisplayName;
+        await _userRepository.SaveAsync(user);
+        return user;
+    }
+
     public async Task SetPasswordAsync(Guid userId, string newPassword)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
 
         var user = await _userRepository.GetByIdAsync(userId)
                    ?? throw new InvalidOperationException("User not found.");
-        user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword, workFactor: 12);
+        user.PasswordHash = HashPassword(newPassword);
         await _userRepository.SaveAsync(user);
+    }
+
+    public async Task ChangePasswordAsync(Guid userId, string currentPassword, string newPassword)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(currentPassword);
+        ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
+
+        var user = await _userRepository.GetByIdAsync(userId)
+                   ?? throw new InvalidOperationException("User not found.");
+
+        EnsureActive(user);
+
+        if (user.AuthenticationProvider != AuthenticationProvider.Local || string.IsNullOrWhiteSpace(user.PasswordHash))
+        {
+            throw new InvalidOperationException("This account does not have a local password.");
+        }
+
+        if (!BCrypt.Net.BCrypt.Verify(currentPassword, user.PasswordHash))
+        {
+            throw new InvalidOperationException("The current password is incorrect.");
+        }
+
+        user.PasswordHash = HashPassword(newPassword);
+        await _userRepository.SaveAsync(user);
+    }
+
+    public async Task<User> UpdateAdminUserAsync(Guid userId, string username, UserRole role)
+    {
+        var normalizedUsername = NormalizeUsername(username);
+        var user = await _userRepository.GetByIdAsync(userId)
+                   ?? throw new InvalidOperationException("User not found.");
+
+        var existing = await _userRepository.GetByUsernameAsync(normalizedUsername);
+        if (existing is not null && existing.Id != userId)
+        {
+            throw new InvalidOperationException($"User '{normalizedUsername}' already exists.");
+        }
+
+        await EnsureAdminRoleChangeAllowedAsync(user, role);
+
+        var previousUsername = user.Username;
+        var usernameChanged = !string.Equals(previousUsername, normalizedUsername, StringComparison.OrdinalIgnoreCase);
+        var shouldSyncDisplayName = string.IsNullOrWhiteSpace(user.DisplayName)
+            || string.Equals(user.DisplayName, previousUsername, StringComparison.OrdinalIgnoreCase);
+
+        user.Username = normalizedUsername;
+        if (usernameChanged && shouldSyncDisplayName)
+        {
+            user.DisplayName = normalizedUsername;
+        }
+
+        user.Role = role;
+
+        await _userRepository.SaveAsync(user);
+
+        if (usernameChanged)
+        {
+            await UpdateBoardMembershipUsernamesAsync(user.Id, normalizedUsername);
+        }
+
+        return user;
     }
 
     public async Task<User?> AuthenticateAsync(string username, string password)
     {
-        var user = await _userRepository.GetByUsernameAsync(username);
+        if (string.IsNullOrWhiteSpace(username) || string.IsNullOrWhiteSpace(password))
+        {
+            return null;
+        }
+
+        var user = await _userRepository.GetByUsernameAsync(username.Trim());
         if (user is null || !user.IsActive || string.IsNullOrWhiteSpace(user.PasswordHash))
             return null;
 
@@ -117,6 +196,7 @@ public class UserService
             var user = new User
             {
                 Username = await GenerateAvailableUsernameAsync(profile),
+                DisplayName = profile.Username.Trim(),
                 Email = profile.Email,
                 PasswordHash = string.Empty,
                 AuthenticationProvider = profile.Provider,
@@ -138,6 +218,9 @@ public class UserService
     {
         var user = await _userRepository.GetByIdAsync(userId)
                    ?? throw new InvalidOperationException("User not found.");
+
+        await EnsureAdminCanBeDeactivatedAsync(user);
+
         user.IsActive = false;
         await _userRepository.SaveAsync(user);
     }
@@ -146,6 +229,8 @@ public class UserService
     {
         var user = await _userRepository.GetByIdAsync(userId)
                    ?? throw new InvalidOperationException("User not found.");
+
+        await EnsureAdminCanBeRemovedAsync(user);
 
         var boards = await _boardRepository.GetAllAsync();
 
@@ -170,6 +255,35 @@ public class UserService
             throw new InvalidOperationException("User is deactivated.");
         }
     }
+
+    private static string NormalizeUsername(string username)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(username);
+
+        var normalized = username.Trim();
+        if (normalized.Length > MaxUsernameLength)
+        {
+            throw new ArgumentException($"Username must not exceed {MaxUsernameLength} characters.", nameof(username));
+        }
+
+        return normalized;
+    }
+
+    private static string NormalizeDisplayName(string displayName)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
+
+        var normalized = displayName.Trim();
+        if (normalized.Length > MaxDisplayNameLength)
+        {
+            throw new ArgumentException($"Display name must not exceed {MaxDisplayNameLength} characters.", nameof(displayName));
+        }
+
+        return normalized;
+    }
+
+    private static string HashPassword(string password) =>
+        BCrypt.Net.BCrypt.HashPassword(password, workFactor: 12);
 
     private static void UpdateExternalIdentity(User user, ExternalLoginProfile profile)
     {
@@ -204,8 +318,8 @@ public class UserService
             baseUsername = $"{profile.Provider}-{profile.Subject}";
         }
 
-        baseUsername = baseUsername.Length > 100
-            ? baseUsername[..100]
+        baseUsername = baseUsername.Length > MaxUsernameLength
+            ? baseUsername[..MaxUsernameLength]
             : baseUsername;
 
         var candidate = baseUsername;
@@ -214,11 +328,97 @@ public class UserService
         while (await _userRepository.GetByUsernameAsync(candidate) is not null)
         {
             var suffixText = $"-{suffix}";
-            var maxBaseLength = Math.Max(1, 100 - suffixText.Length);
+            var maxBaseLength = Math.Max(1, MaxUsernameLength - suffixText.Length);
             candidate = $"{baseUsername[..Math.Min(baseUsername.Length, maxBaseLength)]}{suffixText}";
             suffix++;
         }
 
         return candidate;
+    }
+
+    private async Task EnsureAdminRoleChangeAllowedAsync(User user, UserRole newRole)
+    {
+        if (user.Role != UserRole.Admin || newRole == UserRole.Admin)
+        {
+            return;
+        }
+
+        var users = await _userRepository.GetAllAsync();
+        EnsureAdminGuardrails(users, user);
+    }
+
+    private async Task EnsureAdminCanBeDeactivatedAsync(User user)
+    {
+        if (!user.IsActive || user.Role != UserRole.Admin)
+        {
+            return;
+        }
+
+        var activeAdminCount = await CountActiveAdminsAsync();
+        if (activeAdminCount <= 1)
+        {
+            throw new InvalidOperationException("At least one active admin account must remain.");
+        }
+    }
+
+    private async Task EnsureAdminCanBeRemovedAsync(User user)
+    {
+        if (user.Role != UserRole.Admin)
+        {
+            return;
+        }
+
+        var users = await _userRepository.GetAllAsync();
+        EnsureAdminGuardrails(users, user);
+    }
+
+    private static void EnsureAdminGuardrails(IReadOnlyCollection<User> users, User targetUser)
+    {
+        var adminCount = users.Count(candidate => candidate.Role == UserRole.Admin);
+        if (adminCount <= 1)
+        {
+            throw new InvalidOperationException("At least one admin account must remain.");
+        }
+
+        if (targetUser.IsActive)
+        {
+            var activeAdminCount = users.Count(candidate => candidate.Role == UserRole.Admin && candidate.IsActive);
+            if (activeAdminCount <= 1)
+            {
+                throw new InvalidOperationException("At least one active admin account must remain.");
+            }
+        }
+    }
+
+    private async Task<int> CountActiveAdminsAsync()
+    {
+        var users = await _userRepository.GetAllAsync();
+        return users.Count(candidate => candidate.Role == UserRole.Admin && candidate.IsActive);
+    }
+
+    private async Task UpdateBoardMembershipUsernamesAsync(Guid userId, string username)
+    {
+        var boards = await _boardRepository.GetAllAsync();
+
+        foreach (var board in boards)
+        {
+            var changed = false;
+
+            foreach (var member in board.Members.Where(candidate => candidate.UserId == userId))
+            {
+                if (string.Equals(member.Username, username, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                member.Username = username;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                await _boardRepository.SaveAsync(board);
+            }
+        }
     }
 }
