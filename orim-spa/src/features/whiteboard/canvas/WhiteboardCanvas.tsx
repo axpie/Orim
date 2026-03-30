@@ -2,7 +2,7 @@ import { useRef, useCallback, useState, useEffect, useId, useMemo, type FocusEve
 import { useQuery } from '@tanstack/react-query';
 import { useMediaQuery } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Stage, Layer, Rect, Line, Circle, Group, Text } from 'react-konva';
+import { Stage, Layer, Rect, Line, Circle } from 'react-konva';
 import type Konva from 'konva';
 import { getThemes } from '../../../api/themes';
 import { useThemeStore } from '../../../stores/themeStore';
@@ -18,6 +18,7 @@ import { SelectionOverlay, type ResizeHandle } from '../shapes/SelectionOverlay'
 import { AlignmentGuides } from '../shapes/AlignmentGuides';
 import { InlineTextEditor } from '../shapes/InlineTextEditor';
 import { CanvasAccessibilityLayer } from './CanvasAccessibilityLayer';
+import { RemoteCursorPresence } from './RemoteCursorPresence';
 import {
   ArrowHeadStyle,
   ArrowLineStyle,
@@ -360,7 +361,6 @@ export function WhiteboardCanvas({
   const updateElement = useBoardStore((s) => s.updateElement);
   const setElements = useBoardStore((s) => s.setElements);
   const applyLocalCommand = useBoardStore((s) => s.applyLocalCommand);
-  const remoteCursors = useBoardStore((s) => s.remoteCursors);
   const pendingIconName = useBoardStore((s) => s.pendingIconName);
   const themeKey = useThemeStore((s) => s.themeKey);
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
@@ -2335,46 +2335,7 @@ export function WhiteboardCanvas({
             touchMode={isCoarsePointer}
           />
 
-          {remoteCursors
-            .filter((cursor) => cursor.clientId !== localPresenceClientId && cursor.worldX != null && cursor.worldY != null)
-            .map((cursor) => (
-              <Group key={cursor.clientId} x={cursor.worldX ?? 0} y={cursor.worldY ?? 0} listening={false}>
-                <Line
-                  points={[0, 0, 0, 24 / zoom, 5 / zoom, 18 / zoom, 8 / zoom, 28 / zoom, 12 / zoom, 26 / zoom, 9 / zoom, 16 / zoom, 18 / zoom, 16 / zoom]}
-                  closed
-                  fill="#111827"
-                  opacity={0.22}
-                  strokeEnabled={false}
-                  x={1.5 / zoom}
-                  y={2 / zoom}
-                />
-                <Line
-                  points={[0, 0, 0, 24 / zoom, 5 / zoom, 18 / zoom, 8 / zoom, 28 / zoom, 12 / zoom, 26 / zoom, 9 / zoom, 16 / zoom, 18 / zoom, 16 / zoom]}
-                  closed
-                  fill="#FFFFFF"
-                  stroke="#111827"
-                  strokeWidth={1.6 / zoom}
-                  lineJoin="round"
-                />
-                <Circle x={13 / zoom} y={24 / zoom} radius={4 / zoom} fill={cursor.colorHex} stroke="#FFFFFF" strokeWidth={1 / zoom} />
-                <Rect
-                  x={20 / zoom}
-                  y={10 / zoom}
-                  width={(cursor.displayName.length * 7 + 16) / zoom}
-                  height={22 / zoom}
-                  fill={cursor.colorHex}
-                  cornerRadius={6 / zoom}
-                  opacity={0.92}
-                />
-                <Text
-                  x={28 / zoom}
-                  y={14 / zoom}
-                  text={cursor.displayName}
-                  fontSize={12 / zoom}
-                  fill="#ffffff"
-                />
-              </Group>
-            ))}
+          <RemoteCursorPresence localPresenceClientId={localPresenceClientId} zoom={zoom} />
 
           {/* Alignment guides */}
           <AlignmentGuides guides={guides} zoom={zoom} stageSize={stageSize} cameraX={cameraX} cameraY={cameraY} />

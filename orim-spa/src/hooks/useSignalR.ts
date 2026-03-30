@@ -45,6 +45,8 @@ function getErrorMessage(error: unknown): string {
   return 'SignalR connection error';
 }
 
+const CURSOR_UPDATE_INTERVAL_MS = 40;
+
 export function useSignalR({
   boardId,
   shareToken,
@@ -65,6 +67,7 @@ export function useSignalR({
   const latestLiveOperationRef = useRef<BoardOperationPayload | null>(null);
   const cursorTimerRef = useRef<number | null>(null);
   const latestCursorRef = useRef<{ x: number | null; y: number | null } | null>(null);
+  const lastCursorSentAtRef = useRef(0);
   const isFlushingOutboxRef = useRef(false);
   const boardIdRef = useRef(boardId);
   const shareTokenRef = useRef(shareToken ?? null);
@@ -291,6 +294,8 @@ export function useSignalR({
         window.clearTimeout(cursorTimerRef.current);
         cursorTimerRef.current = null;
       }
+      latestCursorRef.current = null;
+      lastCursorSentAtRef.current = 0;
       if (connection.state === signalR.HubConnectionState.Connected) {
         connection.invoke('LeaveBoard', boardId).catch(() => {});
       }
@@ -316,18 +321,40 @@ export function useSignalR({
   const sendCursorUpdate = useCallback(
     (worldX: number | null, worldY: number | null) => {
       latestCursorRef.current = { x: worldX, y: worldY };
+      const flushPendingCursor = () => {
+        const pending = latestCursorRef.current;
+        latestCursorRef.current = null;
+        if (pending && boardIdRef.current) {
+          lastCursorSentAtRef.current = performance.now();
+          void invokeIfConnected('UpdateCursor', boardIdRef.current, pending.x, pending.y);
+        }
+      };
+
+      if (worldX == null || worldY == null) {
+        if (cursorTimerRef.current != null) {
+          window.clearTimeout(cursorTimerRef.current);
+          cursorTimerRef.current = null;
+        }
+        flushPendingCursor();
+        return;
+      }
+
+      const now = performance.now();
+      const elapsedSinceLastSend = now - lastCursorSentAtRef.current;
+
+      if (cursorTimerRef.current == null && elapsedSinceLastSend >= CURSOR_UPDATE_INTERVAL_MS) {
+        flushPendingCursor();
+        return;
+      }
+
       if (cursorTimerRef.current != null) {
         return;
       }
 
       cursorTimerRef.current = window.setTimeout(() => {
         cursorTimerRef.current = null;
-        const pending = latestCursorRef.current;
-        latestCursorRef.current = null;
-        if (pending && boardIdRef.current) {
-          void invokeIfConnected('UpdateCursor', boardIdRef.current, pending.x, pending.y);
-        }
-      }, 60);
+        flushPendingCursor();
+      }, Math.max(0, CURSOR_UPDATE_INTERVAL_MS - elapsedSinceLastSend));
     },
     [invokeIfConnected],
   );
