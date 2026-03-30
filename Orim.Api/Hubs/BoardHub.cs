@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
+using Orim.Api.Contracts;
 using Orim.Core.Models;
 using Orim.Core.Services;
 
@@ -33,7 +34,7 @@ public sealed class BoardHub : Hub
         Context.Items[JoinedCanEditKey] = CanEditBoard(board, shareToken, sharePassword);
 
         var displayName = ResolveDisplayName(requestedDisplayName);
-    Context.Items[DisplayNameKey] = displayName;
+        Context.Items[DisplayNameKey] = displayName;
         var clientId = Context.ConnectionId;
         var color = BoardPresenceIdentity.ResolveColor(clientId);
 
@@ -130,6 +131,27 @@ public sealed class BoardHub : Hub
             kind = changeKind,
             board
         });
+    }
+
+    public async Task ApplyBoardOperation(Guid boardId, BoardOperationDto operation)
+    {
+        if (!IsJoinedBoard(boardId))
+        {
+            return;
+        }
+
+        if (!CanEditJoinedBoard())
+        {
+            return;
+        }
+
+        ArgumentNullException.ThrowIfNull(operation);
+
+        await Clients.OthersInGroup(BoardGroup(boardId)).SendAsync("BoardOperationApplied", new BoardOperationNotification(
+            boardId,
+            Context.ConnectionId,
+            DateTime.UtcNow,
+            operation));
     }
 
     public async Task UpdateCursor(Guid boardId, double? worldX, double? worldY)
@@ -274,5 +296,7 @@ public sealed class BoardHub : Hub
         return tcs.Task;
     }
 
-    private static string BoardGroup(Guid boardId) => $"board-{boardId}";
+    public static string GetBoardGroupName(Guid boardId) => $"board-{boardId}";
+
+    private static string BoardGroup(Guid boardId) => GetBoardGroupName(boardId);
 }

@@ -1,4 +1,4 @@
-import type { ArrowElement, BoardElementBase, TextElement } from '../types/models';
+import type { ArrowElement, BoardElementBase, StickyNoteElement, TextElement } from '../types/models';
 
 export const MIN_AUTO_TEXT_FONT_SIZE = 8;
 export const MIN_TEXT_FONT_SIZE = 10;
@@ -103,7 +103,7 @@ export function resolveArrowLabelFontSize(
 }
 
 export function resolveTextFontSize(
-  element: Pick<TextElement, 'text' | 'fontSize' | 'autoFontSize' | 'width' | 'height'>,
+  element: Pick<TextElement | StickyNoteElement, 'text' | 'fontSize' | 'autoFontSize' | 'width' | 'height'>,
 ): number {
   if (!element.autoFontSize) {
     return Math.max(1, element.fontSize ?? DEFAULT_TEXT_FONT_SIZE);

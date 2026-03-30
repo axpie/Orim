@@ -16,11 +16,12 @@ import SendIcon from '@mui/icons-material/Send';
 import { sendAssistantMessage } from '../../../api/boards';
 import { useBoardStore } from '../store/boardStore';
 import type { ChatMessageEntry } from '../../../types/models';
+import type { BoardOperationPayload } from '../realtime/boardOperations';
 
 interface ChatPanelProps {
   boardId: string;
   onClose: () => void;
-  onBoardChanged?: (changeKind: string) => void;
+  onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
   mobile?: boolean;
 }
 

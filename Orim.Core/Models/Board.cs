@@ -31,6 +31,7 @@ public class Board
     public string? SharePasswordHash { get; set; }
     public List<BoardMember> Members { get; set; } = [];
     public List<BoardElement> Elements { get; set; } = [];
+    public List<BoardComment> Comments { get; set; } = [];
     public List<BoardSnapshot> Snapshots { get; set; } = [];
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;

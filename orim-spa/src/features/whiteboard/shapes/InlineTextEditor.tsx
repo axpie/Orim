@@ -2,6 +2,13 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import type { BoardElement } from '../../../types/models';
 import { contrastingTextColor } from '../../../utils/colorUtils';
 import { resolveFontFamily, resolveLabelFontSize, resolveTextFontSize } from '../../../utils/textLayout';
+import { getFrameHeaderHeight } from './FrameRenderer';
+
+function isTextContentElement(
+  element: BoardElement,
+): element is Extract<BoardElement, { $type: 'text' | 'sticky' }> {
+  return element.$type === 'text' || element.$type === 'sticky';
+}
 
 interface InlineTextEditorProps {
   element: BoardElement;
@@ -23,20 +30,44 @@ export function InlineTextEditor({
   const ref = useRef<HTMLTextAreaElement>(null);
   const ignoreBlurRef = useRef(false);
 
-  const initialValue = element.$type === 'text' ? (element.text ?? '') : (element.label ?? '');
-  const fontSize = element.$type === 'text' ? resolveTextFontSize(element) : resolveLabelFontSize(element);
+  const initialValue = element.$type === 'shape' || element.$type === 'frame'
+    ? (element.label ?? '')
+    : (isTextContentElement(element) ? (element.text ?? '') : '');
+  const fontSize = element.$type === 'frame'
+    ? (typeof element.labelFontSize === 'number'
+        ? Math.max(1, element.labelFontSize)
+        : Math.min(22, Math.max(12, getFrameHeaderHeight(element.height) * 0.48)))
+    : element.$type === 'shape'
+    ? resolveLabelFontSize(element)
+    : (isTextContentElement(element) ? resolveTextFontSize(element) : 16);
   const fontFamily = resolveFontFamily(element.fontFamily);
-  const textAlign = (element.labelHorizontalAlignment?.toLowerCase() ?? (element.$type === 'text' ? 'left' : 'center')) as CSSProperties['textAlign'];
-  const textColor = element.$type === 'text'
-    ? (element.color ?? '#333333')
-    : (element.$type === 'shape'
-        ? (element.labelColor ?? contrastingTextColor(element.fillColor ?? '#ffffff'))
+  const textAlign = (
+    (element.$type === 'frame' ? 'left' : element.labelHorizontalAlignment?.toLowerCase())
+    ?? (element.$type === 'shape' ? 'center' : 'left')
+  ) as CSSProperties['textAlign'];
+  const textColor = element.$type === 'frame'
+    ? (element.labelColor ?? contrastingTextColor(element.fillColor ?? 'rgba(37, 99, 235, 0.08)'))
+    : element.$type === 'shape'
+    ? (element.labelColor ?? contrastingTextColor(element.fillColor ?? '#ffffff'))
+    : (isTextContentElement(element)
+        ? (element.color ?? (element.$type === 'sticky' ? contrastingTextColor(element.fillColor ?? '#FDE68A') : '#333333'))
         : '#333333');
   const fontWeight = element.isBold ? 700 : 500;
   const fontStyle = element.isItalic ? 'italic' : 'normal';
   const textDecoration = [element.isUnderline ? 'underline' : '', element.isStrikethrough ? 'line-through' : '']
     .filter(Boolean)
     .join(' ');
+  const padding = element.$type === 'sticky'
+    ? 10 * zoom
+    : element.$type === 'frame'
+      ? 12 * zoom
+      : 4 * zoom;
+  const background = element.$type === 'sticky'
+    ? (element.fillColor ?? '#FDE68A')
+    : element.$type === 'frame'
+      ? (element.fillColor ?? 'rgba(37, 99, 235, 0.08)')
+    : 'rgba(255, 255, 255, 0.96)';
+  const borderRadius = element.$type === 'sticky' ? 8 : element.$type === 'frame' ? 10 : 2;
 
   useEffect(() => {
     const ta = ref.current;
@@ -51,7 +82,9 @@ export function InlineTextEditor({
   const left = element.x * zoom + cameraX;
   const top = element.y * zoom + cameraY;
   const width = element.width * zoom;
-  const height = element.height * zoom;
+  const height = element.$type === 'frame'
+    ? Math.max(getFrameHeaderHeight(element.height) * zoom, 24)
+    : element.height * zoom;
 
   return (
     <textarea
@@ -71,9 +104,9 @@ export function InlineTextEditor({
         textAlign,
         lineHeight: 1.15,
         border: '2px solid #1976d2',
-        borderRadius: 2,
-        padding: 4 * zoom,
-        background: 'rgba(255, 255, 255, 0.96)',
+        borderRadius,
+        padding,
+        background,
         resize: 'none',
         outline: 'none',
         zIndex: 100,

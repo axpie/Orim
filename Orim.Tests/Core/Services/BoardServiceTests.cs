@@ -441,6 +441,40 @@ public class BoardServiceTests
     }
 
     [Fact]
+    public void RestoreSnapshot_PreservesComments()
+    {
+        var board = new Board
+        {
+            Title = "Original",
+            Elements = [new ShapeElement { Label = "A" }],
+            Comments =
+            [
+                new BoardComment
+                {
+                    AuthorUserId = Guid.NewGuid(),
+                    AuthorUsername = "alice",
+                    X = 10,
+                    Y = 20,
+                    Text = "Keep me"
+                }
+            ]
+        };
+
+        var snapshot = _sut.CreateSnapshot(board, "v1", Guid.NewGuid(), "alice");
+
+        board.Title = "Modified";
+        board.Elements.Clear();
+        board.Comments[0].Text = "Still here";
+
+        _sut.RestoreSnapshot(board, snapshot.Id);
+
+        Assert.Equal("Original", board.Title);
+        Assert.Single(board.Elements);
+        Assert.Single(board.Comments);
+        Assert.Equal("Still here", board.Comments[0].Text);
+    }
+
+    [Fact]
     public void RestoreSnapshot_NonExistent_Throws()
     {
         var board = new Board { Title = "Test" };
@@ -611,6 +645,46 @@ public class BoardServiceTests
 
         Assert.Single(target.CustomColors);
         Assert.Single(target.RecentColors);
+    }
+
+    [Fact]
+    public void ReplaceBoardContent_PreservesComments()
+    {
+        var target = new Board
+        {
+            Comments =
+            [
+                new BoardComment
+                {
+                    AuthorUserId = Guid.NewGuid(),
+                    AuthorUsername = "alice",
+                    X = 12,
+                    Y = 24,
+                    Text = "Server-owned"
+                }
+            ]
+        };
+        var imported = new Board
+        {
+            Elements = [new ShapeElement { Label = "Imported" }],
+            Comments =
+            [
+                new BoardComment
+                {
+                    AuthorUserId = Guid.NewGuid(),
+                    AuthorUsername = "bob",
+                    X = 1,
+                    Y = 2,
+                    Text = "Should not replace"
+                }
+            ]
+        };
+
+        _sut.ReplaceBoardContent(target, imported);
+
+        Assert.Single(target.Elements);
+        Assert.Single(target.Comments);
+        Assert.Equal("Server-owned", target.Comments[0].Text);
     }
 
     #endregion

@@ -1,6 +1,7 @@
-import { useRef, useCallback, useState, useEffect, type ReactNode } from 'react';
+import { useRef, useCallback, useState, useEffect, useId, useMemo, type FocusEvent as ReactFocusEvent, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useMediaQuery } from '@mui/material';
+import { useTranslation } from 'react-i18next';
 import { Stage, Layer, Rect, Line, Circle, Group, Text } from 'react-konva';
 import type Konva from 'konva';
 import { getThemes } from '../../../api/themes';
@@ -9,11 +10,14 @@ import { useBoardStore } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
 import { ShapeRenderer } from '../shapes/ShapeRenderer';
 import { TextRenderer } from '../shapes/TextRenderer';
+import { StickyNoteRenderer } from '../shapes/StickyNoteRenderer';
+import { FrameRenderer } from '../shapes/FrameRenderer';
 import { ArrowRenderer } from '../shapes/ArrowRenderer';
 import { IconRenderer } from '../shapes/IconRenderer';
 import { SelectionOverlay, type ResizeHandle } from '../shapes/SelectionOverlay';
 import { AlignmentGuides } from '../shapes/AlignmentGuides';
 import { InlineTextEditor } from '../shapes/InlineTextEditor';
+import { CanvasAccessibilityLayer } from './CanvasAccessibilityLayer';
 import {
   ArrowHeadStyle,
   ArrowLineStyle,
@@ -26,9 +30,12 @@ import {
   type BoardElement,
   type ShapeElement,
   type TextElement,
+  type StickyNoteElement,
+  type FrameElement,
   type ArrowElement,
   type IconElement,
 } from '../../../types/models';
+import { contrastingTextColor } from '../../../utils/colorUtils';
 import { snapResizeRectToAlignmentGuides, snapToAlignmentGuides, type AlignmentGuide, getBoundingRect } from '../../../utils/geometry';
 import {
   computeArrowPolyline,
@@ -40,6 +47,21 @@ import {
   resolveFreeDock,
 } from '../../../utils/arrowRouting';
 import { v4 as uuidv4 } from 'uuid';
+import type { BoardOperationPayload } from '../realtime/boardOperations';
+import { describeBoardElement } from '../a11yAnnouncements';
+import {
+  asOperationPayload,
+  createElementAddedOperation,
+  createElementsDeletedOperation,
+  createElementUpdatedOperation,
+} from '../realtime/boardOperations';
+import {
+  ARROW_ENDPOINT_CHANGED_KEYS,
+  createAddElementsCommand,
+  createChangedKeysByElementId,
+  createDeleteElementsCommand,
+  createElementUpdateCommand,
+} from '../realtime/localBoardCommands';
 
 const GRID_SIZE = 24;
 const MIN_ZOOM = 0.2;
@@ -49,6 +71,7 @@ const DOCK_SNAP_RADIUS = 28;
 const KEYBOARD_DUPLICATE_OFFSET = 32;
 const WHITEBOARD_CLIPBOARD_STORAGE_KEY = 'orim:whiteboard:clipboard';
 const WHITEBOARD_CLIPBOARD_PREFIX = 'ORIM_WHITEBOARD_CLIPBOARD:';
+const DEFAULT_STICKY_FILL_COLOR = '#FDE68A';
 const FALLBACK_BOARD_DEFAULTS = {
   surfaceColor: '#FFFFFF',
   gridColor: '#EEF2F7',
@@ -63,11 +86,16 @@ const FALLBACK_BOARD_DEFAULTS = {
 
 interface WhiteboardCanvasProps {
   editable?: boolean;
-  onBoardChanged: (changeKind: string) => void;
-  onBoardLiveChanged?: (changeKind: string) => void;
+  onBoardChanged: (changeKind: string, operation?: BoardOperationPayload) => void;
+  onBoardLiveChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
   onPointerPresenceChanged?: (worldX: number | null, worldY: number | null) => void;
   localPresenceClientId?: string | null;
   onStageReady?: (stage: Konva.Stage | null) => void;
+  selectedCommentId?: string | null;
+  commentPlacementMode?: boolean;
+  onSelectComment?: (commentId: string) => void;
+  onCreateCommentAnchor?: (position: { x: number; y: number }) => void;
+  liveAnnouncement?: { id: number; text: string } | null;
 }
 
 type DockTargetState = {
@@ -94,10 +122,62 @@ type SafariGestureEvent = Event & {
 let whiteboardClipboard: BoardElement[] = [];
 
 function isInteractiveTextTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLInputElement
+  if (target instanceof HTMLInputElement
     || target instanceof HTMLTextAreaElement
-    || target instanceof HTMLSelectElement
-    || (target instanceof HTMLElement && target.isContentEditable);
+    || target instanceof HTMLSelectElement) {
+    return true;
+  }
+
+  if (target instanceof HTMLElement) {
+    if (target.dataset.whiteboardShortcutTarget === 'true') {
+      return false;
+    }
+
+    return target.isContentEditable
+      || target instanceof HTMLButtonElement
+      || target instanceof HTMLAnchorElement
+      || target.getAttribute('role') === 'button';
+  }
+
+  return false;
+}
+
+function areComparedValuesEqual(left: unknown, right: unknown): boolean {
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+      return false;
+    }
+
+    return left.every((value, index) => Object.is(value, right[index]));
+  }
+
+  return Object.is(left, right);
+}
+
+function haveTrackedElementChanges(
+  before: BoardElement[],
+  after: BoardElement[],
+  elementIds: readonly string[],
+  keys: readonly string[],
+): boolean {
+  if (elementIds.length === 0 || keys.length === 0) {
+    return false;
+  }
+
+  const beforeById = new Map(before.map((element) => [element.id, element]));
+  const afterById = new Map(after.map((element) => [element.id, element]));
+
+  return [...new Set(elementIds)].some((elementId) => {
+    const beforeElement = beforeById.get(elementId);
+    const afterElement = afterById.get(elementId);
+    if (!beforeElement || !afterElement) {
+      return beforeElement !== afterElement;
+    }
+
+    const beforeRecord = beforeElement as unknown as Record<string, unknown>;
+    const afterRecord = afterElement as unknown as Record<string, unknown>;
+    return keys.some((key) => !areComparedValuesEqual(beforeRecord[key], afterRecord[key]));
+  });
 }
 
 function isTrackpadPanWheelEvent(event: WheelEvent): boolean {
@@ -214,6 +294,16 @@ function cloneElementsForInsertion(
   });
 }
 
+function isPointInsideElementBounds(
+  point: { x: number; y: number },
+  element: Pick<BoardElement, 'x' | 'y' | 'width' | 'height'>,
+): boolean {
+  return point.x >= element.x
+    && point.x <= element.x + element.width
+    && point.y >= element.y
+    && point.y <= element.y + element.height;
+}
+
 function getResizeCursor(handle: ResizeHandle | null | undefined): string | null {
   switch (handle) {
     case 'n':
@@ -240,13 +330,22 @@ export function WhiteboardCanvas({
   onPointerPresenceChanged,
   localPresenceClientId = null,
   onStageReady,
+  selectedCommentId = null,
+  commentPlacementMode = false,
+  onSelectComment,
+  onCreateCommentAnchor,
+  liveAnnouncement = null,
 }: WhiteboardCanvasProps) {
+  const { t } = useTranslation();
+  const accessibilityHelpId = useId();
   const stageRef = useRef<Konva.Stage>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const [stageSize, setStageSize] = useState({ width: 800, height: 600 });
+  const [isCanvasFocused, setIsCanvasFocused] = useState(false);
 
   const board = useBoardStore((s) => s.board);
   const elements = board?.elements ?? [];
+  const comments = board?.comments ?? [];
   const selectedIds = useBoardStore((s) => s.selectedElementIds);
   const activeTool = useBoardStore((s) => s.activeTool);
   const zoom = useBoardStore((s) => s.zoom);
@@ -260,11 +359,19 @@ export function WhiteboardCanvas({
   const addElement = useBoardStore((s) => s.addElement);
   const updateElement = useBoardStore((s) => s.updateElement);
   const setElements = useBoardStore((s) => s.setElements);
+  const applyLocalCommand = useBoardStore((s) => s.applyLocalCommand);
   const remoteCursors = useBoardStore((s) => s.remoteCursors);
   const pendingIconName = useBoardStore((s) => s.pendingIconName);
   const themeKey = useThemeStore((s) => s.themeKey);
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const dockSnapRadius = isCoarsePointer ? DOCK_SNAP_RADIUS * 1.6 : DOCK_SNAP_RADIUS;
+  const keyboardNavigableElements = useMemo(
+    () => [...elements].sort((left, right) => {
+      const zOrder = left.zIndex - right.zIndex;
+      return zOrder !== 0 ? zOrder : left.id.localeCompare(right.id);
+    }),
+    [elements],
+  );
 
   const { data: themes = [] } = useQuery({
     queryKey: ['themes'],
@@ -275,8 +382,10 @@ export function WhiteboardCanvas({
   const boardDefaults = activeTheme?.boardDefaults ?? FALLBACK_BOARD_DEFAULTS;
 
   const pushCommand = useCommandStack((s) => s.push);
-  const undo = useCommandStack((s) => s.undo);
-  const redo = useCommandStack((s) => s.redo);
+  const peekUndo = useCommandStack((s) => s.peekUndo);
+  const commitUndo = useCommandStack((s) => s.commitUndo);
+  const peekRedo = useCommandStack((s) => s.peekRedo);
+  const commitRedo = useCommandStack((s) => s.commitRedo);
 
   useEffect(() => {
     onStageReady?.(stageRef.current);
@@ -368,19 +477,73 @@ export function WhiteboardCanvas({
       .sort((left, right) => (left.zIndex ?? 0) - (right.zIndex ?? 0));
   }, [elements, selectedIds]);
 
+  const findTopmostFrameAtPoint = useCallback((point: { x: number; y: number }): FrameElement | null => (
+    elements
+      .filter((element): element is FrameElement => element.$type === 'frame' && isPointInsideElementBounds(point, element))
+      .sort((left, right) => (right.zIndex ?? 0) - (left.zIndex ?? 0))[0]
+    ?? null
+  ), [elements]);
+
+  const emitUpdatedOperations = useCallback((
+    changeKind: string,
+    elementIds: string[],
+    emitLive = false,
+  ) => {
+    const currentElements = useBoardStore.getState().board?.elements ?? [];
+    const idSet = new Set(elementIds);
+    const payload = asOperationPayload(
+      currentElements
+        .filter((element) => idSet.has(element.id))
+        .map((element) => createElementUpdatedOperation(element)),
+    );
+
+    if (!payload) {
+      return;
+    }
+
+    if (emitLive) {
+      onBoardLiveChanged?.(changeKind, payload);
+      return;
+    }
+
+      onBoardChanged(changeKind, payload);
+  }, [onBoardChanged, onBoardLiveChanged]);
+
+  const applyCommandExecution = useCallback((
+    execution: ReturnType<typeof peekUndo>,
+    changeKind: 'undo' | 'redo',
+    commit: () => void,
+  ) => {
+    if (!execution) {
+      return;
+    }
+
+    const result = applyLocalCommand(execution);
+    if (!result.success) {
+      return;
+    }
+
+    commit();
+    if (result.operations.length > 0) {
+      onBoardChanged(changeKind, asOperationPayload(result.operations));
+    }
+  }, [applyLocalCommand, onBoardChanged]);
+
   const deleteSelectedElements = useCallback(() => {
     if (!editable || selectedIds.length === 0) {
       return;
     }
 
-    const before = [...elements];
     const selectedIdSet = new Set(selectedIds);
-    const after = elements.filter((element) => !selectedIdSet.has(element.id));
+    const deletedElements = elements.filter((element) => selectedIdSet.has(element.id));
+    if (deletedElements.length === 0) {
+      return;
+    }
 
-    setElements(after);
-    pushCommand(before, after);
+    setElements(elements.filter((element) => !selectedIdSet.has(element.id)));
+    pushCommand(createDeleteElementsCommand(deletedElements));
     setSelectedElementIds([]);
-    onBoardChanged('delete');
+    onBoardChanged('delete', createElementsDeletedOperation([...selectedIdSet]));
   }, [editable, elements, onBoardChanged, pushCommand, selectedIds, setElements, setSelectedElementIds]);
 
   const copySelectedElementsToClipboard = useCallback(() => {
@@ -419,9 +582,9 @@ export function WhiteboardCanvas({
 
     whiteboardClipboard = structuredClone(sourceElements);
     setElements(after);
-    pushCommand(before, after);
+    pushCommand(createAddElementsCommand(pasted));
     setSelectedElementIds(pasted.map((element) => element.id));
-    onBoardChanged('paste');
+    onBoardChanged('paste', asOperationPayload(pasted.map((element) => createElementAddedOperation(element))));
   }, [editable, elements, onBoardChanged, pushCommand, setElements, setSelectedElementIds]);
 
   const duplicateSelectedElements = useCallback(() => {
@@ -445,9 +608,9 @@ export function WhiteboardCanvas({
 
     whiteboardClipboard = structuredClone(selection);
     setElements(after);
-    pushCommand(before, after);
+    pushCommand(createAddElementsCommand(duplicated));
     setSelectedElementIds(duplicated.map((element) => element.id));
-    onBoardChanged('duplicate');
+    onBoardChanged('duplicate', asOperationPayload(duplicated.map((element) => createElementAddedOperation(element))));
   }, [editable, elements, getSelectedElements, onBoardChanged, pushCommand, setElements, setSelectedElementIds]);
 
   const groupSelectedElements = useCallback(() => {
@@ -470,9 +633,17 @@ export function WhiteboardCanvas({
     ));
 
     setElements(after);
-    pushCommand(before, after);
+    pushCommand(createElementUpdateCommand(
+      before.filter((element) => selectedIdSet.has(element.id)),
+      after.filter((element) => selectedIdSet.has(element.id)),
+      createChangedKeysByElementId(selection.map((element) => element.id), ['groupId']),
+    ));
     setSelectedElementIds(after.filter((element) => element.groupId === nextGroupId).map((element) => element.id));
-    onBoardChanged('group');
+    onBoardChanged('group', asOperationPayload(
+      after
+        .filter((element) => selectedIdSet.has(element.id))
+        .map((element) => createElementUpdatedOperation(element)),
+    ));
   }, [editable, elements, getSelectedElements, onBoardChanged, pushCommand, setElements, setSelectedElementIds]);
 
   const ungroupSelectedElements = useCallback(() => {
@@ -490,16 +661,24 @@ export function WhiteboardCanvas({
     }
 
     const before = [...elements];
+    const affectedBefore = before.filter((element) => element.groupId && groupedSelection.has(element.groupId));
     const after = elements.map((element) => (
       element.groupId && groupedSelection.has(element.groupId)
         ? { ...element, groupId: null }
         : element
     ));
+    const affectedAfter = after.filter((element) => affectedBefore.some((candidate) => candidate.id === element.id));
 
     setElements(after);
-    pushCommand(before, after);
+    pushCommand(createElementUpdateCommand(
+      affectedBefore,
+      affectedAfter,
+      createChangedKeysByElementId(affectedBefore.map((element) => element.id), ['groupId']),
+    ));
     setSelectedElementIds(selectedIds.filter((id) => after.some((element) => element.id === id)));
-    onBoardChanged('ungroup');
+    onBoardChanged('ungroup', asOperationPayload(
+      affectedAfter.map((element) => createElementUpdatedOperation(element)),
+    ));
   }, [editable, elements, getSelectedElements, onBoardChanged, pushCommand, selectedIds, setElements, setSelectedElementIds]);
 
   const moveSelectedElementsBy = useCallback((deltaX: number, deltaY: number) => {
@@ -519,10 +698,18 @@ export function WhiteboardCanvas({
         ? { ...element, x: element.x + deltaX, y: element.y + deltaY }
         : element
     ));
+    const movedBefore = before.filter((element) => selectedIdSet.has(element.id) && element.$type !== 'arrow');
+    const movedAfter = after.filter((element) => selectedIdSet.has(element.id) && element.$type !== 'arrow');
 
     setElements(after);
-    pushCommand(before, after);
-    onBoardChanged('move');
+    pushCommand(createElementUpdateCommand(
+      movedBefore,
+      movedAfter,
+      createChangedKeysByElementId(movedBefore.map((element) => element.id), ['x', 'y']),
+    ));
+    onBoardChanged('move', asOperationPayload(
+      movedAfter.map((element) => createElementUpdatedOperation(element)),
+    ));
   }, [editable, elements, onBoardChanged, pushCommand, selectedIds, setElements]);
 
   const beginInlineEditingSelection = useCallback(() => {
@@ -531,10 +718,37 @@ export function WhiteboardCanvas({
     }
 
     const selected = elements.find((element) => element.id === selectedIds[0]);
-    if (editable && selected && (selected.$type === 'text' || selected.$type === 'shape')) {
+    if (editable && selected && (selected.$type === 'text' || selected.$type === 'sticky' || selected.$type === 'shape' || selected.$type === 'frame')) {
       setEditingElement(selected);
     }
   }, [editable, elements, selectedIds]);
+
+  const selectAccessibleElement = useCallback((elementId: string) => {
+    setActiveTool('select');
+    setSelectedElementIds(expandSelectionWithGroups([elementId]));
+  }, [expandSelectionWithGroups, setActiveTool, setSelectedElementIds]);
+
+  const beginInlineEditingElement = useCallback((elementId: string) => {
+    selectAccessibleElement(elementId);
+
+    const selected = elements.find((element) => element.id === elementId);
+    if (editable && selected && (selected.$type === 'text' || selected.$type === 'sticky' || selected.$type === 'shape' || selected.$type === 'frame')) {
+      setEditingElement(selected);
+    }
+  }, [editable, elements, selectAccessibleElement]);
+
+  const handleContainerFocus = useCallback(() => {
+    setIsCanvasFocused(true);
+  }, []);
+
+  const handleContainerBlur = useCallback((event: ReactFocusEvent<HTMLDivElement>) => {
+    const nextFocusedNode = event.relatedTarget;
+    if (nextFocusedNode instanceof Node && containerRef.current?.contains(nextFocusedNode)) {
+      return;
+    }
+
+    setIsCanvasFocused(false);
+  }, []);
 
   useEffect(() => {
     viewportStateRef.current = { zoom, cameraX, cameraY };
@@ -582,34 +796,20 @@ export function WhiteboardCanvas({
       const hasModifier = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
 
-      if (hasModifier) {
-        switch (key) {
-          case 'z':
-            e.preventDefault();
-            if (e.shiftKey) {
-              const redoResult = redo();
-              if (redoResult) {
-                setElements(redoResult);
-                onBoardChanged('redo');
+        if (hasModifier) {
+          switch (key) {
+            case 'z':
+              e.preventDefault();
+              if (e.shiftKey) {
+                applyCommandExecution(peekRedo(), 'redo', commitRedo);
+              } else {
+                applyCommandExecution(peekUndo(), 'undo', commitUndo);
               }
-            } else {
-              const undoResult = undo();
-              if (undoResult) {
-                setElements(undoResult);
-                onBoardChanged('undo');
-              }
-            }
-            return;
-          case 'y':
-            e.preventDefault();
-            {
-              const redoResult = redo();
-              if (redoResult) {
-                setElements(redoResult);
-                onBoardChanged('redo');
-              }
-            }
-            return;
+              return;
+            case 'y':
+              e.preventDefault();
+              applyCommandExecution(peekRedo(), 'redo', commitRedo);
+              return;
           case 'a':
             if (!editable) {
               return;
@@ -761,15 +961,18 @@ export function WhiteboardCanvas({
     elements,
     expandSelectionWithGroups,
     groupSelectedElements,
+    applyCommandExecution,
+    commitRedo,
+    commitUndo,
     moveSelectedElementsBy,
-    onBoardChanged,
     pasteClipboardElements,
-    redo,
+    peekRedo,
+    peekUndo,
     selectedIds.length,
+    beginInlineEditingElement,
+    selectAccessibleElement,
     setActiveTool,
-    setElements,
     setSelectedElementIds,
-    undo,
     ungroupSelectedElements,
   ]);
 
@@ -928,7 +1131,7 @@ export function WhiteboardCanvas({
     const dock = isSource ? arrow.sourceDock : arrow.targetDock;
 
     if (elementId) {
-      const connectedElement = elements.find((element) => element.id === elementId && element.$type !== 'arrow');
+      const connectedElement = elements.find((element) => element.id === elementId && element.$type !== 'arrow' && element.$type !== 'frame');
       if (connectedElement) {
         return {
           elementId,
@@ -963,7 +1166,7 @@ export function WhiteboardCanvas({
       },
     ): ArrowElement => {
       if (drag.hoverElementId && drag.hoverDock != null) {
-        const hoverElement = elements.find((element) => element.id === drag.hoverElementId && element.$type !== 'arrow');
+        const hoverElement = elements.find((element) => element.id === drag.hoverElementId && element.$type !== 'arrow' && element.$type !== 'frame');
         const hoverPoint = hoverElement ? getDockPosition(hoverElement, drag.hoverDock) : drag.pointer;
 
         return isSource
@@ -1006,6 +1209,7 @@ export function WhiteboardCanvas({
   // ── Mouse Down ──
   const handleMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
+      containerRef.current?.focus({ preventScroll: true });
       const worldPos = getWorldPos();
       const screenPos = getScreenPos();
       if (!screenPos) return;
@@ -1017,8 +1221,13 @@ export function WhiteboardCanvas({
         return;
       }
 
+      if (commentPlacementMode) {
+        onCreateCommentAnchor?.(worldPos);
+        return;
+      }
+
       // Drawing tools
-      if (editable && (activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle')) {
+      if (editable && (activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle' || activeTool === 'frame')) {
         setDrawStart(worldPos);
         setDraftRect({ x: worldPos.x, y: worldPos.y, w: 0, h: 0 });
         return;
@@ -1026,7 +1235,6 @@ export function WhiteboardCanvas({
 
       // Text tool — place immediately
       if (editable && activeTool === 'text') {
-        const before = [...elements];
         const newText: TextElement = {
           $type: 'text',
           id: uuidv4(),
@@ -1050,16 +1258,48 @@ export function WhiteboardCanvas({
           isStrikethrough: false,
         };
         addElement(newText);
-        pushCommand(before, [...elements, newText]);
+        pushCommand(createAddElementsCommand([newText]));
         setSelectedElementIds([newText.id]);
         setActiveTool('select');
         setEditingElement(newText);
-        onBoardChanged('add');
+        onBoardChanged('add', createElementAddedOperation(newText));
+        return;
+      }
+
+      if (editable && activeTool === 'sticky') {
+        const newSticky: StickyNoteElement = {
+          $type: 'sticky',
+          id: uuidv4(),
+          x: worldPos.x - 110,
+          y: worldPos.y - 80,
+          width: 220,
+          height: 160,
+          zIndex: elements.length,
+          rotation: 0,
+          label: '',
+          labelHorizontalAlignment: HorizontalLabelAlignment.Left,
+          labelVerticalAlignment: VerticalLabelAlignment.Top,
+          text: '',
+          fontSize: 16,
+          autoFontSize: false,
+          fontFamily: null,
+          fillColor: DEFAULT_STICKY_FILL_COLOR,
+          color: contrastingTextColor(DEFAULT_STICKY_FILL_COLOR),
+          isBold: false,
+          isItalic: false,
+          isUnderline: false,
+          isStrikethrough: false,
+        };
+        addElement(newSticky);
+        pushCommand(createAddElementsCommand([newSticky]));
+        setSelectedElementIds([newSticky.id]);
+        setActiveTool('select');
+        setEditingElement(newSticky);
+        onBoardChanged('add', createElementAddedOperation(newSticky));
         return;
       }
 
       if (editable && activeTool === 'icon' && pendingIconName) {
-        const before = [...elements];
         const newIcon: IconElement = {
           $type: 'icon',
           id: uuidv4(),
@@ -1076,10 +1316,10 @@ export function WhiteboardCanvas({
           color: boardDefaults.iconColor,
         };
         addElement(newIcon);
-        pushCommand(before, [...elements, newIcon]);
+        pushCommand(createAddElementsCommand([newIcon]));
         setSelectedElementIds([newIcon.id]);
         setActiveTool('select');
-        onBoardChanged('add');
+        onBoardChanged('add', createElementAddedOperation(newIcon));
         return;
       }
 
@@ -1087,14 +1327,12 @@ export function WhiteboardCanvas({
       if (editable && activeTool === 'arrow') {
         const startDockTarget = findNearestDockTarget(elements, worldPos, undefined, dockSnapRadius);
         const hitEl = startDockTarget
-          ? elements.find((element) => element.id === startDockTarget.elementId && element.$type !== 'arrow')
+          ? elements.find((element) => element.id === startDockTarget.elementId && element.$type !== 'arrow' && element.$type !== 'frame')
           : elements.find(
             (el: BoardElement) =>
               el.$type !== 'arrow' &&
-              worldPos.x >= el.x &&
-              worldPos.x <= el.x + el.width &&
-              worldPos.y >= el.y &&
-              worldPos.y <= el.y + el.height,
+              el.$type !== 'frame' &&
+              isPointInsideElementBounds(worldPos, el),
           );
 
         if (startDockTarget) {
@@ -1171,6 +1409,34 @@ export function WhiteboardCanvas({
           }
         }
 
+        const frameAtPoint = target === stageRef.current
+          ? findTopmostFrameAtPoint(worldPos)
+          : null;
+        if (frameAtPoint) {
+          const groupedSelectionIds = expandSelectionWithGroups([frameAtPoint.id]);
+
+          if (e.evt.shiftKey) {
+            const hasGroupedSelection = groupedSelectionIds.some((id) => selectedIds.includes(id));
+            setSelectedElementIds(
+              hasGroupedSelection
+                ? selectedIds.filter((id) => !groupedSelectionIds.includes(id))
+                : [...selectedIds, ...groupedSelectionIds.filter((id) => !selectedIds.includes(id))],
+            );
+          } else if (
+            selectedIds.length !== groupedSelectionIds.length
+            || groupedSelectionIds.some((id) => !selectedIds.includes(id))
+          ) {
+            setSelectedElementIds(groupedSelectionIds);
+          }
+
+          if (editable) {
+            dragSnapshotRef.current = [...elements];
+            setIsDragging(true);
+            setDragStart(worldPos);
+          }
+          return;
+        }
+
         // Clicked on stage background
         if (target === stageRef.current) {
           if (!e.evt.shiftKey) {
@@ -1208,7 +1474,7 @@ export function WhiteboardCanvas({
         }
       }
     },
-    [editable, activeTool, elements, selectedIds, cameraX, cameraY, zoom, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pushCommand, onBoardChanged, boardDefaults, spacePanActive],
+    [editable, activeTool, elements, selectedIds, cameraX, cameraY, zoom, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, expandSelectionWithGroups, findTopmostFrameAtPoint, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pushCommand, onBoardChanged, boardDefaults, spacePanActive, commentPlacementMode, onCreateCommentAnchor],
   );
 
   // ── Mouse Move ──
@@ -1259,11 +1525,14 @@ export function WhiteboardCanvas({
 
       if (arrowEndpointDrag) {
         const arrow = elements.find((candidate): candidate is ArrowElement => candidate.id === arrowEndpointDrag.arrowId && candidate.$type === 'arrow');
+        if (!arrow) {
+          return;
+        }
         const hoverTarget = findNearestDockTarget(elements, worldPos, undefined, dockSnapRadius);
         const nextPointer = hoverTarget?.point ?? getMagneticArrowPoint(
           arrowEndpointDrag.fixedPoint,
           worldPos,
-          arrow?.routeStyle ?? ArrowRouteStyle.Orthogonal,
+          arrow.routeStyle,
         );
         const nextDrag = {
           ...arrowEndpointDrag,
@@ -1273,18 +1542,18 @@ export function WhiteboardCanvas({
         };
 
         setArrowEndpointDrag(nextDrag);
-        updateElement(arrowEndpointDrag.arrowId, (element) => {
-          if (element.$type !== 'arrow') {
-            return element;
-          }
-
-          return applyDraggedArrowEndpoint(element, arrowEndpointDrag.isSource, nextDrag);
-        });
-        onBoardLiveChanged?.('edit');
+        const nextArrow = applyDraggedArrowEndpoint(arrow, arrowEndpointDrag.isSource, nextDrag);
+        updateElement(arrowEndpointDrag.arrowId, nextArrow);
+        onBoardLiveChanged?.('edit', createElementUpdatedOperation(nextArrow));
         return;
       }
 
       if (resizeState) {
+        const currentElement = elements.find((element) => element.id === resizeState.elementId && element.$type !== 'arrow');
+        if (!currentElement) {
+          return;
+        }
+
         const right = resizeState.initialX + resizeState.initialWidth;
         const bottom = resizeState.initialY + resizeState.initialHeight;
         let nextLeft = resizeState.initialX;
@@ -1340,13 +1609,15 @@ export function WhiteboardCanvas({
           setGuides(snappedResize.guides);
         }
 
-        updateElement(resizeState.elementId, {
+        const nextElement = {
+          ...currentElement,
           x: nextLeft,
           y: nextTop,
           width: nextRight - nextLeft,
           height: nextBottom - nextTop,
-        });
-        onBoardLiveChanged?.('resize');
+        } as BoardElement;
+        updateElement(resizeState.elementId, nextElement);
+        onBoardLiveChanged?.('resize', createElementUpdatedOperation(nextElement));
         return;
       }
 
@@ -1382,13 +1653,18 @@ export function WhiteboardCanvas({
             setGuides(snap.guides);
           }
 
-          for (const el of selectedEls) {
-            updateElement(el.id, {
+          const payload = asOperationPayload(selectedEls.map((el) => {
+            const nextElement = {
+              ...el,
               x: el.x + dx + snapDx,
               y: el.y + dy + snapDy,
-            });
+            } as BoardElement;
+            updateElement(el.id, nextElement);
+            return createElementUpdatedOperation(nextElement);
+          }));
+          if (payload) {
+            onBoardLiveChanged?.('move', payload);
           }
-          onBoardLiveChanged?.('move');
         }
         setDragStart(worldPos);
       }
@@ -1418,42 +1694,73 @@ export function WhiteboardCanvas({
 
       // Commit drawn shape
       if (drawStart && draftRect && draftRect.w >= 12 && draftRect.h >= 12) {
-        const before = [...elements];
-        const shapeType =
-          activeTool === 'ellipse' ? ShapeType.Ellipse :
-          activeTool === 'triangle' ? ShapeType.Triangle :
-          ShapeType.Rectangle;
+        if (activeTool === 'frame') {
+          const newFrame: FrameElement = {
+            $type: 'frame',
+            id: uuidv4(),
+            x: draftRect.x,
+            y: draftRect.y,
+            width: draftRect.w,
+            height: draftRect.h,
+            zIndex: elements.length > 0 ? Math.min(...elements.map((element) => element.zIndex ?? 0)) - 1 : 0,
+            rotation: 0,
+            label: '',
+            labelFontSize: null,
+            labelColor: null,
+            fontFamily: null,
+            isBold: false,
+            isItalic: false,
+            isUnderline: false,
+            isStrikethrough: false,
+            labelHorizontalAlignment: HorizontalLabelAlignment.Left,
+            labelVerticalAlignment: VerticalLabelAlignment.Top,
+            fillColor: 'rgba(37, 99, 235, 0.08)',
+            strokeColor: 'rgba(37, 99, 235, 0.48)',
+            strokeWidth: 2,
+          };
+          addElement(newFrame);
+          pushCommand(createAddElementsCommand([newFrame]));
+          setSelectedElementIds([newFrame.id]);
+          setActiveTool('select');
+          setEditingElement(newFrame);
+          onBoardChanged('add', createElementAddedOperation(newFrame));
+        } else {
+          const shapeType =
+            activeTool === 'ellipse' ? ShapeType.Ellipse :
+            activeTool === 'triangle' ? ShapeType.Triangle :
+            ShapeType.Rectangle;
 
-        const newShape: ShapeElement = {
-          $type: 'shape',
-          id: uuidv4(),
-          x: draftRect.x,
-          y: draftRect.y,
-          width: draftRect.w,
-          height: draftRect.h,
-          zIndex: elements.length,
-          rotation: 0,
-          label: '',
-          labelFontSize: null,
-          labelColor: null,
-          fontFamily: null,
-          isBold: false,
-          isItalic: false,
-          isUnderline: false,
-          isStrikethrough: false,
-          labelHorizontalAlignment: HorizontalLabelAlignment.Center,
-          labelVerticalAlignment: VerticalLabelAlignment.Middle,
-          shapeType,
-          fillColor: boardDefaults.shapeFillColor,
-          strokeColor: boardDefaults.strokeColor,
-          strokeWidth: 2,
-          borderLineStyle: BorderLineStyle.Solid,
-        };
-        addElement(newShape);
-        pushCommand(before, [...elements, newShape]);
-        setSelectedElementIds([newShape.id]);
-        setActiveTool('select');
-        onBoardChanged('add');
+          const newShape: ShapeElement = {
+            $type: 'shape',
+            id: uuidv4(),
+            x: draftRect.x,
+            y: draftRect.y,
+            width: draftRect.w,
+            height: draftRect.h,
+            zIndex: elements.length,
+            rotation: 0,
+            label: '',
+            labelFontSize: null,
+            labelColor: null,
+            fontFamily: null,
+            isBold: false,
+            isItalic: false,
+            isUnderline: false,
+            isStrikethrough: false,
+            labelHorizontalAlignment: HorizontalLabelAlignment.Center,
+            labelVerticalAlignment: VerticalLabelAlignment.Middle,
+            shapeType,
+            fillColor: boardDefaults.shapeFillColor,
+            strokeColor: boardDefaults.strokeColor,
+            strokeWidth: 2,
+            borderLineStyle: BorderLineStyle.Solid,
+          };
+          addElement(newShape);
+          pushCommand(createAddElementsCommand([newShape]));
+          setSelectedElementIds([newShape.id]);
+          setActiveTool('select');
+          onBoardChanged('add', createElementAddedOperation(newShape));
+        }
       }
       setDrawStart(null);
       setDraftRect(null);
@@ -1462,9 +1769,8 @@ export function WhiteboardCanvas({
       if (draftArrowStart && draftArrowEnd) {
         const dist = Math.hypot(draftArrowEnd.x - draftArrowStart.x, draftArrowEnd.y - draftArrowStart.y);
         if (dist > 10) {
-          const before = [...elements];
           const targetEl = draftArrowHover
-            ? elements.find((el: BoardElement) => el.id === draftArrowHover.elementId && el.$type !== 'arrow')
+            ? elements.find((el: BoardElement) => el.id === draftArrowHover.elementId && el.$type !== 'arrow' && el.$type !== 'frame')
             : null;
           const targetDock = draftArrowHover?.dock;
           const targetDockPos = draftArrowHover?.point ?? draftArrowEnd;
@@ -1499,10 +1805,10 @@ export function WhiteboardCanvas({
             routeStyle: ArrowRouteStyle.Orthogonal,
           };
           addElement(newArrow);
-          pushCommand(before, [...elements, newArrow]);
+          pushCommand(createAddElementsCommand([newArrow]));
           setSelectedElementIds([newArrow.id]);
           setActiveTool('select');
-          onBoardChanged('add');
+          onBoardChanged('add', createElementAddedOperation(newArrow));
         }
       }
       setDraftArrowStart(null);
@@ -1515,9 +1821,15 @@ export function WhiteboardCanvas({
         setArrowEndpointDrag(null);
         arrowEndpointSnapshotRef.current = null;
 
-        if (before && JSON.stringify(before) !== JSON.stringify(after)) {
-          pushCommand(before, after);
-          onBoardChanged('edit');
+        if (before && haveTrackedElementChanges(before, after, [arrowEndpointDrag.arrowId], ARROW_ENDPOINT_CHANGED_KEYS)) {
+          const beforeArrow = before.filter((element) => element.id === arrowEndpointDrag.arrowId);
+          const afterArrow = after.filter((element) => element.id === arrowEndpointDrag.arrowId);
+          pushCommand(createElementUpdateCommand(
+            beforeArrow,
+            afterArrow,
+            createChangedKeysByElementId([arrowEndpointDrag.arrowId], ARROW_ENDPOINT_CHANGED_KEYS),
+          ));
+          emitUpdatedOperations('edit', [arrowEndpointDrag.arrowId]);
         }
 
         return;
@@ -1530,9 +1842,13 @@ export function WhiteboardCanvas({
         setGuides([]);
         resizeSnapshotRef.current = null;
 
-        if (before && JSON.stringify(before) !== JSON.stringify(after)) {
-          pushCommand(before, after);
-          onBoardChanged('resize');
+        if (before && haveTrackedElementChanges(before, after, [resizeState.elementId], ['x', 'y', 'width', 'height'])) {
+          pushCommand(createElementUpdateCommand(
+            before.filter((element) => element.id === resizeState.elementId),
+            after.filter((element) => element.id === resizeState.elementId),
+            createChangedKeysByElementId([resizeState.elementId], ['x', 'y', 'width', 'height']),
+          ));
+          emitUpdatedOperations('resize', [resizeState.elementId]);
         }
 
         return;
@@ -1560,15 +1876,19 @@ export function WhiteboardCanvas({
         setDragStart(null);
         setGuides([]);
 
-        if (before && JSON.stringify(before) !== JSON.stringify(after)) {
-          pushCommand(before, after);
-          onBoardChanged('move');
+        if (before && haveTrackedElementChanges(before, after, selectedIds, ['x', 'y'])) {
+          pushCommand(createElementUpdateCommand(
+            before.filter((element) => selectedIds.includes(element.id)),
+            after.filter((element) => selectedIds.includes(element.id)),
+            createChangedKeysByElementId(selectedIds, ['x', 'y']),
+          ));
+          emitUpdatedOperations('move', selectedIds);
         }
 
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, zoom, getResizeHandleFromTarget, getWorldPos, setCamera, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, onBoardChanged, updateElement, boardDefaults],
+    [isPanning, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, zoom, getResizeHandleFromTarget, getWorldPos, setCamera, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, updateElement, boardDefaults, emitUpdatedOperations, selectedIds],
   );
 
   const handleTouchStart = useCallback(
@@ -1689,14 +2009,21 @@ export function WhiteboardCanvas({
     (e: Konva.KonvaEventObject<MouseEvent>) => {
       const target = e.target;
       const elementId = getElementIdFromTarget(target);
-      if (!elementId) return;
+      if (!elementId) {
+        const frame = findTopmostFrameAtPoint(getWorldPos());
+        if (editable && frame) {
+          setSelectedElementIds([frame.id]);
+          setEditingElement(frame);
+        }
+        return;
+      }
       const el = elements.find((el: BoardElement) => el.id === elementId);
-      if (editable && el && (el.$type === 'text' || el.$type === 'shape')) {
+      if (editable && el && (el.$type === 'text' || el.$type === 'sticky' || el.$type === 'shape' || el.$type === 'frame')) {
         setSelectedElementIds([el.id]);
         setEditingElement(el);
       }
     },
-    [editable, elements, getElementIdFromTarget, setSelectedElementIds],
+    [editable, elements, findTopmostFrameAtPoint, getElementIdFromTarget, getWorldPos, setSelectedElementIds],
   );
 
   // Inline editor callbacks
@@ -1704,25 +2031,48 @@ export function WhiteboardCanvas({
     (id: string, value: string) => {
       const el = elements.find((element: BoardElement) => element.id === id);
       if (!el) return;
-      const before = [...elements];
-      const after = elements.map((element: BoardElement) => {
-        if (element.id !== id) {
-          return element;
-        }
+      let nextElement: BoardElement;
+      let changedKeys: string[];
 
-        return element.$type === 'text'
-          ? { ...element, text: value }
-          : { ...element, label: value };
+      switch (el.$type) {
+        case 'text':
+        case 'sticky':
+          nextElement = { ...el, text: value };
+          changedKeys = ['text'];
+          break;
+        case 'shape':
+        case 'frame':
+          nextElement = { ...el, label: value };
+          changedKeys = ['label'];
+          break;
+        default:
+          setEditingElement(null);
+          return;
+      }
+
+      const hasMeaningfulChange = changedKeys.some((key) => {
+        const currentValue = (el as unknown as Record<string, unknown>)[key];
+        const nextValue = (nextElement as unknown as Record<string, unknown>)[key];
+        return !Object.is(currentValue, nextValue);
       });
 
-      if (el.$type === 'text') {
+      if (!hasMeaningfulChange) {
+        setEditingElement(null);
+        return;
+      }
+
+      if (el.$type === 'text' || el.$type === 'sticky') {
         updateElement(id, { text: value });
-      } else if (el.$type === 'shape') {
+      } else if (el.$type === 'shape' || el.$type === 'frame') {
         updateElement(id, { label: value });
       }
-      pushCommand(before, after);
+      pushCommand(createElementUpdateCommand(
+        [el],
+        [nextElement],
+        createChangedKeysByElementId([id], changedKeys),
+      ));
       setEditingElement(null);
-      onBoardChanged('edit');
+      onBoardChanged('edit', createElementUpdatedOperation(nextElement));
     },
     [elements, updateElement, pushCommand, onBoardChanged],
   );
@@ -1818,10 +2168,20 @@ export function WhiteboardCanvas({
   return (
     <div
       ref={containerRef}
+      tabIndex={0}
+      role="region"
+      aria-label={t('a11y.canvasRegionLabel')}
+      aria-describedby={accessibilityHelpId}
+      aria-keyshortcuts="Tab, Shift+Tab, Enter, Escape"
+      onFocus={handleContainerFocus}
+      onBlur={handleContainerBlur}
       style={{
         width: '100%',
         height: '100%',
         background: boardDefaults.surfaceColor,
+        position: 'relative',
+        outline: isCanvasFocused ? `3px solid ${boardDefaults.selectionColor}` : 'none',
+        outlineOffset: -3,
         touchAction: 'none',
         overscrollBehavior: 'none',
         WebkitUserSelect: 'none',
@@ -1831,6 +2191,8 @@ export function WhiteboardCanvas({
             ? resizeCursor
             : isPanning
               ? 'grabbing'
+              : commentPlacementMode
+                ? 'crosshair'
               : activeTool === 'hand' || spacePanActive
                 ? 'grab'
                 : activeTool === 'arrow'
@@ -1880,6 +2242,10 @@ export function WhiteboardCanvas({
                 return <ShapeRenderer key={el.id} element={el} />;
               case 'text':
                 return <TextRenderer key={el.id} element={el} />;
+              case 'sticky':
+                return <StickyNoteRenderer key={el.id} element={el} />;
+              case 'frame':
+                return <FrameRenderer key={el.id} element={el} />;
               case 'arrow':
                 return <ArrowRenderer key={el.id} element={el} elements={elements} />;
               case 'icon':
@@ -1918,7 +2284,7 @@ export function WhiteboardCanvas({
             />
           )}
 
-          {showDockHandles && elements.filter((element) => element.$type !== 'arrow').flatMap((element) => [
+          {showDockHandles && elements.filter((element) => element.$type !== 'arrow' && element.$type !== 'frame').flatMap((element) => [
             DockPoint.Top,
             DockPoint.Right,
             DockPoint.Bottom,
@@ -2014,6 +2380,107 @@ export function WhiteboardCanvas({
           <AlignmentGuides guides={guides} zoom={zoom} stageSize={stageSize} cameraX={cameraX} cameraY={cameraY} />
         </Layer>
       </Stage>
+
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          pointerEvents: 'none',
+        }}
+      >
+        {comments.map((comment) => {
+          const left = comment.x * zoom + cameraX;
+          const top = comment.y * zoom + cameraY;
+
+          if (left < -36 || top < -36 || left > stageSize.width + 36 || top > stageSize.height + 36) {
+            return null;
+          }
+
+          const isActive = comment.id === selectedCommentId;
+          return (
+            <button
+              key={comment.id}
+              type="button"
+              tabIndex={-1}
+              onClick={() => onSelectComment?.(comment.id)}
+              title={comment.text}
+              style={{
+                position: 'absolute',
+                left,
+                top,
+                width: 28,
+                height: 28,
+                transform: 'translate(-50%, -50%)',
+                borderRadius: '999px',
+                border: `2px solid ${isActive ? boardDefaults.selectionColor : 'rgba(255,255,255,0.92)'}`,
+                background: boardDefaults.selectionColor,
+                color: '#FFFFFF',
+                fontSize: 12,
+                fontWeight: 700,
+                boxShadow: isActive ? '0 0 0 3px rgba(37, 99, 235, 0.22)' : '0 8px 18px rgba(15, 23, 42, 0.18)',
+                cursor: 'pointer',
+                pointerEvents: 'auto',
+              }}
+            >
+              {Math.min(comment.replies.length + 1, 99)}
+            </button>
+          );
+        })}
+      </div>
+
+      <CanvasAccessibilityLayer
+        helpTextId={accessibilityHelpId}
+        elements={elements}
+        selectedIds={selectedIds}
+        activeTool={activeTool}
+        commentPlacementMode={commentPlacementMode}
+        externalAnnouncement={liveAnnouncement}
+      />
+
+      <div
+        role="group"
+        aria-label={t('a11y.elementNavigatorLabel')}
+        style={{
+          position: 'absolute',
+          width: 1,
+          height: 1,
+          padding: 0,
+          margin: -1,
+          overflow: 'hidden',
+          clip: 'rect(0 0 0 0)',
+          whiteSpace: 'nowrap',
+          border: 0,
+        }}
+      >
+        {keyboardNavigableElements.map((element) => (
+          <button
+            key={`a11y-element-${element.id}`}
+            type="button"
+            data-whiteboard-shortcut-target="true"
+            data-element-id={element.id}
+            aria-label={describeBoardElement(element, t)}
+            aria-pressed={selectedIds.includes(element.id)}
+            onClick={() => selectAccessibleElement(element.id)}
+            onFocus={() => selectAccessibleElement(element.id)}
+            onKeyDown={(event) => {
+              if (event.key === ' ' || event.code === 'Space') {
+                event.preventDefault();
+                event.stopPropagation();
+                selectAccessibleElement(element.id);
+                return;
+              }
+
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                event.stopPropagation();
+                beginInlineEditingElement(element.id);
+              }
+            }}
+          >
+            {describeBoardElement(element, t)}
+          </button>
+        ))}
+      </div>
 
       {/* Inline text editor (DOM overlay) */}
       {editingElement && (

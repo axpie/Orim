@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   AppBar,
+  Badge,
   Box,
   Chip,
   IconButton,
@@ -21,6 +22,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChatIcon from '@mui/icons-material/Chat';
+import ModeCommentOutlinedIcon from '@mui/icons-material/ModeCommentOutlined';
 import SettingsIcon from '@mui/icons-material/Settings';
 import TuneIcon from '@mui/icons-material/Tune';
 import ShareIcon from '@mui/icons-material/Share';
@@ -37,6 +39,8 @@ import { exportBoardJson, exportBoardPdf } from '../../../api/boards';
 import { ShareDialog } from '../../sharing/ShareDialog';
 import { ShortcutHelpDialog } from './ShortcutHelpDialog';
 import type { BoardSyncStatus, CursorPresence } from '../../../types/models';
+import type { BoardOperationPayload } from '../realtime/boardOperations';
+import { createBoardMetadataUpdatedOperation } from '../realtime/boardOperations';
 
 function createBoardFileName(title: string | undefined, extension: string) {
   const baseName = (title?.trim() || 'board').replace(/[\\/:*?"<>|]+/g, '-');
@@ -45,8 +49,10 @@ function createBoardFileName(title: string | undefined, extension: string) {
 
 interface BoardTopBarProps {
   onOpenProperties: () => void;
+  onOpenComments: () => void;
   onOpenChat: () => void;
   propertiesOpen: boolean;
+  commentsOpen: boolean;
   chatOpen: boolean;
   syncStatus: BoardSyncStatus;
   titleEditable?: boolean;
@@ -54,9 +60,11 @@ interface BoardTopBarProps {
   showExport?: boolean;
   showSnapshots?: boolean;
   showProperties?: boolean;
+  showComments?: boolean;
   showChat?: boolean;
   showBackButton?: boolean;
   onBack?: () => void;
+  onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
   onOpenSnapshots?: () => void;
   onExportPng?: () => Promise<void> | void;
   collaborators?: CursorPresence[];
@@ -65,8 +73,10 @@ interface BoardTopBarProps {
 
 export function BoardTopBar({
   onOpenProperties,
+  onOpenComments,
   onOpenChat,
   propertiesOpen,
+  commentsOpen,
   chatOpen,
   syncStatus,
   titleEditable = true,
@@ -74,9 +84,11 @@ export function BoardTopBar({
   showExport = true,
   showSnapshots = false,
   showProperties = true,
+  showComments = false,
   showChat = true,
   showBackButton = true,
   onBack,
+  onBoardChanged,
   onOpenSnapshots,
   onExportPng,
   collaborators = [],
@@ -108,8 +120,18 @@ export function BoardTopBar({
 
   const handleTitleBlur = () => {
     setEditing(false);
-    if (title.trim() && title !== board?.title) {
-      updateBoard({ title: title.trim() });
+    const trimmedTitle = title.trim();
+    if (trimmedTitle && trimmedTitle !== board?.title) {
+      updateBoard({ title: trimmedTitle });
+      if (board) {
+        onBoardChanged?.('Metadata', createBoardMetadataUpdatedOperation({
+          title: trimmedTitle,
+          labelOutlineEnabled: board.labelOutlineEnabled,
+          arrowOutlineEnabled: board.arrowOutlineEnabled,
+          customColors: board.customColors,
+          recentColors: board.recentColors,
+        }));
+      }
     }
   };
 
@@ -149,12 +171,15 @@ export function BoardTopBar({
   const compactCollaborators = collaborators.length > 0
     ? collaborators.filter((collaborator) => collaborator.clientId !== localConnectionId).length
     : 0;
+  const commentCount = board?.comments?.length ?? 0;
   const statusLabelKey = (() => {
     switch (syncStatus.kind) {
       case 'saving':
         return 'board.saving';
       case 'unsaved':
         return 'board.statusUnsaved';
+      case 'unsyncedChanges':
+        return 'board.statusUnsyncedChanges';
       case 'connecting':
         return 'board.statusConnecting';
       case 'reconnecting':
@@ -171,12 +196,18 @@ export function BoardTopBar({
     }
   })();
   const baseStatusLabel = t(statusLabelKey);
-  const statusLabel = syncStatus.hasPendingChanges && !['saving', 'unsaved', 'saveError'].includes(syncStatus.kind)
+  const statusLabel = syncStatus.hasPendingChanges && !['saving', 'unsaved', 'unsyncedChanges', 'saveError'].includes(syncStatus.kind)
     ? `${baseStatusLabel} · ${t('board.statusUnsaved')}`
     : baseStatusLabel;
   const statusTooltip = syncStatus.detail
     ? t('board.lastError', { message: syncStatus.detail })
     : statusLabel;
+  const queuedChangesLabel = syncStatus.queuedChangesCount && syncStatus.queuedChangesCount > 0
+    ? t('board.unsyncedChangesCount', {
+        count: syncStatus.queuedChangesCount,
+        defaultValue: '{{count}} unsynced changes',
+      })
+    : null;
   const statusColor = (() => {
     switch (syncStatus.kind) {
       case 'saved':
@@ -184,6 +215,7 @@ export function BoardTopBar({
       case 'saving':
         return 'info' as const;
       case 'unsaved':
+      case 'unsyncedChanges':
       case 'reconnecting':
         return 'warning' as const;
       case 'offline':
@@ -264,6 +296,15 @@ export function BoardTopBar({
               sx={{ ml: 1, maxWidth: { xs: 180, sm: 240 } }}
             />
           </Tooltip>
+          {queuedChangesLabel && (
+            <Chip
+              size="small"
+              color="warning"
+              variant="outlined"
+              label={queuedChangesLabel}
+              sx={{ ml: 1 }}
+            />
+          )}
 
           <Box sx={{ flexGrow: 1 }} />
 
@@ -353,6 +394,19 @@ export function BoardTopBar({
                 </Tooltip>
               )}
 
+              {showComments && (
+                <Tooltip title={t('comments.title')}>
+                  <IconButton
+                    onClick={onOpenComments}
+                    sx={{ color: 'inherit', bgcolor: commentsOpen ? 'rgba(255,255,255,0.14)' : undefined }}
+                  >
+                    <Badge badgeContent={commentCount} color="secondary" max={99}>
+                      <ModeCommentOutlinedIcon />
+                    </Badge>
+                  </IconButton>
+                </Tooltip>
+              )}
+
               {showChat && (
                 <Tooltip title={t('assistant.title')}>
                   <IconButton
@@ -429,6 +483,16 @@ export function BoardTopBar({
           <MenuItem onClick={() => { closeMobileActions(); onOpenProperties(); }}>
             <ListItemIcon><TuneIcon fontSize="small" /></ListItemIcon>
             <ListItemText>{t('properties.title', 'Eigenschaften')}</ListItemText>
+          </MenuItem>
+        )}
+        {showComments && (
+          <MenuItem onClick={() => { closeMobileActions(); onOpenComments(); }}>
+            <ListItemIcon>
+              <Badge badgeContent={commentCount} color="secondary" max={99}>
+                <ModeCommentOutlinedIcon fontSize="small" />
+              </Badge>
+            </ListItemIcon>
+            <ListItemText>{t('comments.title')}</ListItemText>
           </MenuItem>
         )}
         {showChat && (

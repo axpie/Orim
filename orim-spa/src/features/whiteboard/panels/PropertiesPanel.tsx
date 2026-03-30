@@ -30,6 +30,12 @@ import { useCommandStack } from '../store/commandStack';
 import { ColorInputField } from '../controls/ColorInputField';
 import { PreviewSelect, type PreviewSelectOption } from '../controls/PreviewSelect';
 import { getIconDisplayName } from '../icons/iconCatalog';
+import type { BoardOperationPayload } from '../realtime/boardOperations';
+import { createElementUpdatedOperation } from '../realtime/boardOperations';
+import {
+  createChangedKeysByElementId,
+  createElementUpdateCommand,
+} from '../realtime/localBoardCommands';
 import {
   ArrowLineStyle,
   ArrowHeadStyle,
@@ -41,6 +47,8 @@ import {
   type BoardElementBase,
   type ShapeElement,
   type TextElement,
+  type StickyNoteElement,
+  type FrameElement,
   type ArrowElement,
   type IconElement,
 } from '../../../types/models';
@@ -259,7 +267,7 @@ function NumericSliderField({
 
 interface PropertiesPanelProps {
   onClose: () => void;
-  onBoardChanged?: (changeKind: string) => void;
+  onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
   mobile?: boolean;
 }
 
@@ -321,14 +329,39 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
   }));
 
   const update = (id: string, changes: Partial<BoardElement>) => {
-    const before = [...elements];
+    const currentElement = elements.find((element) => element.id === id);
+    if (!currentElement) {
+      return;
+    }
+
+    const updatedElement = { ...currentElement, ...changes } as BoardElement;
+    const changedKeys = Object.keys(changes).filter((key) => {
+      const currentValue = (currentElement as unknown as Record<string, unknown>)[key];
+      const nextValue = (updatedElement as unknown as Record<string, unknown>)[key];
+
+      if (Array.isArray(currentValue) || Array.isArray(nextValue)) {
+        if (!Array.isArray(currentValue) || !Array.isArray(nextValue) || currentValue.length !== nextValue.length) {
+          return true;
+        }
+
+        return currentValue.some((value, index) => !Object.is(value, nextValue[index]));
+      }
+
+      return !Object.is(currentValue, nextValue);
+    });
+
+    if (changedKeys.length === 0) {
+      return;
+    }
+
     updateElement(id, changes);
-    const after = elements.map((element: BoardElement) =>
-      element.id === id ? { ...element, ...changes } : element,
-    ) as BoardElement[];
-    pushCommand(before, after);
+    pushCommand(createElementUpdateCommand(
+      [currentElement],
+      [updatedElement],
+      createChangedKeysByElementId([id], changedKeys),
+    ));
     setDirty(true);
-    onBoardChanged?.('edit');
+    onBoardChanged?.('edit', createElementUpdatedOperation(updatedElement));
   };
 
   return (
@@ -560,6 +593,113 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
               <TextStyleControls
                 element={el as TextElement}
                 onChange={(changes) => update(el.id, changes)}
+              />
+            </>
+          )}
+
+          {el.$type === 'sticky' && (
+            <>
+              <TextField
+                label={t('properties.text')}
+                size="small"
+                multiline
+                minRows={4}
+                value={(el as StickyNoteElement).text ?? ''}
+                onChange={(e) => update(el.id, { text: e.target.value })}
+              />
+              <ColorInputField
+                label={t('properties.fillColor')}
+                value={(el as StickyNoteElement).fillColor ?? '#FDE68A'}
+                onChange={(value) => {
+                  const sticky = el as StickyNoteElement;
+                  const fallbackColor = contrastingTextColor(sticky.fillColor ?? '#FDE68A');
+                  const currentColor = sticky.color ?? fallbackColor;
+                  update(el.id, currentColor === fallbackColor
+                    ? { fillColor: value, color: contrastingTextColor(value) }
+                    : { fillColor: value });
+                }}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={(el as StickyNoteElement).autoFontSize ?? false}
+                    onChange={(e) => {
+                      const sticky = el as StickyNoteElement;
+                      update(el.id, e.target.checked
+                        ? { autoFontSize: true }
+                        : { autoFontSize: false, fontSize: Math.round(resolveTextFontSize(sticky)) });
+                    }}
+                    size="small"
+                  />
+                }
+                label={t('properties.automaticFontSize')}
+              />
+              {!(el as StickyNoteElement).autoFontSize && (
+                <NumericSliderField
+                  label={t('properties.fontSize')}
+                  value={Math.round((el as StickyNoteElement).fontSize ?? 16)}
+                  min={8}
+                  max={200}
+                  onChange={(value) => update(el.id, { fontSize: value, autoFontSize: false })}
+                />
+              )}
+              <TextField
+                select
+                label={t('properties.fontFamily')}
+                size="small"
+                value={(el as StickyNoteElement).fontFamily ?? FONT_FAMILY_DEFAULT}
+                onChange={(e) => update(el.id, { fontFamily: e.target.value === FONT_FAMILY_DEFAULT ? null : e.target.value })}
+              >
+                {FONT_FAMILY_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    <Box sx={{ fontFamily: option.previewFamily ?? 'inherit' }}>{option.label === 'Theme Default' ? t('properties.defaultFont') : option.label}</Box>
+                  </MenuItem>
+                ))}
+              </TextField>
+              <ColorInputField
+                label={t('properties.color')}
+                value={(el as StickyNoteElement).color ?? contrastingTextColor((el as StickyNoteElement).fillColor ?? '#FDE68A')}
+                onChange={(value) => update(el.id, { color: value })}
+              />
+              <AlignmentControls
+                horizontal={(el as StickyNoteElement).labelHorizontalAlignment ?? HorizontalLabelAlignment.Left}
+                vertical={(el as StickyNoteElement).labelVerticalAlignment ?? VerticalLabelAlignment.Top}
+                horizontalLabel={t('properties.horizontal')}
+                verticalLabel={t('properties.vertical')}
+                onHorizontalChange={(value) => update(el.id, { labelHorizontalAlignment: value })}
+                onVerticalChange={(value) => update(el.id, { labelVerticalAlignment: value })}
+              />
+              <TextStyleControls
+                element={el as StickyNoteElement}
+                onChange={(changes) => update(el.id, changes)}
+              />
+            </>
+          )}
+
+          {el.$type === 'frame' && (
+            <>
+              <TextField
+                label={t('properties.label')}
+                size="small"
+                value={(el as FrameElement).label ?? ''}
+                onChange={(e) => update(el.id, { label: e.target.value })}
+              />
+              <ColorInputField
+                label={t('properties.fillColor')}
+                value={(el as FrameElement).fillColor ?? 'rgba(37, 99, 235, 0.08)'}
+                onChange={(value) => update(el.id, { fillColor: value })}
+              />
+              <ColorInputField
+                label={t('properties.strokeColor')}
+                value={(el as FrameElement).strokeColor ?? 'rgba(37, 99, 235, 0.48)'}
+                onChange={(value) => update(el.id, { strokeColor: value })}
+              />
+              <NumericSliderField
+                label={t('properties.strokeWidth')}
+                value={(el as FrameElement).strokeWidth ?? 2}
+                min={1}
+                max={12}
+                onChange={(value) => update(el.id, { strokeWidth: value })}
               />
             </>
           )}

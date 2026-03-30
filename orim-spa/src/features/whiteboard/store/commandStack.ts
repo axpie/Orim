@@ -1,19 +1,16 @@
 import { create } from 'zustand';
-import type { BoardElement } from '../../../types/models';
-
-interface SnapshotCommand {
-  before: BoardElement[];
-  after: BoardElement[];
-}
+import type { BoardCommandExecution, LocalBoardCommand } from '../realtime/localBoardCommands';
 
 interface CommandStackState {
-  undoStack: SnapshotCommand[];
-  redoStack: SnapshotCommand[];
+  undoStack: LocalBoardCommand[];
+  redoStack: LocalBoardCommand[];
   canUndo: boolean;
   canRedo: boolean;
-  push: (before: BoardElement[], after: BoardElement[]) => void;
-  undo: () => BoardElement[] | null;
-  redo: () => BoardElement[] | null;
+  push: (command: LocalBoardCommand) => void;
+  peekUndo: () => BoardCommandExecution | null;
+  commitUndo: () => void;
+  peekRedo: () => BoardCommandExecution | null;
+  commitRedo: () => void;
   clear: () => void;
 }
 
@@ -25,52 +22,93 @@ export const useCommandStack = create<CommandStackState>((set, get) => ({
   canUndo: false,
   canRedo: false,
 
-  push: (before, after) => {
-    const command: SnapshotCommand = {
-      before: structuredClone(before),
-      after: structuredClone(after),
-    };
+  push: (command) => {
+    if (command.forward.length === 0 && command.inverse.length === 0) {
+      return;
+    }
+
+    const nextCommand = structuredClone(command);
 
     set((state) => {
-      const newUndo = [...state.undoStack, command];
-      if (newUndo.length > MAX_UNDO) newUndo.shift();
+      const nextUndo = [...state.undoStack, nextCommand];
+      if (nextUndo.length > MAX_UNDO) {
+        nextUndo.shift();
+      }
+
       return {
-        undoStack: newUndo,
+        undoStack: nextUndo,
         redoStack: [],
-        canUndo: true,
+        canUndo: nextUndo.length > 0,
         canRedo: false,
       };
     });
   },
 
-  undo: () => {
-    const { undoStack, redoStack } = get();
-    if (undoStack.length === 0) return null;
+  peekUndo: () => {
+    const { undoStack } = get();
+    if (undoStack.length === 0) {
+      return null;
+    }
+
     const command = undoStack[undoStack.length - 1];
-    const elements = structuredClone(command.before);
-    set({
-      undoStack: undoStack.slice(0, -1),
-      redoStack: [...redoStack, command],
-      canUndo: undoStack.length > 1,
-      canRedo: true,
-    });
-    return elements;
+    return {
+      direction: 'undo',
+      operations: structuredClone(command.inverse),
+      counterpartOperations: structuredClone(command.forward),
+      changedKeysByElementId: structuredClone(command.changedKeysByElementId ?? {}),
+    };
   },
 
-  redo: () => {
-    const { undoStack, redoStack } = get();
-    if (redoStack.length === 0) return null;
+  commitUndo: () =>
+    set((state) => {
+      if (state.undoStack.length === 0) {
+        return state;
+      }
+
+      const command = state.undoStack[state.undoStack.length - 1];
+      const nextUndo = state.undoStack.slice(0, -1);
+      const nextRedo = [...state.redoStack, structuredClone(command)];
+
+      return {
+        undoStack: nextUndo,
+        redoStack: nextRedo,
+        canUndo: nextUndo.length > 0,
+        canRedo: nextRedo.length > 0,
+      };
+    }),
+
+  peekRedo: () => {
+    const { redoStack } = get();
+    if (redoStack.length === 0) {
+      return null;
+    }
+
     const command = redoStack[redoStack.length - 1];
-    const elements = structuredClone(command.after);
-    set({
-      undoStack: [...undoStack, command],
-      redoStack: redoStack.slice(0, -1),
-      canUndo: true,
-      canRedo: redoStack.length > 1,
-    });
-    return elements;
+    return {
+      direction: 'redo',
+      operations: structuredClone(command.forward),
+      counterpartOperations: structuredClone(command.inverse),
+      changedKeysByElementId: structuredClone(command.changedKeysByElementId ?? {}),
+    };
   },
 
-  clear: () =>
-    set({ undoStack: [], redoStack: [], canUndo: false, canRedo: false }),
+  commitRedo: () =>
+    set((state) => {
+      if (state.redoStack.length === 0) {
+        return state;
+      }
+
+      const command = state.redoStack[state.redoStack.length - 1];
+      const nextUndo = [...state.undoStack, structuredClone(command)];
+      const nextRedo = state.redoStack.slice(0, -1);
+
+      return {
+        undoStack: nextUndo,
+        redoStack: nextRedo,
+        canUndo: nextUndo.length > 0,
+        canRedo: nextRedo.length > 0,
+      };
+    }),
+
+  clear: () => set({ undoStack: [], redoStack: [], canUndo: false, canRedo: false }),
 }));

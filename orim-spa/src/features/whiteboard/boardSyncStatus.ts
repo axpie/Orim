@@ -4,6 +4,7 @@ interface DeriveBoardSyncStatusOptions {
   connectionState: RealtimeConnectionState;
   lastError: string | null;
   isDirty: boolean;
+  outboxCount: number;
   isSaving: boolean;
   saveError: unknown;
 }
@@ -59,14 +60,17 @@ export function deriveBoardSyncStatus({
   connectionState,
   lastError,
   isDirty,
+  outboxCount,
   isSaving,
   saveError,
 }: DeriveBoardSyncStatusOptions): BoardSyncStatus {
+  const hasPendingChanges = isDirty || outboxCount > 0;
   const saveErrorMessage = getErrorMessage(saveError);
   if (saveErrorMessage) {
     return {
       kind: 'saveError',
-      hasPendingChanges: isDirty,
+      hasPendingChanges,
+      queuedChangesCount: outboxCount,
       detail: saveErrorMessage,
     };
   }
@@ -75,19 +79,22 @@ export function deriveBoardSyncStatus({
     case 'connecting':
       return {
         kind: 'connecting',
-        hasPendingChanges: isDirty,
+        hasPendingChanges,
+        queuedChangesCount: outboxCount,
         detail: lastError,
       };
     case 'reconnecting':
       return {
         kind: 'reconnecting',
-        hasPendingChanges: isDirty,
+        hasPendingChanges,
+        queuedChangesCount: outboxCount,
         detail: lastError,
       };
     case 'disconnected':
       return {
         kind: lastError ? 'connectionError' : 'offline',
-        hasPendingChanges: isDirty,
+        hasPendingChanges,
+        queuedChangesCount: outboxCount,
         detail: lastError,
       };
     case 'connected':
@@ -95,14 +102,16 @@ export function deriveBoardSyncStatus({
       if (isSaving) {
         return {
           kind: 'saving',
-          hasPendingChanges: isDirty,
+          hasPendingChanges,
+          queuedChangesCount: outboxCount,
           detail: lastError,
         };
       }
 
       return {
-        kind: isDirty ? 'unsaved' : 'saved',
-        hasPendingChanges: isDirty,
+        kind: outboxCount > 0 ? 'unsyncedChanges' : isDirty ? 'unsaved' : 'saved',
+        hasPendingChanges,
+        queuedChangesCount: outboxCount,
         detail: lastError,
       };
   }

@@ -1,5 +1,6 @@
 using System.Globalization;
 using PdfSharp.Drawing;
+using PdfSharp.Fonts;
 using PdfSharp.Pdf;
 using Orim.Core.Models;
 
@@ -7,6 +8,14 @@ namespace Orim.Api.Services;
 
 public sealed class BoardPdfExportService
 {
+    static BoardPdfExportService()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            GlobalFontSettings.UseWindowsFontsUnderWindows = true;
+        }
+    }
+
     private const double PageWidthPoints = 842;
     private const double PageHeightPoints = 595;
     private const double PageMarginPoints = 36;
@@ -14,6 +23,10 @@ public sealed class BoardPdfExportService
     private const double OrthogonalBendPenalty = 40;
     private const int OrthogonalMaxBends = 12;
     private const double OrthogonalSolverTimeBudgetMs = 8;
+    private const double StickyPadding = 12;
+    private const double FrameTitlePadding = 14;
+    private const string StickyBorderColor = "rgba(15, 23, 42, 0.14)";
+    private const string StickyFoldColor = "rgba(255, 255, 255, 0.32)";
     private static readonly DockPoint[] EdgeDocks = [DockPoint.Top, DockPoint.Right, DockPoint.Bottom, DockPoint.Left];
 
     public byte[] Export(Board board)
@@ -56,6 +69,12 @@ public sealed class BoardPdfExportService
                 case TextElement text:
                     DrawText(gfx, text, scale, offsetX, offsetY);
                     break;
+                case StickyNoteElement sticky:
+                    DrawStickyNote(gfx, sticky, scale, offsetX, offsetY);
+                    break;
+                case FrameElement frame:
+                    DrawFrame(gfx, frame, scale, offsetX, offsetY);
+                    break;
                 case ArrowElement arrow:
                     DrawArrow(gfx, arrow, orderedElements, scale, offsetX, offsetY);
                     break;
@@ -84,6 +103,8 @@ public sealed class BoardPdfExportService
             {
                 ShapeElement shape => ExpandBounds(new PdfBounds(shape.X, shape.Y, shape.Width, shape.Height), shape.StrokeWidth / 2),
                 TextElement text => new PdfBounds(text.X, text.Y, Math.Max(text.Width, 100), Math.Max(text.Height, 30)),
+                StickyNoteElement sticky => new PdfBounds(sticky.X, sticky.Y, Math.Max(sticky.Width, 120), Math.Max(sticky.Height, 80)),
+                FrameElement frame => ExpandBounds(new PdfBounds(frame.X, frame.Y, Math.Max(frame.Width, 120), Math.Max(frame.Height, 80)), frame.StrokeWidth / 2),
                 IconElement icon => new PdfBounds(icon.X, icon.Y, icon.Width, icon.Height),
                 ArrowElement arrow => GetArrowBounds(arrow, elements),
                 _ => new PdfBounds(element.X, element.Y, element.Width, element.Height),
@@ -173,6 +194,99 @@ public sealed class BoardPdfExportService
                 TransformY(text.Y, scale, offsetY),
                 Math.Max(text.Width, 100) * scale,
                 Math.Max(text.Height, 30) * scale),
+            XStringFormats.TopLeft);
+    }
+
+    private static void DrawStickyNote(XGraphics gfx, StickyNoteElement sticky, double scale, double offsetX, double offsetY)
+    {
+        var x = TransformX(sticky.X, scale, offsetX);
+        var y = TransformY(sticky.Y, scale, offsetY);
+        var width = Math.Max(1, sticky.Width * scale);
+        var height = Math.Max(1, sticky.Height * scale);
+        var foldSize = Math.Max(8, Math.Min(24, Math.Min(width, height) * 0.22));
+        var padding = StickyPadding * scale;
+
+        gfx.DrawRectangle(
+            new XPen(ParseColor(StickyBorderColor), Math.Max(0.75, scale)),
+            new XSolidBrush(ParseColor(sticky.FillColor)),
+            x,
+            y,
+            width,
+            height);
+
+        gfx.DrawPolygon(
+            new XPen(ParseColor(StickyBorderColor), Math.Max(0.75, scale)),
+            new XSolidBrush(ParseColor(StickyFoldColor)),
+            [
+                new XPoint(x + width - foldSize, y),
+                new XPoint(x + width, y),
+                new XPoint(x + width, y + foldSize),
+            ],
+            XFillMode.Winding);
+
+        var fontStyle = GetFontStyle(sticky.IsBold, sticky.IsItalic);
+        var font = new XFont(ResolveFontFamily(sticky.FontFamily), Math.Max(8, sticky.FontSize * scale), fontStyle);
+        var brush = new XSolidBrush(ParseColor(sticky.Color));
+        gfx.DrawString(
+            sticky.Text,
+            font,
+            brush,
+            new XRect(
+                x + padding,
+                y + padding,
+                Math.Max(1, width - padding * 2),
+            Math.Max(1, height - padding * 2)),
+            XStringFormats.TopLeft);
+    }
+
+    private static void DrawFrame(XGraphics gfx, FrameElement frame, double scale, double offsetX, double offsetY)
+    {
+        var x = TransformX(frame.X, scale, offsetX);
+        var y = TransformY(frame.Y, scale, offsetY);
+        var width = Math.Max(1, frame.Width * scale);
+        var height = Math.Max(1, frame.Height * scale);
+        var strokeWidth = Math.Max(0.75, frame.StrokeWidth * scale);
+        var titleBarHeight = GetFrameTitleBarHeight(height);
+        var strokeColor = ParseColor(frame.StrokeColor);
+
+        gfx.DrawRectangle(
+            new XPen(strokeColor, strokeWidth),
+            new XSolidBrush(ParseColor(frame.FillColor)),
+            x,
+            y,
+            width,
+            height);
+
+        if (height > titleBarHeight)
+        {
+            gfx.DrawLine(
+                new XPen(strokeColor, Math.Max(0.5, strokeWidth * 0.75)),
+                x,
+                y + titleBarHeight,
+                x + width,
+                y + titleBarHeight);
+        }
+
+        if (string.IsNullOrWhiteSpace(frame.Label))
+        {
+            return;
+        }
+
+        var fontStyle = GetFontStyle(frame.IsBold, frame.IsItalic);
+        var fontSize = frame.LabelFontSize is double explicitSize
+            ? Math.Max(8, explicitSize * scale)
+            : Math.Min(22, Math.Max(10, titleBarHeight * 0.5));
+        var font = new XFont(ResolveFontFamily(frame.FontFamily), fontSize, fontStyle);
+        var brush = new XSolidBrush(ParseColor(frame.LabelColor ?? "#0F172A"));
+        gfx.DrawString(
+            frame.Label,
+            font,
+            brush,
+            new XRect(
+                x + FrameTitlePadding * scale,
+                y + Math.Max(4, (titleBarHeight - fontSize) / 2),
+                Math.Max(1, width - FrameTitlePadding * scale * 2),
+                Math.Max(1, titleBarHeight)),
             XStringFormats.TopLeft);
     }
 
@@ -668,6 +782,13 @@ public sealed class BoardPdfExportService
     private static double GetArrowHeadCircleRadius(ArrowElement arrow) => GetArrowHeadSize(arrow) / 2;
 
     private static double GetArrowHeadCircleRadius(double strokeWidth) => Math.Max(10, (strokeWidth <= 0 ? 2 : strokeWidth) * 4) / 2;
+
+    private static double GetFrameTitleBarHeight(double scaledHeight)
+    {
+        var preferred = Math.Max(24, scaledHeight * 0.2);
+        var available = Math.Max(scaledHeight - 16, 14);
+        return Math.Min(40, Math.Min(preferred, available));
+    }
 
     private static PdfPoint[] GetArrowHeadPoints(PdfPoint tip, PdfPoint from, double size)
     {

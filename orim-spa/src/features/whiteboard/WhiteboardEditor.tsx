@@ -2,22 +2,29 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type Konva from 'konva';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Box, Drawer, useMediaQuery, useTheme } from '@mui/material';
+import { useTranslation } from 'react-i18next';
+import { Alert, Box, Drawer, Snackbar, useMediaQuery, useTheme } from '@mui/material';
 import { getAssistantAvailability } from '../../api/assistantSettings';
 import { createSnapshot, getBoard, restoreSnapshot, updateBoard } from '../../api/boards';
+import { useBoardComments } from './comments/useBoardComments';
 import { useBoardStore } from './store/boardStore';
 import { useCommandStack } from './store/commandStack';
+import { formatBoardCommandConflict } from './realtime/localBoardCommands';
 import { useSignalR } from '../../hooks/useSignalR';
 import { WhiteboardCanvas } from './canvas/WhiteboardCanvas';
 import { Toolbar } from './tools/Toolbar';
 import { PropertiesPanel } from './panels/PropertiesPanel';
 import { ChatPanel } from './panels/ChatPanel';
+import { CommentsPanel, COMMENTS_PANEL_WIDTH } from './panels/CommentsPanel';
 import { SnapshotDialog } from './panels/SnapshotDialog';
 import { BoardTopBar } from './tools/BoardTopBar';
 import { deriveBoardSyncStatus } from './boardSyncStatus';
+import { getBoardSyncAnnouncement } from './a11yAnnouncements';
+import { useOperationOutboxStore } from './store/outboxStore';
 import type { Board, BoardSnapshot } from '../../types/models';
 import { BoardRole } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
+import type { BoardOperationPayload } from './realtime/boardOperations';
 
 const PROPERTIES_PANEL_WIDTH = 280;
 const CHAT_PANEL_WIDTH = 320;
@@ -33,6 +40,7 @@ function createBoardFileName(title: string | undefined, extension: string) {
 
 export function WhiteboardEditor() {
   const { id } = useParams<{ id: string }>();
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const theme = useTheme();
@@ -41,6 +49,7 @@ export function WhiteboardEditor() {
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const isCompactToolbarLayout = isMediumDown || isCoarsePointer;
   const setBoard = useBoardStore((s) => s.setBoard);
+  const applyRemoteOperation = useBoardStore((s) => s.applyRemoteOperation);
   const setRemoteCursors = useBoardStore((s) => s.setRemoteCursors);
   const setViewportInsets = useBoardStore((s) => s.setViewportInsets);
   const user = useAuthStore((s) => s.user);
@@ -48,15 +57,25 @@ export function WhiteboardEditor() {
   const remoteCursors = useBoardStore((s) => s.remoteCursors);
   const isDirty = useBoardStore((s) => s.isDirty);
   const setDirty = useBoardStore((s) => s.setDirty);
+  const commandConflict = useBoardStore((s) => s.commandConflict);
+  const clearCommandConflict = useBoardStore((s) => s.clearCommandConflict);
+  const outboxCount = useOperationOutboxStore((s) => (id ? s.countForBoard(id) : 0));
   const clearCommandStack = useCommandStack((s) => s.clear);
 
   const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [snapshotsOpen, setSnapshotsOpen] = useState(false);
+  const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
+  const [pendingCommentAnchor, setPendingCommentAnchor] = useState<{ x: number; y: number } | null>(null);
+  const [commentPlacementMode, setCommentPlacementMode] = useState(false);
+  const [liveAnnouncement, setLiveAnnouncement] = useState<{ id: number; text: string } | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
+  const liveAnnouncementIdRef = useRef(0);
+  const lastSyncAnnouncementRef = useRef<string | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
-  const compactOverlayOpen = isCompactToolbarLayout && (propertiesOpen || chatOpen);
+  const compactOverlayOpen = isCompactToolbarLayout && (propertiesOpen || commentsOpen || chatOpen);
 
   const currentMembership = user && board
     ? board.members.find((member) => member.userId === user.id) ?? (board.ownerId === user.id
@@ -65,6 +84,32 @@ export function WhiteboardEditor() {
     : null;
   const canEdit = currentMembership != null && currentMembership.role !== BoardRole.Viewer;
   const canShare = currentMembership?.role === BoardRole.Owner;
+  const comments = board?.comments ?? [];
+
+  const announceLive = useCallback((text: string | null | undefined) => {
+    const normalized = text?.trim();
+    if (!normalized) {
+      return;
+    }
+
+    liveAnnouncementIdRef.current += 1;
+    setLiveAnnouncement({ id: liveAnnouncementIdRef.current, text: normalized });
+  }, []);
+
+  const {
+    errorMessage: commentError,
+    clearErrorMessage: clearCommentError,
+    handleCommentUpserted,
+    handleCommentDeleted,
+    createCommentAt,
+    createReply,
+    removeBoardComment,
+    removeBoardCommentReply,
+    isCreatingComment,
+    isCreatingReply,
+    deletingCommentId,
+    deletingReply,
+  } = useBoardComments(id ?? null);
 
   const { data: assistantAvailability } = useQuery({
     queryKey: ['assistant-availability'],
@@ -91,6 +136,22 @@ export function WhiteboardEditor() {
       const next = !current;
       if (next && isNarrowPanelMode) {
         setPropertiesOpen(false);
+        setCommentsOpen(false);
+      }
+
+      return next;
+    });
+  }, [isNarrowPanelMode]);
+
+  const openCommentsPanel = useCallback(() => {
+    setCommentsOpen((current) => {
+      const next = !current;
+      if (next && isNarrowPanelMode) {
+        setPropertiesOpen(false);
+        setChatOpen(false);
+      } else if (!next) {
+        setCommentPlacementMode(false);
+        setPendingCommentAnchor(null);
       }
 
       return next;
@@ -216,21 +277,38 @@ export function WhiteboardEditor() {
 
     setViewportInsets({
       top: 0,
-      right: (chatOpen ? CHAT_PANEL_WIDTH : 0) + (propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0),
+      right:
+        (commentsOpen ? COMMENTS_PANEL_WIDTH : 0)
+        + (chatOpen ? CHAT_PANEL_WIDTH : 0)
+        + (propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0),
       bottom: 0,
       left: 0,
     });
-  }, [canEdit, chatOpen, isNarrowPanelMode, propertiesOpen, setViewportInsets]);
+  }, [canEdit, chatOpen, commentsOpen, isNarrowPanelMode, propertiesOpen, setViewportInsets]);
+
+  useEffect(() => {
+    if (activeCommentId && !comments.some((comment) => comment.id === activeCommentId)) {
+      setActiveCommentId(null);
+    }
+  }, [activeCommentId, comments]);
 
   const {
     sendBoardState,
-    sendBoardStateThrottled,
+    sendOperation,
+    sendOperationThrottled,
     sendCursorUpdate,
     connectionId,
     connectionState,
     lastError,
   } = useSignalR({
     boardId: id ?? null,
+    onBoardOperationApplied: (notification) => {
+      applyRemoteOperation(notification.operation);
+      const nextBoard = useBoardStore.getState().board;
+      if (id && nextBoard) {
+        queryClient.setQueryData(['board', id], nextBoard);
+      }
+    },
     onBoardStateUpdated: (notification) => {
       setBoard(notification.board);
       clearCommandStack();
@@ -238,6 +316,8 @@ export function WhiteboardEditor() {
         queryClient.setQueryData(['board', id], notification.board);
       }
     },
+    onCommentUpserted: handleCommentUpserted,
+    onCommentDeleted: handleCommentDeleted,
     onPresenceUpdated: (cursors) => setRemoteCursors(cursors),
     onCursorUpdated: (cursor) => {
       const current = useBoardStore.getState().remoteCursors.filter((entry) => entry.clientId !== cursor.clientId);
@@ -249,9 +329,35 @@ export function WhiteboardEditor() {
     connectionState,
     lastError,
     isDirty,
+    outboxCount,
     isSaving: saveMutation.isPending,
     saveError: saveMutation.error,
-  }), [connectionState, isDirty, lastError, saveMutation.error, saveMutation.isPending]);
+  }), [connectionState, isDirty, lastError, outboxCount, saveMutation.error, saveMutation.isPending]);
+
+  useEffect(() => {
+    const nextAnnouncement = getBoardSyncAnnouncement(boardSyncStatus, t);
+    if (lastSyncAnnouncementRef.current == null) {
+      lastSyncAnnouncementRef.current = nextAnnouncement;
+      return;
+    }
+
+    if (nextAnnouncement !== lastSyncAnnouncementRef.current) {
+      lastSyncAnnouncementRef.current = nextAnnouncement;
+      announceLive(nextAnnouncement);
+    }
+  }, [announceLive, boardSyncStatus, t]);
+
+  useEffect(() => {
+    if (commandConflict) {
+      announceLive(formatBoardCommandConflict(commandConflict));
+    }
+  }, [announceLive, commandConflict]);
+
+  useEffect(() => {
+    if (commentError) {
+      announceLive(commentError);
+    }
+  }, [announceLive, commentError]);
 
   const handleStageReady = useCallback((stage: Konva.Stage | null) => {
     stageRef.current = stage;
@@ -331,30 +437,96 @@ export function WhiteboardEditor() {
     clearCommandStack();
     setDirty(false);
     queryClient.setQueryData(['board', id], restoredBoard);
-  }, [clearCommandStack, clearScheduledSave, id, queryClient, setBoard, setDirty, waitForActiveSave]);
+    announceLive(t('a11y.snapshotRestored'));
+  }, [announceLive, clearCommandStack, clearScheduledSave, id, queryClient, setBoard, setDirty, t, waitForActiveSave]);
 
-  const onBoardChanged = useCallback((changeKind: string) => {
+  const onBoardChanged = useCallback((changeKind: string, operation?: BoardOperationPayload) => {
     if (!canEdit) {
       return;
     }
 
     setDirty(true);
-    const current = useBoardStore.getState().board;
-    if (current) {
-      sendBoardState(current, changeKind);
-    }
-  }, [canEdit, sendBoardState, setDirty]);
-
-  const onBoardLiveChanged = useCallback((changeKind: string) => {
-    if (!canEdit) {
+    if (operation) {
+      sendOperation(operation);
       return;
     }
 
     const current = useBoardStore.getState().board;
     if (current) {
-      sendBoardStateThrottled(current, changeKind);
+      sendBoardState(current, changeKind);
     }
-  }, [canEdit, sendBoardStateThrottled]);
+  }, [canEdit, sendBoardState, sendOperation, setDirty]);
+
+  const onBoardLiveChanged = useCallback((_changeKind: string, operation?: BoardOperationPayload) => {
+    if (!canEdit) {
+      return;
+    }
+
+    if (operation) {
+      sendOperationThrottled(operation);
+    }
+  }, [canEdit, sendOperationThrottled]);
+
+  const handleSelectComment = useCallback((commentId: string) => {
+    setActiveCommentId(commentId);
+    setCommentsOpen(true);
+    setCommentPlacementMode(false);
+    setPendingCommentAnchor(null);
+  }, []);
+
+  const handleStartComment = useCallback(() => {
+    if (!canEdit) {
+      return;
+    }
+
+    setCommentsOpen(true);
+    setCommentPlacementMode(true);
+    setPendingCommentAnchor(null);
+  }, [canEdit]);
+
+  const handleCommentAnchorSelected = useCallback((position: { x: number; y: number }) => {
+    if (!canEdit) {
+      return;
+    }
+
+    setCommentsOpen(true);
+    setCommentPlacementMode(false);
+    setPendingCommentAnchor(position);
+  }, [canEdit]);
+
+  const handleCancelPendingComment = useCallback(() => {
+    setCommentPlacementMode(false);
+    setPendingCommentAnchor(null);
+  }, []);
+
+  const handleCreateComment = useCallback(async (text: string) => {
+    if (!pendingCommentAnchor) {
+      return;
+    }
+
+    const comment = await createCommentAt(pendingCommentAnchor.x, pendingCommentAnchor.y, text);
+    setPendingCommentAnchor(null);
+    setCommentPlacementMode(false);
+    setActiveCommentId(comment.id);
+    setCommentsOpen(true);
+  }, [createCommentAt, pendingCommentAnchor]);
+
+  const handleCreateReply = useCallback(async (commentId: string, text: string) => {
+    const comment = await createReply(commentId, text);
+    setActiveCommentId(comment.id);
+  }, [createReply]);
+
+  const handleDeleteComment = useCallback(async (commentId: string) => {
+    await removeBoardComment(commentId);
+    if (activeCommentId === commentId) {
+      setActiveCommentId(null);
+    }
+  }, [activeCommentId, removeBoardComment]);
+
+  const handleDeleteReply = useCallback(async (commentId: string, replyId: string) => {
+    const comment = await removeBoardCommentReply(commentId, replyId);
+    setActiveCommentId(comment.id);
+  }, [removeBoardCommentReply]);
 
   if (!board) return null;
 
@@ -362,22 +534,26 @@ export function WhiteboardEditor() {
     <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', pb: 'env(safe-area-inset-bottom)' }}>
       <BoardTopBar
         onOpenProperties={openPropertiesPanel}
+        onOpenComments={openCommentsPanel}
         onOpenChat={openChatPanel}
         propertiesOpen={propertiesOpen}
+        commentsOpen={commentsOpen}
         chatOpen={chatOpen}
         syncStatus={boardSyncStatus}
         titleEditable={canEdit}
         showShare={canShare}
         showProperties={canEdit}
+        showComments
         showChat={canUseAssistant}
         showSnapshots={canEdit}
+        onBoardChanged={onBoardChanged}
         onOpenSnapshots={() => setSnapshotsOpen(true)}
         onExportPng={handleExportPng}
         collaborators={remoteCursors}
         localConnectionId={connectionId}
       />
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
-        {canEdit && !compactOverlayOpen && <Toolbar />}
+        {canEdit && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} />}
         <Box sx={{ flex: 1, position: 'relative' }}>
           <WhiteboardCanvas
             editable={canEdit}
@@ -386,7 +562,51 @@ export function WhiteboardEditor() {
             onBoardLiveChanged={onBoardLiveChanged}
             onPointerPresenceChanged={sendCursorUpdate}
             onStageReady={handleStageReady}
+            selectedCommentId={activeCommentId}
+            commentPlacementMode={commentPlacementMode}
+            onSelectComment={handleSelectComment}
+            onCreateCommentAnchor={handleCommentAnchorSelected}
+            liveAnnouncement={liveAnnouncement}
           />
+
+          {!isNarrowPanelMode && commentsOpen && (
+            <Box
+              sx={{
+                position: 'absolute',
+                top: 0,
+                bottom: 0,
+                right: (propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0) + (chatOpen ? CHAT_PANEL_WIDTH : 0),
+                width: COMMENTS_PANEL_WIDTH,
+                zIndex: 4,
+                boxShadow: 6,
+              }}
+            >
+              <CommentsPanel
+                comments={comments}
+                activeCommentId={activeCommentId}
+                pendingAnchor={pendingCommentAnchor}
+                canCreateComments={canEdit}
+                currentUserId={user?.id ?? null}
+                boardOwnerId={board.ownerId}
+                isCreatingComment={isCreatingComment}
+                isCreatingReply={isCreatingReply}
+                deletingCommentId={deletingCommentId}
+                deletingReply={deletingReply}
+                onClose={() => {
+                  setCommentsOpen(false);
+                  setCommentPlacementMode(false);
+                  setPendingCommentAnchor(null);
+                }}
+                onSelectComment={handleSelectComment}
+                onStartComment={handleStartComment}
+                onCancelPendingComment={handleCancelPendingComment}
+                onCreateComment={handleCreateComment}
+                onCreateReply={handleCreateReply}
+                onDeleteComment={handleDeleteComment}
+                onDeleteReply={handleDeleteReply}
+              />
+            </Box>
+          )}
 
           {canEdit && !isNarrowPanelMode && chatOpen && (
             <Box
@@ -394,7 +614,7 @@ export function WhiteboardEditor() {
                 position: 'absolute',
                 top: 0,
                 bottom: 0,
-                right: propertiesOpen ? `${PROPERTIES_PANEL_WIDTH}px` : 0,
+                right: `${(propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0) + (commentsOpen ? COMMENTS_PANEL_WIDTH : 0)}px`,
                 width: CHAT_PANEL_WIDTH,
                 zIndex: 4,
                 boxShadow: 6,
@@ -421,6 +641,51 @@ export function WhiteboardEditor() {
           )}
         </Box>
       </Box>
+
+      {isNarrowPanelMode && (
+        <Drawer
+          anchor="right"
+          open={commentsOpen}
+          onClose={() => {
+            setCommentsOpen(false);
+            setCommentPlacementMode(false);
+            setPendingCommentAnchor(null);
+          }}
+          ModalProps={{ keepMounted: true }}
+          PaperProps={{
+            sx: {
+              width: '100vw',
+              maxWidth: '100vw',
+            },
+          }}
+        >
+          <CommentsPanel
+            comments={comments}
+            activeCommentId={activeCommentId}
+            pendingAnchor={pendingCommentAnchor}
+            canCreateComments={canEdit}
+            currentUserId={user?.id ?? null}
+            boardOwnerId={board.ownerId}
+            isCreatingComment={isCreatingComment}
+            isCreatingReply={isCreatingReply}
+            deletingCommentId={deletingCommentId}
+            deletingReply={deletingReply}
+            mobile
+            onClose={() => {
+              setCommentsOpen(false);
+              setCommentPlacementMode(false);
+              setPendingCommentAnchor(null);
+            }}
+            onSelectComment={handleSelectComment}
+            onStartComment={handleStartComment}
+            onCancelPendingComment={handleCancelPendingComment}
+            onCreateComment={handleCreateComment}
+            onCreateReply={handleCreateReply}
+            onDeleteComment={handleDeleteComment}
+            onDeleteReply={handleDeleteReply}
+          />
+        </Drawer>
+      )}
 
       {canEdit && isNarrowPanelMode && (
         <Drawer
@@ -470,6 +735,28 @@ export function WhiteboardEditor() {
           onRestoreSnapshot={handleRestoreSnapshot}
         />
       )}
+
+      <Snackbar
+        open={!!commandConflict}
+        autoHideDuration={5000}
+        onClose={() => clearCommandConflict()}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="warning" variant="filled" onClose={() => clearCommandConflict()} sx={{ width: '100%' }}>
+          {commandConflict ? formatBoardCommandConflict(commandConflict) : ''}
+        </Alert>
+      </Snackbar>
+
+      <Snackbar
+        open={!!commentError}
+        autoHideDuration={5000}
+        onClose={() => clearCommentError()}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert severity="error" variant="filled" onClose={() => clearCommentError()} sx={{ width: '100%' }}>
+          {commentError ?? ''}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 }

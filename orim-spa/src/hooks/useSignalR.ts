@@ -3,11 +3,17 @@ import * as signalR from '@microsoft/signalr';
 import { API_BASE_URL } from '../api/client';
 import type {
   Board,
+  BoardCommentDeletedNotification,
+  BoardCommentNotification,
+  BoardOperation,
   CursorPresence,
   BoardChangeNotification,
+  BoardOperationNotification,
   BoardStateUpdateNotification,
   RealtimeConnectionState,
 } from '../types/models';
+import type { BoardOperationPayload } from '../features/whiteboard/realtime/boardOperations';
+import { useOperationOutboxStore } from '../features/whiteboard/store/outboxStore';
 
 interface UseSignalROptions {
   boardId: string | null;
@@ -15,9 +21,16 @@ interface UseSignalROptions {
   sharePassword?: string | null;
   displayName?: string | null;
   onBoardChanged?: (notification: BoardChangeNotification) => void;
+  onBoardOperationApplied?: (notification: BoardOperationNotification) => void;
   onBoardStateUpdated?: (notification: BoardStateUpdateNotification) => void;
+  onCommentUpserted?: (notification: BoardCommentNotification) => void;
+  onCommentDeleted?: (notification: BoardCommentDeletedNotification) => void;
   onCursorUpdated?: (cursor: CursorPresence) => void;
   onPresenceUpdated?: (cursors: CursorPresence[]) => void;
+}
+
+function cloneOperationPayload(payload: BoardOperationPayload): BoardOperationPayload {
+  return structuredClone(payload);
 }
 
 function getErrorMessage(error: unknown): string {
@@ -38,15 +51,21 @@ export function useSignalR({
   sharePassword,
   displayName,
   onBoardChanged,
+  onBoardOperationApplied,
   onBoardStateUpdated,
+  onCommentUpserted,
+  onCommentDeleted,
   onCursorUpdated,
   onPresenceUpdated,
 }: UseSignalROptions) {
   const connectionRef = useRef<signalR.HubConnection | null>(null);
   const liveSyncTimerRef = useRef<number | null>(null);
   const latestLiveSyncRef = useRef<{ board: Board; kind: string } | null>(null);
+  const liveOperationTimerRef = useRef<number | null>(null);
+  const latestLiveOperationRef = useRef<BoardOperationPayload | null>(null);
   const cursorTimerRef = useRef<number | null>(null);
   const latestCursorRef = useRef<{ x: number | null; y: number | null } | null>(null);
+  const isFlushingOutboxRef = useRef(false);
   const boardIdRef = useRef(boardId);
   const shareTokenRef = useRef(shareToken ?? null);
   const sharePasswordRef = useRef(sharePassword ?? null);
@@ -82,6 +101,42 @@ export function useSignalR({
     },
     [handleInvokeError],
   );
+
+  const enqueueOperations = useCallback((operations: BoardOperation[]) => {
+    const currentBoardId = boardIdRef.current;
+    if (!currentBoardId || operations.length === 0) {
+      return;
+    }
+
+    useOperationOutboxStore.getState().enqueueOperations(currentBoardId, operations);
+  }, []);
+
+  const flushOutbox = useCallback(async () => {
+    const currentBoardId = boardIdRef.current;
+    if (!currentBoardId || isFlushingOutboxRef.current) {
+      return;
+    }
+
+    isFlushingOutboxRef.current = true;
+
+    try {
+      while (true) {
+        const [entry] = useOperationOutboxStore.getState().getBoardEntries(currentBoardId);
+        if (!entry) {
+          break;
+        }
+
+        const sent = await invokeIfConnected('ApplyBoardOperation', currentBoardId, entry.operation);
+        if (!sent) {
+          break;
+        }
+
+        useOperationOutboxStore.getState().removeEntry(entry.id);
+      }
+    } finally {
+      isFlushingOutboxRef.current = false;
+    }
+  }, [invokeIfConnected]);
 
   useEffect(() => {
     const token = localStorage.getItem('orim_token');
@@ -130,6 +185,18 @@ export function useSignalR({
       onBoardStateUpdated?.(notification);
     });
 
+    connection.on('BoardOperationApplied', (notification: BoardOperationNotification) => {
+      onBoardOperationApplied?.(notification);
+    });
+
+    connection.on('CommentUpserted', (notification: BoardCommentNotification) => {
+      onCommentUpserted?.(notification);
+    });
+
+    connection.on('CommentDeleted', (notification: BoardCommentDeletedNotification) => {
+      onCommentDeleted?.(notification);
+    });
+
     connection.on('CursorUpdated', (cursor: CursorPresence) => {
       onCursorUpdated?.(cursor);
     });
@@ -149,6 +216,7 @@ export function useSignalR({
         setConnectionId(connection.connectionId ?? null);
         setConnectionState('connected');
         setLastError(null);
+        void flushOutbox();
       })
       .catch((error) => {
         if (isDisposed) {
@@ -184,6 +252,7 @@ export function useSignalR({
         setConnectionId(connection.connectionId ?? null);
         setConnectionState('connected');
         setLastError(null);
+        void flushOutbox();
       } catch (error) {
         if (isDisposed) {
           return;
@@ -214,6 +283,10 @@ export function useSignalR({
         window.clearTimeout(liveSyncTimerRef.current);
         liveSyncTimerRef.current = null;
       }
+      if (liveOperationTimerRef.current != null) {
+        window.clearTimeout(liveOperationTimerRef.current);
+        liveOperationTimerRef.current = null;
+      }
       if (cursorTimerRef.current != null) {
         window.clearTimeout(cursorTimerRef.current);
         cursorTimerRef.current = null;
@@ -228,7 +301,7 @@ export function useSignalR({
       setLastError(null);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardId, handleInvokeError]);
+  }, [boardId, flushOutbox, handleInvokeError]);
 
   const sendBoardUpdated = useCallback(
     (sourceClientId?: string, changeKind = 'Content') => {
@@ -288,6 +361,53 @@ export function useSignalR({
     [sendBoardState],
   );
 
+  const sendOperation = useCallback(
+    (operation: BoardOperationPayload) => {
+      const currentBoardId = boardIdRef.current;
+      if (!currentBoardId) {
+        return;
+      }
+
+      const operations = Array.isArray(operation) ? operation : [operation];
+      if (useOperationOutboxStore.getState().countForBoard(currentBoardId) > 0 || isFlushingOutboxRef.current) {
+        enqueueOperations(operations);
+        void flushOutbox();
+        return;
+      }
+
+      void (async () => {
+        for (let index = 0; index < operations.length; index += 1) {
+          const sent = await invokeIfConnected('ApplyBoardOperation', currentBoardId, operations[index]);
+          if (!sent) {
+            enqueueOperations(operations.slice(index));
+            void flushOutbox();
+            break;
+          }
+        }
+      })();
+    },
+    [enqueueOperations, flushOutbox, invokeIfConnected],
+  );
+
+  const sendOperationThrottled = useCallback(
+    (operation: BoardOperationPayload) => {
+      latestLiveOperationRef.current = cloneOperationPayload(operation);
+      if (liveOperationTimerRef.current != null) {
+        return;
+      }
+
+      liveOperationTimerRef.current = window.setTimeout(() => {
+        liveOperationTimerRef.current = null;
+        const pending = latestLiveOperationRef.current;
+        latestLiveOperationRef.current = null;
+        if (pending) {
+          sendOperation(pending);
+        }
+      }, 80);
+    },
+    [sendOperation],
+  );
+
   const updateDisplayName = useCallback(
     (nextDisplayName: string) => {
       const conn = connectionRef.current;
@@ -303,6 +423,8 @@ export function useSignalR({
     sendCursorUpdate,
     sendBoardState,
     sendBoardStateThrottled,
+    sendOperation,
+    sendOperationThrottled,
     updateDisplayName,
     connectionId,
     connectionState,

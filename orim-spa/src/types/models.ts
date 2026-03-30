@@ -117,6 +117,22 @@ export interface TextElement extends BoardElementBase {
   color: string;
 }
 
+export interface StickyNoteElement extends BoardElementBase {
+  $type: 'sticky';
+  text: string;
+  fontSize: number;
+  autoFontSize?: boolean;
+  fillColor: string;
+  color: string;
+}
+
+export interface FrameElement extends BoardElementBase {
+  $type: 'frame';
+  fillColor: string;
+  strokeColor: string;
+  strokeWidth: number;
+}
+
 export interface ArrowElement extends BoardElementBase {
   $type: 'arrow';
   sourceElementId?: string | null;
@@ -142,7 +158,7 @@ export interface IconElement extends BoardElementBase {
   color: string;
 }
 
-export type BoardElement = ShapeElement | TextElement | ArrowElement | IconElement;
+export type BoardElement = ShapeElement | TextElement | StickyNoteElement | FrameElement | ArrowElement | IconElement;
 
 // --- Board ---
 
@@ -161,6 +177,28 @@ export interface BoardSnapshot {
   contentJson: string;
 }
 
+export interface BoardCommentReply {
+  id: string;
+  authorUserId: string;
+  authorUsername: string;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BoardComment {
+  id: string;
+  boardId: string;
+  authorUserId: string;
+  authorUsername: string;
+  x: number;
+  y: number;
+  text: string;
+  replies: BoardCommentReply[];
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type RealtimeConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
 
 export type BoardSyncStatusKind =
@@ -168,6 +206,7 @@ export type BoardSyncStatusKind =
   | 'saving'
   | 'saved'
   | 'unsaved'
+  | 'unsyncedChanges'
   | 'reconnecting'
   | 'offline'
   | 'saveError'
@@ -176,6 +215,7 @@ export type BoardSyncStatusKind =
 export interface BoardSyncStatus {
   kind: BoardSyncStatusKind;
   hasPendingChanges: boolean;
+  queuedChangesCount?: number;
   detail?: string | null;
 }
 
@@ -193,6 +233,7 @@ export interface Board {
   sharePasswordHash?: string | null;
   members: BoardMember[];
   elements: BoardElement[];
+  comments: BoardComment[];
   snapshots: BoardSnapshot[];
   createdAt: string;
   updatedAt: string;
@@ -361,4 +402,59 @@ export interface BoardStateUpdateNotification {
   changedAtUtc: string;
   kind: string;
   board: Board;
+}
+
+export interface BoardCommentNotification {
+  boardId: string;
+  changedAtUtc: string;
+  comment: BoardComment;
+}
+
+export interface BoardCommentDeletedNotification {
+  boardId: string;
+  changedAtUtc: string;
+  commentId: string;
+}
+
+export interface BoardElementAddedOperation {
+  type: 'element.added';
+  element: BoardElement;
+}
+
+export interface BoardElementUpdatedOperation {
+  type: 'element.updated';
+  element: BoardElement;
+}
+
+export interface BoardElementDeletedOperation {
+  type: 'element.deleted';
+  elementId: string;
+}
+
+export interface BoardElementsDeletedOperation {
+  type: 'elements.deleted';
+  elementIds: string[];
+}
+
+export interface BoardMetadataUpdatedOperation {
+  type: 'board.metadata.updated';
+  title?: string;
+  labelOutlineEnabled?: boolean;
+  arrowOutlineEnabled?: boolean;
+  customColors?: string[];
+  recentColors?: string[];
+}
+
+export type BoardOperation =
+  | BoardElementAddedOperation
+  | BoardElementUpdatedOperation
+  | BoardElementDeletedOperation
+  | BoardElementsDeletedOperation
+  | BoardMetadataUpdatedOperation;
+
+export interface BoardOperationNotification {
+  boardId: string;
+  sourceClientId?: string | null;
+  changedAtUtc: string;
+  operation: BoardOperation;
 }

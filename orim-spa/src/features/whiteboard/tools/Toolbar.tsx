@@ -22,6 +22,8 @@ import RectangleOutlinedIcon from '@mui/icons-material/RectangleOutlined';
 import CircleOutlinedIcon from '@mui/icons-material/CircleOutlined';
 import ChangeHistoryIcon from '@mui/icons-material/ChangeHistory';
 import TextFieldsIcon from '@mui/icons-material/TextFields';
+import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
+import CropLandscapeIcon from '@mui/icons-material/CropLandscape';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AddReactionIcon from '@mui/icons-material/AddReaction';
 import UndoIcon from '@mui/icons-material/Undo';
@@ -29,16 +31,105 @@ import RedoIcon from '@mui/icons-material/Redo';
 import DeleteIcon from '@mui/icons-material/Delete';
 import GroupWorkIcon from '@mui/icons-material/GroupWork';
 import CallSplitIcon from '@mui/icons-material/CallSplit';
+import CropFreeIcon from '@mui/icons-material/CropFree';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import FitScreenIcon from '@mui/icons-material/FitScreen';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { filterIconDefinitions, getIconDefinition } from '../icons/iconCatalog';
+import type { BoardOperationPayload } from '../realtime/boardOperations';
+import {
+  asOperationPayload,
+  createElementAddedOperation,
+  createElementsDeletedOperation,
+  createElementUpdatedOperation,
+} from '../realtime/boardOperations';
+import {
+  createChangedKeysByElementId,
+  createAddElementsCommand,
+  createDeleteElementsCommand,
+  createElementUpdateCommand,
+} from '../realtime/localBoardCommands';
 import { useBoardStore, type ToolType } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
+import { getBoundingRect, type Rect } from '../../../utils/geometry';
+import { computeArrowPolyline } from '../../../utils/arrowRouting';
+import { HorizontalLabelAlignment, VerticalLabelAlignment, type BoardElement, type FrameElement } from '../../../types/models';
+import { v4 as uuidv4 } from 'uuid';
 
-export function Toolbar() {
+interface ToolbarProps {
+  onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
+}
+
+const FRAME_WRAP_HORIZONTAL_PADDING = 24;
+const FRAME_WRAP_TOP_PADDING = 56;
+const FRAME_WRAP_BOTTOM_PADDING = 24;
+
+function getElementBounds(element: BoardElement, elements: BoardElement[]): Rect | null {
+  if (element.$type !== 'arrow') {
+    return getBoundingRect([element]);
+  }
+
+  const points = computeArrowPolyline(element, elements);
+  if (points.length === 0) {
+    return null;
+  }
+
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+
+  for (const point of points) {
+    minX = Math.min(minX, point.x);
+    minY = Math.min(minY, point.y);
+    maxX = Math.max(maxX, point.x);
+    maxY = Math.max(maxY, point.y);
+  }
+
+  return {
+    x: minX,
+    y: minY,
+    width: maxX - minX,
+    height: maxY - minY,
+  };
+}
+
+function getBoundsForElements(elementsToMeasure: BoardElement[], allElements: BoardElement[]): Rect | null {
+  const bounds = elementsToMeasure
+    .map((element) => getElementBounds(element, allElements))
+    .filter((candidate): candidate is Rect => candidate != null);
+
+  if (bounds.length === 0) {
+    return null;
+  }
+
+  return {
+    x: Math.min(...bounds.map((bound) => bound.x)),
+    y: Math.min(...bounds.map((bound) => bound.y)),
+    width: Math.max(...bounds.map((bound) => bound.x + bound.width)) - Math.min(...bounds.map((bound) => bound.x)),
+    height: Math.max(...bounds.map((bound) => bound.y + bound.height)) - Math.min(...bounds.map((bound) => bound.y)),
+  };
+}
+
+function isRectContained(frame: Pick<FrameElement, 'x' | 'y' | 'width' | 'height'>, bounds: Rect): boolean {
+  return bounds.x >= frame.x
+    && bounds.y >= frame.y
+    && bounds.x + bounds.width <= frame.x + frame.width
+    && bounds.y + bounds.height <= frame.y + frame.height;
+}
+
+function createFrameRect(bounds: Rect): Rect {
+  return {
+    x: bounds.x - FRAME_WRAP_HORIZONTAL_PADDING,
+    y: bounds.y - FRAME_WRAP_TOP_PADDING,
+    width: bounds.width + FRAME_WRAP_HORIZONTAL_PADDING * 2,
+    height: bounds.height + FRAME_WRAP_TOP_PADDING + FRAME_WRAP_BOTTOM_PADDING,
+  };
+}
+
+export function Toolbar({ onBoardChanged }: ToolbarProps) {
   const { t } = useTranslation();
   const theme = useTheme();
   const isTouchDevice = useMediaQuery('(pointer: coarse)');
@@ -55,16 +146,21 @@ export function Toolbar() {
   const selectedIds = useBoardStore((s) => s.selectedElementIds);
   const removeElements = useBoardStore((s) => s.removeElements);
   const setSelectedElementIds = useBoardStore((s) => s.setSelectedElementIds);
+  const addElement = useBoardStore((s) => s.addElement);
+  const updateElement = useBoardStore((s) => s.updateElement);
   const pendingIconName = useBoardStore((s) => s.pendingIconName);
   const setPendingIconName = useBoardStore((s) => s.setPendingIconName);
   const board = useBoardStore((s) => s.board);
   const setElements = useBoardStore((s) => s.setElements);
+  const applyLocalCommand = useBoardStore((s) => s.applyLocalCommand);
   const setDirty = useBoardStore((s) => s.setDirty);
 
   const canUndo = useCommandStack((s) => s.canUndo);
   const canRedo = useCommandStack((s) => s.canRedo);
-  const undoFn = useCommandStack((s) => s.undo);
-  const redoFn = useCommandStack((s) => s.redo);
+  const peekUndo = useCommandStack((s) => s.peekUndo);
+  const commitUndo = useCommandStack((s) => s.commitUndo);
+  const peekRedo = useCommandStack((s) => s.peekRedo);
+  const commitRedo = useCommandStack((s) => s.commitRedo);
   const pushCommand = useCommandStack((s) => s.push);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [iconSearch, setIconSearch] = useState('');
@@ -78,8 +174,39 @@ export function Toolbar() {
     () => new Set(selectedElements.flatMap((element) => element.groupId ? [element.groupId] : [])),
     [selectedElements],
   );
+  const selectedFrames = useMemo(
+    () => selectedElements.filter((element): element is FrameElement => element.$type === 'frame'),
+    [selectedElements],
+  );
+  const selectedNonFrames = useMemo(
+    () => selectedElements.filter((element) => element.$type !== 'frame'),
+    [selectedElements],
+  );
+  const selectedFrame = selectedFrames.length === 1 ? selectedFrames[0] : null;
+  const enclosedContentForSelectedFrame = useMemo(() => {
+    if (!board || !selectedFrame || selectedNonFrames.length > 0) {
+      return [];
+    }
+
+    return board.elements.filter((element) => {
+      if (element.id === selectedFrame.id || element.$type === 'frame') {
+        return false;
+      }
+
+      const bounds = getElementBounds(element, board.elements);
+      return bounds != null && isRectContained(selectedFrame, bounds);
+    });
+  }, [board, selectedFrame, selectedNonFrames]);
+  const fitFrameTargets = selectedFrame
+    ? (selectedNonFrames.length > 0 ? selectedNonFrames : enclosedContentForSelectedFrame)
+    : selectedNonFrames;
+  const fitFrameBounds = useMemo(
+    () => board ? getBoundsForElements(fitFrameTargets, board.elements) : null,
+    [board, fitFrameTargets],
+  );
   const canGroup = selectedElements.length >= 2;
   const canUngroup = selectedGroupIds.size > 0;
+  const canFitFrameSelection = selectedFrames.length <= 1 && fitFrameBounds != null;
 
   useEffect(() => {
     if (!isCompactLayout) {
@@ -100,6 +227,8 @@ export function Toolbar() {
     { tool: 'ellipse', icon: <CircleOutlinedIcon />, label: t('tools.ellipse') },
     { tool: 'triangle', icon: <ChangeHistoryIcon />, label: t('tools.triangle') },
     { tool: 'text', icon: <TextFieldsIcon />, label: t('tools.text') },
+    { tool: 'sticky', icon: <StickyNote2OutlinedIcon />, label: t('tools.stickyNote') },
+    { tool: 'frame', icon: <CropLandscapeIcon />, label: t('tools.frame') },
     {
       tool: 'icon',
       icon: selectedIcon ? (
@@ -136,11 +265,16 @@ export function Toolbar() {
 
   const handleDelete = () => {
     if (selectedIds.length === 0 || !board) return;
-    const before = [...board.elements];
+    const deletedElements = board.elements.filter((element) => selectedIds.includes(element.id));
+    if (deletedElements.length === 0) {
+      return;
+    }
+
     removeElements(selectedIds);
-    pushCommand(before, board.elements.filter((el) => !selectedIds.includes(el.id)));
+    pushCommand(createDeleteElementsCommand(deletedElements));
     setSelectedElementIds([]);
     setDirty(true);
+    onBoardChanged?.('delete', createElementsDeletedOperation(selectedIds));
   };
 
   const handleGroup = () => {
@@ -158,40 +292,72 @@ export function Toolbar() {
     ));
 
     setElements(after);
-    pushCommand(before, after);
+    pushCommand(createElementUpdateCommand(
+      before.filter((element) => selectedIdSet.has(element.id)),
+      after.filter((element) => selectedIdSet.has(element.id)),
+      createChangedKeysByElementId(selectedElements.map((element) => element.id), ['groupId']),
+    ));
     setSelectedElementIds(after.filter((element) => element.groupId === nextGroupId).map((element) => element.id));
     setDirty(true);
+    onBoardChanged?.('group', asOperationPayload(
+      after
+        .filter((element) => selectedIdSet.has(element.id))
+        .map((element) => createElementUpdatedOperation(element)),
+    ));
   };
 
   const handleUngroup = () => {
     if (!board || selectedGroupIds.size === 0) return;
 
     const before = [...board.elements];
+    const affectedBefore = before.filter((element) => element.groupId && selectedGroupIds.has(element.groupId));
     const after = board.elements.map((element) => (
       element.groupId && selectedGroupIds.has(element.groupId)
         ? { ...element, groupId: null }
         : element
     ));
+    const affectedAfter = after.filter((element) => affectedBefore.some((candidate) => candidate.id === element.id));
 
     setElements(after);
-    pushCommand(before, after);
+    pushCommand(createElementUpdateCommand(
+      affectedBefore,
+      affectedAfter,
+      createChangedKeysByElementId(affectedBefore.map((element) => element.id), ['groupId']),
+    ));
     setSelectedElementIds(selectedIds.filter((id) => after.some((element) => element.id === id)));
     setDirty(true);
+    onBoardChanged?.('ungroup', asOperationPayload(
+      affectedAfter.map((element) => createElementUpdatedOperation(element)),
+    ));
   };
 
   const handleUndo = () => {
-    const result = undoFn();
-    if (result) {
-      setElements(result);
-      setDirty(true);
+    const execution = peekUndo();
+    if (!execution) {
+      return;
+    }
+
+    const result = applyLocalCommand(execution);
+    if (result.success) {
+      commitUndo();
+      if (result.operations.length > 0) {
+        onBoardChanged?.('undo', asOperationPayload(result.operations));
+      }
     }
   };
 
   const handleRedo = () => {
-    const result = redoFn();
-    if (result) {
-      setElements(result);
-      setDirty(true);
+    const execution = peekRedo();
+    if (!execution) {
+      return;
+    }
+
+    const result = applyLocalCommand(execution);
+    if (result.success) {
+      commitRedo();
+      if (result.operations.length > 0) {
+        onBoardChanged?.('redo', asOperationPayload(result.operations));
+      }
     }
   };
 
@@ -200,15 +366,13 @@ export function Toolbar() {
 
   const handleFitToScreen = () => {
     if (!board || board.elements.length === 0) return;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const el of board.elements) {
-      minX = Math.min(minX, el.x);
-      minY = Math.min(minY, el.y);
-      maxX = Math.max(maxX, el.x + el.width);
-      maxY = Math.max(maxY, el.y + el.height);
+    const bounds = getBoundsForElements(board.elements, board.elements);
+    if (!bounds) {
+      return;
     }
-    const contentW = Math.max(1, maxX - minX);
-    const contentH = Math.max(1, maxY - minY);
+
+    const contentW = Math.max(1, bounds.width);
+    const contentH = Math.max(1, bounds.height);
     const visibleWidth = Math.max(1, viewportWidth - viewportInsets.left - viewportInsets.right);
     const visibleHeight = Math.max(1, viewportHeight - viewportInsets.top - viewportInsets.bottom);
     const margin = 64;
@@ -217,13 +381,73 @@ export function Toolbar() {
       (Math.max(1, visibleHeight - margin * 2)) / contentH,
       3.5,
     ));
-    const cxContent = minX + contentW / 2;
-    const cyContent = minY + contentH / 2;
+    const cxContent = bounds.x + contentW / 2;
+    const cyContent = bounds.y + contentH / 2;
     const visibleCenterX = viewportInsets.left + visibleWidth / 2;
     const visibleCenterY = viewportInsets.top + visibleHeight / 2;
 
     setZoom(clampedZoom);
     setCamera(visibleCenterX - cxContent * clampedZoom, visibleCenterY - cyContent * clampedZoom);
+  };
+
+  const handleFitFrameToSelection = () => {
+    if (!board || !fitFrameBounds) {
+      return;
+    }
+
+    const frameRect = createFrameRect(fitFrameBounds);
+
+    if (selectedFrame) {
+      const nextFrame: FrameElement = {
+        ...selectedFrame,
+        x: frameRect.x,
+        y: frameRect.y,
+        width: frameRect.width,
+        height: frameRect.height,
+      };
+      updateElement(selectedFrame.id, nextFrame);
+      pushCommand(createElementUpdateCommand(
+        [selectedFrame],
+        [nextFrame],
+        createChangedKeysByElementId([selectedFrame.id], ['x', 'y', 'width', 'height']),
+      ));
+      setSelectedElementIds([selectedFrame.id]);
+      setActiveTool('select');
+      setDirty(true);
+      onBoardChanged?.('resize', createElementUpdatedOperation(nextFrame));
+      return;
+    }
+
+    const nextFrame: FrameElement = {
+      $type: 'frame',
+      id: uuidv4(),
+      x: frameRect.x,
+      y: frameRect.y,
+      width: frameRect.width,
+      height: frameRect.height,
+      zIndex: fitFrameTargets.length > 0 ? Math.min(...fitFrameTargets.map((element) => element.zIndex ?? 0)) - 1 : 0,
+      rotation: 0,
+      label: '',
+      labelFontSize: null,
+      labelColor: null,
+      fontFamily: null,
+      isBold: false,
+      isItalic: false,
+      isUnderline: false,
+      isStrikethrough: false,
+      labelHorizontalAlignment: HorizontalLabelAlignment.Left,
+      labelVerticalAlignment: VerticalLabelAlignment.Top,
+      fillColor: 'rgba(37, 99, 235, 0.08)',
+      strokeColor: 'rgba(37, 99, 235, 0.48)',
+      strokeWidth: 2,
+    };
+
+    addElement(nextFrame);
+    pushCommand(createAddElementsCommand([nextFrame]));
+    setSelectedElementIds([nextFrame.id]);
+    setActiveTool('select');
+    setDirty(true);
+    onBoardChanged?.('add', createElementAddedOperation(nextFrame));
   };
 
   const actionButtons = (
@@ -302,6 +526,18 @@ export function Toolbar() {
             sx={{ flexShrink: 0 }}
           >
             <CallSplitIcon />
+          </IconButton>
+        </span>
+      </Tooltip>
+      <Tooltip title={t('tools.fitFrameToSelection')} placement={isCompactLayout ? 'top' : 'right'}>
+        <span>
+          <IconButton
+            size={isCompactLayout ? 'medium' : 'small'}
+            onClick={handleFitFrameToSelection}
+            disabled={!canFitFrameSelection}
+            sx={{ flexShrink: 0 }}
+          >
+            <CropFreeIcon />
           </IconButton>
         </span>
       </Tooltip>

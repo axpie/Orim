@@ -43,6 +43,8 @@ builder.Services.AddSingleton(sp => new AssistantSettingsService(
 builder.Services.AddSingleton<DiagramAssistantService>();
 builder.Services.AddSingleton(new ThemeCatalogApiService(ThemeCatalogApiService.ResolveThemesPath(dataPath)));
 builder.Services.AddSingleton<BoardPdfExportService>();
+builder.Services.AddSingleton<BoardCommentNotifier>();
+builder.Services.AddScoped<BoardCommentService>();
 builder.Services.AddSignalR().AddJsonProtocol(options =>
 {
     options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -433,10 +435,10 @@ app.MapPut("/api/boards/{id:guid}", [Authorize] async (Guid id, Board updatedBoa
     if (!boardService.HasAccess(board, userId, BoardRole.Editor))
         return Results.Forbid();
 
-    updatedBoard.Id = id;
-    updatedBoard.OwnerId = board.OwnerId;
-    await boardService.UpdateBoardAsync(updatedBoard);
-    return Results.Ok(updatedBoard);
+    board.Title = updatedBoard.Title;
+    boardService.ReplaceBoardContent(board, updatedBoard);
+    await boardService.UpdateBoardAsync(board);
+    return Results.Ok(board);
 });
 
 app.MapDelete("/api/boards/{id:guid}", [Authorize] async (Guid id, HttpContext context, BoardService boardService) =>
@@ -618,6 +620,135 @@ app.MapPut("/api/boards/{id:guid}/content", [Authorize] async (Guid id, Board im
     boardService.ReplaceBoardContent(board, importedBoard);
     await boardService.UpdateBoardAsync(board);
     return Results.Ok(board);
+});
+
+app.MapGet("/api/boards/{id:guid}/comments", [Authorize] async (Guid id, HttpContext context, BoardService boardService) =>
+{
+    var board = await boardService.GetBoardAsync(id);
+    if (board is null) return Results.NotFound();
+
+    if (!boardService.HasAccess(board, GetUserId(context)))
+        return Results.Forbid();
+
+    return Results.Ok(board.Comments.OrderByDescending(comment => comment.UpdatedAt).ToList());
+});
+
+app.MapPost("/api/boards/{id:guid}/comments", [Authorize] async (
+    Guid id,
+    CreateBoardCommentRequest request,
+    HttpContext context,
+    BoardService boardService,
+    BoardCommentService boardCommentService,
+    BoardCommentNotifier boardCommentNotifier) =>
+{
+    var board = await boardService.GetBoardAsync(id);
+    if (board is null) return Results.NotFound();
+
+    var userId = GetUserId(context);
+    if (!boardService.HasAccess(board, userId, BoardRole.Editor))
+        return Results.Forbid();
+
+    try
+    {
+        var comment = await boardCommentService.CreateCommentAsync(board, userId, GetUsername(context), request.X, request.Y, request.Text);
+        await boardCommentNotifier.NotifyCommentUpsertedAsync(id, comment);
+        return Results.Created($"/api/boards/{id}/comments/{comment.Id}", comment);
+    }
+    catch (ArgumentException exception)
+    {
+        return Results.BadRequest(exception.Message);
+    }
+});
+
+app.MapPost("/api/boards/{id:guid}/comments/{commentId:guid}/replies", [Authorize] async (
+    Guid id,
+    Guid commentId,
+    CreateBoardCommentReplyRequest request,
+    HttpContext context,
+    BoardService boardService,
+    BoardCommentService boardCommentService,
+    BoardCommentNotifier boardCommentNotifier) =>
+{
+    var board = await boardService.GetBoardAsync(id);
+    if (board is null) return Results.NotFound();
+
+    var userId = GetUserId(context);
+    if (!boardService.HasAccess(board, userId, BoardRole.Editor))
+        return Results.Forbid();
+
+    try
+    {
+        var comment = await boardCommentService.AddReplyAsync(board, commentId, userId, GetUsername(context), request.Text);
+        await boardCommentNotifier.NotifyCommentUpsertedAsync(id, comment);
+        return Results.Ok(comment);
+    }
+    catch (ArgumentException exception)
+    {
+        return Results.BadRequest(exception.Message);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.NotFound(exception.Message);
+    }
+});
+
+app.MapDelete("/api/boards/{id:guid}/comments/{commentId:guid}", [Authorize] async (
+    Guid id,
+    Guid commentId,
+    HttpContext context,
+    BoardService boardService,
+    BoardCommentService boardCommentService,
+    BoardCommentNotifier boardCommentNotifier) =>
+{
+    var board = await boardService.GetBoardAsync(id);
+    if (board is null) return Results.NotFound();
+
+    var userId = GetUserId(context);
+    if (!boardService.HasAccess(board, userId))
+        return Results.Forbid();
+
+    var comment = board.Comments.FirstOrDefault(candidate => candidate.Id == commentId);
+    if (comment is null)
+        return Results.NotFound();
+
+    if (!BoardCommentService.CanDeleteComment(board, comment, userId))
+        return Results.Forbid();
+
+    await boardCommentService.DeleteCommentAsync(board, commentId);
+    await boardCommentNotifier.NotifyCommentDeletedAsync(id, commentId);
+    return Results.NoContent();
+});
+
+app.MapDelete("/api/boards/{id:guid}/comments/{commentId:guid}/replies/{replyId:guid}", [Authorize] async (
+    Guid id,
+    Guid commentId,
+    Guid replyId,
+    HttpContext context,
+    BoardService boardService,
+    BoardCommentService boardCommentService,
+    BoardCommentNotifier boardCommentNotifier) =>
+{
+    var board = await boardService.GetBoardAsync(id);
+    if (board is null) return Results.NotFound();
+
+    var userId = GetUserId(context);
+    if (!boardService.HasAccess(board, userId))
+        return Results.Forbid();
+
+    var comment = board.Comments.FirstOrDefault(candidate => candidate.Id == commentId);
+    if (comment is null)
+        return Results.NotFound();
+
+    var reply = comment.Replies.FirstOrDefault(candidate => candidate.Id == replyId);
+    if (reply is null)
+        return Results.NotFound();
+
+    if (!BoardCommentService.CanDeleteReply(board, reply, userId))
+        return Results.Forbid();
+
+    var updatedComment = await boardCommentService.DeleteReplyAsync(board, commentId, replyId);
+    await boardCommentNotifier.NotifyCommentUpsertedAsync(id, updatedComment);
+    return Results.Ok(updatedComment);
 });
 
 app.MapPost("/api/boards/import", [Authorize] async (ImportBoardRequest request, HttpContext context, BoardService boardService) =>

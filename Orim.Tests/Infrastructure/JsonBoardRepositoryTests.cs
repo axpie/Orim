@@ -174,6 +174,8 @@ public class JsonBoardRepositoryTests : IDisposable
                 new ShapeElement { Label = "Shape", ShapeType = ShapeType.Ellipse },
                 new ArrowElement { StrokeColor = "#FF0000" },
                 new TextElement { Text = "Hello" },
+                new StickyNoteElement { Text = "Remember this" },
+                new FrameElement { Label = "Area" },
                 new IconElement { IconName = "mdi-star" }
             ]
         };
@@ -182,11 +184,51 @@ public class JsonBoardRepositoryTests : IDisposable
         var retrieved = await _sut.GetByIdAsync(board.Id);
 
         Assert.NotNull(retrieved);
-        Assert.Equal(4, retrieved.Elements.Count);
+        Assert.Equal(6, retrieved.Elements.Count);
         Assert.IsType<ShapeElement>(retrieved.Elements[0]);
         Assert.IsType<ArrowElement>(retrieved.Elements[1]);
         Assert.IsType<TextElement>(retrieved.Elements[2]);
-        Assert.IsType<IconElement>(retrieved.Elements[3]);
+        Assert.IsType<StickyNoteElement>(retrieved.Elements[3]);
+        Assert.IsType<FrameElement>(retrieved.Elements[4]);
+        Assert.IsType<IconElement>(retrieved.Elements[5]);
+    }
+
+    [Fact]
+    public async Task SaveAsync_PersistsComments()
+    {
+        var board = new Board
+        {
+            Title = "With Comments",
+            Comments =
+            [
+                new BoardComment
+                {
+                    AuthorUserId = Guid.NewGuid(),
+                    AuthorUsername = "alice",
+                    X = 100.12,
+                    Y = 250.34,
+                    Text = "Review this area",
+                    Replies =
+                    [
+                        new BoardCommentReply
+                        {
+                            AuthorUserId = Guid.NewGuid(),
+                            AuthorUsername = "bob",
+                            Text = "Done"
+                        }
+                    ]
+                }
+            ]
+        };
+
+        await _sut.SaveAsync(board);
+        var retrieved = await _sut.GetByIdAsync(board.Id);
+
+        Assert.NotNull(retrieved);
+        Assert.Single(retrieved.Comments);
+        Assert.Equal("Review this area", retrieved.Comments[0].Text);
+        Assert.Single(retrieved.Comments[0].Replies);
+        Assert.Equal("Done", retrieved.Comments[0].Replies[0].Text);
     }
 
     [Fact]
