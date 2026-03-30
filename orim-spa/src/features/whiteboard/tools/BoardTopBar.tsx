@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useState, type MouseEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -38,6 +38,7 @@ import { AppSettingsDialog } from '../../../components/dialogs/AppSettingsDialog
 import { exportBoardJson, exportBoardPdf } from '../../../api/boards';
 import { ShareDialog } from '../../sharing/ShareDialog';
 import { ShortcutHelpDialog } from './ShortcutHelpDialog';
+import { BoardSettingsDialog } from '../panels/BoardSettingsDialog';
 import type { BoardSyncStatus, CursorPresence } from '../../../types/models';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
 import { createBoardMetadataUpdatedOperation } from '../realtime/boardOperations';
@@ -105,7 +106,9 @@ export function BoardTopBar({
   const [title, setTitle] = useState('');
   const [exportAnchor, setExportAnchor] = useState<null | HTMLElement>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsMenuAnchor, setSettingsMenuAnchor] = useState<null | HTMLElement>(null);
+  const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
+  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [mobileActionsAnchor, setMobileActionsAnchor] = useState<null | HTMLElement>(null);
 
@@ -130,6 +133,7 @@ export function BoardTopBar({
           arrowOutlineEnabled: board.arrowOutlineEnabled,
           customColors: board.customColors,
           recentColors: board.recentColors,
+          stickyNotePresets: board.stickyNotePresets,
         }));
       }
     }
@@ -167,6 +171,11 @@ export function BoardTopBar({
   };
 
   const closeMobileActions = () => setMobileActionsAnchor(null);
+  const closeSettingsMenu = () => setSettingsMenuAnchor(null);
+
+  const openSettingsMenu = (event: MouseEvent<HTMLElement>) => {
+    setSettingsMenuAnchor(event.currentTarget);
+  };
 
   const compactCollaborators = collaborators.length > 0
     ? collaborators.filter((collaborator) => collaborator.clientId !== localConnectionId).length
@@ -376,8 +385,8 @@ export function BoardTopBar({
 
               <Tooltip title={t('app.settings')}>
                 <IconButton
-                  onClick={() => setSettingsOpen(true)}
-                  sx={{ color: 'inherit', bgcolor: settingsOpen ? 'rgba(255,255,255,0.14)' : undefined }}
+                  onClick={openSettingsMenu}
+                  sx={{ color: 'inherit', bgcolor: settingsMenuAnchor ? 'rgba(255,255,255,0.14)' : undefined }}
                 >
                   <SettingsIcon />
                 </IconButton>
@@ -435,6 +444,23 @@ export function BoardTopBar({
       </Menu>
 
       <Menu
+        anchorEl={settingsMenuAnchor}
+        open={Boolean(settingsMenuAnchor)}
+        onClose={closeSettingsMenu}
+      >
+        {titleEditable && (
+          <MenuItem onClick={() => { closeSettingsMenu(); setBoardSettingsOpen(true); }}>
+            <ListItemIcon><TuneIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('boardSettings.title')}</ListItemText>
+          </MenuItem>
+        )}
+        <MenuItem onClick={() => { closeSettingsMenu(); setAppSettingsOpen(true); }}>
+          <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{t('app.settings')}</ListItemText>
+        </MenuItem>
+      </Menu>
+
+      <Menu
         anchorEl={mobileActionsAnchor}
         open={Boolean(mobileActionsAnchor)}
         onClose={closeMobileActions}
@@ -475,7 +501,13 @@ export function BoardTopBar({
           <ListItemIcon><KeyboardIcon fontSize="small" /></ListItemIcon>
           <ListItemText>{t('shortcuts.open')}</ListItemText>
         </MenuItem>
-        <MenuItem onClick={() => { closeMobileActions(); setSettingsOpen(true); }}>
+        {titleEditable && (
+          <MenuItem onClick={() => { closeMobileActions(); setBoardSettingsOpen(true); }}>
+            <ListItemIcon><TuneIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('boardSettings.title')}</ListItemText>
+          </MenuItem>
+        )}
+        <MenuItem onClick={() => { closeMobileActions(); setAppSettingsOpen(true); }}>
           <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
           <ListItemText>{t('app.settings')}</ListItemText>
         </MenuItem>
@@ -509,7 +541,13 @@ export function BoardTopBar({
 
       <ShortcutHelpDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
-      <AppSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <BoardSettingsDialog
+        open={boardSettingsOpen}
+        onClose={() => setBoardSettingsOpen(false)}
+        onBoardChanged={onBoardChanged}
+      />
+
+      <AppSettingsDialog open={appSettingsOpen} onClose={() => setAppSettingsOpen(false)} />
     </>
   );
 }

@@ -166,9 +166,13 @@ export function WhiteboardEditor() {
 
   useEffect(() => {
     if (data) {
-      setBoard(data as Board, { preserveSelection: false });
-      setRemoteCursors([]);
-      clearCommandStack();
+      const currentBoardId = useBoardStore.getState().board?.id;
+      const preserveSelection = currentBoardId === data.id;
+      setBoard(data as Board, { preserveSelection });
+      if (!preserveSelection) {
+        setRemoteCursors([]);
+        clearCommandStack();
+      }
     }
   }, [clearCommandStack, data, setBoard, setRemoteCursors]);
 
@@ -209,6 +213,11 @@ export function WhiteboardEditor() {
 
     const savePromise = saveMutation.mutateAsync({
       title: current.title,
+      labelOutlineEnabled: current.labelOutlineEnabled,
+      arrowOutlineEnabled: current.arrowOutlineEnabled,
+      customColors: current.customColors,
+      recentColors: current.recentColors,
+      stickyNotePresets: current.stickyNotePresets,
       elements: current.elements,
     }).then((nextBoard) => {
       setBoard(nextBoard, { preserveSelection: true });
@@ -255,7 +264,18 @@ export function WhiteboardEditor() {
     }
 
     scheduleSave();
-  }, [board?.elements, board?.title, canEdit, isDirty, scheduleSave]);
+  }, [
+    board?.elements,
+    board?.title,
+    board?.labelOutlineEnabled,
+    board?.arrowOutlineEnabled,
+    board?.customColors,
+    board?.recentColors,
+    board?.stickyNotePresets,
+    canEdit,
+    isDirty,
+    scheduleSave,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -310,7 +330,7 @@ export function WhiteboardEditor() {
       }
     },
     onBoardStateUpdated: (notification) => {
-      setBoard(notification.board);
+      setBoard(notification.board, { preserveSelection: true });
       clearCommandStack();
       if (id) {
         queryClient.setQueryData(['board', id], notification.board);

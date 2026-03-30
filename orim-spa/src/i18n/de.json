@@ -75,6 +75,23 @@
     "snapshotRestoreDescription": "Snapshot \"{{name}}\" wiederherstellen? Dadurch wird der aktuelle Board-Inhalt ersetzt.",
     "lastError": "Letzter Fehler: {{message}}"
   },
+  "boardSettings": {
+    "title": "Board-Einstellungen",
+    "stickyPresets": "Haftnotiz-Vorlagen",
+    "description": "Lege fest, welche Haftnotiz-Varianten in der Toolbar für dieses Board angeboten werden.",
+    "presetLabel": "Bezeichnung",
+    "presetColor": "Farbe",
+    "addPreset": "Vorlage hinzufügen",
+    "removePreset": "Vorlage entfernen",
+    "restoreDefaults": "Standard wiederherstellen",
+    "presetLabelRequired": "Jede Vorlage benötigt eine Bezeichnung.",
+    "atLeastOnePreset": "Mindestens eine Vorlage ist erforderlich.",
+    "defaultPresetYellow": "Gelb",
+    "defaultPresetPink": "Pink",
+    "defaultPresetGreen": "Grün",
+    "defaultPresetBlue": "Blau",
+    "newPresetLabel": "Vorlage {{index}}"
+  },
   "tools": {
     "select": "Auswählen",
     "hand": "Verschieben",

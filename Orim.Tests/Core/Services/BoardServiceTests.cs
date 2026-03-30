@@ -105,6 +105,23 @@ public class BoardServiceTests
     }
 
     [Fact]
+    public async Task CreateBoardFromImportAsync_CopiesStickyNotePresets()
+    {
+        var imported = new Board
+        {
+            StickyNotePresets =
+            [
+                new StickyNotePreset { Id = "yellow", Label = "Yellow", FillColor = "#FDE68A" }
+            ]
+        };
+
+        var board = await _sut.CreateBoardFromImportAsync(imported, "Import", Guid.NewGuid(), "owner");
+
+        Assert.Single(board.StickyNotePresets);
+        Assert.Equal("Yellow", board.StickyNotePresets[0].Label);
+    }
+
+    [Fact]
     public async Task CreateBoardFromImportAsync_NormalizesZIndexes()
     {
         var imported = new Board
@@ -475,6 +492,31 @@ public class BoardServiceTests
     }
 
     [Fact]
+    public void RestoreSnapshot_RestoresStickyNotePresets()
+    {
+        var board = new Board
+        {
+            Title = "Original",
+            StickyNotePresets =
+            [
+                new StickyNotePreset { Id = "yellow", Label = "Yellow", FillColor = "#FDE68A" }
+            ]
+        };
+
+        var snapshot = _sut.CreateSnapshot(board, "v1", Guid.NewGuid(), "alice");
+
+        board.StickyNotePresets =
+        [
+            new StickyNotePreset { Id = "pink", Label = "Pink", FillColor = "#F9A8D4" }
+        ];
+
+        _sut.RestoreSnapshot(board, snapshot.Id);
+
+        Assert.Single(board.StickyNotePresets);
+        Assert.Equal("yellow", board.StickyNotePresets[0].Id);
+    }
+
+    [Fact]
     public void RestoreSnapshot_NonExistent_Throws()
     {
         var board = new Board { Title = "Test" };
@@ -619,6 +661,7 @@ public class BoardServiceTests
             ArrowOutlineEnabled = false,
             CustomColors = ["#FFF"],
             RecentColors = ["#000"],
+            StickyNotePresets = [new StickyNotePreset { Id = "yellow", Label = "Yellow", FillColor = "#FDE68A" }],
             Elements = [new ShapeElement { Label = "Imported" }]
         };
 
@@ -628,6 +671,7 @@ public class BoardServiceTests
         Assert.False(target.ArrowOutlineEnabled);
         Assert.Single(target.CustomColors);
         Assert.Single(target.RecentColors);
+        Assert.Single(target.StickyNotePresets);
         Assert.Single(target.Elements);
     }
 

@@ -694,6 +694,11 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 value={(el as FrameElement).strokeColor ?? 'rgba(37, 99, 235, 0.48)'}
                 onChange={(value) => update(el.id, { strokeColor: value })}
               />
+              <ColorInputField
+                label={t('properties.color')}
+                value={(el as FrameElement).labelColor ?? contrastingTextColor((el as FrameElement).fillColor ?? 'rgba(37, 99, 235, 0.08)')}
+                onChange={(value) => update(el.id, { labelColor: value })}
+              />
               <NumericSliderField
                 label={t('properties.strokeWidth')}
                 value={(el as FrameElement).strokeWidth ?? 2}

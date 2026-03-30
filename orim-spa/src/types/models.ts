@@ -219,6 +219,12 @@ export interface BoardSyncStatus {
   detail?: string | null;
 }
 
+export interface StickyNotePreset {
+  id: string;
+  label: string;
+  fillColor: string;
+}
+
 export interface Board {
   id: string;
   title: string;
@@ -226,6 +232,7 @@ export interface Board {
   arrowOutlineEnabled: boolean;
   customColors: string[];
   recentColors: string[];
+  stickyNotePresets: StickyNotePreset[];
   ownerId: string;
   visibility: BoardVisibility;
   shareLinkToken?: string | null;
@@ -443,6 +450,7 @@ export interface BoardMetadataUpdatedOperation {
   arrowOutlineEnabled?: boolean;
   customColors?: string[];
   recentColors?: string[];
+  stickyNotePresets?: StickyNotePreset[];
 }
 
 export type BoardOperation =

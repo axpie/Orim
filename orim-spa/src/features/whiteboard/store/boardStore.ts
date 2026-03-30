@@ -45,6 +45,7 @@ interface BoardState {
   remoteCursors: CursorPresence[];
   isDirty: boolean;
   pendingIconName: string | null;
+  pendingStickyNotePresetId: string | null;
   commandConflict: BoardCommandConflict | null;
 
   setBoard: (board: Board | null, options?: SetBoardOptions) => void;
@@ -68,6 +69,7 @@ interface BoardState {
   setRemoteCursors: (cursors: CursorPresence[]) => void;
   setDirty: (dirty: boolean) => void;
   setPendingIconName: (iconName: string | null) => void;
+  setPendingStickyNotePresetId: (presetId: string | null) => void;
 }
 
 function areValuesEqual(left: unknown, right: unknown): boolean {
@@ -250,6 +252,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   remoteCursors: [],
   isDirty: false,
   pendingIconName: 'mdi-star',
+  pendingStickyNotePresetId: null,
   commandConflict: null,
 
   setBoard: (board, options) =>
@@ -484,4 +487,5 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   setRemoteCursors: (cursors) => set({ remoteCursors: cursors }),
   setDirty: (dirty) => set({ isDirty: dirty }),
   setPendingIconName: (iconName) => set({ pendingIconName: iconName }),
+  setPendingStickyNotePresetId: (presetId) => set({ pendingStickyNotePresetId: presetId }),
 }));

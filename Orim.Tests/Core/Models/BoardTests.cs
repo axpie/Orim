@@ -22,6 +22,7 @@ public class BoardTests
         Assert.Empty(board.Comments);
         Assert.Empty(board.Snapshots);
         Assert.Empty(board.RecentColors);
+        Assert.Empty(board.StickyNotePresets);
     }
 
     [Fact]

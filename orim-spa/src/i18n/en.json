@@ -75,6 +75,23 @@
     "snapshotRestoreDescription": "Restore \"{{name}}\"? This replaces the current board content.",
     "lastError": "Last error: {{message}}"
   },
+  "boardSettings": {
+    "title": "Board settings",
+    "stickyPresets": "Sticky note presets",
+    "description": "Choose which sticky note variants are available in the toolbar for this board.",
+    "presetLabel": "Preset label",
+    "presetColor": "Color",
+    "addPreset": "Add preset",
+    "removePreset": "Remove preset",
+    "restoreDefaults": "Restore defaults",
+    "presetLabelRequired": "Every preset needs a label.",
+    "atLeastOnePreset": "At least one preset is required.",
+    "defaultPresetYellow": "Yellow",
+    "defaultPresetPink": "Pink",
+    "defaultPresetGreen": "Green",
+    "defaultPresetBlue": "Blue",
+    "newPresetLabel": "Preset {{index}}"
+  },
   "tools": {
     "select": "Select",
     "hand": "Pan",

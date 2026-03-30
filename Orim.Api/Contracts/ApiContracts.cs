@@ -29,7 +29,8 @@ public sealed record BoardMetadataUpdatedOperationDto(
     bool? LabelOutlineEnabled = null,
     bool? ArrowOutlineEnabled = null,
     IReadOnlyList<string>? CustomColors = null,
-    IReadOnlyList<string>? RecentColors = null) : BoardOperationDto;
+    IReadOnlyList<string>? RecentColors = null,
+    IReadOnlyList<StickyNotePreset>? StickyNotePresets = null) : BoardOperationDto;
 public sealed record BoardOperationNotification(Guid BoardId, string? SourceClientId, DateTime ChangedAtUtc, BoardOperationDto Operation);
 public sealed record SetSharePasswordRequest(string? Password);
 public sealed record AddMemberRequest(string Username, BoardRole Role);

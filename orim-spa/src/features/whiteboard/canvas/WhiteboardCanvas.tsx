@@ -63,6 +63,7 @@ import {
   createDeleteElementsCommand,
   createElementUpdateCommand,
 } from '../realtime/localBoardCommands';
+import { DEFAULT_STICKY_NOTE_FILL_COLOR, getStickyNotePresetById } from '../stickyNotePresets';
 
 const GRID_SIZE = 24;
 const MIN_ZOOM = 0.2;
@@ -72,7 +73,6 @@ const DOCK_SNAP_RADIUS = 28;
 const KEYBOARD_DUPLICATE_OFFSET = 32;
 const WHITEBOARD_CLIPBOARD_STORAGE_KEY = 'orim:whiteboard:clipboard';
 const WHITEBOARD_CLIPBOARD_PREFIX = 'ORIM_WHITEBOARD_CLIPBOARD:';
-const DEFAULT_STICKY_FILL_COLOR = '#FDE68A';
 const FALLBACK_BOARD_DEFAULTS = {
   surfaceColor: '#FFFFFF',
   gridColor: '#EEF2F7',
@@ -362,6 +362,7 @@ export function WhiteboardCanvas({
   const setElements = useBoardStore((s) => s.setElements);
   const applyLocalCommand = useBoardStore((s) => s.applyLocalCommand);
   const pendingIconName = useBoardStore((s) => s.pendingIconName);
+  const pendingStickyNotePresetId = useBoardStore((s) => s.pendingStickyNotePresetId);
   const themeKey = useThemeStore((s) => s.themeKey);
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const dockSnapRadius = isCoarsePointer ? DOCK_SNAP_RADIUS * 1.6 : DOCK_SNAP_RADIUS;
@@ -1267,6 +1268,8 @@ export function WhiteboardCanvas({
       }
 
       if (editable && activeTool === 'sticky') {
+        const stickyPreset = getStickyNotePresetById(board, pendingStickyNotePresetId);
+        const stickyFillColor = stickyPreset?.fillColor ?? DEFAULT_STICKY_NOTE_FILL_COLOR;
         const newSticky: StickyNoteElement = {
           $type: 'sticky',
           id: uuidv4(),
@@ -1283,8 +1286,8 @@ export function WhiteboardCanvas({
           fontSize: 16,
           autoFontSize: false,
           fontFamily: null,
-          fillColor: DEFAULT_STICKY_FILL_COLOR,
-          color: contrastingTextColor(DEFAULT_STICKY_FILL_COLOR),
+          fillColor: stickyFillColor,
+          color: contrastingTextColor(stickyFillColor),
           isBold: false,
           isItalic: false,
           isUnderline: false,
@@ -1474,7 +1477,7 @@ export function WhiteboardCanvas({
         }
       }
     },
-    [editable, activeTool, elements, selectedIds, cameraX, cameraY, zoom, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, expandSelectionWithGroups, findTopmostFrameAtPoint, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pushCommand, onBoardChanged, boardDefaults, spacePanActive, commentPlacementMode, onCreateCommentAnchor],
+    [editable, activeTool, elements, selectedIds, cameraX, cameraY, zoom, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, expandSelectionWithGroups, findTopmostFrameAtPoint, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pendingStickyNotePresetId, pushCommand, onBoardChanged, board, boardDefaults, spacePanActive, commentPlacementMode, onCreateCommentAnchor],
   );
 
   // ── Mouse Move ──

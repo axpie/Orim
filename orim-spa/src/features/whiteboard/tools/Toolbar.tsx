@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -8,6 +8,8 @@ import {
   DialogTitle,
   IconButton,
   Divider,
+  Menu,
+  MenuItem,
   Paper,
   SvgIcon,
   TextField,
@@ -56,6 +58,7 @@ import { useCommandStack } from '../store/commandStack';
 import { getBoundingRect, type Rect } from '../../../utils/geometry';
 import { computeArrowPolyline } from '../../../utils/arrowRouting';
 import { HorizontalLabelAlignment, VerticalLabelAlignment, type BoardElement, type FrameElement } from '../../../types/models';
+import { getEffectiveStickyNotePresets } from '../stickyNotePresets';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ToolbarProps {
@@ -154,6 +157,8 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
   const setElements = useBoardStore((s) => s.setElements);
   const applyLocalCommand = useBoardStore((s) => s.applyLocalCommand);
   const setDirty = useBoardStore((s) => s.setDirty);
+  const pendingStickyNotePresetId = useBoardStore((s) => s.pendingStickyNotePresetId);
+  const setPendingStickyNotePresetId = useBoardStore((s) => s.setPendingStickyNotePresetId);
 
   const canUndo = useCommandStack((s) => s.canUndo);
   const canRedo = useCommandStack((s) => s.canRedo);
@@ -163,6 +168,7 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
   const commitRedo = useCommandStack((s) => s.commitRedo);
   const pushCommand = useCommandStack((s) => s.push);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [stickyPresetAnchorEl, setStickyPresetAnchorEl] = useState<HTMLElement | null>(null);
   const [iconSearch, setIconSearch] = useState('');
   const [collapsed, setCollapsed] = useState(isCompactLayout);
 
@@ -219,6 +225,10 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
 
   const selectedIcon = getIconDefinition(pendingIconName);
   const filteredIcons = useMemo(() => filterIconDefinitions(iconSearch), [iconSearch]);
+  const stickyNotePresets = useMemo(() => getEffectiveStickyNotePresets(board, t), [board, t]);
+  const activeStickyPresetId = stickyNotePresets.some((preset) => preset.id === pendingStickyNotePresetId)
+    ? pendingStickyNotePresetId
+    : (stickyNotePresets[0]?.id ?? null);
 
   const tools: { tool: ToolType; icon: ReactNode; label: string }[] = [
     { tool: 'select', icon: <NearMeIcon />, label: t('tools.select') },
@@ -247,9 +257,14 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
     setIconPickerOpen(true);
   };
 
-  const handleToolClick = (tool: ToolType) => {
+  const handleToolClick = (event: MouseEvent<HTMLElement>, tool: ToolType) => {
     if (tool === 'icon') {
       openIconPicker();
+      return;
+    }
+
+    if (tool === 'sticky') {
+      setStickyPresetAnchorEl(event.currentTarget);
       return;
     }
 
@@ -261,6 +276,12 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
     setActiveTool('icon');
     setIconPickerOpen(false);
     setIconSearch('');
+  };
+
+  const handleStickyPresetSelected = (presetId: string) => {
+    setPendingStickyNotePresetId(presetId);
+    setActiveTool('sticky');
+    setStickyPresetAnchorEl(null);
   };
 
   const handleDelete = () => {
@@ -457,7 +478,7 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
           <IconButton
             size={isCompactLayout ? 'medium' : 'small'}
             color={activeTool === tool ? 'primary' : 'default'}
-            onClick={() => handleToolClick(tool)}
+            onClick={(event) => handleToolClick(event, tool)}
             sx={{
               bgcolor: activeTool === tool ? 'action.selected' : undefined,
               flexShrink: 0,
@@ -680,6 +701,33 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
           </Box>
         </DialogContent>
       </Dialog>
+
+      <Menu
+        anchorEl={stickyPresetAnchorEl}
+        open={Boolean(stickyPresetAnchorEl)}
+        onClose={() => setStickyPresetAnchorEl(null)}
+      >
+        {stickyNotePresets.map((preset) => (
+          <MenuItem
+            key={preset.id}
+            selected={preset.id === activeStickyPresetId}
+            onClick={() => handleStickyPresetSelected(preset.id)}
+          >
+            <Box
+              sx={{
+                width: 16,
+                height: 16,
+                borderRadius: 0.75,
+                bgcolor: preset.fillColor,
+                border: '1px solid rgba(15, 23, 42, 0.18)',
+                mr: 1.25,
+                flexShrink: 0,
+              }}
+            />
+            <Typography variant="body2">{preset.label}</Typography>
+          </MenuItem>
+        ))}
+      </Menu>
     </Paper>
   );
 }

@@ -59,6 +59,7 @@ public class BoardService
             ArrowOutlineEnabled = importedBoard.ArrowOutlineEnabled,
             CustomColors = importedBoard.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             RecentColors = importedBoard.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
+            StickyNotePresets = CloneStickyNotePresets(importedBoard.StickyNotePresets),
             Elements = CloneElements(importedBoard.Elements),
             Members =
             [
@@ -273,6 +274,7 @@ public class BoardService
         board.ArrowOutlineEnabled = content.ArrowOutlineEnabled;
         board.CustomColors = content.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         board.RecentColors = content.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        board.StickyNotePresets = CloneStickyNotePresets(content.StickyNotePresets);
         board.Elements = CloneElements(content.Elements);
         NormalizeZIndexes(board.Elements);
     }
@@ -286,6 +288,7 @@ public class BoardService
         targetBoard.ArrowOutlineEnabled = importedBoard.ArrowOutlineEnabled;
         targetBoard.CustomColors = importedBoard.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         targetBoard.RecentColors = importedBoard.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        targetBoard.StickyNotePresets = CloneStickyNotePresets(importedBoard.StickyNotePresets);
         targetBoard.Elements = CloneElements(importedBoard.Elements);
         NormalizeZIndexes(targetBoard.Elements);
     }
@@ -327,8 +330,31 @@ public class BoardService
         ArrowOutlineEnabled = board.ArrowOutlineEnabled,
         CustomColors = board.CustomColors.ToList(),
         RecentColors = board.RecentColors.ToList(),
+        StickyNotePresets = CloneStickyNotePresets(board.StickyNotePresets),
         Elements = CloneElements(board.Elements)
     };
+
+    private static List<StickyNotePreset> CloneStickyNotePresets(IEnumerable<StickyNotePreset>? presets)
+    {
+        if (presets is null)
+        {
+            return [];
+        }
+
+        return presets
+            .Select((preset, index) => new StickyNotePreset
+            {
+                Id = string.IsNullOrWhiteSpace(preset.Id)
+                    ? $"sticky-preset-{index + 1}"
+                    : preset.Id.Trim(),
+                Label = preset.Label?.Trim() ?? string.Empty,
+                FillColor = string.IsNullOrWhiteSpace(preset.FillColor)
+                    ? "#FDE68A"
+                    : preset.FillColor.Trim()
+            })
+            .DistinctBy(preset => preset.Id, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
 
     private static List<BoardElement> CloneElements(IEnumerable<BoardElement> elements)
     {
