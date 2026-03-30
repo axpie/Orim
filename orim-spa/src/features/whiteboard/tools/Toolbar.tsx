@@ -18,6 +18,7 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { mdiLayersOutline } from '@mdi/js';
 import NearMeIcon from '@mui/icons-material/NearMe';
 import PanToolIcon from '@mui/icons-material/PanTool';
 import RectangleOutlinedIcon from '@mui/icons-material/RectangleOutlined';
@@ -59,6 +60,12 @@ import { getBoundingRect, type Rect } from '../../../utils/geometry';
 import { computeArrowPolyline } from '../../../utils/arrowRouting';
 import { HorizontalLabelAlignment, VerticalLabelAlignment, type BoardElement, type FrameElement } from '../../../types/models';
 import { getEffectiveStickyNotePresets } from '../stickyNotePresets';
+import { ZOrderMenuItems } from '../ZOrderMenuItems';
+import {
+  applyZOrderAction,
+  getZOrderAvailability,
+  type ZOrderAction,
+} from '../zOrder';
 import { v4 as uuidv4 } from 'uuid';
 
 interface ToolbarProps {
@@ -168,6 +175,7 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
   const commitRedo = useCommandStack((s) => s.commitRedo);
   const pushCommand = useCommandStack((s) => s.push);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [arrangeAnchorEl, setArrangeAnchorEl] = useState<HTMLElement | null>(null);
   const [stickyPresetAnchorEl, setStickyPresetAnchorEl] = useState<HTMLElement | null>(null);
   const [iconSearch, setIconSearch] = useState('');
   const [collapsed, setCollapsed] = useState(isCompactLayout);
@@ -213,6 +221,15 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
   const canGroup = selectedElements.length >= 2;
   const canUngroup = selectedGroupIds.size > 0;
   const canFitFrameSelection = selectedFrames.length <= 1 && fitFrameBounds != null;
+  const zOrderAvailability = useMemo(
+    () => board ? getZOrderAvailability(board.elements, selectedIds) : {
+      'bring-to-front': false,
+      'bring-forward': false,
+      'send-backward': false,
+      'send-to-back': false,
+    },
+    [board, selectedIds],
+  );
 
   useEffect(() => {
     if (!isCompactLayout) {
@@ -350,6 +367,35 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
     onBoardChanged?.('ungroup', asOperationPayload(
       affectedAfter.map((element) => createElementUpdatedOperation(element)),
     ));
+  };
+
+  const handleZOrderAction = (action: ZOrderAction) => {
+    if (!board) {
+      return;
+    }
+
+    const result = applyZOrderAction(board.elements, selectedIds, action);
+    if (result.changedIds.length === 0) {
+      setArrangeAnchorEl(null);
+      return;
+    }
+
+    const changedIdSet = new Set(result.changedIds);
+    const before = board.elements.filter((element) => changedIdSet.has(element.id));
+    const after = result.elements.filter((element) => changedIdSet.has(element.id));
+
+    setElements(result.elements);
+    pushCommand(createElementUpdateCommand(
+      before,
+      after,
+      createChangedKeysByElementId(result.changedIds, ['zIndex']),
+    ));
+    setSelectedElementIds(result.effectiveSelectedIds);
+    setDirty(true);
+    onBoardChanged?.('zOrder', asOperationPayload(
+      after.map((element) => createElementUpdatedOperation(element)),
+    ));
+    setArrangeAnchorEl(null);
   };
 
   const handleUndo = () => {
@@ -550,6 +596,23 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
           </IconButton>
         </span>
       </Tooltip>
+      <Tooltip title={t('tools.arrange')} placement={isCompactLayout ? 'top' : 'right'}>
+        <span>
+          <IconButton
+            size={isCompactLayout ? 'medium' : 'small'}
+            onClick={(event) => setArrangeAnchorEl(event.currentTarget)}
+            disabled={selectedIds.length === 0}
+            sx={{ flexShrink: 0 }}
+            aria-label={t('tools.arrange')}
+            aria-haspopup="menu"
+            aria-expanded={Boolean(arrangeAnchorEl)}
+          >
+            <SvgIcon fontSize="small">
+              <path d={mdiLayersOutline} />
+            </SvgIcon>
+          </IconButton>
+        </span>
+      </Tooltip>
       <Tooltip title={t('tools.fitFrameToSelection')} placement={isCompactLayout ? 'top' : 'right'}>
         <span>
           <IconButton
@@ -701,6 +764,17 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
           </Box>
         </DialogContent>
       </Dialog>
+
+      <Menu
+        anchorEl={arrangeAnchorEl}
+        open={Boolean(arrangeAnchorEl)}
+        onClose={() => setArrangeAnchorEl(null)}
+      >
+        <ZOrderMenuItems
+          availability={zOrderAvailability}
+          onSelect={handleZOrderAction}
+        />
+      </Menu>
 
       <Menu
         anchorEl={stickyPresetAnchorEl}

@@ -1,5 +1,6 @@
 import { Box, Dialog, DialogContent, DialogTitle, Divider, Typography } from '@mui/material';
 import { useTranslation } from 'react-i18next';
+import { getZOrderShortcutLabel } from '../zOrder';
 
 interface ShortcutHelpDialogProps {
   open: boolean;
@@ -23,6 +24,10 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
         { keys: 'Cmd/Ctrl + D', label: t('shortcuts.duplicateSelection') },
         { keys: 'Cmd/Ctrl + G', label: t('tools.group') },
         { keys: 'Cmd/Ctrl + Shift + G', label: t('tools.ungroup') },
+        { keys: getZOrderShortcutLabel('bring-forward'), label: t('tools.bringForward') },
+        { keys: getZOrderShortcutLabel('send-backward'), label: t('tools.sendBackward') },
+        { keys: getZOrderShortcutLabel('bring-to-front'), label: t('tools.bringToFront') },
+        { keys: getZOrderShortcutLabel('send-to-back'), label: t('tools.sendToBack') },
         { keys: 'Delete / Backspace', label: t('shortcuts.deleteSelection') },
       ],
     },

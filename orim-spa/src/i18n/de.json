@@ -111,6 +111,11 @@
     "delete": "Löschen",
     "group": "Gruppieren",
     "ungroup": "Gruppierung aufheben",
+    "arrange": "Anordnen",
+    "bringToFront": "Ganz nach vorne",
+    "bringForward": "Eine Ebene nach vorne",
+    "sendBackward": "Eine Ebene nach hinten",
+    "sendToBack": "Ganz nach hinten",
     "fitFrameToSelection": "Rahmen an Auswahl anpassen",
     "zoomIn": "Vergrößern",
     "zoomOut": "Verkleinern",
@@ -256,6 +261,14 @@
       "tools": "Werkzeuge",
       "navigation": "Navigation"
     }
+  },
+  "contextMenu": {
+    "cut": "Ausschneiden",
+    "copy": "Kopieren",
+    "paste": "Einfügen",
+    "duplicate": "Duplizieren",
+    "editText": "Text bearbeiten",
+    "selectAll": "Alles auswählen"
   },
   "admin": {
     "userManagement": "Benutzerverwaltung",

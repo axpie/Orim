@@ -19,6 +19,7 @@ import { AlignmentGuides } from '../shapes/AlignmentGuides';
 import { InlineTextEditor } from '../shapes/InlineTextEditor';
 import { CanvasAccessibilityLayer } from './CanvasAccessibilityLayer';
 import { RemoteCursorPresence } from './RemoteCursorPresence';
+import { WhiteboardContextMenu, type WhiteboardContextMenuAction } from './WhiteboardContextMenu';
 import {
   ArrowHeadStyle,
   ArrowLineStyle,
@@ -64,6 +65,12 @@ import {
   createElementUpdateCommand,
 } from '../realtime/localBoardCommands';
 import { DEFAULT_STICKY_NOTE_FILL_COLOR, getStickyNotePresetById } from '../stickyNotePresets';
+import {
+  applyZOrderAction,
+  getZOrderActionFromKeyboardEvent,
+  getZOrderAvailability,
+  type ZOrderAction,
+} from '../zOrder';
 
 const GRID_SIZE = 24;
 const MIN_ZOOM = 0.2;
@@ -228,6 +235,11 @@ function readStoredClipboardElements(): BoardElement[] | null {
   } catch {
     return null;
   }
+}
+
+function hasClipboardElementsAvailable(): boolean {
+  const storedElements = readStoredClipboardElements();
+  return whiteboardClipboard.length > 0 || (storedElements?.length ?? 0) > 0;
 }
 
 async function readBrowserClipboardElements(): Promise<BoardElement[] | 'unavailable' | null> {
@@ -442,9 +454,40 @@ export function WhiteboardCanvas({
   const [isPanning, setIsPanning] = useState(false);
   const [panStart, setPanStart] = useState<{ x: number; y: number; cx: number; cy: number } | null>(null);
   const [spacePanActive, setSpacePanActive] = useState(false);
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ left: number; top: number } | null>(null);
+  const [clipboardVersion, setClipboardVersion] = useState(0);
   const viewportStateRef = useRef({ zoom, cameraX, cameraY });
   const safariGestureRef = useRef<{ initialZoom: number; anchorWorldX: number; anchorWorldY: number } | null>(null);
   const lastSafariGestureAtRef = useRef(0);
+  const selectedElements = useMemo(
+    () => elements.filter((element) => selectedIds.includes(element.id)),
+    [elements, selectedIds],
+  );
+  const selectedGroupIds = useMemo(
+    () => new Set(selectedElements.flatMap((element) => element.groupId ? [element.groupId] : [])),
+    [selectedElements],
+  );
+  const canGroup = editable && selectedElements.length >= 2;
+  const canUngroup = editable && selectedGroupIds.size > 0;
+  const canInlineEditSelection = editable
+    && selectedIds.length === 1
+    && selectedElements.length === 1
+    && (selectedElements[0].$type === 'text'
+      || selectedElements[0].$type === 'sticky'
+      || selectedElements[0].$type === 'shape'
+      || selectedElements[0].$type === 'frame');
+  const canSelectAll = editable && elements.length > 0 && selectedIds.length !== elements.length;
+  const canPaste = useMemo(
+    () => hasClipboardElementsAvailable(),
+    [clipboardVersion],
+  );
+  const zOrderAvailability = useMemo(
+    () => getZOrderAvailability(elements, selectedIds),
+    [elements, selectedIds],
+  );
+  const refreshClipboardAvailability = useCallback(() => {
+    setClipboardVersion((value) => value + 1);
+  }, []);
 
   const expandSelectionWithGroups = useCallback((ids: string[]): string[] => {
     if (ids.length === 0) {
@@ -555,8 +598,19 @@ export function WhiteboardCanvas({
 
     whiteboardClipboard = structuredClone(selection);
     persistClipboardPayload(serializeClipboardElements(selection));
+    refreshClipboardAvailability();
     return true;
-  }, [getSelectedElements]);
+  }, [getSelectedElements, refreshClipboardAvailability]);
+
+  const cutSelectedElements = useCallback(() => {
+    if (!editable) {
+      return;
+    }
+
+    if (copySelectedElementsToClipboard()) {
+      deleteSelectedElements();
+    }
+  }, [copySelectedElementsToClipboard, deleteSelectedElements, editable]);
 
   const pasteClipboardElements = useCallback(async () => {
     if (!editable) {
@@ -582,11 +636,12 @@ export function WhiteboardCanvas({
     const after = [...before, ...pasted];
 
     whiteboardClipboard = structuredClone(sourceElements);
+    refreshClipboardAvailability();
     setElements(after);
     pushCommand(createAddElementsCommand(pasted));
     setSelectedElementIds(pasted.map((element) => element.id));
     onBoardChanged('paste', asOperationPayload(pasted.map((element) => createElementAddedOperation(element))));
-  }, [editable, elements, onBoardChanged, pushCommand, setElements, setSelectedElementIds]);
+  }, [editable, elements, onBoardChanged, pushCommand, refreshClipboardAvailability, setElements, setSelectedElementIds]);
 
   const duplicateSelectedElements = useCallback(() => {
     if (!editable) {
@@ -682,6 +737,32 @@ export function WhiteboardCanvas({
     ));
   }, [editable, elements, getSelectedElements, onBoardChanged, pushCommand, selectedIds, setElements, setSelectedElementIds]);
 
+  const reorderSelectedElements = useCallback((action: ZOrderAction) => {
+    if (!editable) {
+      return;
+    }
+
+    const result = applyZOrderAction(elements, selectedIds, action);
+    if (result.changedIds.length === 0) {
+      return;
+    }
+
+    const changedIdSet = new Set(result.changedIds);
+    const before = elements.filter((element) => changedIdSet.has(element.id));
+    const after = result.elements.filter((element) => changedIdSet.has(element.id));
+
+    setElements(result.elements);
+    pushCommand(createElementUpdateCommand(
+      before,
+      after,
+      createChangedKeysByElementId(result.changedIds, ['zIndex']),
+    ));
+    setSelectedElementIds(result.effectiveSelectedIds);
+    onBoardChanged('zOrder', asOperationPayload(
+      after.map((element) => createElementUpdatedOperation(element)),
+    ));
+  }, [editable, elements, onBoardChanged, pushCommand, selectedIds, setElements, setSelectedElementIds]);
+
   const moveSelectedElementsBy = useCallback((deltaX: number, deltaY: number) => {
     if (!editable || selectedIds.length === 0) {
       return;
@@ -723,6 +804,65 @@ export function WhiteboardCanvas({
       setEditingElement(selected);
     }
   }, [editable, elements, selectedIds]);
+
+  const selectAllElements = useCallback(() => {
+    if (!editable) {
+      return;
+    }
+
+    setSelectedElementIds(expandSelectionWithGroups(elements.map((element) => element.id)));
+  }, [editable, elements, expandSelectionWithGroups, setSelectedElementIds]);
+
+  const handleContextMenuAction = useCallback((action: WhiteboardContextMenuAction) => {
+    switch (action) {
+      case 'copy':
+        copySelectedElementsToClipboard();
+        return;
+      case 'cut':
+        cutSelectedElements();
+        return;
+      case 'paste':
+        void pasteClipboardElements();
+        return;
+      case 'duplicate':
+        duplicateSelectedElements();
+        return;
+      case 'delete':
+        deleteSelectedElements();
+        return;
+      case 'edit-text':
+        beginInlineEditingSelection();
+        return;
+      case 'group':
+        groupSelectedElements();
+        return;
+      case 'ungroup':
+        ungroupSelectedElements();
+        return;
+      case 'select-all':
+        selectAllElements();
+        return;
+      case 'bring-to-front':
+      case 'bring-forward':
+      case 'send-backward':
+      case 'send-to-back':
+        reorderSelectedElements(action);
+        return;
+      default:
+        return;
+    }
+  }, [
+    beginInlineEditingSelection,
+    copySelectedElementsToClipboard,
+    cutSelectedElements,
+    deleteSelectedElements,
+    duplicateSelectedElements,
+    groupSelectedElements,
+    pasteClipboardElements,
+    reorderSelectedElements,
+    selectAllElements,
+    ungroupSelectedElements,
+  ]);
 
   const selectAccessibleElement = useCallback((elementId: string) => {
     setActiveTool('select');
@@ -798,6 +938,17 @@ export function WhiteboardCanvas({
       const key = e.key.toLowerCase();
 
         if (hasModifier) {
+          const zOrderAction = getZOrderActionFromKeyboardEvent(e);
+          if (zOrderAction) {
+            if (!editable) {
+              return;
+            }
+
+            e.preventDefault();
+            reorderSelectedElements(zOrderAction);
+            return;
+          }
+
           switch (key) {
             case 'z':
               e.preventDefault();
@@ -816,7 +967,7 @@ export function WhiteboardCanvas({
               return;
             }
             e.preventDefault();
-            setSelectedElementIds(expandSelectionWithGroups(elements.map((element) => element.id)));
+            selectAllElements();
             return;
           case 'c':
             if (!editable) {
@@ -830,9 +981,7 @@ export function WhiteboardCanvas({
               return;
             }
             e.preventDefault();
-            if (copySelectedElementsToClipboard()) {
-              deleteSelectedElements();
-            }
+            cutSelectedElements();
             return;
           case 'v':
             if (!editable) {
@@ -965,15 +1114,17 @@ export function WhiteboardCanvas({
     applyCommandExecution,
     commitRedo,
     commitUndo,
+    cutSelectedElements,
     moveSelectedElementsBy,
     pasteClipboardElements,
     peekRedo,
     peekUndo,
+    reorderSelectedElements,
+    selectAllElements,
     selectedIds.length,
     beginInlineEditingElement,
     selectAccessibleElement,
     setActiveTool,
-    setSelectedElementIds,
     ungroupSelectedElements,
   ]);
 
@@ -1211,12 +1362,17 @@ export function WhiteboardCanvas({
   const handleMouseDown = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
       containerRef.current?.focus({ preventScroll: true });
+      setContextMenuPosition(null);
       const worldPos = getWorldPos();
       const screenPos = getScreenPos();
       if (!screenPos) return;
 
       if (commentPlacementMode && e.evt.button !== 1) {
         onCreateCommentAnchor?.(worldPos);
+        return;
+      }
+
+      if (e.evt.button === 2) {
         return;
       }
 
@@ -1479,6 +1635,50 @@ export function WhiteboardCanvas({
     },
     [editable, activeTool, elements, selectedIds, cameraX, cameraY, zoom, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, expandSelectionWithGroups, findTopmostFrameAtPoint, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pendingStickyNotePresetId, pushCommand, onBoardChanged, board, boardDefaults, spacePanActive, commentPlacementMode, onCreateCommentAnchor],
   );
+
+  const handleContextMenu = useCallback((e: Konva.KonvaEventObject<PointerEvent>) => {
+    if (!editable) {
+      return;
+    }
+
+    e.evt.preventDefault();
+    containerRef.current?.focus({ preventScroll: true });
+
+    const worldPos = getWorldPos();
+    const target = e.target;
+    const frameAtPoint = target === stageRef.current
+      ? findTopmostFrameAtPoint(worldPos)
+      : null;
+    const elementId = frameAtPoint?.id ?? getElementIdFromTarget(target);
+
+    if (elementId) {
+      const groupedSelectionIds = expandSelectionWithGroups([elementId]);
+      const selectionChanged = groupedSelectionIds.length !== selectedIds.length
+        || groupedSelectionIds.some((id) => !selectedIds.includes(id));
+
+      if (selectionChanged) {
+        setSelectedElementIds(groupedSelectionIds);
+      }
+    } else if (selectedIds.length === 0 && !canPaste && !canSelectAll) {
+      setContextMenuPosition(null);
+      return;
+    }
+
+    setContextMenuPosition({
+      left: e.evt.clientX + 2,
+      top: e.evt.clientY - 6,
+    });
+  }, [
+    canPaste,
+    canSelectAll,
+    editable,
+    expandSelectionWithGroups,
+    findTopmostFrameAtPoint,
+    getElementIdFromTarget,
+    getWorldPos,
+    selectedIds,
+    setSelectedElementIds,
+  ]);
 
   // ── Mouse Move ──
   const handleMouseMove = useCallback(
@@ -2219,6 +2419,7 @@ export function WhiteboardCanvas({
         onMouseLeave={handleMouseLeave}
         onWheel={handleWheel}
         onDblClick={handleDblClick}
+        onContextMenu={handleContextMenu}
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
@@ -2399,6 +2600,19 @@ export function WhiteboardCanvas({
         activeTool={activeTool}
         commentPlacementMode={commentPlacementMode}
         externalAnnouncement={liveAnnouncement}
+      />
+
+      <WhiteboardContextMenu
+        position={contextMenuPosition}
+        hasSelection={selectedIds.length > 0}
+        canPaste={canPaste}
+        canInlineEditSelection={canInlineEditSelection}
+        canGroup={canGroup}
+        canUngroup={canUngroup}
+        canSelectAll={canSelectAll}
+        zOrderAvailability={zOrderAvailability}
+        onClose={() => setContextMenuPosition(null)}
+        onAction={handleContextMenuAction}
       />
 
       <div

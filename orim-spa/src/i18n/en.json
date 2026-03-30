@@ -111,6 +111,11 @@
     "delete": "Delete",
     "group": "Group",
     "ungroup": "Ungroup",
+    "arrange": "Arrange",
+    "bringToFront": "Bring to Front",
+    "bringForward": "Bring Forward",
+    "sendBackward": "Send Backward",
+    "sendToBack": "Send to Back",
     "fitFrameToSelection": "Fit Frame to Selection",
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out",
@@ -256,6 +261,14 @@
       "tools": "Tools",
       "navigation": "Navigation"
     }
+  },
+  "contextMenu": {
+    "cut": "Cut",
+    "copy": "Copy",
+    "paste": "Paste",
+    "duplicate": "Duplicate",
+    "editText": "Edit text",
+    "selectAll": "Select all"
   },
   "admin": {
     "userManagement": "User Management",
