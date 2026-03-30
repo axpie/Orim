@@ -21,8 +21,10 @@
     "password": "Password",
     "loginButton": "Log in",
     "loginWithMicrosoft": "Continue with Microsoft 365",
+    "loginWithGoogle": "Continue with Google",
     "loginError": "Invalid username or password.",
     "microsoftLoginError": "Microsoft sign-in could not be completed.",
+    "googleLoginError": "Google sign-in could not be completed.",
     "orContinueWithPassword": "or continue with password",
     "welcome": "Welcome to ORIM"
   },

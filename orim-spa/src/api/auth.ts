@@ -20,3 +20,8 @@ export async function exchangeMicrosoftIdToken(idToken: string): Promise<LoginRe
   const { data } = await client.post<LoginResponse>('/api/auth/microsoft/exchange', { idToken });
   return data;
 }
+
+export async function exchangeGoogleIdToken(idToken: string): Promise<LoginResponse> {
+  const { data } = await client.post<LoginResponse>('/api/auth/google/exchange', { idToken });
+  return data;
+}

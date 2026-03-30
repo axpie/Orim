@@ -82,6 +82,17 @@ Wichtige Eigenschaften:
 - Benutzer werden beim ersten erfolgreichen Microsoft-Login automatisch verknuepft oder angelegt
 - die Tenant-Pruefung erfolgt serverseitig ueber die `tid`-Claim-Pruefung
 
+## Google SSO / Google-Anmeldung
+
+ORIM unterstuetzt Google-SSO als weitere Login-Option. Die SPA nutzt die offiziellen Google Identity Services (Client-side), die ein ID-Token (Credential) liefern. Das Backend validiert das Google-ID-Token serverseitig (Google.Apis.Auth), verlangt eine verifizierte E-Mail und tauscht die externe Identitaet gegen ein ORIM-JWT aus.
+
+Wichtige Eigenschaften:
+
+- lokale Anmeldung bleibt als Fallback erhalten
+- nur verifizierte Google-E-Mails werden akzeptiert (verringert Risiko von Konto-Übernahmen)
+- optional kann die Anmeldung auf eine Google Workspace / Hosted-Domain eingeschränkt werden (konfigurierbar über `Authentication:Google:HostedDomain`)
+- Hosted-Domain wird serverseitig case-insensitiv geprüft; wenn gesetzt, wird die Domain als `ExternalTenantId` gespeichert
+
 Beispielkonfiguration in `Orim.Api/appsettings.json` oder ueber Umgebungsvariablen:
 
 ```json
@@ -91,6 +102,11 @@ Beispielkonfiguration in `Orim.Api/appsettings.json` oder ueber Umgebungsvariabl
     "TenantId": "11111111-2222-3333-4444-555555555555",
     "ClientId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
     "Scopes": [ "openid", "profile", "email" ]
+  },
+  "Google": {
+    "Enabled": true,
+    "ClientId": "000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com",
+    "HostedDomain": ""
   }
 }
 ```

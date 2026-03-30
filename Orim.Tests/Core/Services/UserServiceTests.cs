@@ -421,4 +421,75 @@ public class UserServiceTests
         await _boardRepo.Received(1).SaveAsync(board);
         await _userRepo.Received(1).DeleteAsync(user.Id);
     }
+
+    // -------------------------------------------------------------------------
+    // Google external-auth regression
+    // -------------------------------------------------------------------------
+
+    [Fact]
+    public async Task AuthenticateExternalAsync_Google_CreatesNewUser()
+    {
+        _userRepo.GetByExternalIdentityAsync(AuthenticationProvider.Google, "google-sub-abc").Returns((User?)null);
+        _userRepo.GetByEmailAsync("alice@gmail.com").Returns((User?)null);
+        _userRepo.GetByUsernameAsync("alice@gmail.com").Returns((User?)null);
+
+        var result = await _sut.AuthenticateExternalAsync(new ExternalLoginProfile(
+            AuthenticationProvider.Google,
+            "google-sub-abc",
+            "alice@gmail.com",
+            "alice@gmail.com",
+            null));
+
+        Assert.Equal("alice@gmail.com", result.Username);
+        Assert.Equal("alice@gmail.com", result.Email);
+        Assert.Equal(AuthenticationProvider.Google, result.AuthenticationProvider);
+        Assert.Equal("google-sub-abc", result.ExternalSubject);
+        Assert.Null(result.ExternalTenantId);
+        await _userRepo.Received(1).SaveAsync(Arg.Is<User>(u =>
+            u.Username == "alice@gmail.com"
+            && u.AuthenticationProvider == AuthenticationProvider.Google
+            && u.ExternalSubject == "google-sub-abc"));
+    }
+
+    [Fact]
+    public async Task AuthenticateExternalAsync_Google_WithHostedDomain_StoresTenantId()
+    {
+        _userRepo.GetByExternalIdentityAsync(AuthenticationProvider.Google, "google-sub-corp").Returns((User?)null);
+        _userRepo.GetByEmailAsync("alice@corp.com").Returns((User?)null);
+        _userRepo.GetByUsernameAsync("alice@corp.com").Returns((User?)null);
+
+        var result = await _sut.AuthenticateExternalAsync(new ExternalLoginProfile(
+            AuthenticationProvider.Google,
+            "google-sub-corp",
+            "alice@corp.com",
+            "alice@corp.com",
+            "corp.com"));
+
+        Assert.Equal(AuthenticationProvider.Google, result.AuthenticationProvider);
+        Assert.Equal("corp.com", result.ExternalTenantId);
+    }
+
+    [Fact]
+    public async Task AuthenticateExternalAsync_Google_ExistingLinkedUser_ReturnsUser()
+    {
+        var user = new User
+        {
+            Username = "alice@gmail.com",
+            AuthenticationProvider = AuthenticationProvider.Google,
+            ExternalSubject = "google-sub-abc",
+            Email = "alice@gmail.com",
+            IsActive = true
+        };
+        _userRepo.GetByExternalIdentityAsync(AuthenticationProvider.Google, "google-sub-abc").Returns(user);
+
+        var result = await _sut.AuthenticateExternalAsync(new ExternalLoginProfile(
+            AuthenticationProvider.Google,
+            "google-sub-abc",
+            "alice@gmail.com",
+            "alice@gmail.com",
+            null));
+
+        Assert.Same(user, result);
+        await _userRepo.Received(1).SaveAsync(user);
+    }
 }

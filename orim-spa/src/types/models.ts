@@ -351,8 +351,13 @@ export interface MicrosoftAuthProvider {
   scopes: string[];
 }
 
+export interface GoogleAuthProvider {
+  clientId: string;
+}
+
 export interface AuthProvidersResponse {
   microsoft: MicrosoftAuthProvider | null;
+  google: GoogleAuthProvider | null;
 }
 
 // --- Assistant ---

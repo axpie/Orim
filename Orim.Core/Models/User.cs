@@ -17,7 +17,8 @@ public class User
 public enum AuthenticationProvider
 {
     Local,
-    MicrosoftEntraId
+    MicrosoftEntraId,
+    Google
 }
 
 public enum UserRole

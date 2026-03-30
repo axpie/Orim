@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import { useQuery } from '@tanstack/react-query';
 import { mdiMicrosoft } from '@mdi/js';
+import { GoogleOAuthProvider, GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { OrimLogo } from '../../components/Brand/OrimLogo';
 import { useAuthStore } from '../../stores/authStore';
 import { getAuthProviders } from '../../api/auth';
@@ -25,6 +26,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
   const loginWithMicrosoft = useAuthStore((s) => s.loginWithMicrosoft);
+  const loginWithGoogle = useAuthStore((s) => s.loginWithGoogle);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -40,6 +42,8 @@ export function LoginPage() {
   });
 
   const microsoftProvider = providers?.microsoft ?? null;
+  const googleProvider = providers?.google ?? null;
+  const hasExternalProviders = !!(microsoftProvider || googleProvider);
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
@@ -56,9 +60,7 @@ export function LoginPage() {
   };
 
   const handleMicrosoftSignIn = async () => {
-    if (!microsoftProvider) {
-      return;
-    }
+    if (!microsoftProvider) return;
 
     setError('');
     setMicrosoftLoading(true);
@@ -71,6 +73,23 @@ export function LoginPage() {
     } finally {
       setMicrosoftLoading(false);
     }
+  };
+
+  const handleGoogleSuccess = async (credentialResponse: CredentialResponse) => {
+    if (!credentialResponse.credential) {
+      setError(t('auth.googleLoginError'));
+      return;
+    }
+    try {
+      await loginWithGoogle(credentialResponse.credential);
+      navigate('/');
+    } catch {
+      setError(t('auth.googleLoginError'));
+    }
+  };
+
+  const handleGoogleError = () => {
+    setError(t('auth.googleLoginError'));
   };
 
   return (
@@ -99,26 +118,38 @@ export function LoginPage() {
           )}
 
           {microsoftProvider && (
-            <>
-              <Button
-                type="button"
-                variant="outlined"
-                fullWidth
-                size="large"
-                disabled={loading || microsoftLoading}
-                onClick={handleMicrosoftSignIn}
-                startIcon={microsoftLoading ? undefined : (
-                  <SvgIcon fontSize="small">
-                    <path d={mdiMicrosoft} />
-                  </SvgIcon>
-                )}
-                sx={{ mb: 2 }}
-              >
-                {microsoftLoading ? <CircularProgress size={24} /> : t('auth.loginWithMicrosoft')}
-              </Button>
+            <Button
+              type="button"
+              variant="outlined"
+              fullWidth
+              size="large"
+              disabled={loading || microsoftLoading}
+              onClick={handleMicrosoftSignIn}
+              startIcon={microsoftLoading ? undefined : (
+                <SvgIcon fontSize="small">
+                  <path d={mdiMicrosoft} />
+                </SvgIcon>
+              )}
+              sx={{ mb: 2 }}
+            >
+              {microsoftLoading ? <CircularProgress size={24} /> : t('auth.loginWithMicrosoft')}
+            </Button>
+          )}
 
-              <Divider sx={{ mb: 2 }}>{t('auth.orContinueWithPassword')}</Divider>
-            </>
+          {googleProvider && (
+            <Box sx={{ mb: 2, display: 'flex', justifyContent: 'center' }}>
+              <GoogleOAuthProvider clientId={googleProvider.clientId}>
+                <GoogleLogin
+                  onSuccess={handleGoogleSuccess}
+                  onError={handleGoogleError}
+                  width="352"
+                />
+              </GoogleOAuthProvider>
+            </Box>
+          )}
+
+          {hasExternalProviders && (
+            <Divider sx={{ mb: 2 }}>{t('auth.orContinueWithPassword')}</Divider>
           )}
 
           <Box component="form" onSubmit={handleSubmit}>
@@ -128,7 +159,7 @@ export function LoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               fullWidth
               required
-              autoFocus={!microsoftProvider}
+              autoFocus={!hasExternalProviders}
               sx={{ mb: 2 }}
             />
             <TextField
@@ -141,14 +172,14 @@ export function LoginPage() {
               sx={{ mb: 3 }}
             />
             <Button
-                type="submit"
-                variant="contained"
-                fullWidth
-                size="large"
-                disabled={loading || microsoftLoading}
-              >
-                {loading ? <CircularProgress size={24} /> : t('auth.loginButton')}
-              </Button>
+              type="submit"
+              variant="contained"
+              fullWidth
+              size="large"
+              disabled={loading || microsoftLoading}
+            >
+              {loading ? <CircularProgress size={24} /> : t('auth.loginButton')}
+            </Button>
           </Box>
         </CardContent>
       </Card>

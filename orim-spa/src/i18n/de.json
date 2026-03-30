@@ -22,7 +22,9 @@
     "loginButton": "Anmelden",
     "loginError": "Benutzername oder Passwort ungültig.",
     "loginWithMicrosoft": "Mit Microsoft 365 fortfahren",
+    "loginWithGoogle": "Mit Google fortfahren",
     "microsoftLoginError": "Die Microsoft-Anmeldung konnte nicht abgeschlossen werden.",
+    "googleLoginError": "Die Google-Anmeldung konnte nicht abgeschlossen werden.",
     "orContinueWithPassword": "oder mit Passwort fortfahren",
     "welcome": "Willkommen bei ORIM"
   },

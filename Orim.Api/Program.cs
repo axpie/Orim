@@ -48,6 +48,9 @@ builder.Services.AddSingleton<BoardCommentNotifier>();
 builder.Services.AddScoped<BoardCommentService>();
 builder.Services.Configure<MicrosoftEntraOptions>(builder.Configuration.GetSection("Authentication:Microsoft"));
 builder.Services.AddSingleton<MicrosoftIdentityTokenValidator>();
+builder.Services.Configure<GoogleOAuthOptions>(builder.Configuration.GetSection("Authentication:Google"));
+builder.Services.AddSingleton<IGoogleTokenVerifier, GoogleTokenVerifier>();
+builder.Services.AddSingleton<GoogleIdentityTokenValidator>();
 builder.Services.AddSignalR().AddJsonProtocol(options =>
 {
     options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -206,16 +209,20 @@ app.MapPost("/api/auth/login", async (LoginRequest request, UserService userServ
     return Results.Ok(new LoginResponse(token, user.Id, user.Username, user.Role));
 });
 
-app.MapGet("/api/auth/providers", (IOptions<MicrosoftEntraOptions> options) =>
+app.MapGet("/api/auth/providers", (IOptions<MicrosoftEntraOptions> msOptions, IOptions<GoogleOAuthOptions> googleOptions) =>
 {
-    var microsoft = options.Value.IsConfigured
+    var microsoft = msOptions.Value.IsConfigured
         ? new MicrosoftAuthProviderDto(
-            options.Value.ClientId,
-            options.Value.ResolveAuthority(),
-            options.Value.Scopes)
+            msOptions.Value.ClientId,
+            msOptions.Value.ResolveAuthority(),
+            msOptions.Value.Scopes)
         : null;
 
-    return Results.Ok(new AuthProvidersResponse(microsoft));
+    var google = googleOptions.Value.IsConfigured
+        ? new GoogleAuthProviderDto(googleOptions.Value.ClientId)
+        : null;
+
+    return Results.Ok(new AuthProvidersResponse(microsoft, google));
 }).AllowAnonymous();
 
 app.MapPost(
@@ -263,6 +270,51 @@ app.MapPost(
     catch (InvalidOperationException ex)
     {
         logger.LogWarning(ex, "Microsoft sign-in could not be linked to an ORIM user.");
+        return Results.BadRequest(ex.Message);
+    }
+}).AllowAnonymous();
+
+app.MapPost(
+    "/api/auth/google/exchange",
+    async (GoogleTokenExchangeRequest request,
+        UserService userService,
+        GoogleIdentityTokenValidator validator,
+        IOptions<GoogleOAuthOptions> options,
+        ILogger<Program> logger,
+        CancellationToken cancellationToken) =>
+{
+    if (!options.Value.IsConfigured)
+        return Results.NotFound();
+
+    if (string.IsNullOrWhiteSpace(request.IdToken))
+        return Results.BadRequest("An ID token is required.");
+
+    GoogleIdentityPrincipal identity;
+    try
+    {
+        identity = await validator.ValidateIdTokenAsync(request.IdToken, cancellationToken);
+    }
+    catch (SecurityTokenException ex)
+    {
+        logger.LogWarning(ex, "Google sign-in token validation failed.");
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        var user = await userService.AuthenticateExternalAsync(new ExternalLoginProfile(
+            AuthenticationProvider.Google,
+            identity.Subject,
+            identity.Email,
+            identity.Username,
+            string.IsNullOrWhiteSpace(identity.HostedDomain) ? null : identity.HostedDomain));
+
+        var token = GenerateJwtToken(user);
+        return Results.Ok(new LoginResponse(token, user.Id, user.Username, user.Role));
+    }
+    catch (InvalidOperationException ex)
+    {
+        logger.LogWarning(ex, "Google sign-in could not be linked to an ORIM user.");
         return Results.BadRequest(ex.Message);
     }
 }).AllowAnonymous();

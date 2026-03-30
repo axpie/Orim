@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { UserRole } from '../types/models';
-import { exchangeMicrosoftIdToken, login as apiLogin } from '../api/auth';
+import { exchangeGoogleIdToken, exchangeMicrosoftIdToken, login as apiLogin } from '../api/auth';
 
 interface AuthUser {
   id: string;
@@ -14,6 +14,7 @@ interface AuthState {
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<void>;
   loginWithMicrosoft: (idToken: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => void;
   hydrate: () => void;
 }
@@ -52,6 +53,11 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   loginWithMicrosoft: async (idToken) => {
     const response = await exchangeMicrosoftIdToken(idToken);
+    set(persistAuth(response));
+  },
+
+  loginWithGoogle: async (idToken) => {
+    const response = await exchangeGoogleIdToken(idToken);
     set(persistAuth(response));
   },
 
