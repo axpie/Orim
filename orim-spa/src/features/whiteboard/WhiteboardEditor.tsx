@@ -605,6 +605,7 @@ export function WhiteboardEditor() {
                 comments={comments}
                 activeCommentId={activeCommentId}
                 pendingAnchor={pendingCommentAnchor}
+                commentPlacementMode={commentPlacementMode}
                 canCreateComments={canEdit}
                 currentUserId={user?.id ?? null}
                 boardOwnerId={board.ownerId}
@@ -683,6 +684,7 @@ export function WhiteboardEditor() {
             comments={comments}
             activeCommentId={activeCommentId}
             pendingAnchor={pendingCommentAnchor}
+            commentPlacementMode={commentPlacementMode}
             canCreateComments={canEdit}
             currentUserId={user?.id ?? null}
             boardOwnerId={board.ownerId}

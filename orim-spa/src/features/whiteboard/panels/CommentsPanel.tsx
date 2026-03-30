@@ -26,6 +26,7 @@ interface CommentsPanelProps {
   comments: BoardComment[];
   activeCommentId: string | null;
   pendingAnchor: { x: number; y: number } | null;
+  commentPlacementMode?: boolean;
   canCreateComments: boolean;
   currentUserId?: string | null;
   boardOwnerId?: string | null;
@@ -53,6 +54,7 @@ export function CommentsPanel({
   comments,
   activeCommentId,
   pendingAnchor,
+  commentPlacementMode = false,
   canCreateComments,
   currentUserId = null,
   boardOwnerId = null,
@@ -153,12 +155,12 @@ export function CommentsPanel({
         <Stack direction="row" spacing={1}>
           {canCreateComments && (
             <Button
-              variant={pendingAnchor ? 'contained' : 'outlined'}
+              variant={commentPlacementMode ? 'contained' : 'outlined'}
               startIcon={<AddCommentIcon />}
               onClick={onStartComment}
               fullWidth
             >
-              {pendingAnchor ? t('comments.pickLocationActive') : t('comments.addComment')}
+              {commentPlacementMode ? t('comments.pickLocationActive') : t('comments.addComment')}
             </Button>
           )}
         </Stack>

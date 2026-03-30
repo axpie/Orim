@@ -17,6 +17,12 @@ export function getFrameHeaderHeight(height: number): number {
   return Math.min(40, Math.max(24, height * 0.2), Math.max(height - 16, 14));
 }
 
+export function resolveFrameTitleFontSize(element: Pick<FrameElement, 'height' | 'labelFontSize'>): number {
+  return typeof element.labelFontSize === 'number'
+    ? Math.max(1, element.labelFontSize)
+    : Math.min(22, Math.max(12, getFrameHeaderHeight(element.height) * 0.48));
+}
+
 export function FrameRenderer({ element: el }: FrameRendererProps) {
   const fillColor = el.fillColor ?? DEFAULT_FRAME_FILL_COLOR;
   const strokeColor = el.strokeColor ?? DEFAULT_FRAME_STROKE_COLOR;
@@ -27,9 +33,7 @@ export function FrameRenderer({ element: el }: FrameRendererProps) {
     alpha: Math.min(1, Math.max(parsedFill.alpha + 0.08, 0.16)),
   });
   const titleColor = el.labelColor ?? contrastingTextColor(headerFill);
-  const titleFontSize = typeof el.labelFontSize === 'number'
-    ? Math.max(1, el.labelFontSize)
-    : Math.min(22, Math.max(12, headerHeight * 0.48));
+  const titleFontSize = resolveFrameTitleFontSize(el);
   const fontStyle = [(el.isBold ? 'bold' : ''), (el.isItalic ? 'italic' : '')]
     .filter(Boolean)
     .join(' ');
@@ -76,6 +80,7 @@ export function FrameRenderer({ element: el }: FrameRendererProps) {
           fill={titleColor}
           fontStyle={fontStyle || 'normal'}
           textDecoration={textDecoration || undefined}
+          align={el.labelHorizontalAlignment?.toLowerCase() ?? 'left'}
           verticalAlign="middle"
           ellipsis
         />

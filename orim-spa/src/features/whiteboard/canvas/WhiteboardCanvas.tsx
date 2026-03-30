@@ -1215,15 +1215,15 @@ export function WhiteboardCanvas({
       const screenPos = getScreenPos();
       if (!screenPos) return;
 
+      if (commentPlacementMode && e.evt.button !== 1) {
+        onCreateCommentAnchor?.(worldPos);
+        return;
+      }
+
       // Middle mouse or hand tool → pan
       if (e.evt.button === 1 || activeTool === 'hand' || spacePanActive) {
         setIsPanning(true);
         setPanStart({ x: screenPos.x, y: screenPos.y, cx: cameraX, cy: cameraY });
-        return;
-      }
-
-      if (commentPlacementMode) {
-        onCreateCommentAnchor?.(worldPos);
         return;
       }
 

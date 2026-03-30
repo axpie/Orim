@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import type { BoardElement } from '../../../types/models';
 import { contrastingTextColor } from '../../../utils/colorUtils';
 import { resolveFontFamily, resolveLabelFontSize, resolveTextFontSize } from '../../../utils/textLayout';
-import { getFrameHeaderHeight } from './FrameRenderer';
+import { getFrameHeaderHeight, resolveFrameTitleFontSize } from './FrameRenderer';
 
 function isTextContentElement(
   element: BoardElement,
@@ -34,15 +34,13 @@ export function InlineTextEditor({
     ? (element.label ?? '')
     : (isTextContentElement(element) ? (element.text ?? '') : '');
   const fontSize = element.$type === 'frame'
-    ? (typeof element.labelFontSize === 'number'
-        ? Math.max(1, element.labelFontSize)
-        : Math.min(22, Math.max(12, getFrameHeaderHeight(element.height) * 0.48)))
+    ? resolveFrameTitleFontSize(element)
     : element.$type === 'shape'
     ? resolveLabelFontSize(element)
     : (isTextContentElement(element) ? resolveTextFontSize(element) : 16);
   const fontFamily = resolveFontFamily(element.fontFamily);
   const textAlign = (
-    (element.$type === 'frame' ? 'left' : element.labelHorizontalAlignment?.toLowerCase())
+    element.labelHorizontalAlignment?.toLowerCase()
     ?? (element.$type === 'shape' ? 'center' : 'left')
   ) as CSSProperties['textAlign'];
   const textColor = element.$type === 'frame'

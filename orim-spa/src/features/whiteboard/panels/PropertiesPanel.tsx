@@ -30,6 +30,7 @@ import { useCommandStack } from '../store/commandStack';
 import { ColorInputField } from '../controls/ColorInputField';
 import { PreviewSelect, type PreviewSelectOption } from '../controls/PreviewSelect';
 import { getIconDisplayName } from '../icons/iconCatalog';
+import { resolveFrameTitleFontSize } from '../shapes/FrameRenderer';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
 import { createElementUpdatedOperation } from '../realtime/boardOperations';
 import {
@@ -167,6 +168,7 @@ function AlignmentControls({
   verticalLabel,
   onHorizontalChange,
   onVerticalChange,
+  showVertical = true,
 }: {
   horizontal: HorizontalLabelAlignment;
   vertical: VerticalLabelAlignment;
@@ -174,6 +176,7 @@ function AlignmentControls({
   verticalLabel: string;
   onHorizontalChange: (value: HorizontalLabelAlignment) => void;
   onVerticalChange: (value: VerticalLabelAlignment) => void;
+  showVertical?: boolean;
 }) {
   return (
     <Box sx={{ display: 'grid', gap: 1 }}>
@@ -197,26 +200,28 @@ function AlignmentControls({
           <ToggleButton value={HorizontalLabelAlignment.Right}><FormatAlignRightIcon fontSize="small" /></ToggleButton>
         </ToggleButtonGroup>
       </Box>
-      <Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-          {verticalLabel}
-        </Typography>
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          fullWidth
-          value={vertical}
-          onChange={(_, value) => {
-            if (value) {
-              onVerticalChange(value as VerticalLabelAlignment);
-            }
-          }}
-        >
-          <ToggleButton value={VerticalLabelAlignment.Top}><VerticalAlignTopIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value={VerticalLabelAlignment.Middle}><VerticalAlignCenterIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value={VerticalLabelAlignment.Bottom}><VerticalAlignBottomIcon fontSize="small" /></ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
+      {showVertical && (
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+            {verticalLabel}
+          </Typography>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            fullWidth
+            value={vertical}
+            onChange={(_, value) => {
+              if (value) {
+                onVerticalChange(value as VerticalLabelAlignment);
+              }
+            }}
+          >
+            <ToggleButton value={VerticalLabelAlignment.Top}><VerticalAlignTopIcon fontSize="small" /></ToggleButton>
+            <ToggleButton value={VerticalLabelAlignment.Middle}><VerticalAlignCenterIcon fontSize="small" /></ToggleButton>
+            <ToggleButton value={VerticalLabelAlignment.Bottom}><VerticalAlignBottomIcon fontSize="small" /></ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -684,6 +689,61 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 value={(el as FrameElement).label ?? ''}
                 onChange={(e) => update(el.id, { label: e.target.value })}
               />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={(el as FrameElement).labelFontSize == null}
+                    onChange={(e) => {
+                      const frame = el as FrameElement;
+                      update(el.id, e.target.checked
+                        ? { labelFontSize: null }
+                        : { labelFontSize: Math.round(resolveFrameTitleFontSize(frame)) });
+                    }}
+                    size="small"
+                  />
+                }
+                label={t('properties.automaticFontSize')}
+              />
+              {(el as FrameElement).labelFontSize != null && (
+                <NumericSliderField
+                  label={t('properties.fontSize')}
+                  value={Math.round((el as FrameElement).labelFontSize ?? resolveFrameTitleFontSize(el as FrameElement))}
+                  min={8}
+                  max={64}
+                  onChange={(value) => update(el.id, { labelFontSize: value })}
+                />
+              )}
+              <TextField
+                select
+                label={t('properties.fontFamily')}
+                size="small"
+                value={(el as FrameElement).fontFamily ?? FONT_FAMILY_DEFAULT}
+                onChange={(e) => update(el.id, { fontFamily: e.target.value === FONT_FAMILY_DEFAULT ? null : e.target.value })}
+              >
+                {FONT_FAMILY_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    <Box sx={{ fontFamily: option.previewFamily ?? 'inherit' }}>{option.label === 'Theme Default' ? t('properties.defaultFont') : option.label}</Box>
+                  </MenuItem>
+                ))}
+              </TextField>
+              <ColorInputField
+                label={t('properties.color')}
+                value={(el as FrameElement).labelColor ?? contrastingTextColor((el as FrameElement).fillColor ?? 'rgba(37, 99, 235, 0.08)')}
+                onChange={(value) => update(el.id, { labelColor: value })}
+              />
+              <AlignmentControls
+                horizontal={(el as FrameElement).labelHorizontalAlignment ?? HorizontalLabelAlignment.Left}
+                vertical={VerticalLabelAlignment.Top}
+                horizontalLabel={t('properties.horizontal')}
+                verticalLabel={t('properties.vertical')}
+                onHorizontalChange={(value) => update(el.id, { labelHorizontalAlignment: value })}
+                onVerticalChange={() => undefined}
+                showVertical={false}
+              />
+              <TextStyleControls
+                element={el as FrameElement}
+                onChange={(changes) => update(el.id, changes)}
+              />
               <ColorInputField
                 label={t('properties.fillColor')}
                 value={(el as FrameElement).fillColor ?? 'rgba(37, 99, 235, 0.08)'}
@@ -693,11 +753,6 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 label={t('properties.strokeColor')}
                 value={(el as FrameElement).strokeColor ?? 'rgba(37, 99, 235, 0.48)'}
                 onChange={(value) => update(el.id, { strokeColor: value })}
-              />
-              <ColorInputField
-                label={t('properties.color')}
-                value={(el as FrameElement).labelColor ?? contrastingTextColor((el as FrameElement).fillColor ?? 'rgba(37, 99, 235, 0.08)')}
-                onChange={(value) => update(el.id, { labelColor: value })}
               />
               <NumericSliderField
                 label={t('properties.strokeWidth')}

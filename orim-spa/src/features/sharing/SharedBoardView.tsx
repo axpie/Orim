@@ -573,6 +573,7 @@ export function SharedBoardView() {
                 comments={comments}
                 activeCommentId={activeCommentId}
                 pendingAnchor={pendingCommentAnchor}
+                commentPlacementMode={commentPlacementMode}
                 canCreateComments={canCreateComments}
                 currentUserId={user?.id ?? null}
                 boardOwnerId={board.ownerId}
@@ -635,6 +636,7 @@ export function SharedBoardView() {
             comments={comments}
             activeCommentId={activeCommentId}
             pendingAnchor={pendingCommentAnchor}
+            commentPlacementMode={commentPlacementMode}
             canCreateComments={canCreateComments}
             currentUserId={user?.id ?? null}
             boardOwnerId={board.ownerId}
