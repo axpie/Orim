@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using PdfSharp.Fonts;
 using Orim.Api.Contracts;
@@ -45,6 +46,8 @@ builder.Services.AddSingleton(new ThemeCatalogApiService(ThemeCatalogApiService.
 builder.Services.AddSingleton<BoardPdfExportService>();
 builder.Services.AddSingleton<BoardCommentNotifier>();
 builder.Services.AddScoped<BoardCommentService>();
+builder.Services.Configure<MicrosoftEntraOptions>(builder.Configuration.GetSection("Authentication:Microsoft"));
+builder.Services.AddSingleton<MicrosoftIdentityTokenValidator>();
 builder.Services.AddSignalR().AddJsonProtocol(options =>
 {
     options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -202,6 +205,67 @@ app.MapPost("/api/auth/login", async (LoginRequest request, UserService userServ
     var token = GenerateJwtToken(user);
     return Results.Ok(new LoginResponse(token, user.Id, user.Username, user.Role));
 });
+
+app.MapGet("/api/auth/providers", (IOptions<MicrosoftEntraOptions> options) =>
+{
+    var microsoft = options.Value.IsConfigured
+        ? new MicrosoftAuthProviderDto(
+            options.Value.ClientId,
+            options.Value.ResolveAuthority(),
+            options.Value.Scopes)
+        : null;
+
+    return Results.Ok(new AuthProvidersResponse(microsoft));
+}).AllowAnonymous();
+
+app.MapPost(
+    "/api/auth/microsoft/exchange",
+    async (MicrosoftTokenExchangeRequest request,
+        UserService userService,
+        MicrosoftIdentityTokenValidator validator,
+        IOptions<MicrosoftEntraOptions> options,
+        ILogger<Program> logger,
+        CancellationToken cancellationToken) =>
+{
+    if (!options.Value.IsConfigured)
+    {
+        return Results.NotFound();
+    }
+
+    if (string.IsNullOrWhiteSpace(request.IdToken))
+    {
+        return Results.BadRequest("An ID token is required.");
+    }
+
+    MicrosoftIdentityPrincipal identity;
+    try
+    {
+        identity = await validator.ValidateIdTokenAsync(request.IdToken, cancellationToken);
+    }
+    catch (SecurityTokenException ex)
+    {
+        logger.LogWarning(ex, "Microsoft sign-in token validation failed.");
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        var user = await userService.AuthenticateExternalAsync(new ExternalLoginProfile(
+            AuthenticationProvider.MicrosoftEntraId,
+            identity.Subject,
+            identity.Email,
+            identity.Username,
+            identity.TenantId));
+
+        var token = GenerateJwtToken(user);
+        return Results.Ok(new LoginResponse(token, user.Id, user.Username, user.Role));
+    }
+    catch (InvalidOperationException ex)
+    {
+        logger.LogWarning(ex, "Microsoft sign-in could not be linked to an ORIM user.");
+        return Results.BadRequest(ex.Message);
+    }
+}).AllowAnonymous();
 
 app.MapPost("/api/auth/refresh", [Authorize] async (HttpContext context, UserService userService) =>
 {

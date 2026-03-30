@@ -21,6 +21,9 @@
     "password": "Passwort",
     "loginButton": "Anmelden",
     "loginError": "Benutzername oder Passwort ungültig.",
+    "loginWithMicrosoft": "Mit Microsoft 365 fortfahren",
+    "microsoftLoginError": "Die Microsoft-Anmeldung konnte nicht abgeschlossen werden.",
+    "orContinueWithPassword": "oder mit Passwort fortfahren",
     "welcome": "Willkommen bei ORIM"
   },
   "dashboard": {

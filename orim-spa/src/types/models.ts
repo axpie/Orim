@@ -345,6 +345,16 @@ export interface LoginResponse {
   role: UserRole;
 }
 
+export interface MicrosoftAuthProvider {
+  clientId: string;
+  authority: string;
+  scopes: string[];
+}
+
+export interface AuthProvidersResponse {
+  microsoft: MicrosoftAuthProvider | null;
+}
+
 // --- Assistant ---
 
 export interface ChatMessageEntry {

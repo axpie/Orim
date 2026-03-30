@@ -6,6 +6,9 @@ namespace Orim.Api.Contracts;
 
 public sealed record LoginRequest(string Username, string Password);
 public sealed record LoginResponse(string Token, Guid UserId, string Username, UserRole Role);
+public sealed record MicrosoftTokenExchangeRequest(string IdToken);
+public sealed record MicrosoftAuthProviderDto(string ClientId, string Authority, IReadOnlyList<string> Scopes);
+public sealed record AuthProvidersResponse(MicrosoftAuthProviderDto? Microsoft);
 public sealed record UserDto(Guid Id, string Username, UserRole Role, bool IsActive, DateTime CreatedAt);
 public sealed record CreateUserRequest(string Username, string Password, UserRole Role);
 public sealed record ChangePasswordRequest(string NewPassword);

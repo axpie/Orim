@@ -196,6 +196,151 @@ public class UserServiceTests
     }
 
     [Fact]
+    public async Task AuthenticateAsync_UserWithoutPasswordHash_ReturnsNull()
+    {
+        var user = new User
+        {
+            Username = "alice",
+            PasswordHash = string.Empty,
+            AuthenticationProvider = AuthenticationProvider.MicrosoftEntraId,
+            IsActive = true
+        };
+        _userRepo.GetByUsernameAsync("alice").Returns(user);
+
+        var result = await _sut.AuthenticateAsync("alice", "password");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task AuthenticateExternalAsync_ExistingLinkedUser_ReturnsUser()
+    {
+        var user = new User
+        {
+            Username = "alice",
+            AuthenticationProvider = AuthenticationProvider.MicrosoftEntraId,
+            ExternalSubject = "oid-123",
+            ExternalTenantId = "tenant-1",
+            Email = "alice@contoso.com",
+            IsActive = true
+        };
+        _userRepo.GetByExternalIdentityAsync(AuthenticationProvider.MicrosoftEntraId, "oid-123").Returns(user);
+
+        var result = await _sut.AuthenticateExternalAsync(new ExternalLoginProfile(
+            AuthenticationProvider.MicrosoftEntraId,
+            "oid-123",
+            "alice@contoso.com",
+            "alice@contoso.com",
+            "tenant-1"));
+
+        Assert.Same(user, result);
+        await _userRepo.Received(1).SaveAsync(user);
+    }
+
+    [Fact]
+    public async Task AuthenticateExternalAsync_LinksUserByEmail()
+    {
+        var user = new User
+        {
+            Username = "alice",
+            AuthenticationProvider = AuthenticationProvider.Local,
+            Email = "alice@contoso.com",
+            PasswordHash = BCrypt.Net.BCrypt.HashPassword("secret", workFactor: 4),
+            IsActive = true
+        };
+        _userRepo.GetByExternalIdentityAsync(AuthenticationProvider.MicrosoftEntraId, "oid-123").Returns((User?)null);
+        _userRepo.GetByEmailAsync("alice@contoso.com").Returns(user);
+
+        var result = await _sut.AuthenticateExternalAsync(new ExternalLoginProfile(
+            AuthenticationProvider.MicrosoftEntraId,
+            "oid-123",
+            "alice@contoso.com",
+            "alice@contoso.com",
+            "tenant-1"));
+
+        Assert.Same(user, result);
+        Assert.Equal(AuthenticationProvider.MicrosoftEntraId, user.AuthenticationProvider);
+        Assert.Equal("oid-123", user.ExternalSubject);
+        Assert.Equal("tenant-1", user.ExternalTenantId);
+        await _userRepo.Received(1).SaveAsync(user);
+    }
+
+    [Fact]
+    public async Task AuthenticateExternalAsync_LinksUserByUsername_WhenNoEmailMatchExists()
+    {
+        var user = new User
+        {
+            Username = "alice@contoso.com",
+            AuthenticationProvider = AuthenticationProvider.Local,
+            IsActive = true
+        };
+        _userRepo.GetByExternalIdentityAsync(AuthenticationProvider.MicrosoftEntraId, "oid-123").Returns((User?)null);
+        _userRepo.GetByEmailAsync("alice@contoso.com").Returns((User?)null);
+        _userRepo.GetByUsernameAsync("alice@contoso.com").Returns(user);
+
+        var result = await _sut.AuthenticateExternalAsync(new ExternalLoginProfile(
+            AuthenticationProvider.MicrosoftEntraId,
+            "oid-123",
+            "alice@contoso.com",
+            "alice@contoso.com",
+            "tenant-1"));
+
+        Assert.Same(user, result);
+        Assert.Equal(AuthenticationProvider.MicrosoftEntraId, user.AuthenticationProvider);
+        Assert.Equal("oid-123", user.ExternalSubject);
+        await _userRepo.Received(1).SaveAsync(user);
+    }
+
+    [Fact]
+    public async Task AuthenticateExternalAsync_CreatesUserWhenNoLinkExists()
+    {
+        _userRepo.GetByExternalIdentityAsync(AuthenticationProvider.MicrosoftEntraId, "oid-123").Returns((User?)null);
+        _userRepo.GetByEmailAsync("alice@contoso.com").Returns((User?)null);
+        _userRepo.GetByUsernameAsync("alice@contoso.com").Returns((User?)null);
+
+        var result = await _sut.AuthenticateExternalAsync(new ExternalLoginProfile(
+            AuthenticationProvider.MicrosoftEntraId,
+            "oid-123",
+            "alice@contoso.com",
+            "alice@contoso.com",
+            "tenant-1"));
+
+        Assert.Equal("alice@contoso.com", result.Username);
+        Assert.Equal("alice@contoso.com", result.Email);
+        Assert.Equal(AuthenticationProvider.MicrosoftEntraId, result.AuthenticationProvider);
+        Assert.Equal("oid-123", result.ExternalSubject);
+        Assert.Equal("tenant-1", result.ExternalTenantId);
+        Assert.Equal(UserRole.User, result.Role);
+        Assert.Equal(string.Empty, result.PasswordHash);
+        await _userRepo.Received(1).SaveAsync(Arg.Is<User>(user =>
+            user.Username == "alice@contoso.com"
+            && user.AuthenticationProvider == AuthenticationProvider.MicrosoftEntraId
+            && user.ExternalSubject == "oid-123"));
+    }
+
+    [Fact]
+    public async Task AuthenticateExternalAsync_DifferentExternalIdentityOnExistingUser_Throws()
+    {
+        var user = new User
+        {
+            Username = "alice@contoso.com",
+            AuthenticationProvider = AuthenticationProvider.MicrosoftEntraId,
+            ExternalSubject = "oid-existing",
+            IsActive = true
+        };
+        _userRepo.GetByExternalIdentityAsync(AuthenticationProvider.MicrosoftEntraId, "oid-new").Returns((User?)null);
+        _userRepo.GetByEmailAsync("alice@contoso.com").Returns((User?)null);
+        _userRepo.GetByUsernameAsync("alice@contoso.com").Returns(user);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => _sut.AuthenticateExternalAsync(new ExternalLoginProfile(
+            AuthenticationProvider.MicrosoftEntraId,
+            "oid-new",
+            "alice@contoso.com",
+            "alice@contoso.com",
+            "tenant-1")));
+    }
+
+    [Fact]
     public async Task DeactivateUserAsync_UserNotFound_Throws()
     {
         _userRepo.GetByIdAsync(Arg.Any<Guid>()).Returns((User?)null);

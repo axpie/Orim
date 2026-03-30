@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type { UserRole } from '../types/models';
-import { login as apiLogin } from '../api/auth';
+import { exchangeMicrosoftIdToken, login as apiLogin } from '../api/auth';
 
 interface AuthUser {
   id: string;
@@ -13,8 +13,31 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<void>;
+  loginWithMicrosoft: (idToken: string) => Promise<void>;
   logout: () => void;
   hydrate: () => void;
+}
+
+function toAuthUser(response: { userId: string; username: string; role: UserRole }): AuthUser {
+  return {
+    id: response.userId,
+    username: response.username,
+    role: response.role,
+  };
+}
+
+function persistAuth(response: { token: string; userId: string; username: string; role: UserRole }) {
+  const user = toAuthUser(response);
+
+  localStorage.setItem('orim_token', response.token);
+  localStorage.setItem('orim_user', JSON.stringify(user));
+
+  return { user, token: response.token, isAuthenticated: true } satisfies Pick<AuthState, 'user' | 'token' | 'isAuthenticated'>;
+}
+
+function clearPersistedAuth() {
+  localStorage.removeItem('orim_token');
+  localStorage.removeItem('orim_user');
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -24,19 +47,16 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (username, password) => {
     const response = await apiLogin(username, password);
-    const user: AuthUser = {
-      id: response.userId,
-      username: response.username,
-      role: response.role,
-    };
-    localStorage.setItem('orim_token', response.token);
-    localStorage.setItem('orim_user', JSON.stringify(user));
-    set({ user, token: response.token, isAuthenticated: true });
+    set(persistAuth(response));
+  },
+
+  loginWithMicrosoft: async (idToken) => {
+    const response = await exchangeMicrosoftIdToken(idToken);
+    set(persistAuth(response));
   },
 
   logout: () => {
-    localStorage.removeItem('orim_token');
-    localStorage.removeItem('orim_user');
+    clearPersistedAuth();
     set({ user: null, token: null, isAuthenticated: false });
   },
 
@@ -48,8 +68,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         const user = JSON.parse(userJson) as AuthUser;
         set({ user, token, isAuthenticated: true });
       } catch {
-        localStorage.removeItem('orim_token');
-        localStorage.removeItem('orim_user');
+        clearPersistedAuth();
       }
     }
   },

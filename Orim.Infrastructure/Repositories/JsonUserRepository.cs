@@ -50,6 +50,23 @@ public class JsonUserRepository : IUserRepository
             string.Equals(u.Username, username, StringComparison.OrdinalIgnoreCase));
     }
 
+    public async Task<User?> GetByEmailAsync(string email)
+    {
+        var users = await GetAllAsync();
+        return users.FirstOrDefault(u =>
+            !string.IsNullOrWhiteSpace(u.Email)
+            && string.Equals(u.Email, email, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public async Task<User?> GetByExternalIdentityAsync(AuthenticationProvider provider, string externalSubject)
+    {
+        var users = await GetAllAsync();
+        return users.FirstOrDefault(u =>
+            u.AuthenticationProvider == provider
+            && !string.IsNullOrWhiteSpace(u.ExternalSubject)
+            && string.Equals(u.ExternalSubject, externalSubject, StringComparison.OrdinalIgnoreCase));
+    }
+
     public async Task SaveAsync(User entity)
     {
         await _lock.WaitAsync();

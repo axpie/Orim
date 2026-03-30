@@ -82,6 +82,35 @@ public class JsonUserRepositoryTests : IDisposable
     }
 
     [Fact]
+    public async Task GetByEmailAsync_CaseInsensitive()
+    {
+        var user = new User { Username = "Alice", Email = "Alice@Contoso.com" };
+        await _sut.SaveAsync(user);
+
+        var result = await _sut.GetByEmailAsync("alice@contoso.com");
+
+        Assert.NotNull(result);
+        Assert.Equal("Alice@Contoso.com", result.Email);
+    }
+
+    [Fact]
+    public async Task GetByExternalIdentityAsync_ReturnsMatchingUser()
+    {
+        var user = new User
+        {
+            Username = "alice",
+            AuthenticationProvider = AuthenticationProvider.MicrosoftEntraId,
+            ExternalSubject = "OID-123"
+        };
+        await _sut.SaveAsync(user);
+
+        var result = await _sut.GetByExternalIdentityAsync(AuthenticationProvider.MicrosoftEntraId, "oid-123");
+
+        Assert.NotNull(result);
+        Assert.Equal("OID-123", result.ExternalSubject);
+    }
+
+    [Fact]
     public async Task GetByIdAsync_NotFound_ReturnsNull()
     {
         var result = await _sut.GetByIdAsync(Guid.NewGuid());

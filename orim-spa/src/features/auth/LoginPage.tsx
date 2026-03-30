@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEventHandler } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -10,21 +10,38 @@ import {
   Typography,
   Alert,
   CircularProgress,
+  Divider,
+  SvgIcon,
 } from '@mui/material';
+import { useQuery } from '@tanstack/react-query';
+import { mdiMicrosoft } from '@mdi/js';
 import { OrimLogo } from '../../components/Brand/OrimLogo';
 import { useAuthStore } from '../../stores/authStore';
+import { getAuthProviders } from '../../api/auth';
+import { signInWithMicrosoft } from './microsoftAuth';
 
 export function LoginPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const login = useAuthStore((s) => s.login);
+  const loginWithMicrosoft = useAuthStore((s) => s.loginWithMicrosoft);
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [microsoftLoading, setMicrosoftLoading] = useState(false);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const { data: providers } = useQuery({
+    queryKey: ['auth-providers'],
+    queryFn: getAuthProviders,
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+
+  const microsoftProvider = providers?.microsoft ?? null;
+
+  const handleSubmit: FormEventHandler<HTMLFormElement> = async (e) => {
     e.preventDefault();
     setError('');
     setLoading(true);
@@ -35,6 +52,24 @@ export function LoginPage() {
       setError(t('auth.loginError'));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleMicrosoftSignIn = async () => {
+    if (!microsoftProvider) {
+      return;
+    }
+
+    setError('');
+    setMicrosoftLoading(true);
+    try {
+      const idToken = await signInWithMicrosoft(microsoftProvider);
+      await loginWithMicrosoft(idToken);
+      navigate('/');
+    } catch {
+      setError(t('auth.microsoftLoginError'));
+    } finally {
+      setMicrosoftLoading(false);
     }
   };
 
@@ -63,6 +98,29 @@ export function LoginPage() {
             </Alert>
           )}
 
+          {microsoftProvider && (
+            <>
+              <Button
+                type="button"
+                variant="outlined"
+                fullWidth
+                size="large"
+                disabled={loading || microsoftLoading}
+                onClick={handleMicrosoftSignIn}
+                startIcon={microsoftLoading ? undefined : (
+                  <SvgIcon fontSize="small">
+                    <path d={mdiMicrosoft} />
+                  </SvgIcon>
+                )}
+                sx={{ mb: 2 }}
+              >
+                {microsoftLoading ? <CircularProgress size={24} /> : t('auth.loginWithMicrosoft')}
+              </Button>
+
+              <Divider sx={{ mb: 2 }}>{t('auth.orContinueWithPassword')}</Divider>
+            </>
+          )}
+
           <Box component="form" onSubmit={handleSubmit}>
             <TextField
               label={t('auth.username')}
@@ -70,7 +128,7 @@ export function LoginPage() {
               onChange={(e) => setUsername(e.target.value)}
               fullWidth
               required
-              autoFocus
+              autoFocus={!microsoftProvider}
               sx={{ mb: 2 }}
             />
             <TextField
@@ -83,14 +141,14 @@ export function LoginPage() {
               sx={{ mb: 3 }}
             />
             <Button
-              type="submit"
-              variant="contained"
-              fullWidth
-              size="large"
-              disabled={loading}
-            >
-              {loading ? <CircularProgress size={24} /> : t('auth.loginButton')}
-            </Button>
+                type="submit"
+                variant="contained"
+                fullWidth
+                size="large"
+                disabled={loading || microsoftLoading}
+              >
+                {loading ? <CircularProgress size={24} /> : t('auth.loginButton')}
+              </Button>
           </Box>
         </CardContent>
       </Card>

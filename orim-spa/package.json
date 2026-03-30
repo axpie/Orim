@@ -13,6 +13,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "@mdi/js": "^7.4.47",
+    "@azure/msal-browser": "^4.26.0",
     "@microsoft/signalr": "^10.0.0",
     "@mui/icons-material": "^7.3.9",
     "@mui/material": "^7.3.9",
