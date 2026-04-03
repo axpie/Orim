@@ -56,7 +56,7 @@ export function RemoteCursorPresence({ localPresenceClientId = null, zoom }: Rem
     lastFrameAtRef.current = null;
   }, []);
 
-  const stepAnimation = useCallback((timestamp: number) => {
+  const stepAnimation = useCallback(function stepAnimation(timestamp: number) {
     const lastFrameAt = lastFrameAtRef.current ?? timestamp;
     const deltaMs = Math.min(Math.max(timestamp - lastFrameAt, 1), 64);
     lastFrameAtRef.current = timestamp;

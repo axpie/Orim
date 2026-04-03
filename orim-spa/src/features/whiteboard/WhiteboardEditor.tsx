@@ -5,13 +5,14 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Alert, Box, Drawer, Snackbar, useMediaQuery, useTheme } from '@mui/material';
 import { getAssistantAvailability } from '../../api/assistantSettings';
-import { createSnapshot, getBoard, restoreSnapshot, updateBoard } from '../../api/boards';
+import { createSnapshot, getBoard, restoreSnapshot, saveBoard } from '../../api/boards';
 import { useBoardComments } from './comments/useBoardComments';
 import { useBoardStore } from './store/boardStore';
 import { useCommandStack } from './store/commandStack';
 import { formatBoardCommandConflict } from './realtime/localBoardCommands';
 import { useSignalR } from '../../hooks/useSignalR';
 import { WhiteboardCanvas } from './canvas/WhiteboardCanvas';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Toolbar } from './tools/Toolbar';
 import { PropertiesPanel } from './panels/PropertiesPanel';
 import { ChatPanel } from './panels/ChatPanel';
@@ -25,9 +26,11 @@ import type { Board, BoardSnapshot } from '../../types/models';
 import { BoardRole } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
 import type { BoardOperationPayload } from './realtime/boardOperations';
+import { recoverBoardWithQueuedOperations } from './realtime/reconnectRecovery';
 
 const PROPERTIES_PANEL_WIDTH = 280;
 const CHAT_PANEL_WIDTH = 320;
+const EMPTY_COMMENTS: Board['comments'] = [];
 
 function sortSnapshots(snapshots: BoardSnapshot[]) {
   return [...snapshots].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
@@ -49,6 +52,7 @@ export function WhiteboardEditor() {
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const isCompactToolbarLayout = isMediumDown || isCoarsePointer;
   const setBoard = useBoardStore((s) => s.setBoard);
+  const setBoardTitle = useBoardStore((s) => s.setBoardTitle);
   const applyRemoteOperation = useBoardStore((s) => s.applyRemoteOperation);
   const setRemoteCursors = useBoardStore((s) => s.setRemoteCursors);
   const setViewportInsets = useBoardStore((s) => s.setViewportInsets);
@@ -72,6 +76,7 @@ export function WhiteboardEditor() {
   const [liveAnnouncement, setLiveAnnouncement] = useState<{ id: number; text: string } | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
+  const connectionIdRef = useRef<string | null>(null);
   const liveAnnouncementIdRef = useRef(0);
   const lastSyncAnnouncementRef = useRef<string | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -84,7 +89,7 @@ export function WhiteboardEditor() {
     : null;
   const canEdit = currentMembership != null && currentMembership.role !== BoardRole.Viewer;
   const canShare = currentMembership?.role === BoardRole.Owner;
-  const comments = board?.comments ?? [];
+  const comments = board?.comments ?? EMPTY_COMMENTS;
 
   const announceLive = useCallback((text: string | null | undefined) => {
     const normalized = text?.trim();
@@ -183,7 +188,8 @@ export function WhiteboardEditor() {
   }, [isError, navigate]);
 
   const saveMutation = useMutation({
-    mutationFn: (boardPatch: Partial<Board>) => updateBoard(id!, boardPatch),
+    mutationFn: ({ board: currentBoard, changeKind }: { board: Board; changeKind: 'Content' | 'Metadata' }) =>
+      saveBoard(id!, currentBoard, connectionIdRef.current, changeKind),
   });
 
   const clearScheduledSave = useCallback(() => {
@@ -193,7 +199,7 @@ export function WhiteboardEditor() {
     }
   }, []);
 
-  const persistCurrentBoard = useCallback(async (): Promise<Board | null> => {
+  const persistCurrentBoard = useCallback(async (changeKind: 'Content' | 'Metadata' = 'Content'): Promise<Board | null> => {
     if (activeSavePromiseRef.current) {
       try {
         await activeSavePromiseRef.current;
@@ -201,7 +207,7 @@ export function WhiteboardEditor() {
         // Keep the latest mutation error in React Query state.
       }
 
-      if (!useBoardStore.getState().isDirty) {
+      if (changeKind === 'Content' && !useBoardStore.getState().isDirty) {
         return useBoardStore.getState().board;
       }
     }
@@ -212,21 +218,17 @@ export function WhiteboardEditor() {
     }
 
     const elementsAtSaveStart = current.elements;
+    const titleAtSaveStart = current.title;
 
     const savePromise = saveMutation.mutateAsync({
-      title: current.title,
-      labelOutlineEnabled: current.labelOutlineEnabled,
-      arrowOutlineEnabled: current.arrowOutlineEnabled,
-      customColors: current.customColors,
-      recentColors: current.recentColors,
-      stickyNotePresets: current.stickyNotePresets,
-      elements: current.elements,
+      board: current,
+      changeKind,
     }).then(() => {
       const latestBoard = useBoardStore.getState().board;
       // Only mark clean when no new element changes arrived during the in-flight save.
-      // Zustand produces a new array reference on every mutation, so reference equality
-      // reliably detects concurrent edits without deep comparison.
-      if (latestBoard?.elements === elementsAtSaveStart) {
+      // Zustand produces a new array reference on element edits, and title renames replace
+      // the board object, so this preserves dirty state when a newer local edit landed.
+      if (latestBoard?.elements === elementsAtSaveStart && latestBoard?.title === titleAtSaveStart) {
         setDirty(false);
       }
       // Persist local (potentially newer) state into the query cache rather than
@@ -274,6 +276,7 @@ export function WhiteboardEditor() {
 
     scheduleSave();
   }, [
+    board,
     board?.elements,
     board?.title,
     board?.labelOutlineEnabled,
@@ -333,6 +336,42 @@ export function WhiteboardEditor() {
     boardId: id ?? null,
     displayName: user?.displayName ?? user?.username ?? null,
     syncProfileDisplayNameChanges: true,
+    onBoardChanged: (notification) => {
+      if (
+        notification.kind !== 'Metadata'
+        || notification.sourceClientId === connectionIdRef.current
+        || useBoardStore.getState().isDirty
+        || !id
+      ) {
+        return;
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ['board', id] });
+    },
+    beforeOutboxFlush: async ({ isReconnect }) => {
+      if (!id) {
+        return;
+      }
+
+      const currentBoard = useBoardStore.getState().board;
+      const queuedOperationsCount = useOperationOutboxStore.getState().countForBoard(id);
+      if (!isReconnect && queuedOperationsCount === 0) {
+        return;
+      }
+
+      if (currentBoard?.id === id && useBoardStore.getState().isDirty && queuedOperationsCount === 0) {
+        return;
+      }
+
+      const recovery = await recoverBoardWithQueuedOperations({
+        boardId: id,
+        fetchBoard: () => getBoard(id),
+      });
+
+      setBoard(recovery.board, { preserveSelection: true });
+      clearCommandStack();
+      queryClient.setQueryData(['board', id], recovery.board);
+    },
     onBoardOperationApplied: (notification) => {
       applyRemoteOperation(notification.operation);
       const nextBoard = useBoardStore.getState().board;
@@ -355,6 +394,7 @@ export function WhiteboardEditor() {
       setRemoteCursors([...current, cursor]);
     },
   });
+  connectionIdRef.current = connectionId;
 
   const boardSyncStatus = useMemo(() => deriveBoardSyncStatus({
     connectionState,
@@ -364,6 +404,12 @@ export function WhiteboardEditor() {
     isSaving: saveMutation.isPending,
     saveError: saveMutation.error,
   }), [connectionState, isDirty, lastError, outboxCount, saveMutation.error, saveMutation.isPending]);
+
+  useEffect(() => {
+    if (connectionState === 'connected' && canEdit && isDirty && board) {
+      scheduleSave();
+    }
+  }, [board, canEdit, connectionState, isDirty, scheduleSave]);
 
   useEffect(() => {
     const nextAnnouncement = getBoardSyncAnnouncement(boardSyncStatus, t);
@@ -488,6 +534,32 @@ export function WhiteboardEditor() {
     }
   }, [canEdit, sendBoardState, sendOperation, setDirty]);
 
+  const handleRenameTitle = useCallback((nextTitle: string, previousTitle: string) => {
+    if (!id) {
+      return;
+    }
+
+    const currentBoard = useBoardStore.getState().board;
+    if (!currentBoard) {
+      return;
+    }
+
+    queryClient.setQueryData(['board', id], currentBoard);
+    clearScheduledSave();
+    void persistCurrentBoard('Metadata').catch(() => {
+      const latestBoard = useBoardStore.getState().board;
+      if (!latestBoard || latestBoard.id !== id || latestBoard.title !== nextTitle) {
+        return;
+      }
+
+      setBoardTitle(previousTitle);
+      queryClient.setQueryData(['board', id], {
+        ...latestBoard,
+        title: previousTitle,
+      });
+    });
+  }, [clearScheduledSave, id, persistCurrentBoard, queryClient, setBoardTitle]);
+
   const onBoardLiveChanged = useCallback((_changeKind: string, operation?: BoardOperationPayload) => {
     if (!canEdit) {
       return;
@@ -577,6 +649,7 @@ export function WhiteboardEditor() {
         showComments
         showChat={canUseAssistant}
         showSnapshots={canEdit}
+        onRenameTitle={handleRenameTitle}
         onBoardChanged={onBoardChanged}
         onOpenSnapshots={() => setSnapshotsOpen(true)}
         onExportPng={handleExportPng}
@@ -586,19 +659,21 @@ export function WhiteboardEditor() {
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
         {canEdit && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} />}
         <Box sx={{ flex: 1, position: 'relative' }}>
-          <WhiteboardCanvas
-            editable={canEdit}
-            localPresenceClientId={connectionId}
-            onBoardChanged={onBoardChanged}
-            onBoardLiveChanged={onBoardLiveChanged}
-            onPointerPresenceChanged={sendCursorUpdate}
-            onStageReady={handleStageReady}
-            selectedCommentId={activeCommentId}
-            commentPlacementMode={commentPlacementMode}
-            onSelectComment={handleSelectComment}
-            onCreateCommentAnchor={handleCommentAnchorSelected}
-            liveAnnouncement={liveAnnouncement}
-          />
+          <ErrorBoundary>
+            <WhiteboardCanvas
+              editable={canEdit}
+              localPresenceClientId={connectionId}
+              onBoardChanged={onBoardChanged}
+              onBoardLiveChanged={onBoardLiveChanged}
+              onPointerPresenceChanged={sendCursorUpdate}
+              onStageReady={handleStageReady}
+              selectedCommentId={activeCommentId}
+              commentPlacementMode={commentPlacementMode}
+              onSelectComment={handleSelectComment}
+              onCreateCommentAnchor={handleCommentAnchorSelected}
+              liveAnnouncement={liveAnnouncement}
+            />
+          </ErrorBoundary>
 
           {!isNarrowPanelMode && commentsOpen && (
             <Box

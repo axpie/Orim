@@ -1,11 +1,12 @@
 using System.Text.Json.Serialization;
 using Orim.Api.Services;
 using Orim.Core.Models;
+using Orim.Core.Services;
 
 namespace Orim.Api.Contracts;
 
 public sealed record LoginRequest(string Username, string Password);
-public sealed record LoginResponse(string Token, Guid UserId, string Username, string DisplayName, UserRole Role);
+public sealed record LoginResponse(Guid UserId, string Username, string DisplayName, UserRole Role);
 public sealed record MicrosoftTokenExchangeRequest(string IdToken);
 public sealed record GoogleTokenExchangeRequest(string IdToken);
 public sealed record MicrosoftAuthProviderDto(string ClientId, string Authority, IReadOnlyList<string> Scopes);
@@ -16,7 +17,20 @@ public sealed record CreateUserRequest(string Username, string Password, UserRol
 public sealed record ChangePasswordRequest(string? CurrentPassword, string NewPassword);
 public sealed record UpdateProfileRequest(string DisplayName);
 public sealed record UpdateUserRequest(string Username, UserRole Role);
-public sealed record CreateBoardRequest(string Title, string? TemplateId = null);
+public sealed record CreateBoardRequest(string Title, string? TemplateId = null, string? ThemeKey = null);
+public sealed record SaveBoardStateRequest(
+    string Title,
+    bool LabelOutlineEnabled,
+    bool ArrowOutlineEnabled,
+    string? SurfaceColor,
+    string? ThemeKey,
+    IReadOnlyList<string>? CustomColors,
+    IReadOnlyList<string>? RecentColors,
+    IReadOnlyList<StickyNotePreset>? StickyNotePresets,
+    IReadOnlyList<BoardElement>? Elements,
+    string? SourceClientId = null,
+    BoardChangeKind ChangeKind = BoardChangeKind.Content);
+public sealed record RenameBoardRequest(string Title, string? SourceClientId = null);
 public sealed record SetVisibilityRequest(BoardVisibility Visibility, bool AllowAnonymousEditing = false);
 public sealed record ValidatePasswordRequest(string Password);
 public sealed record SharedBoardUpdateRequest(Board Board, string? Password, string? SourceClientId = null);
@@ -35,6 +49,8 @@ public sealed record BoardMetadataUpdatedOperationDto(
     string? Title = null,
     bool? LabelOutlineEnabled = null,
     bool? ArrowOutlineEnabled = null,
+    string? SurfaceColor = null,
+    string? ThemeKey = null,
     IReadOnlyList<string>? CustomColors = null,
     IReadOnlyList<string>? RecentColors = null,
     IReadOnlyList<StickyNotePreset>? StickyNotePresets = null) : BoardOperationDto;
@@ -48,3 +64,22 @@ public sealed record AssistantRequest(IReadOnlyList<ChatMessageEntry> Messages);
 public sealed record AssistantSettingsRequest(bool Enabled, string Endpoint, string DeploymentName, string? ApiKey);
 public sealed record PresenceLeaveRequest(Guid BoardId, string ClientId);
 public sealed record ThemeAvailabilityRequest(bool Enabled);
+public sealed record DeploymentReadinessResponse(
+    string EnvironmentName,
+    string ApplicationVersion,
+    string DatabaseProvider,
+    bool IsRelationalDatabase,
+    bool DatabaseConnected,
+    int PendingMigrationCount,
+    bool HttpsRedirectionEnabled,
+    bool HstsEnabled,
+    bool RequestIdHeaderEnabled,
+    bool RateLimitingEnabled,
+    bool CookieAuthEnabled,
+    bool MicrosoftSsoConfigured,
+    bool GoogleSsoConfigured,
+    bool AssistantEnabled,
+    bool AssistantConfigured,
+    int EnabledThemeCount,
+    int TotalThemeCount,
+    IReadOnlyList<string> HealthEndpoints);

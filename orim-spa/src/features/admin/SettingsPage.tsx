@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -25,6 +25,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import DownloadIcon from '@mui/icons-material/Download';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
+import { getDeploymentReadiness } from '../../api/admin';
 import { getAssistantSettings, updateAssistantSettings } from '../../api/assistantSettings';
 import {
   deleteTheme,
@@ -40,6 +41,32 @@ type MessageState = {
   severity: 'success' | 'error';
   text: string;
 } | null;
+
+type DeploymentCheckStatus = 'ready' | 'action-required' | 'info';
+type DeploymentCheckSeverity = 'required' | 'recommended';
+
+type DeploymentCheck = {
+  key: string;
+  title: string;
+  status: DeploymentCheckStatus;
+  severity: DeploymentCheckSeverity;
+  message: string;
+};
+
+function getDeploymentStatusColor(status: DeploymentCheckStatus): 'success' | 'warning' | 'default' {
+  switch (status) {
+    case 'ready':
+      return 'success';
+    case 'action-required':
+      return 'warning';
+    default:
+      return 'default';
+  }
+}
+
+function getDeploymentSeverityColor(severity: DeploymentCheckSeverity): 'error' | 'info' {
+  return severity === 'required' ? 'error' : 'info';
+}
 
 function getErrorMessage(error: unknown, fallback: string): string {
   if (typeof error === 'object' && error !== null) {
@@ -74,12 +101,7 @@ export function SettingsPage() {
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [themeMessage, setThemeMessage] = useState<MessageState>(null);
   const [assistantMessage, setAssistantMessage] = useState<MessageState>(null);
-  const [assistantForm, setAssistantForm] = useState<AssistantSettingsUpdateRequest>({
-    enabled: false,
-    endpoint: '',
-    deploymentName: 'gpt-4.1',
-    apiKey: '',
-  });
+  const [assistantFormDraft, setAssistantFormDraft] = useState<AssistantSettingsUpdateRequest | null>(null);
 
   const {
     data: assistantSettings,
@@ -96,18 +118,21 @@ export function SettingsPage() {
     queryFn: getAdminThemes,
   });
 
-  useEffect(() => {
-    if (!assistantSettings) {
-      return;
-    }
+  const {
+    data: deploymentReadiness,
+    isError: isDeploymentReadinessError,
+    error: deploymentReadinessError,
+  } = useQuery({
+    queryKey: ['admin-deployment-readiness'],
+    queryFn: getDeploymentReadiness,
+  });
 
-    setAssistantForm({
-      enabled: assistantSettings.enabled,
-      endpoint: assistantSettings.endpoint,
-      deploymentName: assistantSettings.deploymentName,
-      apiKey: '',
-    });
-  }, [assistantSettings]);
+  const assistantForm = assistantFormDraft ?? {
+    enabled: assistantSettings?.enabled ?? false,
+    endpoint: assistantSettings?.endpoint ?? '',
+    deploymentName: assistantSettings?.deploymentName ?? 'gpt-4.1',
+    apiKey: '',
+  };
 
   const invalidateThemes = async () => {
     await queryClient.invalidateQueries({ queryKey: ['admin-themes'] });
@@ -129,12 +154,7 @@ export function SettingsPage() {
     mutationFn: updateAssistantSettings,
     onSuccess: (nextSettings) => {
       queryClient.setQueryData(['admin-assistant-settings'], nextSettings);
-      setAssistantForm({
-        enabled: nextSettings.enabled,
-        endpoint: nextSettings.endpoint,
-        deploymentName: nextSettings.deploymentName,
-        apiKey: '',
-      });
+      setAssistantFormDraft(null);
       setAssistantMessage({ severity: 'success', text: t('admin.assistantSettingsSaved') });
     },
     onError: (error) => {
@@ -210,6 +230,111 @@ export function SettingsPage() {
     : assistantForm.enabled
       ? 'warning'
       : 'default';
+  const deploymentChecks = useMemo<DeploymentCheck[]>(() => {
+    if (!deploymentReadiness) {
+      return [];
+    }
+
+    const configuredSsoProviders = Number(deploymentReadiness.microsoftSsoConfigured) + Number(deploymentReadiness.googleSsoConfigured);
+
+    return [
+      {
+        key: 'database',
+        title: t('admin.readinessDatabaseTitle'),
+        severity: 'required',
+        status: deploymentReadiness.databaseConnected ? 'ready' : 'action-required',
+        message: deploymentReadiness.databaseConnected
+          ? t('admin.readinessDatabaseReady', { provider: deploymentReadiness.databaseProvider })
+          : t('admin.readinessDatabaseAttention', { provider: deploymentReadiness.databaseProvider }),
+      },
+      {
+        key: 'migrations',
+        title: t('admin.readinessMigrationsTitle'),
+        severity: 'required',
+        status: !deploymentReadiness.isRelationalDatabase
+          ? 'info'
+          : deploymentReadiness.pendingMigrationCount === 0
+            ? 'ready'
+            : 'action-required',
+        message: !deploymentReadiness.isRelationalDatabase
+          ? t('admin.readinessMigrationsNotApplicable')
+          : deploymentReadiness.pendingMigrationCount === 0
+            ? t('admin.readinessMigrationsReady')
+            : t('admin.readinessMigrationsAttention', { count: deploymentReadiness.pendingMigrationCount }),
+      },
+      {
+        key: 'transport',
+        title: t('admin.readinessTransportTitle'),
+        severity: 'required',
+        status: deploymentReadiness.httpsRedirectionEnabled && deploymentReadiness.hstsEnabled ? 'ready' : 'action-required',
+        message: deploymentReadiness.httpsRedirectionEnabled && deploymentReadiness.hstsEnabled
+          ? t('admin.readinessTransportReady')
+          : t('admin.readinessTransportAttention'),
+      },
+      {
+        key: 'operations',
+        title: t('admin.readinessOperationsTitle'),
+        severity: 'required',
+        status: deploymentReadiness.requestIdHeaderEnabled && deploymentReadiness.rateLimitingEnabled ? 'ready' : 'action-required',
+        message: deploymentReadiness.requestIdHeaderEnabled && deploymentReadiness.rateLimitingEnabled
+          ? t('admin.readinessOperationsReady', {
+            liveEndpoint: deploymentReadiness.healthEndpoints[0] ?? '/health/live',
+            readyEndpoint: deploymentReadiness.healthEndpoints[1] ?? '/health/ready',
+          })
+          : t('admin.readinessOperationsAttention'),
+      },
+      {
+        key: 'auth',
+        title: t('admin.readinessAuthTitle'),
+        severity: 'required',
+        status: deploymentReadiness.cookieAuthEnabled ? 'ready' : 'action-required',
+        message: deploymentReadiness.cookieAuthEnabled
+          ? t('admin.readinessAuthReady')
+          : t('admin.readinessAuthAttention'),
+      },
+      {
+        key: 'sso',
+        title: t('admin.readinessSsoTitle'),
+        severity: 'recommended',
+        status: configuredSsoProviders > 0 ? 'ready' : 'action-required',
+        message: configuredSsoProviders > 0
+          ? t('admin.readinessSsoReady', { count: configuredSsoProviders })
+          : t('admin.readinessSsoAttention'),
+      },
+      {
+        key: 'assistant',
+        title: t('admin.readinessAssistantTitle'),
+        severity: 'recommended',
+        status: !deploymentReadiness.assistantEnabled
+          ? 'info'
+          : deploymentReadiness.assistantConfigured
+            ? 'ready'
+            : 'action-required',
+        message: !deploymentReadiness.assistantEnabled
+          ? t('admin.readinessAssistantDisabled')
+          : deploymentReadiness.assistantConfigured
+            ? t('admin.readinessAssistantReady')
+            : t('admin.readinessAssistantAttention'),
+      },
+      {
+        key: 'themes',
+        title: t('admin.readinessThemesTitle'),
+        severity: 'recommended',
+        status: deploymentReadiness.enabledThemeCount > 0 ? 'ready' : 'action-required',
+        message: deploymentReadiness.enabledThemeCount > 0
+          ? t('admin.readinessThemesReady', {
+            enabled: deploymentReadiness.enabledThemeCount,
+            total: deploymentReadiness.totalThemeCount,
+          })
+          : t('admin.readinessThemesAttention'),
+      },
+    ];
+  }, [deploymentReadiness, t]);
+  const deploymentHasRequiredAttention = deploymentChecks.some((check) => check.severity === 'required' && check.status !== 'ready');
+  const deploymentOverviewColor = deploymentHasRequiredAttention ? 'warning' : 'success';
+  const deploymentOverviewLabel = deploymentHasRequiredAttention
+    ? t('admin.deploymentAttention')
+    : t('admin.deploymentReady');
 
   return (
     <Box>
@@ -223,6 +348,74 @@ export function SettingsPage() {
           </Typography>
         </Box>
       </Box>
+
+      {isDeploymentReadinessError && (
+        <Alert severity="error" sx={{ mb: 3 }}>
+          {getErrorMessage(deploymentReadinessError, t('admin.deploymentReadinessLoadFailed'))}
+        </Alert>
+      )}
+
+      {deploymentReadiness && (
+        <Paper sx={{ p: 3, mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 2 }}>
+            <Box>
+              <Typography variant="h6" fontWeight={600}>
+                {t('admin.deploymentReadiness')}
+              </Typography>
+              <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                {t('admin.deploymentReadinessDescription')}
+              </Typography>
+            </Box>
+            <Chip color={deploymentOverviewColor} label={deploymentOverviewLabel} />
+          </Box>
+
+          <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mb: 2 }}>
+            <Chip size="small" variant="outlined" label={`${t('admin.deploymentEnvironment')}: ${deploymentReadiness.environmentName}`} />
+            <Chip size="small" variant="outlined" label={`${t('admin.deploymentVersion')}: ${deploymentReadiness.applicationVersion}`} />
+            <Chip size="small" variant="outlined" label={`${t('admin.deploymentModel')}: ${t('admin.deploymentModelValue')}`} />
+            <Chip size="small" variant="outlined" label={`${t('admin.deploymentAuthMode')}: ${t('admin.deploymentAuthModeValue')}`} />
+            <Chip size="small" variant="outlined" label={`${t('admin.deploymentDatabaseProvider')}: ${deploymentReadiness.databaseProvider}`} />
+            <Chip size="small" variant="outlined" label={`${t('admin.deploymentHealthEndpoints')}: ${deploymentReadiness.healthEndpoints.join(' · ')}`} />
+          </Stack>
+
+          <Stack spacing={1.5}>
+            {deploymentChecks.map((check) => (
+              <Box
+                key={check.key}
+                sx={{
+                  border: 1,
+                  borderColor: 'divider',
+                  borderRadius: 2,
+                  p: 2,
+                }}
+              >
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, flexWrap: 'wrap', mb: 1 }}>
+                  <Typography variant="subtitle2">{check.title}</Typography>
+                  <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap">
+                    <Chip
+                      size="small"
+                      color={getDeploymentSeverityColor(check.severity)}
+                      label={check.severity === 'required' ? t('admin.deploymentRequired') : t('admin.deploymentRecommended')}
+                    />
+                    <Chip
+                      size="small"
+                      color={getDeploymentStatusColor(check.status)}
+                      label={check.status === 'ready'
+                        ? t('admin.deploymentCheckReady')
+                        : check.status === 'action-required'
+                          ? t('admin.deploymentCheckActionRequired')
+                          : t('admin.deploymentCheckInfo')}
+                    />
+                  </Stack>
+                </Box>
+                <Typography variant="body2" color="text.secondary">
+                  {check.message}
+                </Typography>
+              </Box>
+            ))}
+          </Stack>
+        </Paper>
+      )}
 
       <Paper component="form" onSubmit={handleAssistantSave} sx={{ p: 3, mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap', mb: 2 }}>
@@ -256,7 +449,7 @@ export function SettingsPage() {
           control={(
             <Switch
               checked={assistantForm.enabled}
-              onChange={(_, checked) => setAssistantForm((current) => ({ ...current, enabled: checked }))}
+              onChange={(_, checked) => setAssistantFormDraft((current) => ({ ...(current ?? assistantForm), enabled: checked }))}
               disabled={isAssistantLoading || assistantMutation.isPending}
             />
           )}
@@ -274,14 +467,14 @@ export function SettingsPage() {
           <TextField
             label={t('admin.assistantEndpoint')}
             value={assistantForm.endpoint}
-            onChange={(event) => setAssistantForm((current) => ({ ...current, endpoint: event.target.value }))}
+            onChange={(event) => setAssistantFormDraft((current) => ({ ...(current ?? assistantForm), endpoint: event.target.value }))}
             disabled={isAssistantLoading || assistantMutation.isPending}
             fullWidth
           />
           <TextField
             label={t('admin.assistantDeploymentName')}
             value={assistantForm.deploymentName}
-            onChange={(event) => setAssistantForm((current) => ({ ...current, deploymentName: event.target.value }))}
+            onChange={(event) => setAssistantFormDraft((current) => ({ ...(current ?? assistantForm), deploymentName: event.target.value }))}
             disabled={isAssistantLoading || assistantMutation.isPending}
             fullWidth
           />
@@ -289,7 +482,7 @@ export function SettingsPage() {
             label={t('admin.assistantApiKey')}
             type="password"
             value={assistantForm.apiKey ?? ''}
-            onChange={(event) => setAssistantForm((current) => ({ ...current, apiKey: event.target.value }))}
+            onChange={(event) => setAssistantFormDraft((current) => ({ ...(current ?? assistantForm), apiKey: event.target.value }))}
             disabled={isAssistantLoading || assistantMutation.isPending}
             fullWidth
             sx={{ gridColumn: { xs: 'auto', md: '1 / -1' } }}

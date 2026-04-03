@@ -138,6 +138,13 @@ public class BoardServiceTests
         Assert.Equal(1, board.Elements[1].ZIndex);
     }
 
+    [Fact]
+    public async Task CreateBoardFromImportAsync_NullImportedBoard_Throws()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _sut.CreateBoardFromImportAsync(null!, "Title", Guid.NewGuid(), "owner"));
+    }
+
     #endregion
 
     #region Share Password
@@ -210,6 +217,17 @@ public class BoardServiceTests
         _sut.ClearSharePassword(board);
 
         Assert.Null(board.SharePasswordHash);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void SetSharePassword_NullOrWhitespacePassword_Throws(string? password)
+    {
+        var board = new Board();
+
+        Assert.ThrowsAny<ArgumentException>(() => _sut.SetSharePassword(board, password!));
     }
 
     #endregion
@@ -631,12 +649,12 @@ public class BoardServiceTests
     #region GenerateShareLinkToken
 
     [Fact]
-    public void GenerateShareLinkToken_Returns16CharHexString()
+    public void GenerateShareLinkToken_Returns64CharHexString()
     {
         var token = _sut.GenerateShareLinkToken();
 
-        Assert.Equal(16, token.Length);
-        Assert.Matches("^[0-9a-f]{16}$", token);
+        Assert.Equal(64, token.Length);
+        Assert.Matches("^[0-9a-f]{64}$", token);
     }
 
     [Fact]
@@ -731,6 +749,54 @@ public class BoardServiceTests
         Assert.Equal("Server-owned", target.Comments[0].Text);
     }
 
+    [Fact]
+    public void ReplaceBoardContent_NullTargetBoard_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => _sut.ReplaceBoardContent(null!, new Board()));
+    }
+
+    [Fact]
+    public void ReplaceBoardContent_NullImportedBoard_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => _sut.ReplaceBoardContent(new Board(), null!));
+    }
+
+    #endregion
+
+    #region SetBoardTitle
+
+    [Fact]
+    public void SetBoardTitle_TrimsTitle()
+    {
+        var board = new Board();
+
+        _sut.SetBoardTitle(board, "  Renamed Board  ");
+
+        Assert.Equal("Renamed Board", board.Title);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void SetBoardTitle_NullOrWhitespace_Throws(string? title)
+    {
+        var board = new Board();
+
+        Assert.ThrowsAny<ArgumentException>(() => _sut.SetBoardTitle(board, title!));
+    }
+
+    [Fact]
+    public void SetBoardTitle_TitleTooLong_Throws()
+    {
+        var board = new Board();
+        var longTitle = new string('x', 201);
+
+        var exception = Assert.Throws<ArgumentException>(() => _sut.SetBoardTitle(board, longTitle));
+
+        Assert.Contains("200 characters", exception.Message);
+    }
+
     #endregion
 
     #region UpdateBoardAsync
@@ -771,7 +837,7 @@ public class BoardServiceTests
     {
         var templates = _sut.GetTemplates();
 
-        Assert.Equal(6, templates.Count);
+        Assert.Equal(7, templates.Count);
     }
 
     #endregion

@@ -3,7 +3,17 @@ import { initReactI18next } from 'react-i18next';
 import de from './de.json';
 import en from './en.json';
 
-const savedLang = localStorage.getItem('orim_lang') || 'de';
+const SUPPORTED_LANGS = ['de', 'en'];
+
+function detectLanguage(): string {
+  const saved = localStorage.getItem('orim_lang');
+  if (saved && SUPPORTED_LANGS.includes(saved)) return saved;
+  const browser = navigator.language?.split('-')[0]?.toLowerCase();
+  if (browser && SUPPORTED_LANGS.includes(browser)) return browser;
+  return 'en';
+}
+
+const savedLang = detectLanguage();
 
 i18n.use(initReactI18next).init({
   resources: {
@@ -11,7 +21,7 @@ i18n.use(initReactI18next).init({
     en: { translation: en },
   },
   lng: savedLang,
-  fallbackLng: 'de',
+  fallbackLng: 'en',
   interpolation: { escapeValue: false },
 });
 

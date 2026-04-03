@@ -11,6 +11,10 @@ export async function refreshToken(): Promise<LoginResponse> {
   return data;
 }
 
+export async function logout(): Promise<void> {
+  await client.post('/api/auth/logout');
+}
+
 export async function getAuthProviders(): Promise<AuthProvidersResponse> {
   const { data } = await client.get<AuthProvidersResponse>('/api/auth/providers');
   return data;

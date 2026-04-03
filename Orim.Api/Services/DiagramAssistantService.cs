@@ -93,7 +93,11 @@ public sealed class DiagramAssistantService
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Azure OpenAI call failed.");
-                errorEvent = new DiagramAssistantEvent { Type = EventType.Error, Content = $"AI error: {ex.Message}" };
+                errorEvent = new DiagramAssistantEvent
+                {
+                    Type = EventType.Error,
+                    Content = "The assistant is currently unavailable. Please try again later."
+                };
                 break;
             }
 
@@ -195,7 +199,7 @@ public sealed class DiagramAssistantService
             BinaryData.FromString("""{"type":"object","properties":{"confirm":{"type":"boolean"}},"required":["confirm"]}"""))
     ];
 
-    private static (string result, List<DiagramAssistantEvent> events) ExecuteTool(string functionName, string argumentsJson, Board board)
+    private (string result, List<DiagramAssistantEvent> events) ExecuteTool(string functionName, string argumentsJson, Board board)
     {
         var events = new List<DiagramAssistantEvent>();
         try
@@ -213,7 +217,8 @@ public sealed class DiagramAssistantService
         }
         catch (Exception ex)
         {
-            return ($"Error executing {functionName}: {ex.Message}", events);
+            _logger.LogWarning(ex, "Assistant tool {FunctionName} failed.", functionName);
+            return ("The requested tool action could not be completed.", events);
         }
     }
 

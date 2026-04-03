@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -49,19 +49,33 @@ export function ShareMemberSearchDialog({
   onClose,
   onSelect,
 }: ShareMemberSearchDialogProps) {
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <OpenShareMemberSearchDialog
+      boardId={boardId}
+      excludedUserIds={excludedUserIds}
+      onClose={onClose}
+      onSelect={onSelect}
+    />
+  );
+}
+
+function OpenShareMemberSearchDialog({
+  boardId,
+  excludedUserIds,
+  onClose,
+  onSelect,
+}: Omit<ShareMemberSearchDialogProps, 'open'>) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
-
-  useEffect(() => {
-    if (!open) {
-      setQuery('');
-    }
-  }, [open]);
 
   const shareableUsersQuery = useQuery({
     queryKey: ['shareable-users', boardId, query],
     queryFn: () => searchShareableUsers(boardId, query.trim()),
-    enabled: open,
+    enabled: true,
   });
 
   const users = useMemo(
@@ -70,7 +84,7 @@ export function ShareMemberSearchDialog({
   );
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open onClose={onClose} maxWidth="sm" fullWidth>
       <DialogTitle>{t('sharing.searchUsers')}</DialogTitle>
       <DialogContent>
         <TextField

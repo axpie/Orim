@@ -123,7 +123,7 @@ public class UserServiceTests
     {
         _userRepo.GetByIdAsync(Arg.Any<Guid>()).Returns((User?)null);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<Orim.Core.Exceptions.UserNotFoundException>(
             () => _sut.SetPasswordAsync(Guid.NewGuid(), "newpassword"));
     }
 
@@ -480,7 +480,7 @@ public class UserServiceTests
     {
         _userRepo.GetByIdAsync(Arg.Any<Guid>()).Returns((User?)null);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<Orim.Core.Exceptions.UserNotFoundException>(
             () => _sut.DeactivateUserAsync(Guid.NewGuid()));
     }
 
@@ -524,7 +524,7 @@ public class UserServiceTests
     {
         _userRepo.GetByIdAsync(Arg.Any<Guid>()).Returns((User?)null);
 
-        await Assert.ThrowsAsync<InvalidOperationException>(
+        await Assert.ThrowsAsync<Orim.Core.Exceptions.UserNotFoundException>(
             () => _sut.DeleteUserAsync(Guid.NewGuid()));
     }
 

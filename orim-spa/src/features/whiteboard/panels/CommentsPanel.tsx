@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -50,6 +50,126 @@ function formatTimestamp(value: string) {
   return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
 }
 
+interface PendingCommentComposerProps {
+  pendingAnchor: { x: number; y: number };
+  isCreatingComment: boolean;
+  onCancelPendingComment: () => void;
+  onCreateComment: (text: string) => Promise<void>;
+}
+
+function PendingCommentComposer({
+  pendingAnchor,
+  isCreatingComment,
+  onCancelPendingComment,
+  onCreateComment,
+}: PendingCommentComposerProps) {
+  const { t } = useTranslation();
+  const [commentDraft, setCommentDraft] = useState('');
+
+  const handleCreateComment = async () => {
+    const text = commentDraft.trim();
+    if (!text) {
+      return;
+    }
+
+    await onCreateComment(text);
+    setCommentDraft('');
+  };
+
+  return (
+    <>
+      <Divider />
+      <Box sx={{ px: 2, py: 1.5 }}>
+        <Typography variant="subtitle2" gutterBottom>
+          {t('comments.newComment')}
+        </Typography>
+        <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
+          {t('comments.anchorLocation', {
+            x: Math.round(pendingAnchor.x),
+            y: Math.round(pendingAnchor.y),
+          })}
+        </Typography>
+        <TextField
+          fullWidth
+          multiline
+          minRows={3}
+          maxRows={6}
+          placeholder={t('comments.commentPlaceholder')}
+          value={commentDraft}
+          onChange={(event) => setCommentDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+              event.preventDefault();
+              void handleCreateComment();
+            }
+          }}
+        />
+        <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
+          <Button onClick={onCancelPendingComment} disabled={isCreatingComment}>
+            {t('common.cancel')}
+          </Button>
+          <Button
+            variant="contained"
+            onClick={() => { void handleCreateComment(); }}
+            disabled={isCreatingComment || !commentDraft.trim()}
+            startIcon={isCreatingComment ? <CircularProgress size={16} color="inherit" /> : undefined}
+          >
+            {t('comments.createComment')}
+          </Button>
+        </Stack>
+      </Box>
+    </>
+  );
+}
+
+interface ReplyComposerProps {
+  commentId: string;
+  isCreatingReply: boolean;
+  onCreateReply: (commentId: string, text: string) => Promise<void>;
+}
+
+function ReplyComposer({ commentId, isCreatingReply, onCreateReply }: ReplyComposerProps) {
+  const { t } = useTranslation();
+  const [replyDraft, setReplyDraft] = useState('');
+
+  const handleCreateReply = async () => {
+    const text = replyDraft.trim();
+    if (!text) {
+      return;
+    }
+
+    await onCreateReply(commentId, text);
+    setReplyDraft('');
+  };
+
+  return (
+    <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
+      <TextField
+        size="small"
+        fullWidth
+        multiline
+        maxRows={4}
+        placeholder={t('comments.replyPlaceholder')}
+        value={replyDraft}
+        onChange={(event) => setReplyDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
+            event.preventDefault();
+            void handleCreateReply();
+          }
+        }}
+      />
+      <IconButton
+        color="primary"
+        onClick={() => { void handleCreateReply(); }}
+        disabled={isCreatingReply || !replyDraft.trim()}
+      >
+        {isCreatingReply ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
+      </IconButton>
+    </Box>
+  );
+}
+
 export function CommentsPanel({
   comments,
   activeCommentId,
@@ -73,8 +193,6 @@ export function CommentsPanel({
   onDeleteReply,
 }: CommentsPanelProps) {
   const { t } = useTranslation();
-  const [commentDraft, setCommentDraft] = useState('');
-  const [replyDraft, setReplyDraft] = useState('');
 
   const sortedComments = useMemo(
     () => [...comments].sort((left, right) => new Date(right.updatedAt).getTime() - new Date(left.updatedAt).getTime()),
@@ -86,42 +204,8 @@ export function CommentsPanel({
     ? [...activeComment.replies].sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime())
     : [];
 
-  useEffect(() => {
-    if (!pendingAnchor) {
-      setCommentDraft('');
-    }
-  }, [pendingAnchor]);
-
-  useEffect(() => {
-    setReplyDraft('');
-  }, [activeCommentId]);
-
   const canDeleteEntry = (authorUserId: string) =>
     !!currentUserId && (currentUserId === authorUserId || currentUserId === boardOwnerId);
-
-  const handleCreateComment = async () => {
-    const text = commentDraft.trim();
-    if (!text) {
-      return;
-    }
-
-    await onCreateComment(text);
-    setCommentDraft('');
-  };
-
-  const handleCreateReply = async () => {
-    if (!activeComment) {
-      return;
-    }
-
-    const text = replyDraft.trim();
-    if (!text) {
-      return;
-    }
-
-    await onCreateReply(activeComment.id, text);
-    setReplyDraft('');
-  };
 
   return (
     <Paper
@@ -172,48 +256,13 @@ export function CommentsPanel({
       </Box>
 
       {pendingAnchor && (
-        <>
-          <Divider />
-          <Box sx={{ px: 2, py: 1.5 }}>
-            <Typography variant="subtitle2" gutterBottom>
-              {t('comments.newComment')}
-            </Typography>
-            <Typography variant="caption" color="text.secondary" display="block" sx={{ mb: 1 }}>
-              {t('comments.anchorLocation', {
-                x: Math.round(pendingAnchor.x),
-                y: Math.round(pendingAnchor.y),
-              })}
-            </Typography>
-            <TextField
-              fullWidth
-              multiline
-              minRows={3}
-              maxRows={6}
-              placeholder={t('comments.commentPlaceholder')}
-              value={commentDraft}
-              onChange={(event) => setCommentDraft(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                  event.preventDefault();
-                  void handleCreateComment();
-                }
-              }}
-            />
-            <Stack direction="row" spacing={1} sx={{ mt: 1.5 }}>
-              <Button onClick={onCancelPendingComment} disabled={isCreatingComment}>
-                {t('common.cancel')}
-              </Button>
-              <Button
-                variant="contained"
-                onClick={() => { void handleCreateComment(); }}
-                disabled={isCreatingComment || !commentDraft.trim()}
-                startIcon={isCreatingComment ? <CircularProgress size={16} color="inherit" /> : undefined}
-              >
-                {t('comments.createComment')}
-              </Button>
-            </Stack>
-          </Box>
-        </>
+        <PendingCommentComposer
+          key={`${pendingAnchor.x}-${pendingAnchor.y}`}
+          pendingAnchor={pendingAnchor}
+          isCreatingComment={isCreatingComment}
+          onCancelPendingComment={onCancelPendingComment}
+          onCreateComment={onCreateComment}
+        />
       )}
 
       <Divider />
@@ -348,30 +397,12 @@ export function CommentsPanel({
                   </Stack>
 
                   {canCreateComments && (
-                    <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
-                      <TextField
-                        size="small"
-                        fullWidth
-                        multiline
-                        maxRows={4}
-                        placeholder={t('comments.replyPlaceholder')}
-                        value={replyDraft}
-                        onChange={(event) => setReplyDraft(event.target.value)}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) {
-                            event.preventDefault();
-                            void handleCreateReply();
-                          }
-                        }}
-                      />
-                      <IconButton
-                        color="primary"
-                        onClick={() => { void handleCreateReply(); }}
-                        disabled={isCreatingReply || !replyDraft.trim()}
-                      >
-                        {isCreatingReply ? <CircularProgress size={20} color="inherit" /> : <SendIcon />}
-                      </IconButton>
-                    </Box>
+                    <ReplyComposer
+                      key={activeComment.id}
+                      commentId={activeComment.id}
+                      isCreatingReply={isCreatingReply}
+                      onCreateReply={onCreateReply}
+                    />
                   )}
                 </Box>
               </>

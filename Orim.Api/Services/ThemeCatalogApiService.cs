@@ -1,27 +1,23 @@
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Orim.Core;
+using Orim.Core.Interfaces;
 
 namespace Orim.Api.Services;
 
 public sealed class ThemeCatalogApiService
 {
-    private static readonly HashSet<string> BuiltInThemeKeys = new(StringComparer.Ordinal)
-    {
-        "light",
-        "dark",
-        "synthwave",
-    };
-
-    private readonly string _themesPath;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<ThemeCatalogApiService> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private List<ApiThemeDefinition>? _cache;
 
-    public ThemeCatalogApiService(string themesPath)
+    public ThemeCatalogApiService(IServiceScopeFactory scopeFactory, ILogger<ThemeCatalogApiService> logger)
     {
-        _themesPath = themesPath;
+        _scopeFactory = scopeFactory;
+        _logger = logger;
     }
-
-    public static string ResolveThemesPath(string dataPath) => Path.Combine(dataPath, "themes");
 
     public async Task<IReadOnlyList<ApiThemeDefinition>> GetThemesAsync()
     {
@@ -71,7 +67,7 @@ public sealed class ThemeCatalogApiService
                 ?? throw new InvalidOperationException("The selected theme does not exist.");
 
             theme.IsEnabled = enabled;
-            await WriteThemeFileAsync(theme);
+            await SaveThemeToRepositoryAsync(theme);
             SortThemes(themes);
             _cache = themes;
         }
@@ -97,11 +93,7 @@ public sealed class ThemeCatalogApiService
             }
 
             themes.RemoveAll(candidate => candidate.Key == normalizedKey);
-            var filePath = GetThemeFilePath(normalizedKey);
-            if (File.Exists(filePath))
-            {
-                File.Delete(filePath);
-            }
+            await DeleteThemeFromRepositoryAsync(normalizedKey);
 
             SortThemes(themes);
             _cache = themes;
@@ -143,7 +135,7 @@ public sealed class ThemeCatalogApiService
             themes.RemoveAll(candidate => candidate.Key == normalizedTheme.Key);
             themes.Add(normalizedTheme);
             SortThemes(themes);
-            await WriteThemeFileAsync(normalizedTheme);
+            await SaveThemeToRepositoryAsync(normalizedTheme);
             _cache = themes;
             return normalizedTheme.Clone();
         }
@@ -183,25 +175,26 @@ public sealed class ThemeCatalogApiService
             return _cache;
         }
 
-        if (!Directory.Exists(_themesPath))
-        {
-            _cache = CreateBuiltInThemes();
-            return _cache;
-        }
-
         var themesByKey = CreateBuiltInThemes()
             .ToDictionary(theme => theme.Key, theme => theme, StringComparer.Ordinal);
 
-        foreach (var filePath in Directory.EnumerateFiles(_themesPath, "*.json"))
+        using var scope = _scopeFactory.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IThemeRepository>();
+        var records = await repository.GetAllAsync();
+
+        foreach (var record in records)
         {
             try
             {
-                await using var stream = File.OpenRead(filePath);
-                var theme = await JsonSerializer.DeserializeAsync<ApiThemeDefinition>(stream, OrimJsonOptions.Default);
+                var theme = JsonSerializer.Deserialize<ApiThemeDefinition>(record.DefinitionJson, OrimJsonOptions.Default);
                 if (theme is null)
                 {
                     continue;
                 }
+
+                theme.Key = record.Key;
+                theme.IsEnabled = record.IsEnabled;
+                theme.IsProtected = record.IsProtected;
 
                 var normalizedTheme = NormalizeAndValidate(theme);
                 if (normalizedTheme.IsProtected && themesByKey.TryGetValue(normalizedTheme.Key, out var builtInTheme))
@@ -212,8 +205,9 @@ public sealed class ThemeCatalogApiService
 
                 themesByKey[normalizedTheme.Key] = normalizedTheme;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "Failed to process theme record {Key}. Skipping.", record.Key);
                 continue;
             }
         }
@@ -221,6 +215,45 @@ public sealed class ThemeCatalogApiService
         _cache = SortThemes(themesByKey.Values.ToList());
         return _cache;
     }
+
+    public async Task EnsureBuiltInThemesAsync()
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IThemeRepository>();
+
+        foreach (var theme in CreateBuiltInThemes())
+        {
+            var existing = await repository.GetByKeyAsync(theme.Key);
+            if (existing is null)
+            {
+                await repository.SaveAsync(ToThemeRecord(theme));
+            }
+        }
+    }
+
+    private async Task SaveThemeToRepositoryAsync(ApiThemeDefinition theme)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IThemeRepository>();
+        await repository.SaveAsync(ToThemeRecord(theme));
+    }
+
+    private async Task DeleteThemeFromRepositoryAsync(string key)
+    {
+        using var scope = _scopeFactory.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IThemeRepository>();
+        await repository.DeleteAsync(key);
+    }
+
+    private static ThemeRecord ToThemeRecord(ApiThemeDefinition theme) => new()
+    {
+        Key = theme.Key,
+        Name = theme.Name,
+        IsDarkMode = theme.IsDarkMode,
+        IsEnabled = theme.IsEnabled,
+        IsProtected = theme.IsProtected,
+        DefinitionJson = JsonSerializer.Serialize(theme, OrimJsonOptions.Default)
+    };
 
     private static List<ApiThemeDefinition> CreateBuiltInThemes() =>
     [
@@ -425,15 +458,6 @@ public sealed class ThemeCatalogApiService
         }
     };
 
-    private async Task WriteThemeFileAsync(ApiThemeDefinition theme)
-    {
-        Directory.CreateDirectory(_themesPath);
-        var filePath = GetThemeFilePath(theme.Key);
-        await File.WriteAllTextAsync(filePath, JsonSerializer.Serialize(theme, OrimJsonOptions.Indented));
-    }
-
-    private string GetThemeFilePath(string key) => Path.Combine(_themesPath, $"{NormalizeKey(key)}.json");
-
     private static List<ApiThemeDefinition> SortThemes(List<ApiThemeDefinition> themes)
     {
         themes.Sort((left, right) =>
@@ -494,7 +518,7 @@ public sealed class ThemeCatalogApiService
         return normalized;
     }
 
-    private static bool IsBuiltInThemeKey(string key) => BuiltInThemeKeys.Contains(key);
+    private static bool IsBuiltInThemeKey(string key) => key is "light" or "dark" or "synthwave";
 
     private static void ValidatePalette(ApiThemePaletteDefinition palette)
     {

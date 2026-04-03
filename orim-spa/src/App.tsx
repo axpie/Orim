@@ -1,20 +1,13 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
-import { ThemeProvider, createTheme, CssBaseline } from '@mui/material';
+import { ThemeProvider, createTheme, CssBaseline, Box, CircularProgress } from '@mui/material';
 import { getThemes } from './api/themes';
 import { useThemeStore } from './stores/themeStore';
 import { useAuthStore } from './stores/authStore';
 import { AppLayout } from './components/Layout/AppLayout';
 import { AdminRoute } from './components/Layout/AdminRoute';
 import { ProtectedRoute } from './components/Layout/ProtectedRoute';
-import { LoginPage } from './features/auth/LoginPage';
-import { DashboardPage } from './features/dashboard/DashboardPage';
-import { SettingsPage } from './features/admin/SettingsPage';
-import { ProfilePage } from './features/profile/ProfilePage';
-import { WhiteboardEditor } from './features/whiteboard/WhiteboardEditor';
-import { SharedBoardView } from './features/sharing/SharedBoardView';
-import { UsersPage } from './features/admin/UsersPage';
 import type { ThemeDefinition } from './types/models';
 
 const queryClient = new QueryClient({
@@ -23,29 +16,57 @@ const queryClient = new QueryClient({
   },
 });
 
+const LoginPage = lazy(() => import('./features/auth/LoginPage').then((module) => ({ default: module.LoginPage })));
+const DashboardPage = lazy(() => import('./features/dashboard/DashboardPage').then((module) => ({ default: module.DashboardPage })));
+const SettingsPage = lazy(() => import('./features/admin/SettingsPage').then((module) => ({ default: module.SettingsPage })));
+const ProfilePage = lazy(() => import('./features/profile/ProfilePage').then((module) => ({ default: module.ProfilePage })));
+const WhiteboardEditor = lazy(() => import('./features/whiteboard/WhiteboardEditor').then((module) => ({ default: module.WhiteboardEditor })));
+const SharedBoardView = lazy(() => import('./features/sharing/SharedBoardView').then((module) => ({ default: module.SharedBoardView })));
+const UsersPage = lazy(() => import('./features/admin/UsersPage').then((module) => ({ default: module.UsersPage })));
+
+function RouteLoadingFallback() {
+  return (
+    <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+      <CircularProgress />
+    </Box>
+  );
+}
+
 function AppRoutes() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isHydrating = useAuthStore((s) => s.isHydrating);
+  const currentUserId = useAuthStore((s) => s.user?.id ?? 'current-user');
+
+  if (isHydrating) {
+    return (
+      <Box sx={{ minHeight: '100vh', display: 'grid', placeItems: 'center' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   return (
-    <Routes>
-      <Route
-        path="/login"
-        element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />}
-      />
-      <Route path="/shared/:token" element={<SharedBoardView />} />
-      <Route element={<ProtectedRoute />}>
-        <Route element={<AppLayout />}>
-          <Route path="/" element={<DashboardPage />} />
-          <Route path="/profile" element={<ProfilePage />} />
-          <Route element={<AdminRoute />}>
-            <Route path="/admin/users" element={<UsersPage />} />
-            <Route path="/admin/settings" element={<SettingsPage />} />
+    <Suspense fallback={<RouteLoadingFallback />}>
+      <Routes>
+        <Route
+          path="/login"
+          element={isAuthenticated ? <Navigate to="/" replace /> : <LoginPage />}
+        />
+        <Route path="/shared/:token" element={<SharedBoardView />} />
+        <Route element={<ProtectedRoute />}>
+          <Route element={<AppLayout />}>
+            <Route path="/" element={<DashboardPage key={currentUserId} />} />
+            <Route path="/profile" element={<ProfilePage />} />
+            <Route element={<AdminRoute />}>
+              <Route path="/admin/users" element={<UsersPage />} />
+              <Route path="/admin/settings" element={<SettingsPage />} />
+            </Route>
           </Route>
+          <Route path="/board/:id" element={<WhiteboardEditor />} />
         </Route>
-        <Route path="/board/:id" element={<WhiteboardEditor />} />
-      </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </Suspense>
   );
 }
 

@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
+using Orim.Core.Interfaces;
 
 namespace Orim.Api.Services;
 
@@ -9,23 +11,16 @@ public sealed class AssistantSettingsService
         WriteIndented = true
     };
 
-    private readonly string _filePath;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<AssistantSettingsService> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private AssistantSettingsSnapshot _current;
 
-    public AssistantSettingsService(string filePath, IConfiguration configuration, ILogger<AssistantSettingsService> logger)
+    public AssistantSettingsService(IServiceScopeFactory scopeFactory, IConfiguration configuration, ILogger<AssistantSettingsService> logger)
     {
-        _filePath = filePath;
+        _scopeFactory = scopeFactory;
         _logger = logger;
         _current = CreateInitialSnapshot(configuration);
-
-        var directory = Path.GetDirectoryName(_filePath);
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
         LoadPersistedSettings();
     }
 
@@ -88,47 +83,43 @@ public sealed class AssistantSettingsService
 
     private void LoadPersistedSettings()
     {
-        if (!File.Exists(_filePath))
-        {
-            return;
-        }
-
         try
         {
-            var json = File.ReadAllText(_filePath);
-            var persisted = JsonSerializer.Deserialize<PersistedAssistantSettings>(json, SerializerOptions);
-            if (persisted is null)
+            using var scope = _scopeFactory.CreateScope();
+            var repository = scope.ServiceProvider.GetRequiredService<IAssistantSettingsRepository>();
+            var record = repository.GetAsync().GetAwaiter().GetResult();
+            if (record is null)
             {
                 return;
             }
 
             var snapshot = new AssistantSettingsSnapshot(
-                persisted.Enabled,
-                persisted.Endpoint?.Trim() ?? string.Empty,
-                string.IsNullOrWhiteSpace(persisted.DeploymentName) ? "gpt-4.1" : persisted.DeploymentName.Trim(),
-                persisted.ApiKey?.Trim() ?? string.Empty);
+                record.IsEnabled,
+                record.Endpoint?.Trim() ?? string.Empty,
+                string.IsNullOrWhiteSpace(record.DeploymentName) ? "gpt-4.1" : record.DeploymentName.Trim(),
+                record.ApiKey?.Trim() ?? string.Empty);
 
             Validate(snapshot);
             _current = snapshot;
         }
-        catch (Exception ex) when (ex is IOException or JsonException or InvalidOperationException)
+        catch (Exception ex) when (ex is InvalidOperationException)
         {
-            _logger.LogWarning(ex, "Failed to load persisted assistant settings from {SettingsFilePath}. Using configuration defaults.", _filePath);
+            _logger.LogWarning(ex, "Failed to load persisted assistant settings from database. Using configuration defaults.");
         }
     }
 
     private async Task PersistAsync(AssistantSettingsSnapshot snapshot, CancellationToken cancellationToken)
     {
-        var payload = new PersistedAssistantSettings
+        using var scope = _scopeFactory.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IAssistantSettingsRepository>();
+        var record = new AssistantSettingsRecord
         {
-            Enabled = snapshot.IsEnabled,
+            IsEnabled = snapshot.IsEnabled,
             Endpoint = snapshot.Endpoint,
             DeploymentName = snapshot.DeploymentName,
             ApiKey = snapshot.ApiKey,
         };
-
-        await using var stream = File.Create(_filePath);
-        await JsonSerializer.SerializeAsync(stream, payload, SerializerOptions, cancellationToken);
+        await repository.SaveAsync(record);
     }
 
     private static void Validate(AssistantSettingsSnapshot snapshot)
@@ -167,13 +158,6 @@ public sealed class AssistantSettingsService
         }
     }
 
-    private sealed class PersistedAssistantSettings
-    {
-        public bool Enabled { get; set; }
-        public string? Endpoint { get; set; }
-        public string? DeploymentName { get; set; }
-        public string? ApiKey { get; set; }
-    }
 }
 
 public sealed record AssistantSettingsSnapshot(

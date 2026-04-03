@@ -30,6 +30,7 @@ import {
   HorizontalLabelAlignment,
   ShapeType,
   VerticalLabelAlignment,
+  type BoardComment,
   type BoardElement,
   type ShapeElement,
   type TextElement,
@@ -73,6 +74,15 @@ import {
   getZOrderAvailability,
   type ZOrderAction,
 } from '../zOrder';
+import {
+  getClipboardElements,
+  setClipboardElements,
+  hasClipboardElementsAvailable,
+  persistClipboardPayload,
+  readBrowserClipboardElements,
+  readStoredClipboardElements,
+  serializeClipboardElements,
+} from '../clipboard/clipboardService';
 
 const GRID_SIZE = 24;
 const MIN_ZOOM = 0.2;
@@ -80,8 +90,9 @@ const MAX_ZOOM = 3.5;
 const MIN_ELEMENT_SIZE = 24;
 const DOCK_SNAP_RADIUS = 28;
 const KEYBOARD_DUPLICATE_OFFSET = 32;
-const WHITEBOARD_CLIPBOARD_STORAGE_KEY = 'orim:whiteboard:clipboard';
-const WHITEBOARD_CLIPBOARD_PREFIX = 'ORIM_WHITEBOARD_CLIPBOARD:';
+const TRACKPAD_DELTA_THRESHOLD = 24;
+const DEFAULT_TEXT_WIDTH = 220;
+const DEFAULT_TEXT_HEIGHT = 56;
 const FALLBACK_BOARD_DEFAULTS = {
   surfaceColor: '#FFFFFF',
   gridColor: '#EEF2F7',
@@ -128,8 +139,6 @@ type SafariGestureEvent = Event & {
   clientX?: number;
   clientY?: number;
 };
-
-let whiteboardClipboard: BoardElement[] = [];
 
 function isInteractiveTextTarget(target: EventTarget | null): boolean {
   if (target instanceof HTMLInputElement
@@ -197,64 +206,7 @@ function isTrackpadPanWheelEvent(event: WheelEvent): boolean {
   return event.deltaMode === WheelEvent.DOM_DELTA_PIXEL
     && !event.ctrlKey
     && !event.metaKey
-    && (absDeltaX > 0 || absDeltaY < 24);
-}
-
-function serializeClipboardElements(elements: BoardElement[]): string {
-  return `${WHITEBOARD_CLIPBOARD_PREFIX}${JSON.stringify({ version: 1, elements })}`;
-}
-
-function deserializeClipboardPayload(rawValue: string | null | undefined): BoardElement[] | null {
-  if (!rawValue || !rawValue.startsWith(WHITEBOARD_CLIPBOARD_PREFIX)) {
-    return null;
-  }
-
-  try {
-    const parsed = JSON.parse(rawValue.slice(WHITEBOARD_CLIPBOARD_PREFIX.length)) as { elements?: BoardElement[] };
-    return Array.isArray(parsed.elements) ? parsed.elements : null;
-  } catch {
-    return null;
-  }
-}
-
-function persistClipboardPayload(payload: string) {
-  try {
-    window.localStorage.setItem(WHITEBOARD_CLIPBOARD_STORAGE_KEY, payload);
-  } catch {
-    // Ignore storage access failures.
-  }
-
-  if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-    void navigator.clipboard.writeText(payload).catch(() => {
-      // Ignore clipboard write failures and keep local fallback.
-    });
-  }
-}
-
-function readStoredClipboardElements(): BoardElement[] | null {
-  try {
-    return deserializeClipboardPayload(window.localStorage.getItem(WHITEBOARD_CLIPBOARD_STORAGE_KEY));
-  } catch {
-    return null;
-  }
-}
-
-function hasClipboardElementsAvailable(): boolean {
-  const storedElements = readStoredClipboardElements();
-  return whiteboardClipboard.length > 0 || (storedElements?.length ?? 0) > 0;
-}
-
-async function readBrowserClipboardElements(): Promise<BoardElement[] | 'unavailable' | null> {
-  if (typeof navigator === 'undefined' || !navigator.clipboard?.readText) {
-    return 'unavailable';
-  }
-
-  try {
-    const clipboardText = await navigator.clipboard.readText();
-    return deserializeClipboardPayload(clipboardText);
-  } catch {
-    return 'unavailable';
-  }
+    && (absDeltaX > 0 || absDeltaY < TRACKPAD_DELTA_THRESHOLD);
 }
 
 function cloneElementsForInsertion(
@@ -338,6 +290,9 @@ function getResizeCursor(handle: ResizeHandle | null | undefined): string | null
   }
 }
 
+const EMPTY_ELEMENTS: BoardElement[] = [];
+const EMPTY_COMMENTS: BoardComment[] = [];
+
 export function WhiteboardCanvas({
   editable = true,
   onBoardChanged,
@@ -359,8 +314,8 @@ export function WhiteboardCanvas({
   const [isCanvasFocused, setIsCanvasFocused] = useState(false);
 
   const board = useBoardStore((s) => s.board);
-  const elements = board?.elements ?? [];
-  const comments = board?.comments ?? [];
+  const elements = board?.elements ?? EMPTY_ELEMENTS;
+  const comments = board?.comments ?? EMPTY_COMMENTS;
   const selectedIds = useBoardStore((s) => s.selectedElementIds);
   const activeTool = useBoardStore((s) => s.activeTool);
   const zoom = useBoardStore((s) => s.zoom);
@@ -377,7 +332,7 @@ export function WhiteboardCanvas({
   const applyLocalCommand = useBoardStore((s) => s.applyLocalCommand);
   const pendingIconName = useBoardStore((s) => s.pendingIconName);
   const pendingStickyNotePresetId = useBoardStore((s) => s.pendingStickyNotePresetId);
-  const themeKey = useThemeStore((s) => s.themeKey);
+  const userThemeKey = useThemeStore((s) => s.themeKey);
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const dockSnapRadius = isCoarsePointer ? DOCK_SNAP_RADIUS * 1.6 : DOCK_SNAP_RADIUS;
   const keyboardNavigableElements = useMemo(
@@ -393,8 +348,14 @@ export function WhiteboardCanvas({
     queryFn: getThemes,
     staleTime: 60_000,
   });
-  const activeTheme = themes.find((theme) => theme.key === themeKey) ?? themes[0] ?? null;
-  const boardDefaults = activeTheme?.boardDefaults ?? FALLBACK_BOARD_DEFAULTS;
+  const activeTheme = themes.find((theme) => theme.key === (board?.themeKey ?? userThemeKey)) ?? themes[0] ?? null;
+  const rawBoardDefaults = activeTheme?.boardDefaults ?? FALLBACK_BOARD_DEFAULTS;
+  const boardSurfaceColor = board?.surfaceColor ?? null;
+  // If the board has a pinned surface color, use it for all users so everyone
+  // sees the same canvas background regardless of their personal theme choice.
+  const boardDefaults = useMemo(() => (boardSurfaceColor
+    ? { ...rawBoardDefaults, surfaceColor: boardSurfaceColor }
+    : rawBoardDefaults), [boardSurfaceColor, rawBoardDefaults]);
 
   const pushCommand = useCommandStack((s) => s.push);
   const peekUndo = useCommandStack((s) => s.peekUndo);
@@ -481,7 +442,10 @@ export function WhiteboardCanvas({
       || selectedElements[0].$type === 'frame');
   const canSelectAll = editable && elements.length > 0 && selectedIds.length !== elements.length;
   const canPaste = useMemo(
-    () => hasClipboardElementsAvailable(),
+    () => {
+      void clipboardVersion;
+      return hasClipboardElementsAvailable();
+    },
     [clipboardVersion],
   );
   const zOrderAvailability = useMemo(
@@ -599,7 +563,7 @@ export function WhiteboardCanvas({
       return false;
     }
 
-    whiteboardClipboard = structuredClone(selection);
+    setClipboardElements(structuredClone(selection));
     persistClipboardPayload(serializeClipboardElements(selection));
     refreshClipboardAvailability();
     return true;
@@ -621,8 +585,9 @@ export function WhiteboardCanvas({
     }
 
     const browserClipboard = await readBrowserClipboardElements();
+    const inMemory = getClipboardElements();
     const sourceElements = browserClipboard === 'unavailable'
-      ? (readStoredClipboardElements() ?? (whiteboardClipboard.length > 0 ? structuredClone(whiteboardClipboard) : null))
+      ? (readStoredClipboardElements() ?? (inMemory.length > 0 ? structuredClone(inMemory) : null))
       : browserClipboard;
 
     if (!sourceElements || sourceElements.length === 0) {
@@ -638,7 +603,7 @@ export function WhiteboardCanvas({
     );
     const after = [...before, ...pasted];
 
-    whiteboardClipboard = structuredClone(sourceElements);
+    setClipboardElements(structuredClone(sourceElements));
     refreshClipboardAvailability();
     setElements(after);
     pushCommand(createAddElementsCommand(pasted));
@@ -665,7 +630,7 @@ export function WhiteboardCanvas({
     );
     const after = [...before, ...duplicated];
 
-    whiteboardClipboard = structuredClone(selection);
+    setClipboardElements(structuredClone(selection));
     setElements(after);
     pushCommand(createAddElementsCommand(duplicated));
     setSelectedElementIds(duplicated.map((element) => element.id));
@@ -1128,6 +1093,7 @@ export function WhiteboardCanvas({
     beginInlineEditingElement,
     selectAccessibleElement,
     setActiveTool,
+    setSelectedElementIds,
     ungroupSelectedElements,
   ]);
 
@@ -1398,10 +1364,10 @@ export function WhiteboardCanvas({
         const newText: TextElement = {
           $type: 'text',
           id: uuidv4(),
-          x: worldPos.x - 110,
-          y: worldPos.y - 28,
-          width: 220,
-          height: 56,
+          x: worldPos.x - DEFAULT_TEXT_WIDTH / 2,
+          y: worldPos.y - DEFAULT_TEXT_HEIGHT / 2,
+          width: DEFAULT_TEXT_WIDTH,
+          height: DEFAULT_TEXT_HEIGHT,
           zIndex: elements.length,
           rotation: 0,
           label: '',
@@ -1584,10 +1550,10 @@ export function WhiteboardCanvas({
                 ? selectedIds.filter((id) => !groupedSelectionIds.includes(id))
                 : [...selectedIds, ...groupedSelectionIds.filter((id) => !selectedIds.includes(id))],
             );
-          } else if (
-            selectedIds.length !== groupedSelectionIds.length
-            || groupedSelectionIds.some((id) => !selectedIds.includes(id))
-          ) {
+          } else if (groupedSelectionIds.some((id) => !selectedIds.includes(id))) {
+            // Only replace selection when clicking an element not already selected.
+            // If the element is already part of a multi-selection, keep all selected
+            // elements so dragging moves the whole selection.
             setSelectedElementIds(groupedSelectionIds);
           }
 
@@ -1622,10 +1588,10 @@ export function WhiteboardCanvas({
                 ? selectedIds.filter((id) => !groupedSelectionIds.includes(id))
                 : [...selectedIds, ...groupedSelectionIds.filter((id) => !selectedIds.includes(id))],
             );
-          } else if (
-            selectedIds.length !== groupedSelectionIds.length
-            || groupedSelectionIds.some((id) => !selectedIds.includes(id))
-          ) {
+          } else if (groupedSelectionIds.some((id) => !selectedIds.includes(id))) {
+            // Only replace selection when clicking an element not already selected.
+            // If the element is already part of a multi-selection, keep all selected
+            // elements so dragging moves the whole selection.
             setSelectedElementIds(groupedSelectionIds);
           }
           // Start drag
@@ -1637,7 +1603,7 @@ export function WhiteboardCanvas({
         }
       }
     },
-    [editable, activeTool, elements, selectedIds, cameraX, cameraY, zoom, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, expandSelectionWithGroups, findTopmostFrameAtPoint, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pendingStickyNotePresetId, pushCommand, onBoardChanged, board, boardDefaults, spacePanActive, commentPlacementMode, onCreateCommentAnchor],
+    [editable, activeTool, elements, selectedIds, cameraX, cameraY, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, expandSelectionWithGroups, findTopmostFrameAtPoint, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pendingStickyNotePresetId, pushCommand, onBoardChanged, board, boardDefaults, spacePanActive, commentPlacementMode, onCreateCommentAnchor, dockSnapRadius],
   );
 
   const handleContextMenu = useCallback((e: Konva.KonvaEventObject<PointerEvent>) => {
@@ -2131,7 +2097,7 @@ export function WhiteboardCanvas({
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, zoom, getResizeHandleFromTarget, getWorldPos, setCamera, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, updateElement, boardDefaults, emitUpdatedOperations, selectedIds],
+    [isPanning, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, emitUpdatedOperations, selectedIds, onBoardChanged],
   );
 
   const handleTouchStart = useCallback(
@@ -2611,6 +2577,7 @@ export function WhiteboardCanvas({
               tabIndex={-1}
               onClick={() => onSelectComment?.(comment.id)}
               title={comment.text}
+              aria-label={`${comment.replies.length + 1} comment${comment.replies.length !== 0 ? 's' : ''}`}
               style={{
                 position: 'absolute',
                 left,
@@ -2709,6 +2676,7 @@ export function WhiteboardCanvas({
           zoom={zoom}
           cameraX={cameraX}
           cameraY={cameraY}
+          surfaceColor={boardDefaults.surfaceColor}
           onCommit={handleTextCommit}
           onCancel={handleTextCancel}
         />

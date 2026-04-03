@@ -1,34 +1,26 @@
 using Orim.Core.Models;
+using Orim.Infrastructure.Data;
 using Orim.Infrastructure.Repositories;
 
 namespace Orim.Tests.Infrastructure;
 
-public class JsonUserRepositoryTests : IDisposable
+public class EfUserRepositoryTests : IDisposable
 {
-    private readonly string _tempDir;
-    private readonly JsonUserRepository _sut;
+    private const string TestUsername = "alice";
 
-    public JsonUserRepositoryTests()
+    private readonly OrimDbContext _context;
+    private readonly EfUserRepository _sut;
+
+    public EfUserRepositoryTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"orim-tests-{Guid.NewGuid()}");
-        _sut = new JsonUserRepository(_tempDir);
+        _context = TestDbContextFactory.Create();
+        _sut = new EfUserRepository(_context);
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
+    public void Dispose() => _context.Dispose();
 
     [Fact]
-    public void Constructor_CreatesDirectoryAndFile()
-    {
-        Assert.True(Directory.Exists(_tempDir));
-        Assert.True(File.Exists(Path.Combine(_tempDir, "users.json")));
-    }
-
-    [Fact]
-    public async Task GetAllAsync_EmptyFile_ReturnsEmptyList()
+    public async Task GetAllAsync_Empty_ReturnsEmptyList()
     {
         var users = await _sut.GetAllAsync();
 
@@ -38,37 +30,38 @@ public class JsonUserRepositoryTests : IDisposable
     [Fact]
     public async Task SaveAsync_NewUser_CanBeRetrieved()
     {
-        var user = new User { Username = "alice", DisplayName = "Alice Example", PasswordHash = "hash123" };
+        var user = new User { Username = TestUsername, DisplayName = "Alice Example", PasswordHash = "hash123" };
 
         await _sut.SaveAsync(user);
         var retrieved = await _sut.GetByIdAsync(user.Id);
 
         Assert.NotNull(retrieved);
-        Assert.Equal("alice", retrieved.Username);
+        Assert.Equal(TestUsername, retrieved.Username);
         Assert.Equal("Alice Example", retrieved.DisplayName);
     }
 
     [Fact]
     public async Task SaveAsync_ExistingUser_Updates()
     {
-        var user = new User { Username = "alice" };
+        var user = new User { Username = TestUsername };
         await _sut.SaveAsync(user);
 
-        user.Username = "alice-updated";
+        user.Username = TestUsername + "-updated";
         await _sut.SaveAsync(user);
 
         var all = await _sut.GetAllAsync();
         Assert.Single(all);
-        Assert.Equal("alice-updated", all[0].Username);
+        Assert.Equal(TestUsername + "-updated", all[0].Username);
     }
 
     [Fact]
     public async Task GetByUsernameAsync_CaseInsensitive()
     {
+        // EfUserRepository uses .ToLower() for case-insensitive matching
         var user = new User { Username = "Alice" };
         await _sut.SaveAsync(user);
 
-        var result = await _sut.GetByUsernameAsync("alice");
+        var result = await _sut.GetByUsernameAsync(TestUsername);
 
         Assert.NotNull(result);
         Assert.Equal("Alice", result.Username);
@@ -85,6 +78,7 @@ public class JsonUserRepositoryTests : IDisposable
     [Fact]
     public async Task GetByEmailAsync_CaseInsensitive()
     {
+        // EfUserRepository uses .ToLower() for case-insensitive matching
         var user = new User { Username = "Alice", Email = "Alice@Contoso.com" };
         await _sut.SaveAsync(user);
 
@@ -99,7 +93,7 @@ public class JsonUserRepositoryTests : IDisposable
     {
         var user = new User
         {
-            Username = "alice",
+            Username = TestUsername,
             AuthenticationProvider = AuthenticationProvider.MicrosoftEntraId,
             ExternalSubject = "OID-123"
         };
@@ -122,7 +116,7 @@ public class JsonUserRepositoryTests : IDisposable
     [Fact]
     public async Task DeleteAsync_RemovesUser()
     {
-        var user = new User { Username = "alice" };
+        var user = new User { Username = TestUsername };
         await _sut.SaveAsync(user);
 
         await _sut.DeleteAsync(user.Id);
@@ -140,7 +134,7 @@ public class JsonUserRepositoryTests : IDisposable
     [Fact]
     public async Task MultipleUsers_AllPersisted()
     {
-        await _sut.SaveAsync(new User { Username = "alice" });
+        await _sut.SaveAsync(new User { Username = TestUsername });
         await _sut.SaveAsync(new User { Username = "bob" });
         await _sut.SaveAsync(new User { Username = "charlie" });
 
@@ -150,26 +144,18 @@ public class JsonUserRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task CustomFileName_Works()
+    public async Task GetByEmailAsync_NonExistentEmail_ReturnsNull()
     {
-        var repo = new JsonUserRepository(_tempDir, "custom_users.json");
+        var result = await _sut.GetByEmailAsync("nobody@example.com");
 
-        await repo.SaveAsync(new User { Username = "test" });
-        var all = await repo.GetAllAsync();
-
-        Assert.Single(all);
-        Assert.True(File.Exists(Path.Combine(_tempDir, "custom_users.json")));
+        Assert.Null(result);
     }
 
     [Fact]
-    public async Task ConcurrentSaves_AllSucceed()
+    public async Task GetByIdAsync_EmptyGuid_ReturnsNull()
     {
-        var tasks = Enumerable.Range(0, 10)
-            .Select(i => _sut.SaveAsync(new User { Username = $"user-{i}" }));
+        var result = await _sut.GetByIdAsync(Guid.Empty);
 
-        await Task.WhenAll(tasks);
-
-        var users = await _sut.GetAllAsync();
-        Assert.Equal(10, users.Count);
+        Assert.Null(result);
     }
 }

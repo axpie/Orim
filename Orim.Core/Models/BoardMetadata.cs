@@ -9,6 +9,7 @@ public sealed record BoardTemplateDefinition(
 public class BoardSnapshot
 {
     public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid BoardId { get; set; }
     public string Name { get; set; } = string.Empty;
     public Guid CreatedByUserId { get; set; }
     public string CreatedByUsername { get; set; } = string.Empty;

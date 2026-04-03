@@ -6,22 +6,32 @@ Orim ist ein kollaborativer Whiteboard-Editor mit ASP.NET Core API und React SPA
 
 - Backend: .NET 10, ASP.NET Core Minimal API, SignalR
 - Frontend: React 19, Vite, TypeScript, Konva, MUI
-- Persistenz: JSON-Dateien im Dateisystem
-- Authentifizierung: JWT
+- Persistenz: PostgreSQL via Entity Framework Core
+- Authentifizierung: JWT via httpOnly Cookie-Session
 - Export: JSON und PDF
+
+## Positionierung
+
+ORIM ist kein generischer Whiteboard-Klon. Das Produkt ist auf **sichere interne Zusammenarbeit** ausgerichtet:
+
+- Self-hosted oder privat gemanagte Deployments
+- SSO-gestützte Team-Zugänge für Organisationen mit Governance-Anforderungen
+- kontrolliertes Teilen, Kommentare, Snapshots und nachvollziehbare Administration
+- Whiteboard-Zusammenarbeit für interne Teams, Beratungen und regulierte Umgebungen
 
 ## Projektstruktur
 
 - `Orim.Api`: API, SignalR-Hub, SPA-Hosting im Release-Build
 - `orim-spa`: React-Frontend fuer Whiteboard, Dashboard und Administration
 - `Orim.Core`: Domänenmodelle, Interfaces und Kernlogik
-- `Orim.Infrastructure`: JSON-Repositories und Infrastruktur-Services
+- `Orim.Infrastructure`: EF Core DbContext, PostgreSQL-Repositories und Infrastruktur-Services
 - `Orim.Tests`: xUnit-Tests
 
 ## Voraussetzungen
 
 - .NET 10 SDK
 - Node.js mit `npm`
+- Docker Desktop (fuer lokale PostgreSQL-Datenbank) oder PostgreSQL 17+
 
 ## Lokaler Start
 
@@ -48,17 +58,27 @@ dotnet run --project .\Orim.Api\Orim.Api.csproj
 
 Im Release-Build wird die SPA vor dem API-Build nach `Orim.Api/wwwroot` gebaut und von der API ausgeliefert.
 
+## Datenbank (PostgreSQL)
+
+Im DEBUG-Modus startet die API den PostgreSQL-Container automatisch via Docker Compose. Fuer manuellen Start:
+
+```powershell
+docker-compose up -d
+```
+
+Die Verbindung wird ueber den Connection-String in `Orim.Api/appsettings.json` konfiguriert:
+
+```json
+"ConnectionStrings": {
+  "OrimDb": "Host=localhost;Port=5432;Database=orim;Username=orim;Password=orim"
+}
+```
+
+Beim Start fuehrt die API automatisch `Database.MigrateAsync()` aus, sodass das Schema immer aktuell ist. Weitere Details zur Erstellung neuer Migrationen: siehe [docs/db_migration.md](docs/db_migration.md).
+
 ## Datenhaltung
 
-Standardmaessig speichert die API ihre Daten lokal unter `Orim.Api/data`.
-
-Relevante Dateien:
-
-- `data/users.json`: Benutzerkonten
-- `data/boards/*.json`: Whiteboards
-- `data/themes/*.json`: importierte oder angepasste Themes
-
-Der Pfad kann ueber `DataPath` konfiguriert werden. Auf Azure App Service werden relative `DataPath`-Werte automatisch unter `%HOME%` aufgeloest.
+Alle Daten werden in einer PostgreSQL-Datenbank gespeichert (Boards, Benutzer, Themes, Bilder). Die Persistenz erfolgt ueber Entity Framework Core.
 
 ## Konfiguration
 
@@ -66,7 +86,7 @@ Die Basiskonfiguration liegt in `Orim.Api/appsettings.json`.
 
 Wichtige Einstellungen:
 
-- `DataPath`: Speicherort fuer JSON-Daten
+- `ConnectionStrings:OrimDb`: PostgreSQL-Verbindungszeichenfolge
 - `Jwt:Key`: Signierschluessel fuer Tokens
 - `SeedAdmin:Username`: Benutzername des initialen Admins
 - `SeedAdmin:ResetPasswordOnStartup`: optionaler Passwort-Reset beim Start
@@ -137,6 +157,8 @@ Hinweis zum Benutzerabgleich:
 
 Das initiale Admin-Passwort wird absichtlich nicht im Repository gespeichert und muss ueber Konfiguration von aussen gesetzt werden.
 
+Für die lokale **Development-/Debug-Konfiguration** ist `SeedAdmin:Password` auf `Admin123!` gesetzt und `SeedAdmin:ResetPasswordOnStartup` aktiviert. Dadurch wird das lokale Admin-Konto beim Debug-Start deterministisch auf `admin` / `Admin123!` zurückgesetzt, auch wenn die Development-Datenbank bereits existiert.
+
 User-Secrets lokal:
 
 ```powershell
@@ -168,6 +190,33 @@ Die Live-Praesenz im Whiteboard basiert auf SignalR. Anzeigenamen werden fuer ak
 - laufende Board-Verbindungen aktualisieren ihre Presence-Eintraege automatisch, damit andere aktive Teilnehmer den neuen Anzeigenamen sehen
 
 Hinweis: Kommentare, Snapshots und Board-Mitgliedschaften verwenden weiterhin den Benutzernamen als stabile technische Kennung.
+
+## Design-Partner- / Deployment-Readiness
+
+ORIM bringt eine betriebliche Readiness-Schicht für geschlossene Betas und Design-Partner-Piloten mit:
+
+- `/admin/settings` zeigt einen Deployment-Readiness-Check mit Umgebung, Version, Datenbank-Provider, Migrationen, SSO-, Assistant- und Theme-Status
+- `/api/admin/deployment-readiness` liefert dieselben Signale maschinenlesbar für Admin-Oberflächen oder spätere Ops-Automation
+- `/health/live` und `/health/ready` stehen für Liveness- und Readiness-Probes bereit
+- API-Antworten enthalten `X-Request-Id` zur Korrelation von Support-Fällen und Log-Einträgen
+- Auth- und SignalR-Zugänge sind rate-limitiert
+- Browser-Sessions verwenden httpOnly-Cookies statt im Frontend gespeicherter Tokens
+
+Für einen glaubwürdigen Design-Partner-Pilot sollten mindestens folgende Punkte erfüllt sein:
+
+1. PostgreSQL ist erreichbar und es gibt keine offenen Migrationen.
+2. Das Deployment läuft außerhalb von `Development`, damit HSTS aktiv ist.
+3. Mindestens ein Enterprise-SSO-Provider ist konfiguriert, wenn der Pilot SSO erwartet.
+4. CI und lokale Validierung laufen vor jedem Release durch.
+
+## Validierung und CI
+
+Die GitHub-Actions-CI unter `.github/workflows/ci.yml` validiert:
+
+- `dotnet build Orim.Api\Orim.Api.csproj --no-incremental`
+- `dotnet test Orim.Tests\Orim.Tests.csproj`
+- `cd orim-spa && npm run lint`
+- `cd orim-spa && npm run build`
 
 ## Nützliche Befehle
 

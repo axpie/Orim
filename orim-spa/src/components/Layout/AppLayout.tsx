@@ -41,9 +41,9 @@ export function AppLayout() {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     setAnchorEl(null);
-    logout();
+    await logout();
     navigate('/login');
   };
 
@@ -94,7 +94,7 @@ export function AppLayout() {
               </ListItemIcon>
               {t('profile.title')}
             </MenuItem>
-            <MenuItem onClick={handleLogout}>
+            <MenuItem onClick={() => { void handleLogout(); }}>
               <ListItemIcon>
                 <LogoutIcon fontSize="small" />
               </ListItemIcon>

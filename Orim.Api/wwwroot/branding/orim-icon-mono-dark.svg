@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" role="img" aria-labelledby="orimIconMonoTitle">
+  <title id="orimIconMonoTitle">Orim icon monochrome dark</title>
+  <rect x="0" y="0" width="72" height="72" rx="16" fill="#1A1A2E"/>
+  <rect x="12" y="12" width="20" height="20" rx="5" fill="#FFF" opacity="0.9"/>
+  <rect x="40" y="12" width="20" height="20" rx="5" fill="#FFF" opacity="0.6"/>
+  <rect x="12" y="40" width="20" height="20" rx="5" fill="#FFF" opacity="0.35"/>
+  <g transform="translate(42 40)">
+    <path d="M0 0V20L5 15L8.5 22L11.5 20.5L8 14H14Z" fill="#FFF" opacity="0.8" stroke="#000" stroke-opacity="0.3" stroke-width="1" stroke-linejoin="round"/>
+  </g>
+</svg>

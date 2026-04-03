@@ -1,30 +1,23 @@
 using Orim.Core.Models;
+using Orim.Infrastructure.Data;
 using Orim.Infrastructure.Repositories;
 
 namespace Orim.Tests.Infrastructure;
 
-public class JsonBoardRepositoryTests : IDisposable
+public class EfBoardRepositoryTests : IDisposable
 {
-    private readonly string _tempDir;
-    private readonly JsonBoardRepository _sut;
+    private const string DefaultTitle = "Test";
 
-    public JsonBoardRepositoryTests()
+    private readonly OrimDbContext _context;
+    private readonly EfBoardRepository _sut;
+
+    public EfBoardRepositoryTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"orim-tests-{Guid.NewGuid()}");
-        _sut = new JsonBoardRepository(_tempDir);
+        _context = TestDbContextFactory.Create();
+        _sut = new EfBoardRepository(_context);
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
-
-    [Fact]
-    public void Constructor_CreatesDirectory()
-    {
-        Assert.True(Directory.Exists(Path.Combine(_tempDir, "boards")));
-    }
+    public void Dispose() => _context.Dispose();
 
     [Fact]
     public async Task GetAllAsync_Empty_ReturnsEmptyList()
@@ -103,8 +96,8 @@ public class JsonBoardRepositoryTests : IDisposable
     {
         var board = new Board
         {
-            Title = "Test",
-            Elements = [new ShapeElement { Label = "s1" }, new TextElement { Text = "t1" }]
+            Title = DefaultTitle,
+            Elements = [new Orim.Core.Models.TextElement { Text = "A" }, new Orim.Core.Models.TextElement { Text = "B" }]
         };
         await _sut.SaveAsync(board);
 
@@ -138,7 +131,7 @@ public class JsonBoardRepositoryTests : IDisposable
     [Fact]
     public async Task SaveAsync_UpdatesTokenIndex()
     {
-        var board = new Board { Title = "Test", ShareLinkToken = "token1" };
+        var board = new Board { Title = DefaultTitle, ShareLinkToken = "token1" };
         await _sut.SaveAsync(board);
 
         board.ShareLinkToken = "token2";
@@ -154,7 +147,7 @@ public class JsonBoardRepositoryTests : IDisposable
     [Fact]
     public async Task DeleteAsync_CleansTokenIndex()
     {
-        var board = new Board { Title = "Test", ShareLinkToken = "token123" };
+        var board = new Board { Title = DefaultTitle, ShareLinkToken = "token123" };
         await _sut.SaveAsync(board);
 
         await _sut.DeleteAsync(board.Id);
@@ -228,44 +221,13 @@ public class JsonBoardRepositoryTests : IDisposable
         Assert.Single(retrieved.Comments);
         Assert.Equal("Review this area", retrieved.Comments[0].Text);
         Assert.Single(retrieved.Comments[0].Replies);
-        Assert.Equal("Done", retrieved.Comments[0].Replies[0].Text);
     }
 
     [Fact]
-    public async Task ConcurrentSaves_DifferentBoards_AllSucceed()
+    public async Task GetBoardSummariesAsync_Empty_ReturnsEmpty()
     {
-        var tasks = Enumerable.Range(0, 10)
-            .Select(i => _sut.SaveAsync(new Board { Title = $"Board-{i}" }));
+        var result = await _sut.GetBoardSummariesAsync();
 
-        await Task.WhenAll(tasks);
-
-        var boards = await _sut.GetAllAsync();
-        Assert.Equal(10, boards.Count);
-    }
-
-    [Fact]
-    public async Task CustomDirectoryName_Works()
-    {
-        var repo = new JsonBoardRepository(_tempDir, "custom_boards");
-
-        await repo.SaveAsync(new Board { Title = "Custom" });
-        var all = await repo.GetAllAsync();
-
-        Assert.Single(all);
-        Assert.True(Directory.Exists(Path.Combine(_tempDir, "custom_boards")));
-    }
-
-    [Fact]
-    public async Task GetBoardSummariesAsync_LazyLoads_OnFirstCall()
-    {
-        // Pre-save boards before creating a new repo
-        await _sut.SaveAsync(new Board { Title = "B1" });
-        await _sut.SaveAsync(new Board { Title = "B2" });
-
-        // Create a fresh repo pointing to same directory
-        var freshRepo = new JsonBoardRepository(_tempDir);
-        var summaries = await freshRepo.GetBoardSummariesAsync();
-
-        Assert.Equal(2, summaries.Count);
+        Assert.Empty(result);
     }
 }

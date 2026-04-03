@@ -26,6 +26,8 @@ public class Board
     public List<string> RecentColors { get; set; } = [];
     public List<StickyNotePreset> StickyNotePresets { get; set; } = [];
     public Guid OwnerId { get; set; }
+    public string? SurfaceColor { get; set; }
+    public string? ThemeKey { get; set; }
     public BoardVisibility Visibility { get; set; } = BoardVisibility.Private;
     public string? ShareLinkToken { get; set; }
     public bool SharedAllowAnonymousEditing { get; set; }
