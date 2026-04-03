@@ -413,6 +413,7 @@ export interface AssistantSettingsUpdateRequest {
 
 export interface CursorPresence {
   clientId: string;
+  userId?: string | null;
   displayName: string;
   colorHex: string;
   worldX?: number | null;

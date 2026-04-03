@@ -211,6 +211,8 @@ export function WhiteboardEditor() {
       return null;
     }
 
+    const elementsAtSaveStart = current.elements;
+
     const savePromise = saveMutation.mutateAsync({
       title: current.title,
       labelOutlineEnabled: current.labelOutlineEnabled,
@@ -219,11 +221,18 @@ export function WhiteboardEditor() {
       recentColors: current.recentColors,
       stickyNotePresets: current.stickyNotePresets,
       elements: current.elements,
-    }).then((nextBoard) => {
-      setBoard(nextBoard, { preserveSelection: true });
-      setDirty(false);
-      queryClient.setQueryData(['board', id], nextBoard);
-      return nextBoard;
+    }).then(() => {
+      const latestBoard = useBoardStore.getState().board;
+      // Only mark clean when no new element changes arrived during the in-flight save.
+      // Zustand produces a new array reference on every mutation, so reference equality
+      // reliably detects concurrent edits without deep comparison.
+      if (latestBoard?.elements === elementsAtSaveStart) {
+        setDirty(false);
+      }
+      // Persist local (potentially newer) state into the query cache rather than
+      // overwriting it with the server response, which may lag behind local edits.
+      queryClient.setQueryData(['board', id], latestBoard);
+      return latestBoard ?? null;
     });
 
     activeSavePromiseRef.current = savePromise;
@@ -235,7 +244,7 @@ export function WhiteboardEditor() {
         activeSavePromiseRef.current = null;
       }
     }
-  }, [id, queryClient, saveMutation, setBoard, setDirty]);
+  }, [id, queryClient, saveMutation, setDirty]);
 
   const waitForActiveSave = useCallback(async () => {
     const activeSavePromise = activeSavePromiseRef.current;

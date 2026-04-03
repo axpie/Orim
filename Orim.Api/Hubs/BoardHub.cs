@@ -48,7 +48,14 @@ public sealed class BoardHub : Hub
         var clientId = Context.ConnectionId;
         var color = BoardPresenceIdentity.ResolveColor(clientId);
 
-        var presence = new BoardCursorPresence(clientId, displayName, color, null, null, DateTime.UtcNow);
+        // Remove stale cursors left by a previous connection of the same authenticated user
+        // (e.g., after a network reconnect that assigned a new connection ID).
+        if (userId.HasValue)
+        {
+            await _presenceService.RemoveCursorsForUserAsync(boardId, userId.Value, clientId);
+        }
+
+        var presence = new BoardCursorPresence(clientId, userId, displayName, color, null, null, DateTime.UtcNow);
         await _presenceService.UpsertCursorAsync(boardId, presence);
 
         var snapshot = await GetPresenceSnapshot(boardId);
@@ -70,6 +77,7 @@ public sealed class BoardHub : Hub
 
         var presence = new BoardCursorPresence(
             Context.ConnectionId,
+            ResolveUserId(),
             displayName,
             color,
             existingPresence?.WorldX,
@@ -176,7 +184,7 @@ public sealed class BoardHub : Hub
         var clientId = Context.ConnectionId;
         var color = BoardPresenceIdentity.ResolveColor(clientId);
 
-        var presence = new BoardCursorPresence(clientId, displayName, color, worldX, worldY, DateTime.UtcNow);
+        var presence = new BoardCursorPresence(clientId, ResolveUserId(), displayName, color, worldX, worldY, DateTime.UtcNow);
         await _presenceService.UpsertCursorAsync(boardId, presence);
 
         var groupName = BoardGroup(boardId);
