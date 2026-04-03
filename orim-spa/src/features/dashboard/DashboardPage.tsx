@@ -433,7 +433,7 @@ export function DashboardPage() {
           </TextField>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateOpen(false)}>{t('tools.select')}</Button>
+          <Button onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
           <Button variant="contained" onClick={handleCreate}>
             {t('dashboard.createBoard')}
           </Button>
@@ -454,7 +454,7 @@ export function DashboardPage() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRenameOpen(false)}>Cancel</Button>
+          <Button onClick={() => setRenameOpen(false)}>{t('common.cancel')}</Button>
           <Button variant="contained" onClick={handleRename}>
             {t('board.save')}
           </Button>

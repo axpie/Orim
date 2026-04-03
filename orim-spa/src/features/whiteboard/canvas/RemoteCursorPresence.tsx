@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Circle, Group, Line, Rect, Text } from 'react-konva';
+import { Circle, Group, Label, Line, Tag, Text } from 'react-konva';
 import { useBoardStore } from '../store/boardStore';
 
 const CURSOR_SMOOTHING_MS = 70;
@@ -201,22 +201,19 @@ export function RemoteCursorPresence({ localPresenceClientId = null, zoom }: Rem
             lineJoin="round"
           />
           <Circle x={13 / zoom} y={24 / zoom} radius={4 / zoom} fill={cursor.colorHex} stroke="#FFFFFF" strokeWidth={1 / zoom} />
-          <Rect
-            x={20 / zoom}
-            y={10 / zoom}
-            width={(cursor.displayName.length * 7 + 16) / zoom}
-            height={22 / zoom}
-            fill={cursor.colorHex}
-            cornerRadius={6 / zoom}
-            opacity={0.92}
-          />
-          <Text
-            x={28 / zoom}
-            y={14 / zoom}
-            text={cursor.displayName}
-            fontSize={12 / zoom}
-            fill="#ffffff"
-          />
+          <Label x={20 / zoom} y={10 / zoom}>
+            <Tag
+              fill={cursor.colorHex}
+              cornerRadius={6 / zoom}
+              opacity={0.92}
+            />
+            <Text
+              text={cursor.displayName}
+              fontSize={12 / zoom}
+              fill="#ffffff"
+              padding={5 / zoom}
+            />
+          </Label>
         </Group>
       ))}
     </>
