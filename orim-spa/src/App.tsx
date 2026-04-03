@@ -11,6 +11,7 @@ import { ProtectedRoute } from './components/Layout/ProtectedRoute';
 import { LoginPage } from './features/auth/LoginPage';
 import { DashboardPage } from './features/dashboard/DashboardPage';
 import { SettingsPage } from './features/admin/SettingsPage';
+import { ProfilePage } from './features/profile/ProfilePage';
 import { WhiteboardEditor } from './features/whiteboard/WhiteboardEditor';
 import { SharedBoardView } from './features/sharing/SharedBoardView';
 import { UsersPage } from './features/admin/UsersPage';
@@ -35,6 +36,7 @@ function AppRoutes() {
       <Route element={<ProtectedRoute />}>
         <Route element={<AppLayout />}>
           <Route path="/" element={<DashboardPage />} />
+          <Route path="/profile" element={<ProfilePage />} />
           <Route element={<AdminRoute />}>
             <Route path="/admin/users" element={<UsersPage />} />
             <Route path="/admin/settings" element={<SettingsPage />} />

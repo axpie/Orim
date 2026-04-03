@@ -40,11 +40,7 @@ export async function createBoard(request: CreateBoardRequest): Promise<Board> {
 }
 
 export async function updateBoard(id: string, boardPatch: Partial<Board>): Promise<Board> {
-  const currentBoard = await getBoard(id);
-  const { data } = await client.put<Board>(`/api/boards/${id}`, {
-    ...currentBoard,
-    ...boardPatch,
-  });
+  const { data } = await client.put<Board>(`/api/boards/${id}`, boardPatch);
   return data;
 }
 

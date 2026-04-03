@@ -4,8 +4,11 @@ namespace Orim.Core.Models;
 
 [JsonDerivedType(typeof(ShapeElement), "shape")]
 [JsonDerivedType(typeof(TextElement), "text")]
+[JsonDerivedType(typeof(StickyNoteElement), "sticky")]
+[JsonDerivedType(typeof(FrameElement), "frame")]
 [JsonDerivedType(typeof(ArrowElement), "arrow")]
 [JsonDerivedType(typeof(IconElement), "icon")]
+[JsonDerivedType(typeof(ImageElement), "image")]
 public abstract class BoardElement
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -76,6 +79,34 @@ public class TextElement : BoardElement
     public string Color { get; set; } = "#000000";
 }
 
+public class StickyNoteElement : BoardElement
+{
+    public StickyNoteElement()
+    {
+        LabelHorizontalAlignment = HorizontalLabelAlignment.Left;
+        LabelVerticalAlignment = VerticalLabelAlignment.Top;
+    }
+
+    public string Text { get; set; } = string.Empty;
+    public double FontSize { get; set; } = 16;
+    public bool AutoFontSize { get; set; }
+    public string FillColor { get; set; } = "#FDE68A";
+    public string Color { get; set; } = "#111827";
+}
+
+public class FrameElement : BoardElement
+{
+    public FrameElement()
+    {
+        LabelHorizontalAlignment = HorizontalLabelAlignment.Left;
+        LabelVerticalAlignment = VerticalLabelAlignment.Top;
+    }
+
+    public string FillColor { get; set; } = "rgba(37, 99, 235, 0.08)";
+    public string StrokeColor { get; set; } = "rgba(37, 99, 235, 0.48)";
+    public double StrokeWidth { get; set; } = 2;
+}
+
 public class ArrowElement : BoardElement
 {
     public Guid? SourceElementId { get; set; }
@@ -132,4 +163,18 @@ public class IconElement : BoardElement
 {
     public string IconName { get; set; } = "mdi-star";
     public string Color { get; set; } = "#0f172a";
+}
+
+public enum ImageFit
+{
+    Uniform,
+    UniformToFill,
+    Fill,
+}
+
+public class ImageElement : BoardElement
+{
+    public string ImageUrl { get; set; } = string.Empty;
+    public double Opacity { get; set; } = 1.0;
+    public ImageFit ImageFit { get; set; } = ImageFit.Uniform;
 }

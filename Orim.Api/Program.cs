@@ -5,6 +5,7 @@ using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using PdfSharp.Fonts;
 using Orim.Api.Contracts;
@@ -42,7 +43,15 @@ builder.Services.AddSingleton(sp => new AssistantSettingsService(
     sp.GetRequiredService<ILogger<AssistantSettingsService>>()));
 builder.Services.AddSingleton<DiagramAssistantService>();
 builder.Services.AddSingleton(new ThemeCatalogApiService(ThemeCatalogApiService.ResolveThemesPath(dataPath)));
+builder.Services.AddSingleton(new Orim.Api.Services.ImageStorageService(dataPath));
 builder.Services.AddSingleton<BoardPdfExportService>();
+builder.Services.AddSingleton<BoardCommentNotifier>();
+builder.Services.AddScoped<BoardCommentService>();
+builder.Services.Configure<MicrosoftEntraOptions>(builder.Configuration.GetSection("Authentication:Microsoft"));
+builder.Services.AddSingleton<MicrosoftIdentityTokenValidator>();
+builder.Services.Configure<GoogleOAuthOptions>(builder.Configuration.GetSection("Authentication:Google"));
+builder.Services.AddSingleton<IGoogleTokenVerifier, GoogleTokenVerifier>();
+builder.Services.AddSingleton<GoogleIdentityTokenValidator>();
 builder.Services.AddSignalR().AddJsonProtocol(options =>
 {
     options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
@@ -93,6 +102,30 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
                     context.Token = accessToken;
                 }
                 return Task.CompletedTask;
+            },
+            OnTokenValidated = async context =>
+            {
+                var principal = context.Principal;
+                var userIdClaim = principal?.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+                if (!Guid.TryParse(userIdClaim, out var userId))
+                {
+                    context.Fail("The token does not contain a valid user identifier.");
+                    return;
+                }
+
+                var userService = context.HttpContext.RequestServices.GetRequiredService<UserService>();
+                var user = await userService.GetByIdAsync(userId);
+                if (user is null || !user.IsActive)
+                {
+                    context.Fail("The user account is no longer active.");
+                    return;
+                }
+
+                if (principal?.Identity is ClaimsIdentity identity)
+                {
+                    ReplaceClaim(identity, ClaimTypes.Name, user.Username);
+                    ReplaceClaim(identity, ClaimTypes.Role, user.Role.ToString());
+                }
             }
         };
     });
@@ -178,6 +211,25 @@ string GenerateJwtToken(User user)
     return new JwtSecurityTokenHandler().WriteToken(token);
 }
 
+void ReplaceClaim(ClaimsIdentity identity, string claimType, string value)
+{
+    foreach (var existingClaim in identity.FindAll(claimType).ToArray())
+    {
+        identity.RemoveClaim(existingClaim);
+    }
+
+    identity.AddClaim(new Claim(claimType, value));
+}
+
+string ResolveDisplayName(User user) =>
+    string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName.Trim();
+
+LoginResponse CreateLoginResponse(User user) =>
+    new(GenerateJwtToken(user), user.Id, user.Username, ResolveDisplayName(user), user.Role);
+
+UserDto ToUserDto(User user) =>
+    new(user.Id, user.Username, ResolveDisplayName(user), user.Role, user.IsActive, user.CreatedAt);
+
 Guid GetUserId(HttpContext context) =>
     Guid.Parse(context.User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
@@ -197,9 +249,116 @@ app.MapPost("/api/auth/login", async (LoginRequest request, UserService userServ
     if (user is null)
         return Results.Unauthorized();
 
-    var token = GenerateJwtToken(user);
-    return Results.Ok(new LoginResponse(token, user.Id, user.Username, user.Role));
+    return Results.Ok(CreateLoginResponse(user));
 });
+
+app.MapGet("/api/auth/providers", (IOptions<MicrosoftEntraOptions> msOptions, IOptions<GoogleOAuthOptions> googleOptions) =>
+{
+    var microsoft = msOptions.Value.IsConfigured
+        ? new MicrosoftAuthProviderDto(
+            msOptions.Value.ClientId,
+            msOptions.Value.ResolveAuthority(),
+            msOptions.Value.Scopes)
+        : null;
+
+    var google = googleOptions.Value.IsConfigured
+        ? new GoogleAuthProviderDto(googleOptions.Value.ClientId)
+        : null;
+
+    return Results.Ok(new AuthProvidersResponse(microsoft, google));
+}).AllowAnonymous();
+
+app.MapPost(
+    "/api/auth/microsoft/exchange",
+    async (MicrosoftTokenExchangeRequest request,
+        UserService userService,
+        MicrosoftIdentityTokenValidator validator,
+        IOptions<MicrosoftEntraOptions> options,
+        ILogger<Program> logger,
+        CancellationToken cancellationToken) =>
+{
+    if (!options.Value.IsConfigured)
+    {
+        return Results.NotFound();
+    }
+
+    if (string.IsNullOrWhiteSpace(request.IdToken))
+    {
+        return Results.BadRequest("An ID token is required.");
+    }
+
+    MicrosoftIdentityPrincipal identity;
+    try
+    {
+        identity = await validator.ValidateIdTokenAsync(request.IdToken, cancellationToken);
+    }
+    catch (SecurityTokenException ex)
+    {
+        logger.LogWarning(ex, "Microsoft sign-in token validation failed.");
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        var user = await userService.AuthenticateExternalAsync(new ExternalLoginProfile(
+            AuthenticationProvider.MicrosoftEntraId,
+            identity.Subject,
+            identity.Email,
+            identity.Username,
+            identity.TenantId));
+
+        return Results.Ok(CreateLoginResponse(user));
+    }
+    catch (InvalidOperationException ex)
+    {
+        logger.LogWarning(ex, "Microsoft sign-in could not be linked to an ORIM user.");
+        return Results.BadRequest(ex.Message);
+    }
+}).AllowAnonymous();
+
+app.MapPost(
+    "/api/auth/google/exchange",
+    async (GoogleTokenExchangeRequest request,
+        UserService userService,
+        GoogleIdentityTokenValidator validator,
+        IOptions<GoogleOAuthOptions> options,
+        ILogger<Program> logger,
+        CancellationToken cancellationToken) =>
+{
+    if (!options.Value.IsConfigured)
+        return Results.NotFound();
+
+    if (string.IsNullOrWhiteSpace(request.IdToken))
+        return Results.BadRequest("An ID token is required.");
+
+    GoogleIdentityPrincipal identity;
+    try
+    {
+        identity = await validator.ValidateIdTokenAsync(request.IdToken, cancellationToken);
+    }
+    catch (SecurityTokenException ex)
+    {
+        logger.LogWarning(ex, "Google sign-in token validation failed.");
+        return Results.Unauthorized();
+    }
+
+    try
+    {
+        var user = await userService.AuthenticateExternalAsync(new ExternalLoginProfile(
+            AuthenticationProvider.Google,
+            identity.Subject,
+            identity.Email,
+            identity.Username,
+            string.IsNullOrWhiteSpace(identity.HostedDomain) ? null : identity.HostedDomain));
+
+        return Results.Ok(CreateLoginResponse(user));
+    }
+    catch (InvalidOperationException ex)
+    {
+        logger.LogWarning(ex, "Google sign-in could not be linked to an ORIM user.");
+        return Results.BadRequest(ex.Message);
+    }
+}).AllowAnonymous();
 
 app.MapPost("/api/auth/refresh", [Authorize] async (HttpContext context, UserService userService) =>
 {
@@ -208,8 +367,7 @@ app.MapPost("/api/auth/refresh", [Authorize] async (HttpContext context, UserSer
     if (user is null || !user.IsActive)
         return Results.Unauthorized();
 
-    var token = GenerateJwtToken(user);
-    return Results.Ok(new LoginResponse(token, user.Id, user.Username, user.Role));
+    return Results.Ok(CreateLoginResponse(user));
 });
 
 // ==========================================================================
@@ -219,7 +377,7 @@ app.MapPost("/api/auth/refresh", [Authorize] async (HttpContext context, UserSer
 app.MapGet("/api/users", [Authorize(Roles = "Admin")] async (UserService userService) =>
 {
     var users = await userService.GetAllUsersAsync();
-    return Results.Ok(users.Select(u => new UserDto(u.Id, u.Username, u.Role, u.IsActive, u.CreatedAt)));
+    return Results.Ok(users.Select(ToUserDto));
 });
 
 app.MapGet("/api/users/{id:guid}", [Authorize] async (Guid id, HttpContext context, UserService userService) =>
@@ -228,34 +386,102 @@ app.MapGet("/api/users/{id:guid}", [Authorize] async (Guid id, HttpContext conte
         return Results.Forbid();
 
     var user = await userService.GetByIdAsync(id);
-    return user is null ? Results.NotFound() : Results.Ok(new UserDto(user.Id, user.Username, user.Role, user.IsActive, user.CreatedAt));
+    return user is null ? Results.NotFound() : Results.Ok(ToUserDto(user));
 });
 
 app.MapPost("/api/users", [Authorize(Roles = "Admin")] async (CreateUserRequest request, UserService userService) =>
 {
-    var user = await userService.CreateUserAsync(request.Username, request.Password, request.Role);
-    return Results.Created($"/api/users/{user.Id}", new UserDto(user.Id, user.Username, user.Role, user.IsActive, user.CreatedAt));
+    try
+    {
+        var user = await userService.CreateUserAsync(request.Username, request.Password, request.Role);
+        return Results.Created($"/api/users/{user.Id}", ToUserDto(user));
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+    {
+        return Results.BadRequest(ex.Message);
+    }
 });
 
-app.MapPut("/api/users/{id:guid}/password", [Authorize] async (Guid id, ChangePasswordRequest request, HttpContext context, UserService userService) =>
+app.MapPut("/api/users/{id:guid}/profile", [Authorize] async (Guid id, UpdateProfileRequest request, HttpContext context, UserService userService, IHubContext<BoardHub> boardHubContext) =>
 {
     if (!IsAdmin(context) && GetUserId(context) != id)
         return Results.Forbid();
 
-    await userService.SetPasswordAsync(id, request.NewPassword);
-    return Results.NoContent();
+    try
+    {
+        var user = await userService.UpdateDisplayNameAsync(id, request.DisplayName);
+        await boardHubContext.Clients.Group(BoardHub.GetUserGroupName(user.Id))
+            .SendAsync("ProfileDisplayNameChanged", ResolveDisplayName(user));
+        return Results.Ok(ToUserDto(user));
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+app.MapPut("/api/users/{id:guid}/password", [Authorize] async (Guid id, ChangePasswordRequest request, HttpContext context, UserService userService) =>
+{
+    var isAdmin = IsAdmin(context);
+    if (!isAdmin && GetUserId(context) != id)
+        return Results.Forbid();
+
+    try
+    {
+        if (isAdmin)
+        {
+            await userService.SetPasswordAsync(id, request.NewPassword);
+        }
+        else
+        {
+            await userService.ChangePasswordAsync(id, request.CurrentPassword ?? string.Empty, request.NewPassword);
+        }
+
+        return Results.NoContent();
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+app.MapPut("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UpdateUserRequest request, UserService userService) =>
+{
+    try
+    {
+        var user = await userService.UpdateAdminUserAsync(id, request.Username, request.Role);
+        return Results.Ok(ToUserDto(user));
+    }
+    catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
+    {
+        return Results.BadRequest(ex.Message);
+    }
 });
 
 app.MapPut("/api/users/{id:guid}/deactivate", [Authorize(Roles = "Admin")] async (Guid id, UserService userService) =>
 {
-    await userService.DeactivateUserAsync(id);
-    return Results.NoContent();
+    try
+    {
+        await userService.DeactivateUserAsync(id);
+        return Results.NoContent();
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
 });
 
 app.MapDelete("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UserService userService) =>
 {
-    await userService.DeleteUserAsync(id);
-    return Results.NoContent();
+    try
+    {
+        await userService.DeleteUserAsync(id);
+        return Results.NoContent();
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
 });
 
 app.MapGet("/api/boards/{id:guid}/shareable-users", [Authorize] async (Guid id, string? query, HttpContext context, BoardService boardService, UserService userService) =>
@@ -280,7 +506,7 @@ app.MapGet("/api/boards/{id:guid}/shareable-users", [Authorize] async (Guid id, 
                        user.Username.Contains(normalizedQuery, StringComparison.OrdinalIgnoreCase))
         .OrderBy(user => user.Username, StringComparer.OrdinalIgnoreCase)
         .Take(20)
-        .Select(user => new UserDto(user.Id, user.Username, user.Role, user.IsActive, user.CreatedAt));
+        .Select(ToUserDto);
 
     return Results.Ok(results);
 });
@@ -433,10 +659,10 @@ app.MapPut("/api/boards/{id:guid}", [Authorize] async (Guid id, Board updatedBoa
     if (!boardService.HasAccess(board, userId, BoardRole.Editor))
         return Results.Forbid();
 
-    updatedBoard.Id = id;
-    updatedBoard.OwnerId = board.OwnerId;
-    await boardService.UpdateBoardAsync(updatedBoard);
-    return Results.Ok(updatedBoard);
+    board.Title = updatedBoard.Title;
+    boardService.ReplaceBoardContent(board, updatedBoard);
+    await boardService.UpdateBoardAsync(board);
+    return Results.Ok(board);
 });
 
 app.MapDelete("/api/boards/{id:guid}", [Authorize] async (Guid id, HttpContext context, BoardService boardService) =>
@@ -620,6 +846,135 @@ app.MapPut("/api/boards/{id:guid}/content", [Authorize] async (Guid id, Board im
     return Results.Ok(board);
 });
 
+app.MapGet("/api/boards/{id:guid}/comments", [Authorize] async (Guid id, HttpContext context, BoardService boardService) =>
+{
+    var board = await boardService.GetBoardAsync(id);
+    if (board is null) return Results.NotFound();
+
+    if (!boardService.HasAccess(board, GetUserId(context)))
+        return Results.Forbid();
+
+    return Results.Ok(board.Comments.OrderByDescending(comment => comment.UpdatedAt).ToList());
+});
+
+app.MapPost("/api/boards/{id:guid}/comments", [Authorize] async (
+    Guid id,
+    CreateBoardCommentRequest request,
+    HttpContext context,
+    BoardService boardService,
+    BoardCommentService boardCommentService,
+    BoardCommentNotifier boardCommentNotifier) =>
+{
+    var board = await boardService.GetBoardAsync(id);
+    if (board is null) return Results.NotFound();
+
+    var userId = GetUserId(context);
+    if (!boardService.HasAccess(board, userId, BoardRole.Editor))
+        return Results.Forbid();
+
+    try
+    {
+        var comment = await boardCommentService.CreateCommentAsync(board, userId, GetUsername(context), request.X, request.Y, request.Text);
+        await boardCommentNotifier.NotifyCommentUpsertedAsync(id, comment);
+        return Results.Created($"/api/boards/{id}/comments/{comment.Id}", comment);
+    }
+    catch (ArgumentException exception)
+    {
+        return Results.BadRequest(exception.Message);
+    }
+});
+
+app.MapPost("/api/boards/{id:guid}/comments/{commentId:guid}/replies", [Authorize] async (
+    Guid id,
+    Guid commentId,
+    CreateBoardCommentReplyRequest request,
+    HttpContext context,
+    BoardService boardService,
+    BoardCommentService boardCommentService,
+    BoardCommentNotifier boardCommentNotifier) =>
+{
+    var board = await boardService.GetBoardAsync(id);
+    if (board is null) return Results.NotFound();
+
+    var userId = GetUserId(context);
+    if (!boardService.HasAccess(board, userId, BoardRole.Editor))
+        return Results.Forbid();
+
+    try
+    {
+        var comment = await boardCommentService.AddReplyAsync(board, commentId, userId, GetUsername(context), request.Text);
+        await boardCommentNotifier.NotifyCommentUpsertedAsync(id, comment);
+        return Results.Ok(comment);
+    }
+    catch (ArgumentException exception)
+    {
+        return Results.BadRequest(exception.Message);
+    }
+    catch (InvalidOperationException exception)
+    {
+        return Results.NotFound(exception.Message);
+    }
+});
+
+app.MapDelete("/api/boards/{id:guid}/comments/{commentId:guid}", [Authorize] async (
+    Guid id,
+    Guid commentId,
+    HttpContext context,
+    BoardService boardService,
+    BoardCommentService boardCommentService,
+    BoardCommentNotifier boardCommentNotifier) =>
+{
+    var board = await boardService.GetBoardAsync(id);
+    if (board is null) return Results.NotFound();
+
+    var userId = GetUserId(context);
+    if (!boardService.HasAccess(board, userId))
+        return Results.Forbid();
+
+    var comment = board.Comments.FirstOrDefault(candidate => candidate.Id == commentId);
+    if (comment is null)
+        return Results.NotFound();
+
+    if (!BoardCommentService.CanDeleteComment(board, comment, userId))
+        return Results.Forbid();
+
+    await boardCommentService.DeleteCommentAsync(board, commentId);
+    await boardCommentNotifier.NotifyCommentDeletedAsync(id, commentId);
+    return Results.NoContent();
+});
+
+app.MapDelete("/api/boards/{id:guid}/comments/{commentId:guid}/replies/{replyId:guid}", [Authorize] async (
+    Guid id,
+    Guid commentId,
+    Guid replyId,
+    HttpContext context,
+    BoardService boardService,
+    BoardCommentService boardCommentService,
+    BoardCommentNotifier boardCommentNotifier) =>
+{
+    var board = await boardService.GetBoardAsync(id);
+    if (board is null) return Results.NotFound();
+
+    var userId = GetUserId(context);
+    if (!boardService.HasAccess(board, userId))
+        return Results.Forbid();
+
+    var comment = board.Comments.FirstOrDefault(candidate => candidate.Id == commentId);
+    if (comment is null)
+        return Results.NotFound();
+
+    var reply = comment.Replies.FirstOrDefault(candidate => candidate.Id == replyId);
+    if (reply is null)
+        return Results.NotFound();
+
+    if (!BoardCommentService.CanDeleteReply(board, reply, userId))
+        return Results.Forbid();
+
+    var updatedComment = await boardCommentService.DeleteReplyAsync(board, commentId, replyId);
+    await boardCommentNotifier.NotifyCommentUpsertedAsync(id, updatedComment);
+    return Results.Ok(updatedComment);
+});
+
 app.MapPost("/api/boards/import", [Authorize] async (ImportBoardRequest request, HttpContext context, BoardService boardService) =>
 {
     var userId = GetUserId(context);
@@ -698,6 +1053,53 @@ app.MapPost("/api/presence/leave", async (PresenceLeaveRequest request, BoardPre
     await presenceService.RemoveCursorAsync(request.BoardId, request.ClientId);
     return Results.Ok();
 }).AllowAnonymous();
+
+// ==========================================================================
+// User Image endpoints
+// ==========================================================================
+
+app.MapPost("/api/user-images", [Authorize] async (HttpRequest request, HttpContext context, Orim.Api.Services.ImageStorageService imageService) =>
+{
+    var userId = Guid.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+    if (!request.HasFormContentType) return Results.BadRequest("Expected multipart/form-data.");
+    var form = await request.ReadFormAsync();
+    var file = form.Files.GetFile("file");
+    if (file is null) return Results.BadRequest("No file uploaded.");
+    try
+    {
+        var info = await imageService.SaveImageAsync(userId, file);
+        return Results.Ok(new { info.Id, Url = $"/api/user-images/{userId:N}/{info.Id}", info.FileName, info.Size, info.UploadedAt });
+    }
+    catch (InvalidOperationException ex)
+    {
+        return Results.BadRequest(ex.Message);
+    }
+});
+
+app.MapGet("/api/user-images", [Authorize] async (HttpContext context, Orim.Api.Services.ImageStorageService imageService) =>
+{
+    var userId = Guid.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+    var images = await imageService.GetUserImagesAsync(userId);
+    return Results.Ok(images.Select(i => new { i.Id, Url = $"/api/user-images/{userId:N}/{i.Id}", i.FileName, i.Size, i.UploadedAt }));
+});
+
+// No [Authorize] — browser <img> and Konva Image cannot send JWT headers.
+// GUIDs are non-guessable, so public access is safe.
+app.MapGet("/api/user-images/{userIdStr}/{imageId}", async (string userIdStr, string imageId, Orim.Api.Services.ImageStorageService imageService, HttpContext ctx) =>
+{
+    if (!Guid.TryParse(userIdStr, out var userId)) return Results.NotFound();
+    var result = imageService.GetImageFilePath(userId, imageId);
+    if (result is null) return Results.NotFound();
+    ctx.Response.Headers.Append("Cache-Control", "no-store");
+    return Results.File(result.Value.FilePath, result.Value.MimeType);
+});
+
+app.MapDelete("/api/user-images/{imageId}", [Authorize] async (string imageId, HttpContext context, Orim.Api.Services.ImageStorageService imageService) =>
+{
+    var userId = Guid.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
+    var deleted = await imageService.DeleteImageAsync(userId, imageId);
+    return deleted ? Results.NoContent() : Results.NotFound();
+});
 
 // ==========================================================================
 // SignalR Hub

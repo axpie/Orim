@@ -56,7 +56,8 @@ public sealed class ThemeCatalogApiService
             throw new InvalidOperationException("The uploaded theme key does not match the selected theme.");
         }
 
-        return await SaveThemeAsync(importedTheme);
+        // Imported themes should never be marked as protected so users can edit/delete them later.
+        return await SaveThemeAsync(importedTheme, forceUnprotected: true);
     }
 
     public async Task SetEnabledAsync(string key, bool enabled)
@@ -118,13 +119,20 @@ public sealed class ThemeCatalogApiService
         return JsonSerializer.Serialize(theme, OrimJsonOptions.Indented);
     }
 
-    private async Task<ApiThemeDefinition> SaveThemeAsync(ApiThemeDefinition theme)
+    private async Task<ApiThemeDefinition> SaveThemeAsync(ApiThemeDefinition theme, bool forceUnprotected = false)
     {
         await _gate.WaitAsync();
         try
         {
             var themes = await EnsureCacheCoreAsync();
             var normalizedTheme = NormalizeAndValidate(theme);
+
+            // Imported themes or explicit callers can request that the theme not be protected.
+            if (forceUnprotected)
+            {
+                normalizedTheme.IsProtected = false;
+            }
+
             var existingTheme = themes.FirstOrDefault(candidate => candidate.Key == normalizedTheme.Key);
 
             if (existingTheme?.IsProtected == true)

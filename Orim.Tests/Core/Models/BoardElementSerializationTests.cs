@@ -98,6 +98,64 @@ public class BoardElementSerializationTests
     }
 
     [Fact]
+    public void StickyNoteElement_RoundTrips_ViaPolymorphicSerialization()
+    {
+        BoardElement element = new StickyNoteElement
+        {
+            Text = "Capture follow-up tasks",
+            FontSize = 20,
+            AutoFontSize = true,
+            FontFamily = "Verdana, sans-serif",
+            FillColor = "#FDE68A",
+            Color = "#111827",
+            IsBold = true,
+            IsItalic = true,
+            IsUnderline = true,
+            IsStrikethrough = true
+        };
+
+        var json = JsonSerializer.Serialize(element, OrimJsonOptions.Default);
+        var deserialized = JsonSerializer.Deserialize<BoardElement>(json, OrimJsonOptions.Default);
+
+        var sticky = Assert.IsType<StickyNoteElement>(deserialized);
+        Assert.Equal("Capture follow-up tasks", sticky.Text);
+        Assert.Equal(20, sticky.FontSize);
+        Assert.True(sticky.AutoFontSize);
+        Assert.Equal("Verdana, sans-serif", sticky.FontFamily);
+        Assert.Equal("#FDE68A", sticky.FillColor);
+        Assert.Equal("#111827", sticky.Color);
+        Assert.True(sticky.IsBold);
+        Assert.True(sticky.IsItalic);
+        Assert.True(sticky.IsUnderline);
+        Assert.True(sticky.IsStrikethrough);
+    }
+
+    [Fact]
+    public void FrameElement_RoundTrips_ViaPolymorphicSerialization()
+    {
+        BoardElement element = new FrameElement
+        {
+            Label = "Planning",
+            FontFamily = "Arial, sans-serif",
+            FillColor = "rgba(37, 99, 235, 0.08)",
+            StrokeColor = "rgba(37, 99, 235, 0.48)",
+            StrokeWidth = 3,
+            IsBold = true
+        };
+
+        var json = JsonSerializer.Serialize(element, OrimJsonOptions.Default);
+        var deserialized = JsonSerializer.Deserialize<BoardElement>(json, OrimJsonOptions.Default);
+
+        var frame = Assert.IsType<FrameElement>(deserialized);
+        Assert.Equal("Planning", frame.Label);
+        Assert.Equal("Arial, sans-serif", frame.FontFamily);
+        Assert.Equal("rgba(37, 99, 235, 0.08)", frame.FillColor);
+        Assert.Equal("rgba(37, 99, 235, 0.48)", frame.StrokeColor);
+        Assert.Equal(3, frame.StrokeWidth);
+        Assert.True(frame.IsBold);
+    }
+
+    [Fact]
     public void IconElement_RoundTrips_ViaPolymorphicSerialization()
     {
         BoardElement element = new IconElement
@@ -121,6 +179,8 @@ public class BoardElementSerializationTests
         {
             new ShapeElement { Label = "Shape" },
             new TextElement { Text = "Text" },
+            new StickyNoteElement { Text = "Sticky" },
+            new FrameElement { Label = "Frame" },
             new ArrowElement { StrokeColor = "#111" },
             new IconElement { IconName = "mdi-star" }
         };
@@ -128,11 +188,13 @@ public class BoardElementSerializationTests
         var json = JsonSerializer.Serialize(elements, OrimJsonOptions.Default);
         var deserialized = JsonSerializer.Deserialize<List<BoardElement>>(json, OrimJsonOptions.Default)!;
 
-        Assert.Equal(4, deserialized.Count);
+        Assert.Equal(6, deserialized.Count);
         Assert.IsType<ShapeElement>(deserialized[0]);
         Assert.IsType<TextElement>(deserialized[1]);
-        Assert.IsType<ArrowElement>(deserialized[2]);
-        Assert.IsType<IconElement>(deserialized[3]);
+        Assert.IsType<StickyNoteElement>(deserialized[2]);
+        Assert.IsType<FrameElement>(deserialized[3]);
+        Assert.IsType<ArrowElement>(deserialized[4]);
+        Assert.IsType<IconElement>(deserialized[5]);
     }
 
     [Fact]

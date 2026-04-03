@@ -117,6 +117,22 @@ export interface TextElement extends BoardElementBase {
   color: string;
 }
 
+export interface StickyNoteElement extends BoardElementBase {
+  $type: 'sticky';
+  text: string;
+  fontSize: number;
+  autoFontSize?: boolean;
+  fillColor: string;
+  color: string;
+}
+
+export interface FrameElement extends BoardElementBase {
+  $type: 'frame';
+  fillColor: string;
+  strokeColor: string;
+  strokeWidth: number;
+}
+
 export interface ArrowElement extends BoardElementBase {
   $type: 'arrow';
   sourceElementId?: string | null;
@@ -142,7 +158,20 @@ export interface IconElement extends BoardElementBase {
   color: string;
 }
 
-export type BoardElement = ShapeElement | TextElement | ArrowElement | IconElement;
+export enum ImageFit {
+  Uniform = 'Uniform',
+  UniformToFill = 'UniformToFill',
+  Fill = 'Fill',
+}
+
+export interface ImageElement extends BoardElementBase {
+  $type: 'image';
+  imageUrl: string;
+  opacity?: number | null;
+  imageFit?: ImageFit | null;
+}
+
+export type BoardElement = ShapeElement | TextElement | StickyNoteElement | FrameElement | ArrowElement | IconElement | ImageElement;
 
 // --- Board ---
 
@@ -161,6 +190,54 @@ export interface BoardSnapshot {
   contentJson: string;
 }
 
+export interface BoardCommentReply {
+  id: string;
+  authorUserId: string;
+  authorUsername: string;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface BoardComment {
+  id: string;
+  boardId: string;
+  authorUserId: string;
+  authorUsername: string;
+  x: number;
+  y: number;
+  text: string;
+  replies: BoardCommentReply[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type RealtimeConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
+
+export type BoardSyncStatusKind =
+  | 'connecting'
+  | 'saving'
+  | 'saved'
+  | 'unsaved'
+  | 'unsyncedChanges'
+  | 'reconnecting'
+  | 'offline'
+  | 'saveError'
+  | 'connectionError';
+
+export interface BoardSyncStatus {
+  kind: BoardSyncStatusKind;
+  hasPendingChanges: boolean;
+  queuedChangesCount?: number;
+  detail?: string | null;
+}
+
+export interface StickyNotePreset {
+  id: string;
+  label: string;
+  fillColor: string;
+}
+
 export interface Board {
   id: string;
   title: string;
@@ -168,6 +245,7 @@ export interface Board {
   arrowOutlineEnabled: boolean;
   customColors: string[];
   recentColors: string[];
+  stickyNotePresets: StickyNotePreset[];
   ownerId: string;
   visibility: BoardVisibility;
   shareLinkToken?: string | null;
@@ -175,6 +253,7 @@ export interface Board {
   sharePasswordHash?: string | null;
   members: BoardMember[];
   elements: BoardElement[];
+  comments: BoardComment[];
   snapshots: BoardSnapshot[];
   createdAt: string;
   updatedAt: string;
@@ -197,6 +276,7 @@ export interface BoardSummary {
 export interface User {
   id: string;
   username: string;
+  displayName: string;
   role: UserRole;
   isActive: boolean;
   createdAt: string;
@@ -205,6 +285,15 @@ export interface User {
 export interface CreateUserRequest {
   username: string;
   password: string;
+  role: UserRole;
+}
+
+export interface UpdateProfileRequest {
+  displayName: string;
+}
+
+export interface UpdateUserRequest {
+  username: string;
   role: UserRole;
 }
 
@@ -276,7 +365,23 @@ export interface LoginResponse {
   token: string;
   userId: string;
   username: string;
+  displayName: string;
   role: UserRole;
+}
+
+export interface MicrosoftAuthProvider {
+  clientId: string;
+  authority: string;
+  scopes: string[];
+}
+
+export interface GoogleAuthProvider {
+  clientId: string;
+}
+
+export interface AuthProvidersResponse {
+  microsoft: MicrosoftAuthProvider | null;
+  google: GoogleAuthProvider | null;
 }
 
 // --- Assistant ---
@@ -321,6 +426,7 @@ export interface AssistantSettingsUpdateRequest {
 
 export interface CursorPresence {
   clientId: string;
+  userId?: string | null;
   displayName: string;
   colorHex: string;
   worldX?: number | null;
@@ -343,4 +449,69 @@ export interface BoardStateUpdateNotification {
   changedAtUtc: string;
   kind: string;
   board: Board;
+}
+
+export interface BoardCommentNotification {
+  boardId: string;
+  changedAtUtc: string;
+  comment: BoardComment;
+}
+
+export interface BoardCommentDeletedNotification {
+  boardId: string;
+  changedAtUtc: string;
+  commentId: string;
+}
+
+export interface BoardElementAddedOperation {
+  type: 'element.added';
+  element: BoardElement;
+}
+
+export interface BoardElementUpdatedOperation {
+  type: 'element.updated';
+  element: BoardElement;
+}
+
+export interface BoardElementDeletedOperation {
+  type: 'element.deleted';
+  elementId: string;
+}
+
+export interface BoardElementsDeletedOperation {
+  type: 'elements.deleted';
+  elementIds: string[];
+}
+
+export interface BoardMetadataUpdatedOperation {
+  type: 'board.metadata.updated';
+  title?: string;
+  labelOutlineEnabled?: boolean;
+  arrowOutlineEnabled?: boolean;
+  customColors?: string[];
+  recentColors?: string[];
+  stickyNotePresets?: StickyNotePreset[];
+}
+
+export type BoardOperation =
+  | BoardElementAddedOperation
+  | BoardElementUpdatedOperation
+  | BoardElementDeletedOperation
+  | BoardElementsDeletedOperation
+  | BoardMetadataUpdatedOperation;
+
+export interface BoardOperationNotification {
+  boardId: string;
+  sourceClientId?: string | null;
+  changedAtUtc: string;
+  operation: BoardOperation;
+}
+
+// --- User Images ---
+export interface UserImageInfo {
+  id: string;
+  url: string;
+  fileName: string;
+  size: number;
+  uploadedAt: string;
 }

@@ -50,10 +50,32 @@ public class OrimJsonOptionsTests
         {
             Title = "Test Board",
             Visibility = BoardVisibility.Shared,
+            Comments =
+            [
+                new BoardComment
+                {
+                    AuthorUserId = Guid.NewGuid(),
+                    AuthorUsername = "alice",
+                    X = 120.5,
+                    Y = 340.25,
+                    Text = "Please review",
+                    Replies =
+                    [
+                        new BoardCommentReply
+                        {
+                            AuthorUserId = Guid.NewGuid(),
+                            AuthorUsername = "bob",
+                            Text = "Looks good"
+                        }
+                    ]
+                }
+            ],
             Elements =
             [
                 new ShapeElement { Label = "S1", ShapeType = ShapeType.Ellipse },
-                new ArrowElement { LineStyle = ArrowLineStyle.Dashed }
+                new ArrowElement { LineStyle = ArrowLineStyle.Dashed },
+                new StickyNoteElement { Text = "Sticky" },
+                new FrameElement { Label = "Area" }
             ]
         };
 
@@ -63,9 +85,13 @@ public class OrimJsonOptionsTests
         Assert.NotNull(deserialized);
         Assert.Equal("Test Board", deserialized.Title);
         Assert.Equal(BoardVisibility.Shared, deserialized.Visibility);
-        Assert.Equal(2, deserialized.Elements.Count);
+        Assert.Equal(4, deserialized.Elements.Count);
+        Assert.Single(deserialized.Comments);
+        Assert.Single(deserialized.Comments[0].Replies);
         Assert.IsType<ShapeElement>(deserialized.Elements[0]);
         Assert.IsType<ArrowElement>(deserialized.Elements[1]);
+        Assert.IsType<StickyNoteElement>(deserialized.Elements[2]);
+        Assert.IsType<FrameElement>(deserialized.Elements[3]);
     }
 
     [Fact]

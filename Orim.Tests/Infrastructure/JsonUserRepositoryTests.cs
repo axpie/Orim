@@ -38,13 +38,14 @@ public class JsonUserRepositoryTests : IDisposable
     [Fact]
     public async Task SaveAsync_NewUser_CanBeRetrieved()
     {
-        var user = new User { Username = "alice", PasswordHash = "hash123" };
+        var user = new User { Username = "alice", DisplayName = "Alice Example", PasswordHash = "hash123" };
 
         await _sut.SaveAsync(user);
         var retrieved = await _sut.GetByIdAsync(user.Id);
 
         Assert.NotNull(retrieved);
         Assert.Equal("alice", retrieved.Username);
+        Assert.Equal("Alice Example", retrieved.DisplayName);
     }
 
     [Fact]
@@ -79,6 +80,35 @@ public class JsonUserRepositoryTests : IDisposable
         var result = await _sut.GetByUsernameAsync("nobody");
 
         Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetByEmailAsync_CaseInsensitive()
+    {
+        var user = new User { Username = "Alice", Email = "Alice@Contoso.com" };
+        await _sut.SaveAsync(user);
+
+        var result = await _sut.GetByEmailAsync("alice@contoso.com");
+
+        Assert.NotNull(result);
+        Assert.Equal("Alice@Contoso.com", result.Email);
+    }
+
+    [Fact]
+    public async Task GetByExternalIdentityAsync_ReturnsMatchingUser()
+    {
+        var user = new User
+        {
+            Username = "alice",
+            AuthenticationProvider = AuthenticationProvider.MicrosoftEntraId,
+            ExternalSubject = "OID-123"
+        };
+        await _sut.SaveAsync(user);
+
+        var result = await _sut.GetByExternalIdentityAsync(AuthenticationProvider.MicrosoftEntraId, "oid-123");
+
+        Assert.NotNull(result);
+        Assert.Equal("OID-123", result.ExternalSubject);
     }
 
     [Fact]

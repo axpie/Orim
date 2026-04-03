@@ -1,5 +1,7 @@
 <Solution>
-  <Project Path="Orim.Api/Orim.Api.csproj" />
+  <Project Path="Orim.Api/Orim.Api.csproj">
+    <Build Solution="Debug|*" Project="false" />
+  </Project>
   <Project Path="Orim.Core/Orim.Core.csproj" />
   <Project Path="Orim.Infrastructure/Orim.Infrastructure.csproj" />
   <Project Path="Orim.Tests/Orim.Tests.csproj" />

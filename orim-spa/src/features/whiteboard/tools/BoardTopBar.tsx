@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useState, type MouseEvent, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   AppBar,
+  Badge,
   Box,
   Chip,
   IconButton,
@@ -21,11 +22,15 @@ import {
 import { useTheme } from '@mui/material/styles';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import ChatIcon from '@mui/icons-material/Chat';
+import ModeCommentOutlinedIcon from '@mui/icons-material/ModeCommentOutlined';
 import SettingsIcon from '@mui/icons-material/Settings';
 import TuneIcon from '@mui/icons-material/Tune';
 import ShareIcon from '@mui/icons-material/Share';
 import FileDownloadIcon from '@mui/icons-material/FileDownload';
+import HistoryIcon from '@mui/icons-material/History';
+import ImageIcon from '@mui/icons-material/Image';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import KeyboardIcon from '@mui/icons-material/Keyboard';
 import { useBoardStore } from '../store/boardStore';
@@ -33,38 +38,60 @@ import { AppSettingsDialog } from '../../../components/dialogs/AppSettingsDialog
 import { exportBoardJson, exportBoardPdf } from '../../../api/boards';
 import { ShareDialog } from '../../sharing/ShareDialog';
 import { ShortcutHelpDialog } from './ShortcutHelpDialog';
-import type { CursorPresence } from '../../../types/models';
+import { BoardSettingsDialog } from '../panels/BoardSettingsDialog';
+import type { BoardSyncStatus, CursorPresence } from '../../../types/models';
+import type { BoardOperationPayload } from '../realtime/boardOperations';
+import { createBoardMetadataUpdatedOperation } from '../realtime/boardOperations';
+
+function createBoardFileName(title: string | undefined, extension: string) {
+  const baseName = (title?.trim() || 'board').replace(/[\\/:*?"<>|]+/g, '-');
+  return `${baseName}.${extension}`;
+}
 
 interface BoardTopBarProps {
   onOpenProperties: () => void;
+  onOpenComments: () => void;
   onOpenChat: () => void;
   propertiesOpen: boolean;
+  commentsOpen: boolean;
   chatOpen: boolean;
-  saving: boolean;
+  syncStatus: BoardSyncStatus;
   titleEditable?: boolean;
   showShare?: boolean;
   showExport?: boolean;
+  showSnapshots?: boolean;
   showProperties?: boolean;
+  showComments?: boolean;
   showChat?: boolean;
   showBackButton?: boolean;
   onBack?: () => void;
+  onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
+  onOpenSnapshots?: () => void;
+  onExportPng?: () => Promise<void> | void;
   collaborators?: CursorPresence[];
   localConnectionId?: string | null;
 }
 
 export function BoardTopBar({
   onOpenProperties,
+  onOpenComments,
   onOpenChat,
   propertiesOpen,
+  commentsOpen,
   chatOpen,
-  saving,
+  syncStatus,
   titleEditable = true,
   showShare = true,
   showExport = true,
+  showSnapshots = false,
   showProperties = true,
+  showComments = false,
   showChat = true,
   showBackButton = true,
   onBack,
+  onBoardChanged,
+  onOpenSnapshots,
+  onExportPng,
   collaborators = [],
   localConnectionId = null,
 }: BoardTopBarProps) {
@@ -74,13 +101,14 @@ export function BoardTopBar({
   const navigate = useNavigate();
   const board = useBoardStore((s) => s.board);
   const updateBoard = useBoardStore((s) => s.updateBoard);
-  const isDirty = useBoardStore((s) => s.isDirty);
 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState('');
   const [exportAnchor, setExportAnchor] = useState<null | HTMLElement>(null);
   const [shareOpen, setShareOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsMenuAnchor, setSettingsMenuAnchor] = useState<null | HTMLElement>(null);
+  const [boardSettingsOpen, setBoardSettingsOpen] = useState(false);
+  const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [mobileActionsAnchor, setMobileActionsAnchor] = useState<null | HTMLElement>(null);
 
@@ -95,8 +123,19 @@ export function BoardTopBar({
 
   const handleTitleBlur = () => {
     setEditing(false);
-    if (title.trim() && title !== board?.title) {
-      updateBoard({ title: title.trim() });
+    const trimmedTitle = title.trim();
+    if (trimmedTitle && trimmedTitle !== board?.title) {
+      updateBoard({ title: trimmedTitle });
+      if (board) {
+        onBoardChanged?.('Metadata', createBoardMetadataUpdatedOperation({
+          title: trimmedTitle,
+          labelOutlineEnabled: board.labelOutlineEnabled,
+          arrowOutlineEnabled: board.arrowOutlineEnabled,
+          customColors: board.customColors,
+          recentColors: board.recentColors,
+          stickyNotePresets: board.stickyNotePresets,
+        }));
+      }
     }
   };
 
@@ -108,7 +147,7 @@ export function BoardTopBar({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${board.title}.json`;
+    a.download = createBoardFileName(board.title, 'json');
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -120,16 +159,90 @@ export function BoardTopBar({
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${board.title}.pdf`;
+    a.download = createBoardFileName(board.title, 'pdf');
     a.click();
     URL.revokeObjectURL(url);
   };
 
+  const handleExportPng = async () => {
+    if (!onExportPng) return;
+    setExportAnchor(null);
+    await onExportPng();
+  };
+
   const closeMobileActions = () => setMobileActionsAnchor(null);
+  const closeSettingsMenu = () => setSettingsMenuAnchor(null);
+
+  const openSettingsMenu = (event: MouseEvent<HTMLElement>) => {
+    setSettingsMenuAnchor(event.currentTarget);
+  };
 
   const compactCollaborators = collaborators.length > 0
     ? collaborators.filter((collaborator) => collaborator.clientId !== localConnectionId).length
     : 0;
+  const commentCount = board?.comments?.length ?? 0;
+  const statusLabelKey = (() => {
+    switch (syncStatus.kind) {
+      case 'saving':
+        return 'board.saving';
+      case 'unsaved':
+        return 'board.statusUnsaved';
+      case 'unsyncedChanges':
+        return 'board.statusUnsyncedChanges';
+      case 'connecting':
+        return 'board.statusConnecting';
+      case 'reconnecting':
+        return 'board.statusReconnecting';
+      case 'offline':
+        return 'board.statusOffline';
+      case 'saveError':
+        return 'board.statusSaveError';
+      case 'connectionError':
+        return 'board.statusConnectionError';
+      case 'saved':
+      default:
+        return 'board.saved';
+    }
+  })();
+  const baseStatusLabel = t(statusLabelKey);
+  const statusLabel = syncStatus.hasPendingChanges && !['saving', 'unsaved', 'unsyncedChanges', 'saveError'].includes(syncStatus.kind)
+    ? `${baseStatusLabel} · ${t('board.statusUnsaved')}`
+    : baseStatusLabel;
+  const statusTooltip = syncStatus.detail
+    ? t('board.lastError', { message: syncStatus.detail })
+    : statusLabel;
+  const queuedChangesLabel = syncStatus.queuedChangesCount && syncStatus.queuedChangesCount > 0
+    ? t('board.unsyncedChangesCount', {
+        count: syncStatus.queuedChangesCount,
+        defaultValue: '{{count}} unsynced changes',
+      })
+    : null;
+  const statusColor = (() => {
+    switch (syncStatus.kind) {
+      case 'saved':
+        return 'success' as const;
+      case 'saving':
+        return 'info' as const;
+      case 'unsaved':
+      case 'unsyncedChanges':
+      case 'reconnecting':
+        return 'warning' as const;
+      case 'offline':
+      case 'saveError':
+      case 'connectionError':
+        return 'error' as const;
+      case 'connecting':
+      default:
+        return 'default' as const;
+    }
+  })();
+  const statusIcon: ReactNode = ['saving', 'connecting', 'reconnecting'].includes(syncStatus.kind)
+    ? <CircularProgress size={14} thickness={5} color="inherit" />
+    : syncStatus.kind === 'saved'
+      ? <CheckCircleIcon fontSize="small" />
+      : ['offline', 'saveError', 'connectionError'].includes(syncStatus.kind)
+        ? <ErrorOutlineIcon fontSize="small" />
+        : undefined;
 
   return (
     <>
@@ -182,15 +295,25 @@ export function BoardTopBar({
             </Typography>
           )}
 
-          <Box sx={{ display: 'flex', alignItems: 'center', ml: 1 }}>
-            {saving ? (
-              <CircularProgress size={16} sx={{ mr: 1 }} />
-            ) : isDirty ? null : (
-              <Tooltip title={t('board.saved')}>
-                <CheckCircleIcon color="success" fontSize="small" sx={{ mr: 1 }} />
-              </Tooltip>
-            )}
-          </Box>
+          <Tooltip title={statusTooltip}>
+            <Chip
+              size="small"
+              color={statusColor}
+              label={statusLabel}
+              icon={statusIcon}
+              variant={statusColor === 'default' ? 'outlined' : 'filled'}
+              sx={{ ml: 1, maxWidth: { xs: 180, sm: 240 } }}
+            />
+          </Tooltip>
+          {queuedChangesLabel && (
+            <Chip
+              size="small"
+              color="warning"
+              variant="outlined"
+              label={queuedChangesLabel}
+              sx={{ ml: 1 }}
+            />
+          )}
 
           <Box sx={{ flexGrow: 1 }} />
 
@@ -246,6 +369,14 @@ export function BoardTopBar({
                 </Tooltip>
               )}
 
+              {showSnapshots && onOpenSnapshots && (
+                <Tooltip title={t('board.snapshots')}>
+                  <IconButton onClick={onOpenSnapshots} sx={{ color: 'inherit' }}>
+                    <HistoryIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
               <Tooltip title={t('shortcuts.open')}>
                 <IconButton onClick={() => setShortcutsOpen(true)} sx={{ color: 'inherit' }}>
                   <KeyboardIcon />
@@ -254,8 +385,8 @@ export function BoardTopBar({
 
               <Tooltip title={t('app.settings')}>
                 <IconButton
-                  onClick={() => setSettingsOpen(true)}
-                  sx={{ color: 'inherit', bgcolor: settingsOpen ? 'rgba(255,255,255,0.14)' : undefined }}
+                  onClick={openSettingsMenu}
+                  sx={{ color: 'inherit', bgcolor: settingsMenuAnchor ? 'rgba(255,255,255,0.14)' : undefined }}
                 >
                   <SettingsIcon />
                 </IconButton>
@@ -268,6 +399,19 @@ export function BoardTopBar({
                     sx={{ color: 'inherit', bgcolor: propertiesOpen ? 'rgba(255,255,255,0.14)' : undefined }}
                   >
                     <TuneIcon />
+                  </IconButton>
+                </Tooltip>
+              )}
+
+              {showComments && (
+                <Tooltip title={t('comments.title')}>
+                  <IconButton
+                    onClick={onOpenComments}
+                    sx={{ color: 'inherit', bgcolor: commentsOpen ? 'rgba(255,255,255,0.14)' : undefined }}
+                  >
+                    <Badge badgeContent={commentCount} color="secondary" max={99}>
+                      <ModeCommentOutlinedIcon />
+                    </Badge>
                   </IconButton>
                 </Tooltip>
               )}
@@ -292,8 +436,28 @@ export function BoardTopBar({
         open={Boolean(exportAnchor)}
         onClose={() => setExportAnchor(null)}
       >
-        <MenuItem onClick={handleExportJson}>{t('board.exportJson')}</MenuItem>
+        {onExportPng && (
+          <MenuItem onClick={handleExportPng}>{t('board.exportPng')}</MenuItem>
+        )}
         <MenuItem onClick={handleExportPdf}>{t('board.exportPdf')}</MenuItem>
+        <MenuItem onClick={handleExportJson}>{t('board.exportJson')}</MenuItem>
+      </Menu>
+
+      <Menu
+        anchorEl={settingsMenuAnchor}
+        open={Boolean(settingsMenuAnchor)}
+        onClose={closeSettingsMenu}
+      >
+        {titleEditable && (
+          <MenuItem onClick={() => { closeSettingsMenu(); setBoardSettingsOpen(true); }}>
+            <ListItemIcon><TuneIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('boardSettings.title')}</ListItemText>
+          </MenuItem>
+        )}
+        <MenuItem onClick={() => { closeSettingsMenu(); setAppSettingsOpen(true); }}>
+          <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{t('app.settings')}</ListItemText>
+        </MenuItem>
       </Menu>
 
       <Menu
@@ -308,6 +472,14 @@ export function BoardTopBar({
           </MenuItem>
         )}
         {showExport && (
+          onExportPng && (
+            <MenuItem onClick={() => { closeMobileActions(); void handleExportPng(); }}>
+              <ListItemIcon><ImageIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>{t('board.exportPng')}</ListItemText>
+            </MenuItem>
+          )
+        )}
+        {showExport && (
           <MenuItem onClick={() => { closeMobileActions(); void handleExportJson(); }}>
             <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
             <ListItemText>{t('board.exportJson')}</ListItemText>
@@ -319,11 +491,23 @@ export function BoardTopBar({
             <ListItemText>{t('board.exportPdf')}</ListItemText>
           </MenuItem>
         )}
+        {showSnapshots && onOpenSnapshots && (
+          <MenuItem onClick={() => { closeMobileActions(); onOpenSnapshots(); }}>
+            <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('board.snapshots')}</ListItemText>
+          </MenuItem>
+        )}
         <MenuItem onClick={() => { closeMobileActions(); setShortcutsOpen(true); }}>
           <ListItemIcon><KeyboardIcon fontSize="small" /></ListItemIcon>
           <ListItemText>{t('shortcuts.open')}</ListItemText>
         </MenuItem>
-        <MenuItem onClick={() => { closeMobileActions(); setSettingsOpen(true); }}>
+        {titleEditable && (
+          <MenuItem onClick={() => { closeMobileActions(); setBoardSettingsOpen(true); }}>
+            <ListItemIcon><TuneIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('boardSettings.title')}</ListItemText>
+          </MenuItem>
+        )}
+        <MenuItem onClick={() => { closeMobileActions(); setAppSettingsOpen(true); }}>
           <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
           <ListItemText>{t('app.settings')}</ListItemText>
         </MenuItem>
@@ -331,6 +515,16 @@ export function BoardTopBar({
           <MenuItem onClick={() => { closeMobileActions(); onOpenProperties(); }}>
             <ListItemIcon><TuneIcon fontSize="small" /></ListItemIcon>
             <ListItemText>{t('properties.title', 'Eigenschaften')}</ListItemText>
+          </MenuItem>
+        )}
+        {showComments && (
+          <MenuItem onClick={() => { closeMobileActions(); onOpenComments(); }}>
+            <ListItemIcon>
+              <Badge badgeContent={commentCount} color="secondary" max={99}>
+                <ModeCommentOutlinedIcon fontSize="small" />
+              </Badge>
+            </ListItemIcon>
+            <ListItemText>{t('comments.title')}</ListItemText>
           </MenuItem>
         )}
         {showChat && (
@@ -347,7 +541,13 @@ export function BoardTopBar({
 
       <ShortcutHelpDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
-      <AppSettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
+      <BoardSettingsDialog
+        open={boardSettingsOpen}
+        onClose={() => setBoardSettingsOpen(false)}
+        onBoardChanged={onBoardChanged}
+      />
+
+      <AppSettingsDialog open={appSettingsOpen} onClose={() => setAppSettingsOpen(false)} />
     </>
   );
 }

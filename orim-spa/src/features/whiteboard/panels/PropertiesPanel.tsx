@@ -30,6 +30,13 @@ import { useCommandStack } from '../store/commandStack';
 import { ColorInputField } from '../controls/ColorInputField';
 import { PreviewSelect, type PreviewSelectOption } from '../controls/PreviewSelect';
 import { getIconDisplayName } from '../icons/iconCatalog';
+import { resolveFrameTitleFontSize } from '../shapes/FrameRenderer';
+import type { BoardOperationPayload } from '../realtime/boardOperations';
+import { createElementUpdatedOperation } from '../realtime/boardOperations';
+import {
+  createChangedKeysByElementId,
+  createElementUpdateCommand,
+} from '../realtime/localBoardCommands';
 import {
   ArrowLineStyle,
   ArrowHeadStyle,
@@ -37,12 +44,16 @@ import {
   DockPoint,
   HorizontalLabelAlignment,
   VerticalLabelAlignment,
+  ImageFit,
   type BoardElement,
   type BoardElementBase,
   type ShapeElement,
   type TextElement,
+  type StickyNoteElement,
+  type FrameElement,
   type ArrowElement,
   type IconElement,
+  type ImageElement,
 } from '../../../types/models';
 import { contrastingTextColor } from '../../../utils/colorUtils';
 import { getLineDashArray } from '../../../utils/lineStyles';
@@ -159,6 +170,7 @@ function AlignmentControls({
   verticalLabel,
   onHorizontalChange,
   onVerticalChange,
+  showVertical = true,
 }: {
   horizontal: HorizontalLabelAlignment;
   vertical: VerticalLabelAlignment;
@@ -166,6 +178,7 @@ function AlignmentControls({
   verticalLabel: string;
   onHorizontalChange: (value: HorizontalLabelAlignment) => void;
   onVerticalChange: (value: VerticalLabelAlignment) => void;
+  showVertical?: boolean;
 }) {
   return (
     <Box sx={{ display: 'grid', gap: 1 }}>
@@ -189,26 +202,28 @@ function AlignmentControls({
           <ToggleButton value={HorizontalLabelAlignment.Right}><FormatAlignRightIcon fontSize="small" /></ToggleButton>
         </ToggleButtonGroup>
       </Box>
-      <Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
-          {verticalLabel}
-        </Typography>
-        <ToggleButtonGroup
-          exclusive
-          size="small"
-          fullWidth
-          value={vertical}
-          onChange={(_, value) => {
-            if (value) {
-              onVerticalChange(value as VerticalLabelAlignment);
-            }
-          }}
-        >
-          <ToggleButton value={VerticalLabelAlignment.Top}><VerticalAlignTopIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value={VerticalLabelAlignment.Middle}><VerticalAlignCenterIcon fontSize="small" /></ToggleButton>
-          <ToggleButton value={VerticalLabelAlignment.Bottom}><VerticalAlignBottomIcon fontSize="small" /></ToggleButton>
-        </ToggleButtonGroup>
-      </Box>
+      {showVertical && (
+        <Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+            {verticalLabel}
+          </Typography>
+          <ToggleButtonGroup
+            exclusive
+            size="small"
+            fullWidth
+            value={vertical}
+            onChange={(_, value) => {
+              if (value) {
+                onVerticalChange(value as VerticalLabelAlignment);
+              }
+            }}
+          >
+            <ToggleButton value={VerticalLabelAlignment.Top}><VerticalAlignTopIcon fontSize="small" /></ToggleButton>
+            <ToggleButton value={VerticalLabelAlignment.Middle}><VerticalAlignCenterIcon fontSize="small" /></ToggleButton>
+            <ToggleButton value={VerticalLabelAlignment.Bottom}><VerticalAlignBottomIcon fontSize="small" /></ToggleButton>
+          </ToggleButtonGroup>
+        </Box>
+      )}
     </Box>
   );
 }
@@ -259,7 +274,7 @@ function NumericSliderField({
 
 interface PropertiesPanelProps {
   onClose: () => void;
-  onBoardChanged?: (changeKind: string) => void;
+  onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
   mobile?: boolean;
 }
 
@@ -321,14 +336,67 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
   }));
 
   const update = (id: string, changes: Partial<BoardElement>) => {
-    const before = [...elements];
+    const currentElement = elements.find((element) => element.id === id);
+    if (!currentElement) {
+      return;
+    }
+
+    const updatedElement = { ...currentElement, ...changes } as BoardElement;
+    const changedKeys = Object.keys(changes).filter((key) => {
+      const currentValue = (currentElement as unknown as Record<string, unknown>)[key];
+      const nextValue = (updatedElement as unknown as Record<string, unknown>)[key];
+
+      if (Array.isArray(currentValue) || Array.isArray(nextValue)) {
+        if (!Array.isArray(currentValue) || !Array.isArray(nextValue) || currentValue.length !== nextValue.length) {
+          return true;
+        }
+
+        return currentValue.some((value, index) => !Object.is(value, nextValue[index]));
+      }
+
+      return !Object.is(currentValue, nextValue);
+    });
+
+    if (changedKeys.length === 0) {
+      return;
+    }
+
     updateElement(id, changes);
-    const after = elements.map((element: BoardElement) =>
-      element.id === id ? { ...element, ...changes } : element,
-    ) as BoardElement[];
-    pushCommand(before, after);
+    pushCommand(createElementUpdateCommand(
+      [currentElement],
+      [updatedElement],
+      createChangedKeysByElementId([id], changedKeys),
+    ));
     setDirty(true);
-    onBoardChanged?.('edit');
+    onBoardChanged?.('edit', createElementUpdatedOperation(updatedElement));
+  };
+
+  // When switching to Uniform, resize the element box to match the actual rendered image size.
+  const handleImageFitChange = async (id: string, newFit: ImageFit) => {
+    const imgEl = elements.find((e) => e.id === id) as ImageElement | undefined;
+    if (!imgEl) return;
+
+    if (newFit === ImageFit.Uniform) {
+      try {
+        const { natW, natH } = await new Promise<{ natW: number; natH: number }>((resolve, reject) => {
+          const img = new window.Image();
+          img.onload = () => resolve({ natW: img.naturalWidth, natH: img.naturalHeight });
+          img.onerror = reject;
+          img.src = imgEl.imageUrl;
+        });
+        if (natW > 0 && natH > 0) {
+          const scale = Math.min(imgEl.width / natW, imgEl.height / natH);
+          const newW = natW * scale;
+          const newH = natH * scale;
+          const cx = imgEl.x + imgEl.width / 2;
+          const cy = imgEl.y + imgEl.height / 2;
+          update(id, { imageFit: newFit, width: newW, height: newH, x: cx - newW / 2, y: cy - newH / 2 });
+          return;
+        }
+      } catch { /* fall through to plain update */ }
+    }
+
+    update(id, { imageFit: newFit });
   };
 
   return (
@@ -564,6 +632,168 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
             </>
           )}
 
+          {el.$type === 'sticky' && (
+            <>
+              <TextField
+                label={t('properties.text')}
+                size="small"
+                multiline
+                minRows={4}
+                value={(el as StickyNoteElement).text ?? ''}
+                onChange={(e) => update(el.id, { text: e.target.value })}
+              />
+              <ColorInputField
+                label={t('properties.fillColor')}
+                value={(el as StickyNoteElement).fillColor ?? '#FDE68A'}
+                onChange={(value) => {
+                  const sticky = el as StickyNoteElement;
+                  const fallbackColor = contrastingTextColor(sticky.fillColor ?? '#FDE68A');
+                  const currentColor = sticky.color ?? fallbackColor;
+                  update(el.id, currentColor === fallbackColor
+                    ? { fillColor: value, color: contrastingTextColor(value) }
+                    : { fillColor: value });
+                }}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={(el as StickyNoteElement).autoFontSize ?? false}
+                    onChange={(e) => {
+                      const sticky = el as StickyNoteElement;
+                      update(el.id, e.target.checked
+                        ? { autoFontSize: true }
+                        : { autoFontSize: false, fontSize: Math.round(resolveTextFontSize(sticky)) });
+                    }}
+                    size="small"
+                  />
+                }
+                label={t('properties.automaticFontSize')}
+              />
+              {!(el as StickyNoteElement).autoFontSize && (
+                <NumericSliderField
+                  label={t('properties.fontSize')}
+                  value={Math.round((el as StickyNoteElement).fontSize ?? 16)}
+                  min={8}
+                  max={200}
+                  onChange={(value) => update(el.id, { fontSize: value, autoFontSize: false })}
+                />
+              )}
+              <TextField
+                select
+                label={t('properties.fontFamily')}
+                size="small"
+                value={(el as StickyNoteElement).fontFamily ?? FONT_FAMILY_DEFAULT}
+                onChange={(e) => update(el.id, { fontFamily: e.target.value === FONT_FAMILY_DEFAULT ? null : e.target.value })}
+              >
+                {FONT_FAMILY_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    <Box sx={{ fontFamily: option.previewFamily ?? 'inherit' }}>{option.label === 'Theme Default' ? t('properties.defaultFont') : option.label}</Box>
+                  </MenuItem>
+                ))}
+              </TextField>
+              <ColorInputField
+                label={t('properties.color')}
+                value={(el as StickyNoteElement).color ?? contrastingTextColor((el as StickyNoteElement).fillColor ?? '#FDE68A')}
+                onChange={(value) => update(el.id, { color: value })}
+              />
+              <AlignmentControls
+                horizontal={(el as StickyNoteElement).labelHorizontalAlignment ?? HorizontalLabelAlignment.Left}
+                vertical={(el as StickyNoteElement).labelVerticalAlignment ?? VerticalLabelAlignment.Top}
+                horizontalLabel={t('properties.horizontal')}
+                verticalLabel={t('properties.vertical')}
+                onHorizontalChange={(value) => update(el.id, { labelHorizontalAlignment: value })}
+                onVerticalChange={(value) => update(el.id, { labelVerticalAlignment: value })}
+              />
+              <TextStyleControls
+                element={el as StickyNoteElement}
+                onChange={(changes) => update(el.id, changes)}
+              />
+            </>
+          )}
+
+          {el.$type === 'frame' && (
+            <>
+              <TextField
+                label={t('properties.label')}
+                size="small"
+                value={(el as FrameElement).label ?? ''}
+                onChange={(e) => update(el.id, { label: e.target.value })}
+              />
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={(el as FrameElement).labelFontSize == null}
+                    onChange={(e) => {
+                      const frame = el as FrameElement;
+                      update(el.id, e.target.checked
+                        ? { labelFontSize: null }
+                        : { labelFontSize: Math.round(resolveFrameTitleFontSize(frame)) });
+                    }}
+                    size="small"
+                  />
+                }
+                label={t('properties.automaticFontSize')}
+              />
+              {(el as FrameElement).labelFontSize != null && (
+                <NumericSliderField
+                  label={t('properties.fontSize')}
+                  value={Math.round((el as FrameElement).labelFontSize ?? resolveFrameTitleFontSize(el as FrameElement))}
+                  min={8}
+                  max={64}
+                  onChange={(value) => update(el.id, { labelFontSize: value })}
+                />
+              )}
+              <TextField
+                select
+                label={t('properties.fontFamily')}
+                size="small"
+                value={(el as FrameElement).fontFamily ?? FONT_FAMILY_DEFAULT}
+                onChange={(e) => update(el.id, { fontFamily: e.target.value === FONT_FAMILY_DEFAULT ? null : e.target.value })}
+              >
+                {FONT_FAMILY_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    <Box sx={{ fontFamily: option.previewFamily ?? 'inherit' }}>{option.label === 'Theme Default' ? t('properties.defaultFont') : option.label}</Box>
+                  </MenuItem>
+                ))}
+              </TextField>
+              <ColorInputField
+                label={t('properties.color')}
+                value={(el as FrameElement).labelColor ?? contrastingTextColor((el as FrameElement).fillColor ?? 'rgba(37, 99, 235, 0.08)')}
+                onChange={(value) => update(el.id, { labelColor: value })}
+              />
+              <AlignmentControls
+                horizontal={(el as FrameElement).labelHorizontalAlignment ?? HorizontalLabelAlignment.Left}
+                vertical={VerticalLabelAlignment.Top}
+                horizontalLabel={t('properties.horizontal')}
+                verticalLabel={t('properties.vertical')}
+                onHorizontalChange={(value) => update(el.id, { labelHorizontalAlignment: value })}
+                onVerticalChange={() => undefined}
+                showVertical={false}
+              />
+              <TextStyleControls
+                element={el as FrameElement}
+                onChange={(changes) => update(el.id, changes)}
+              />
+              <ColorInputField
+                label={t('properties.fillColor')}
+                value={(el as FrameElement).fillColor ?? 'rgba(37, 99, 235, 0.08)'}
+                onChange={(value) => update(el.id, { fillColor: value })}
+              />
+              <ColorInputField
+                label={t('properties.strokeColor')}
+                value={(el as FrameElement).strokeColor ?? 'rgba(37, 99, 235, 0.48)'}
+                onChange={(value) => update(el.id, { strokeColor: value })}
+              />
+              <NumericSliderField
+                label={t('properties.strokeWidth')}
+                value={(el as FrameElement).strokeWidth ?? 2}
+                min={1}
+                max={12}
+                onChange={(value) => update(el.id, { strokeWidth: value })}
+              />
+            </>
+          )}
+
           {el.$type === 'icon' && (
             <>
               <TextField
@@ -577,6 +807,31 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 value={(el as IconElement).color ?? '#333333'}
                 onChange={(value) => update(el.id, { color: value })}
               />
+            </>
+          )}
+
+          {/* Image-specific */}
+          {el.$type === 'image' && (
+            <>
+              <NumericSliderField
+                label={t('properties.opacity')}
+                value={Math.round(((el as ImageElement).opacity ?? 1) * 100)}
+                min={10}
+                max={100}
+                onChange={(value) => update(el.id, { opacity: value / 100 })}
+              />
+              <TextField
+                select
+                size="small"
+                label={t('properties.imageFit')}
+                value={(el as ImageElement).imageFit ?? ImageFit.Uniform}
+                onChange={(e) => { void handleImageFitChange(el.id, e.target.value as ImageFit); }}
+                fullWidth
+              >
+                <MenuItem value={ImageFit.Uniform}>{t('properties.imageFit_Uniform')}</MenuItem>
+                <MenuItem value={ImageFit.UniformToFill}>{t('properties.imageFit_UniformToFill')}</MenuItem>
+                <MenuItem value={ImageFit.Fill}>{t('properties.imageFit_Fill')}</MenuItem>
+              </TextField>
             </>
           )}
 

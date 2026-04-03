@@ -1,5 +1,6 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.SignalR;
+using Orim.Api.Contracts;
 using Orim.Core.Models;
 using Orim.Core.Services;
 
@@ -12,12 +13,16 @@ public sealed class BoardHub : Hub
     private const string DisplayNameKey = "display-name";
     private readonly BoardPresenceService _presenceService;
     private readonly BoardService _boardService;
+    private readonly UserService _userService;
 
-    public BoardHub(BoardPresenceService presenceService, BoardService boardService)
+    public BoardHub(BoardPresenceService presenceService, BoardService boardService, UserService userService)
     {
         _presenceService = presenceService;
         _boardService = boardService;
+        _userService = userService;
     }
+
+    public static string GetUserGroupName(Guid userId) => $"user:{userId:D}";
 
     public async Task JoinBoard(Guid boardId, string? shareToken = null, string? sharePassword = null, string? requestedDisplayName = null)
     {
@@ -29,15 +34,28 @@ public sealed class BoardHub : Hub
 
         var groupName = BoardGroup(boardId);
         await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+        var userId = ResolveUserId();
+        if (userId.HasValue)
+        {
+            await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(userId.Value));
+        }
+
         Context.Items[JoinedBoardIdKey] = boardId;
         Context.Items[JoinedCanEditKey] = CanEditBoard(board, shareToken, sharePassword);
 
-        var displayName = ResolveDisplayName(requestedDisplayName);
-    Context.Items[DisplayNameKey] = displayName;
+        var displayName = await ResolveDisplayNameAsync(requestedDisplayName);
+        Context.Items[DisplayNameKey] = displayName;
         var clientId = Context.ConnectionId;
         var color = BoardPresenceIdentity.ResolveColor(clientId);
 
-        var presence = new BoardCursorPresence(clientId, displayName, color, null, null, DateTime.UtcNow);
+        // Remove stale cursors left by a previous connection of the same authenticated user
+        // (e.g., after a network reconnect that assigned a new connection ID).
+        if (userId.HasValue)
+        {
+            await _presenceService.RemoveCursorsForUserAsync(boardId, userId.Value, clientId);
+        }
+
+        var presence = new BoardCursorPresence(clientId, userId, displayName, color, null, null, DateTime.UtcNow);
         await _presenceService.UpsertCursorAsync(boardId, presence);
 
         var snapshot = await GetPresenceSnapshot(boardId);
@@ -51,7 +69,7 @@ public sealed class BoardHub : Hub
             return;
         }
 
-        var displayName = ResolveDisplayName(requestedDisplayName);
+        var displayName = await ResolveDisplayNameAsync(requestedDisplayName);
         Context.Items[DisplayNameKey] = displayName;
 
         var existingPresence = _presenceService.GetCursor(boardId, Context.ConnectionId);
@@ -59,6 +77,7 @@ public sealed class BoardHub : Hub
 
         var presence = new BoardCursorPresence(
             Context.ConnectionId,
+            ResolveUserId(),
             displayName,
             color,
             existingPresence?.WorldX,
@@ -132,6 +151,27 @@ public sealed class BoardHub : Hub
         });
     }
 
+    public async Task ApplyBoardOperation(Guid boardId, BoardOperationDto operation)
+    {
+        if (!IsJoinedBoard(boardId))
+        {
+            return;
+        }
+
+        if (!CanEditJoinedBoard())
+        {
+            return;
+        }
+
+        ArgumentNullException.ThrowIfNull(operation);
+
+        await Clients.OthersInGroup(BoardGroup(boardId)).SendAsync("BoardOperationApplied", new BoardOperationNotification(
+            boardId,
+            Context.ConnectionId,
+            DateTime.UtcNow,
+            operation));
+    }
+
     public async Task UpdateCursor(Guid boardId, double? worldX, double? worldY)
     {
         if (!IsJoinedBoard(boardId))
@@ -139,11 +179,12 @@ public sealed class BoardHub : Hub
             return;
         }
 
-        var displayName = ResolveDisplayName(null);
+        var displayName = await ResolveDisplayNameAsync(null, preferCachedDisplayName: true);
+        Context.Items[DisplayNameKey] = displayName;
         var clientId = Context.ConnectionId;
         var color = BoardPresenceIdentity.ResolveColor(clientId);
 
-        var presence = new BoardCursorPresence(clientId, displayName, color, worldX, worldY, DateTime.UtcNow);
+        var presence = new BoardCursorPresence(clientId, ResolveUserId(), displayName, color, worldX, worldY, DateTime.UtcNow);
         await _presenceService.UpsertCursorAsync(boardId, presence);
 
         var groupName = BoardGroup(boardId);
@@ -206,12 +247,31 @@ public sealed class BoardHub : Hub
         return Guid.TryParse(raw, out var userId) ? userId : null;
     }
 
-    private string ResolveDisplayName(string? requestedDisplayName)
+    private async Task<string> ResolveDisplayNameAsync(string? requestedDisplayName, bool preferCachedDisplayName = false)
     {
-        var authenticatedName = Context.User?.FindFirstValue(ClaimTypes.Name);
-        if (!string.IsNullOrWhiteSpace(authenticatedName))
+        if (preferCachedDisplayName
+            && Context.Items.TryGetValue(DisplayNameKey, out var cachedDisplayName)
+            && cachedDisplayName is string cachedPersistedDisplayName
+            && !string.IsNullOrWhiteSpace(cachedPersistedDisplayName))
         {
-            return authenticatedName;
+            return cachedPersistedDisplayName;
+        }
+
+        var userId = ResolveUserId();
+        if (userId.HasValue)
+        {
+            var user = await _userService.GetByIdAsync(userId.Value);
+            if (user is not null)
+            {
+                var resolved = string.IsNullOrWhiteSpace(user.DisplayName)
+                    ? user.Username
+                    : user.DisplayName.Trim();
+
+                if (!string.IsNullOrWhiteSpace(resolved))
+                {
+                    return resolved;
+                }
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(requestedDisplayName))
@@ -224,6 +284,12 @@ public sealed class BoardHub : Hub
             && !string.IsNullOrWhiteSpace(persistedDisplayName))
         {
             return persistedDisplayName;
+        }
+
+        var authenticatedName = Context.User?.FindFirstValue(ClaimTypes.Name);
+        if (!string.IsNullOrWhiteSpace(authenticatedName))
+        {
+            return authenticatedName;
         }
 
         return "Guest";
@@ -274,5 +340,7 @@ public sealed class BoardHub : Hub
         return tcs.Task;
     }
 
-    private static string BoardGroup(Guid boardId) => $"board-{boardId}";
+    public static string GetBoardGroupName(Guid boardId) => $"board-{boardId}";
+
+    private static string BoardGroup(Guid boardId) => GetBoardGroupName(boardId);
 }

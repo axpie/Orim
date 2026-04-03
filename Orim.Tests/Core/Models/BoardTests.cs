@@ -19,8 +19,10 @@ public class BoardTests
         Assert.Null(board.SharePasswordHash);
         Assert.Empty(board.Members);
         Assert.Empty(board.Elements);
+        Assert.Empty(board.Comments);
         Assert.Empty(board.Snapshots);
         Assert.Empty(board.RecentColors);
+        Assert.Empty(board.StickyNotePresets);
     }
 
     [Fact]

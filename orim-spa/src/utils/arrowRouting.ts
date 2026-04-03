@@ -53,7 +53,7 @@ export function computeArrowPolyline(
   }
 
   const obstacles = elements
-    .filter((element) => element.$type !== 'arrow')
+    .filter((element) => element.$type !== 'arrow' && element.$type !== 'frame')
     .map((element) => ({ x: element.x, y: element.y, width: element.width, height: element.height }));
 
   return computeOrthogonalRoute(
@@ -140,7 +140,7 @@ export function findNearestDockTarget(
   let nearestDistance = maxDistance;
 
   for (const element of elements) {
-    if (element.$type === 'arrow' || element.id === excludedElementId) {
+    if (element.$type === 'arrow' || element.$type === 'frame' || element.id === excludedElementId) {
       continue;
     }
 

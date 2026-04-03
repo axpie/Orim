@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import type { UserRole } from '../types/models';
-import { login as apiLogin } from '../api/auth';
+import type { LoginResponse, UserRole } from '../types/models';
+import { exchangeGoogleIdToken, exchangeMicrosoftIdToken, login as apiLogin } from '../api/auth';
 
 interface AuthUser {
   id: string;
   username: string;
+  displayName: string;
   role: UserRole;
 }
 
@@ -13,8 +14,57 @@ interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   login: (username: string, password: string) => Promise<void>;
+  loginWithMicrosoft: (idToken: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
+  setSession: (response: LoginResponse) => void;
+  setUser: (user: AuthUser) => void;
   logout: () => void;
   hydrate: () => void;
+}
+
+let storageSyncInitialized = false;
+
+function toAuthUser(response: { userId: string; username: string; displayName: string; role: UserRole }): AuthUser {
+  const normalizedDisplayName = response.displayName.trim().length > 0 ? response.displayName : response.username;
+
+  return {
+    id: response.userId,
+    username: response.username,
+    displayName: normalizedDisplayName,
+    role: response.role,
+  };
+}
+
+function persistUser(user: AuthUser) {
+  localStorage.setItem('orim_user', JSON.stringify(user));
+}
+
+function persistAuth(response: LoginResponse) {
+  const user = toAuthUser(response);
+
+  localStorage.setItem('orim_token', response.token);
+  persistUser(user);
+
+  return { user, token: response.token, isAuthenticated: true } satisfies Pick<AuthState, 'user' | 'token' | 'isAuthenticated'>;
+}
+
+function clearPersistedAuth() {
+  localStorage.removeItem('orim_token');
+  localStorage.removeItem('orim_user');
+}
+
+function parsePersistedUser(userJson: string): AuthUser {
+  const parsedUser = JSON.parse(userJson) as Partial<AuthUser>;
+  if (!parsedUser.id || !parsedUser.username || !parsedUser.role) {
+    throw new Error('Invalid stored user.');
+  }
+
+  return {
+    id: parsedUser.id,
+    username: parsedUser.username,
+    displayName: parsedUser.displayName?.trim().length ? parsedUser.displayName : parsedUser.username,
+    role: parsedUser.role,
+  };
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
@@ -24,33 +74,64 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (username, password) => {
     const response = await apiLogin(username, password);
-    const user: AuthUser = {
-      id: response.userId,
-      username: response.username,
-      role: response.role,
-    };
-    localStorage.setItem('orim_token', response.token);
-    localStorage.setItem('orim_user', JSON.stringify(user));
-    set({ user, token: response.token, isAuthenticated: true });
+    set(persistAuth(response));
+  },
+
+  loginWithMicrosoft: async (idToken) => {
+    const response = await exchangeMicrosoftIdToken(idToken);
+    set(persistAuth(response));
+  },
+
+  loginWithGoogle: async (idToken) => {
+    const response = await exchangeGoogleIdToken(idToken);
+    set(persistAuth(response));
+  },
+
+  setSession: (response) => {
+    set(persistAuth(response));
+  },
+
+  setUser: (user) => {
+    persistUser(user);
+    set((state) => ({ ...state, user }));
   },
 
   logout: () => {
-    localStorage.removeItem('orim_token');
-    localStorage.removeItem('orim_user');
+    clearPersistedAuth();
     set({ user: null, token: null, isAuthenticated: false });
   },
 
   hydrate: () => {
-    const token = localStorage.getItem('orim_token');
-    const userJson = localStorage.getItem('orim_user');
-    if (token && userJson) {
-      try {
-        const user = JSON.parse(userJson) as AuthUser;
-        set({ user, token, isAuthenticated: true });
-      } catch {
-        localStorage.removeItem('orim_token');
-        localStorage.removeItem('orim_user');
+    const syncFromStorage = () => {
+      const token = localStorage.getItem('orim_token');
+      const userJson = localStorage.getItem('orim_user');
+
+      if (token && userJson) {
+        try {
+          const user = parsePersistedUser(userJson);
+          const normalizedUserJson = JSON.stringify(user);
+          if (normalizedUserJson !== userJson) {
+            localStorage.setItem('orim_user', normalizedUserJson);
+          }
+          set({ user, token, isAuthenticated: true });
+          return;
+        } catch {
+          clearPersistedAuth();
+        }
       }
+
+      set({ user: null, token: null, isAuthenticated: false });
+    };
+
+    syncFromStorage();
+
+    if (!storageSyncInitialized && typeof window !== 'undefined') {
+      storageSyncInitialized = true;
+      window.addEventListener('storage', (event) => {
+        if (event.key === null || event.key === 'orim_token' || event.key === 'orim_user') {
+          syncFromStorage();
+        }
+      });
     }
   },
 }));

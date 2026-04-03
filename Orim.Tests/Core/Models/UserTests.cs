@@ -11,6 +11,7 @@ public class UserTests
 
         Assert.NotEqual(Guid.Empty, user.Id);
         Assert.Equal(string.Empty, user.Username);
+        Assert.Equal(string.Empty, user.DisplayName);
         Assert.Equal(string.Empty, user.PasswordHash);
         Assert.Equal(UserRole.User, user.Role);
         Assert.True(user.IsActive);

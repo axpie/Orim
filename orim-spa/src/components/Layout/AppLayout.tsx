@@ -77,10 +77,23 @@ export function AppLayout() {
             open={Boolean(anchorEl)}
             onClose={() => setAnchorEl(null)}
           >
-            <MenuItem disabled>
-              <Typography variant="body2">{user?.username}</Typography>
+            <MenuItem disabled sx={{ display: 'block', opacity: 1 }}>
+              <Typography variant="body2" fontWeight={600}>
+                {user?.displayName ?? user?.username}
+              </Typography>
+              {user && user.displayName !== user.username && (
+                <Typography variant="caption" color="text.secondary">
+                  @{user.username}
+                </Typography>
+              )}
             </MenuItem>
             <Divider />
+            <MenuItem onClick={() => { setAnchorEl(null); navigate('/profile'); }}>
+              <ListItemIcon>
+                <AccountCircleIcon fontSize="small" />
+              </ListItemIcon>
+              {t('profile.title')}
+            </MenuItem>
             <MenuItem onClick={handleLogout}>
               <ListItemIcon>
                 <LogoutIcon fontSize="small" />

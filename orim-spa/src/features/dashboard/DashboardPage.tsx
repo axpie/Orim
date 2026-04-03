@@ -9,6 +9,7 @@ import {
   CardContent,
   CardActionArea,
   Chip,
+  Collapse,
   Dialog,
   DialogActions,
   DialogContent,
@@ -24,6 +25,8 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import {
   getBoards,
   createBoard,
@@ -33,6 +36,7 @@ import {
   getTemplates,
 } from '../../api/boards';
 import {
+  BoardRole,
   BoardVisibility,
   type BoardSummary,
   type BoardTemplateDefinition,
@@ -130,6 +134,75 @@ function TemplatePreview({ templateId }: { templateId: string }) {
   return <Box sx={frameSx}>{svg}</Box>;
 }
 
+interface BoardCardProps {
+  board: BoardSummary;
+  isOwner: boolean;
+  roleLabel: string | null;
+  onNavigate: () => void;
+  onRename: () => void;
+  onDelete: () => void;
+  visibilityLabel: string;
+  visibilityColor: string;
+  t: (key: string) => string;
+}
+
+function BoardCard({ board, isOwner, roleLabel, onNavigate, onRename, onDelete, visibilityLabel, visibilityColor, t }: BoardCardProps) {
+  return (
+    <Card sx={{ height: '100%' }}>
+      <CardActionArea onClick={onNavigate}>
+        <CardContent>
+          <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 0.75 }}>
+            <Typography variant="h6" fontWeight={600} sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
+              {board.title}
+            </Typography>
+            <Chip
+              label={visibilityLabel}
+              color={visibilityColor as 'default' | 'success' | 'info'}
+              size="small"
+              variant="outlined"
+            />
+            {roleLabel && (
+              <Chip label={roleLabel} size="small" color="secondary" />
+            )}
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            {board.elementCount} {t('dashboard.elements')}
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            {t('dashboard.lastModified')}: {new Date(board.updatedAt).toLocaleDateString()}
+          </Typography>
+        </CardContent>
+      </CardActionArea>
+      {isOwner && (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 1, pb: 1 }}>
+          <Tooltip title={t('board.rename')}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                onRename();
+              }}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title={t('tools.delete')}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete();
+              }}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      )}
+    </Card>
+  );
+}
+
 export function DashboardPage() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -182,6 +255,24 @@ export function DashboardPage() {
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameId, setRenameId] = useState('');
   const [renameTitle, setRenameTitle] = useState('');
+
+  // Shared boards section collapsed by default
+  const [sharedExpanded, setSharedExpanded] = useState(false);
+
+  const myBoards = boards.filter((b: BoardSummary) => b.ownerId === currentUser?.id);
+  const sharedBoards = boards.filter((b: BoardSummary) => b.ownerId !== currentUser?.id);
+
+  const getUserRole = (board: BoardSummary): BoardRole | null =>
+    board.members.find((m) => m.userId === currentUser?.id)?.role ?? null;
+
+  const roleLabel = (role: BoardRole | null) => {
+    switch (role) {
+      case BoardRole.Editor: return t('sharing.editor');
+      case BoardRole.Viewer: return t('sharing.viewer');
+      case BoardRole.Owner: return t('sharing.owner');
+      default: return null;
+    }
+  };
 
   const getTemplateTitle = (template: BoardTemplateDefinition) => {
     const key = `templates.${template.titleResourceKey}`;
@@ -335,63 +426,83 @@ export function DashboardPage() {
           </Box>
         </Box>
       ) : (
-        <Grid container spacing={2}>
-          {boards.map((board: BoardSummary) => (
-            <Grid size={{ xs: 12, sm: 6, md: 4 }} key={board.id}>
-              <Card sx={{ height: '100%' }}>
-                <CardActionArea onClick={() => navigate(`/board/${board.id}`)}>
-                  <CardContent>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                      <Typography variant="h6" fontWeight={600} sx={{ flexGrow: 1 }} noWrap>
-                        {board.title}
-                      </Typography>
-                      <Chip
-                        label={visibilityLabel(board.visibility)}
-                        color={visibilityColor(board.visibility) as 'default' | 'success' | 'info'}
-                        size="small"
-                        variant="outlined"
-                      />
-                    </Box>
-                    <Typography variant="body2" color="text.secondary">
-                      {board.elementCount} {t('dashboard.elements')}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {t('dashboard.lastModified')}: {new Date(board.updatedAt).toLocaleDateString()}
-                    </Typography>
-                  </CardContent>
-                </CardActionArea>
-                {board.ownerId === currentUser?.id && (
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 1, pb: 1 }}>
-                    <Tooltip title={t('board.rename')}>
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setRenameId(board.id);
-                          setRenameTitle(board.title);
-                          setRenameOpen(true);
-                        }}
-                      >
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                    <Tooltip title={t('tools.delete')}>
-                      <IconButton
-                        size="small"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDelete(board.id);
-                        }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                )}
-              </Card>
+        <Box>
+          {/* My Boards */}
+          <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
+            {t('dashboard.myBoards')}
+          </Typography>
+          {myBoards.length === 0 ? (
+            <Typography color="text.secondary" sx={{ mb: 3 }}>
+              {t('dashboard.noOwnBoards')}
+            </Typography>
+          ) : (
+            <Grid container spacing={2} sx={{ mb: 4 }}>
+              {myBoards.map((board: BoardSummary) => (
+                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={board.id}>
+                  <BoardCard
+                    board={board}
+                    isOwner={true}
+                    roleLabel={null}
+                    onNavigate={() => navigate(`/board/${board.id}`)}
+                    onRename={() => {
+                      setRenameId(board.id);
+                      setRenameTitle(board.title);
+                      setRenameOpen(true);
+                    }}
+                    onDelete={() => handleDelete(board.id)}
+                    visibilityLabel={visibilityLabel(board.visibility)}
+                    visibilityColor={visibilityColor(board.visibility)}
+                    t={t}
+                  />
+                </Grid>
+              ))}
             </Grid>
-          ))}
-        </Grid>
+          )}
+
+          {/* Shared with Me */}
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', mb: 1.5 }}
+            onClick={() => setSharedExpanded((v) => !v)}
+          >
+            <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
+              {t('dashboard.sharedWithMe')}
+              {sharedBoards.length > 0 && (
+                <Chip label={sharedBoards.length} size="small" sx={{ ml: 1 }} />
+              )}
+            </Typography>
+            <IconButton size="small">
+              {sharedExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </IconButton>
+          </Box>
+          <Collapse in={sharedExpanded}>
+            {sharedBoards.length === 0 ? (
+              <Typography color="text.secondary" sx={{ mb: 3 }}>
+                {t('dashboard.noSharedBoards')}
+              </Typography>
+            ) : (
+              <Grid container spacing={2} sx={{ mb: 4 }}>
+                {sharedBoards.map((board: BoardSummary) => {
+                  const role = getUserRole(board);
+                  return (
+                    <Grid size={{ xs: 12, sm: 6, md: 4 }} key={board.id}>
+                      <BoardCard
+                        board={board}
+                        isOwner={false}
+                        roleLabel={roleLabel(role)}
+                        onNavigate={() => navigate(`/board/${board.id}`)}
+                        onRename={() => {}}
+                        onDelete={() => {}}
+                        visibilityLabel={visibilityLabel(board.visibility)}
+                        visibilityColor={visibilityColor(board.visibility)}
+                        t={t}
+                      />
+                    </Grid>
+                  );
+                })}
+              </Grid>
+            )}
+          </Collapse>
+        </Box>
       )}
 
       {/* Create Dialog */}
@@ -433,7 +544,7 @@ export function DashboardPage() {
           </TextField>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setCreateOpen(false)}>{t('tools.select')}</Button>
+          <Button onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
           <Button variant="contained" onClick={handleCreate}>
             {t('dashboard.createBoard')}
           </Button>
@@ -454,7 +565,7 @@ export function DashboardPage() {
           />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setRenameOpen(false)}>Cancel</Button>
+          <Button onClick={() => setRenameOpen(false)}>{t('common.cancel')}</Button>
           <Button variant="contained" onClick={handleRename}>
             {t('board.save')}
           </Button>

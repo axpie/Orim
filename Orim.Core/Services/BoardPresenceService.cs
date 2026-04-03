@@ -6,6 +6,7 @@ public sealed record BoardPointerPosition(double WorldX, double WorldY);
 
 public sealed record BoardCursorPresence(
     string ClientId,
+    Guid? UserId,
     string DisplayName,
     string ColorHex,
     double? WorldX,
@@ -40,6 +41,36 @@ public sealed class BoardPresenceService
 
         var boardPresence = _presence.GetOrAdd(boardId, static _ => new());
         boardPresence[presence.ClientId] = presence;
+        return NotifySubscribersAsync(boardId);
+    }
+
+    public Task RemoveCursorsForUserAsync(Guid boardId, Guid userId, string keepClientId)
+    {
+        if (!_presence.TryGetValue(boardId, out var boardPresence))
+        {
+            return Task.CompletedTask;
+        }
+
+        var staleClientIds = boardPresence.Values
+            .Where(p => p.UserId == userId && p.ClientId != keepClientId)
+            .Select(p => p.ClientId)
+            .ToList();
+
+        if (staleClientIds.Count == 0)
+        {
+            return Task.CompletedTask;
+        }
+
+        foreach (var staleClientId in staleClientIds)
+        {
+            boardPresence.TryRemove(staleClientId, out _);
+        }
+
+        if (boardPresence.IsEmpty)
+        {
+            _presence.TryRemove(boardId, out _);
+        }
+
         return NotifySubscribersAsync(boardId);
     }
 

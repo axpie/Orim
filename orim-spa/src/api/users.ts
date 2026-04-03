@@ -1,5 +1,5 @@
 import client from './client';
-import type { CreateUserRequest, User } from '../types/models';
+import type { CreateUserRequest, UpdateProfileRequest, UpdateUserRequest, User } from '../types/models';
 
 export async function getUsers(): Promise<User[]> {
   const { data } = await client.get<User[]>('/api/users');
@@ -16,8 +16,18 @@ export async function createUser(request: CreateUserRequest): Promise<User> {
   return data;
 }
 
-export async function changePassword(id: string, newPassword: string): Promise<void> {
-  await client.put(`/api/users/${id}/password`, { newPassword });
+export async function updateProfile(id: string, request: UpdateProfileRequest): Promise<User> {
+  const { data } = await client.put<User>(`/api/users/${id}/profile`, request);
+  return data;
+}
+
+export async function updateUser(id: string, request: UpdateUserRequest): Promise<User> {
+  const { data } = await client.put<User>(`/api/users/${id}`, request);
+  return data;
+}
+
+export async function changePassword(id: string, newPassword: string, currentPassword?: string): Promise<void> {
+  await client.put(`/api/users/${id}/password`, { currentPassword, newPassword });
 }
 
 export async function deactivateUser(id: string): Promise<void> {

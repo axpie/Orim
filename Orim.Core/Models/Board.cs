@@ -24,6 +24,7 @@ public class Board
     public bool ArrowOutlineEnabled { get; set; } = true;
     public List<string> CustomColors { get; set; } = DefaultCustomColors.ToList();
     public List<string> RecentColors { get; set; } = [];
+    public List<StickyNotePreset> StickyNotePresets { get; set; } = [];
     public Guid OwnerId { get; set; }
     public BoardVisibility Visibility { get; set; } = BoardVisibility.Private;
     public string? ShareLinkToken { get; set; }
@@ -31,9 +32,17 @@ public class Board
     public string? SharePasswordHash { get; set; }
     public List<BoardMember> Members { get; set; } = [];
     public List<BoardElement> Elements { get; set; } = [];
+    public List<BoardComment> Comments { get; set; } = [];
     public List<BoardSnapshot> Snapshots { get; set; } = [];
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
+}
+
+public class StickyNotePreset
+{
+    public string Id { get; set; } = Guid.NewGuid().ToString("N");
+    public string Label { get; set; } = string.Empty;
+    public string FillColor { get; set; } = "#FDE68A";
 }
 
 public enum BoardVisibility
