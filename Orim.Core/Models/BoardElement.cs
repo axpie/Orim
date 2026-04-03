@@ -8,6 +8,7 @@ namespace Orim.Core.Models;
 [JsonDerivedType(typeof(FrameElement), "frame")]
 [JsonDerivedType(typeof(ArrowElement), "arrow")]
 [JsonDerivedType(typeof(IconElement), "icon")]
+[JsonDerivedType(typeof(ImageElement), "image")]
 public abstract class BoardElement
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -162,4 +163,18 @@ public class IconElement : BoardElement
 {
     public string IconName { get; set; } = "mdi-star";
     public string Color { get; set; } = "#0f172a";
+}
+
+public enum ImageFit
+{
+    Uniform,
+    UniformToFill,
+    Fill,
+}
+
+public class ImageElement : BoardElement
+{
+    public string ImageUrl { get; set; } = string.Empty;
+    public double Opacity { get; set; } = 1.0;
+    public ImageFit ImageFit { get; set; } = ImageFit.Uniform;
 }

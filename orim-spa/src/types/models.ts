@@ -158,7 +158,20 @@ export interface IconElement extends BoardElementBase {
   color: string;
 }
 
-export type BoardElement = ShapeElement | TextElement | StickyNoteElement | FrameElement | ArrowElement | IconElement;
+export enum ImageFit {
+  Uniform = 'Uniform',
+  UniformToFill = 'UniformToFill',
+  Fill = 'Fill',
+}
+
+export interface ImageElement extends BoardElementBase {
+  $type: 'image';
+  imageUrl: string;
+  opacity?: number | null;
+  imageFit?: ImageFit | null;
+}
+
+export type BoardElement = ShapeElement | TextElement | StickyNoteElement | FrameElement | ArrowElement | IconElement | ImageElement;
 
 // --- Board ---
 
@@ -492,4 +505,13 @@ export interface BoardOperationNotification {
   sourceClientId?: string | null;
   changedAtUtc: string;
   operation: BoardOperation;
+}
+
+// --- User Images ---
+export interface UserImageInfo {
+  id: string;
+  url: string;
+  fileName: string;
+  size: number;
+  uploadedAt: string;
 }

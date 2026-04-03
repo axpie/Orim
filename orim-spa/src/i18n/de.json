@@ -57,7 +57,12 @@
     "deleteConfirm": "Möchten Sie dieses Board wirklich löschen?",
     "elements": "Elemente",
     "lastModified": "Zuletzt geändert",
-    "templates": "Vorlagen"
+    "templates": "Vorlagen",
+    "myBoards": "Meine Boards",
+    "sharedWithMe": "Geteilt mit mir",
+    "noOwnBoards": "Noch keine eigenen Boards vorhanden.",
+    "noSharedBoards": "Keine Boards mit Ihnen geteilt.",
+    "sharedAs": "Geteilt als"
   },
   "board": {
     "untitled": "Unbenanntes Board",
@@ -130,6 +135,7 @@
     "iconBrowseHint": "Top-Auswahl, weitere Icons per Suche",
     "iconResults": "{{count}} Treffer",
     "arrow": "Pfeil",
+    "image": "Bild",
     "undo": "Rückgängig",
     "redo": "Wiederholen",
     "delete": "Löschen",
@@ -178,7 +184,12 @@
     "straight": "Gerade",
     "orthogonal": "Rechtwinklig",
     "noElementSelected": "Kein Element ausgewählt.",
-    "elementsSelected": "{{count}} Elemente ausgewählt."
+    "elementsSelected": "{{count}} Elemente ausgewählt.",
+    "opacity": "Deckkraft (%)",
+    "imageFit": "Bildanpassung",
+    "imageFit_Uniform": "Einheitlich",
+    "imageFit_UniformToFill": "Einheitlich füllen",
+    "imageFit_Fill": "Strecken"
   },
   "sharing": {
     "visibility": "Sichtbarkeit",
@@ -365,6 +376,14 @@
     "themeDeleteFailed": "Das Theme konnte nicht gelöscht werden.",
     "actions": "Aktionen",
     "noThemes": "Keine Themes gefunden."
+  },
+  "images": {
+    "library": "Bildbibliothek",
+    "upload": "Bild hochladen",
+    "uploadFirst": "Erstes Bild hochladen",
+    "noImages": "Noch keine Bilder hochgeladen.",
+    "delete": "Bild löschen",
+    "insertHint": "Klicken zum Einfügen"
   },
   "templates": {
     "TemplateBlankTitle": "Leeres Board",

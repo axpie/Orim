@@ -29,6 +29,7 @@ import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import CropLandscapeIcon from '@mui/icons-material/CropLandscape';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AddReactionIcon from '@mui/icons-material/AddReaction';
+import ImageIcon from '@mui/icons-material/Image';
 import UndoIcon from '@mui/icons-material/Undo';
 import RedoIcon from '@mui/icons-material/Redo';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -41,6 +42,7 @@ import FitScreenIcon from '@mui/icons-material/FitScreen';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { filterIconDefinitions, getIconDefinition } from '../icons/iconCatalog';
+import { ImageLibraryDialog } from '../ImageLibraryDialog';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
 import {
   asOperationPayload,
@@ -58,7 +60,7 @@ import { useBoardStore, type ToolType } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
 import { getBoundingRect, type Rect } from '../../../utils/geometry';
 import { computeArrowPolyline } from '../../../utils/arrowRouting';
-import { HorizontalLabelAlignment, VerticalLabelAlignment, type BoardElement, type FrameElement } from '../../../types/models';
+import { HorizontalLabelAlignment, VerticalLabelAlignment, ImageFit, type BoardElement, type FrameElement, type ImageElement } from '../../../types/models';
 import { getEffectiveStickyNotePresets } from '../stickyNotePresets';
 import { ZOrderMenuItems } from '../ZOrderMenuItems';
 import {
@@ -166,6 +168,8 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
   const setDirty = useBoardStore((s) => s.setDirty);
   const pendingStickyNotePresetId = useBoardStore((s) => s.pendingStickyNotePresetId);
   const setPendingStickyNotePresetId = useBoardStore((s) => s.setPendingStickyNotePresetId);
+  const cameraX = useBoardStore((s) => s.cameraX);
+  const cameraY = useBoardStore((s) => s.cameraY);
 
   const canUndo = useCommandStack((s) => s.canUndo);
   const canRedo = useCommandStack((s) => s.canRedo);
@@ -175,6 +179,7 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
   const commitRedo = useCommandStack((s) => s.commitRedo);
   const pushCommand = useCommandStack((s) => s.push);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  const [imageLibraryOpen, setImageLibraryOpen] = useState(false);
   const [arrangeAnchorEl, setArrangeAnchorEl] = useState<HTMLElement | null>(null);
   const [stickyPresetAnchorEl, setStickyPresetAnchorEl] = useState<HTMLElement | null>(null);
   const [iconSearch, setIconSearch] = useState('');
@@ -268,6 +273,7 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
       label: t('tools.icon'),
     },
     { tool: 'arrow', icon: <ArrowForwardIcon />, label: t('tools.arrow') },
+    { tool: 'image', icon: <ImageIcon />, label: t('tools.image') },
   ];
 
   const openIconPicker = () => {
@@ -277,6 +283,11 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
   const handleToolClick = (event: MouseEvent<HTMLElement>, tool: ToolType) => {
     if (tool === 'icon') {
       openIconPicker();
+      return;
+    }
+
+    if (tool === 'image') {
+      setImageLibraryOpen(true);
       return;
     }
 
@@ -515,6 +526,60 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
     setActiveTool('select');
     setDirty(true);
     onBoardChanged?.('add', createElementAddedOperation(nextFrame));
+  };
+
+  const handleInsertImage = async (imageUrl: string, fileName: string) => {
+    const centerX = (-cameraX + viewportWidth / 2) / zoom;
+    const centerY = (-cameraY + viewportHeight / 2) / zoom;
+
+    // Load actual image dimensions and cap to max 600px on longest side
+    let w = 400;
+    let h = 300;
+    try {
+      await new Promise<void>((resolve) => {
+        const img = new window.Image();
+        img.onload = () => {
+          const maxSize = 600;
+          const scale = Math.min(1, maxSize / Math.max(img.naturalWidth, img.naturalHeight));
+          w = Math.round(img.naturalWidth * scale);
+          h = Math.round(img.naturalHeight * scale);
+          resolve();
+        };
+        img.onerror = () => resolve();
+        img.src = imageUrl;
+      });
+    } catch { /* use defaults */ }
+
+    const newElement: ImageElement = {
+      $type: 'image',
+      id: uuidv4(),
+      groupId: null,
+      x: centerX - w / 2,
+      y: centerY - h / 2,
+      width: w,
+      height: h,
+      zIndex: (board?.elements.length ?? 0) + 1,
+      rotation: 0,
+      label: fileName,
+      labelFontSize: null,
+      labelColor: null,
+      fontFamily: null,
+      isBold: false,
+      isItalic: false,
+      isUnderline: false,
+      isStrikethrough: false,
+      labelHorizontalAlignment: HorizontalLabelAlignment.Center,
+      labelVerticalAlignment: VerticalLabelAlignment.Middle,
+      imageUrl,
+      opacity: 1,
+      imageFit: ImageFit.Uniform,
+    };
+    addElement(newElement);
+    pushCommand(createAddElementsCommand([newElement]));
+    setSelectedElementIds([newElement.id]);
+    setActiveTool('select');
+    setDirty(true);
+    onBoardChanged?.('add', createElementAddedOperation(newElement));
   };
 
   const actionButtons = (
@@ -802,6 +867,12 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
           </MenuItem>
         ))}
       </Menu>
+
+      <ImageLibraryDialog
+        open={imageLibraryOpen}
+        onClose={() => setImageLibraryOpen(false)}
+        onInsertImage={handleInsertImage}
+      />
     </Paper>
   );
 }

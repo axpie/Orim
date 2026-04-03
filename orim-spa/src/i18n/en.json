@@ -57,7 +57,12 @@
     "deleteConfirm": "Are you sure you want to delete this board?",
     "elements": "Elements",
     "lastModified": "Last Modified",
-    "templates": "Templates"
+    "templates": "Templates",
+    "myBoards": "My Boards",
+    "sharedWithMe": "Shared with Me",
+    "noOwnBoards": "No own boards yet.",
+    "noSharedBoards": "No boards shared with you.",
+    "sharedAs": "Shared as"
   },
   "board": {
     "untitled": "Untitled Board",
@@ -130,6 +135,7 @@
     "iconBrowseHint": "Top picks shown, search for the full icon set",
     "iconResults": "{{count}} results",
     "arrow": "Arrow",
+    "image": "Image",
     "undo": "Undo",
     "redo": "Redo",
     "delete": "Delete",
@@ -178,7 +184,12 @@
     "straight": "Straight",
     "orthogonal": "Orthogonal",
     "noElementSelected": "No element selected.",
-    "elementsSelected": "{{count}} elements selected."
+    "elementsSelected": "{{count}} elements selected.",
+    "opacity": "Opacity (%)",
+    "imageFit": "Image fit",
+    "imageFit_Uniform": "Uniform",
+    "imageFit_UniformToFill": "Uniform to fill",
+    "imageFit_Fill": "Fill"
   },
   "sharing": {
     "visibility": "Visibility",
@@ -365,6 +376,14 @@
     "themeDeleteFailed": "The theme could not be deleted.",
     "actions": "Actions",
     "noThemes": "No themes found."
+  },
+  "images": {
+    "library": "Image Library",
+    "upload": "Upload image",
+    "uploadFirst": "Upload your first image",
+    "noImages": "No images uploaded yet.",
+    "delete": "Delete image",
+    "insertHint": "Click to insert"
   },
   "templates": {
     "TemplateBlankTitle": "Blank Board",

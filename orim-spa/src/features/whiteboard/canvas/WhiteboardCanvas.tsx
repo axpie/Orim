@@ -14,6 +14,7 @@ import { StickyNoteRenderer } from '../shapes/StickyNoteRenderer';
 import { FrameRenderer } from '../shapes/FrameRenderer';
 import { ArrowRenderer } from '../shapes/ArrowRenderer';
 import { IconRenderer } from '../shapes/IconRenderer';
+import { ImageRenderer } from '../shapes/ImageRenderer';
 import { SelectionOverlay, type ResizeHandle } from '../shapes/SelectionOverlay';
 import { AlignmentGuides } from '../shapes/AlignmentGuides';
 import { InlineTextEditor } from '../shapes/InlineTextEditor';
@@ -36,6 +37,7 @@ import {
   type FrameElement,
   type ArrowElement,
   type IconElement,
+  type ImageElement,
 } from '../../../types/models';
 import { contrastingTextColor } from '../../../utils/colorUtils';
 import { snapResizeRectToAlignmentGuides, snapToAlignmentGuides, type AlignmentGuide, getBoundingRect } from '../../../utils/geometry';
@@ -1812,6 +1814,39 @@ export function WhiteboardCanvas({
           setGuides(snappedResize.guides);
         }
 
+        // Aspect ratio constraint for image elements
+        if (currentElement.$type === 'image' && (currentElement as ImageElement).imageFit !== 'Fill') {
+          const aspectRatio = resizeState.initialWidth / resizeState.initialHeight;
+          const newWidth = nextRight - nextLeft;
+          const newHeight = nextBottom - nextTop;
+          const handle = resizeState.handle;
+          const movesVertical = handle.includes('n') || handle.includes('s');
+          const movesHorizontal = handle.includes('e') || handle.includes('w');
+
+          if (movesVertical && !movesHorizontal) {
+            // Pure vertical: derive width from new height
+            const constrainedWidth = newHeight * aspectRatio;
+            nextRight = nextLeft + constrainedWidth;
+          } else {
+            // Horizontal or corner: derive height from new width
+            const constrainedHeight = newWidth / aspectRatio;
+            if (handle.includes('n')) {
+              nextTop = nextBottom - constrainedHeight;
+            } else {
+              nextBottom = nextTop + constrainedHeight;
+            }
+          }
+          // Enforce minimum size after constraint
+          if (nextRight - nextLeft < MIN_ELEMENT_SIZE) {
+            nextRight = nextLeft + MIN_ELEMENT_SIZE;
+            nextBottom = nextTop + MIN_ELEMENT_SIZE / aspectRatio;
+          }
+          if (nextBottom - nextTop < MIN_ELEMENT_SIZE) {
+            nextBottom = nextTop + MIN_ELEMENT_SIZE;
+            nextRight = nextLeft + MIN_ELEMENT_SIZE * aspectRatio;
+          }
+        }
+
         const nextElement = {
           ...currentElement,
           x: nextLeft,
@@ -2454,6 +2489,8 @@ export function WhiteboardCanvas({
                 return <ArrowRenderer key={el.id} element={el} elements={elements} />;
               case 'icon':
                 return <IconRenderer key={el.id} element={el} />;
+              case 'image':
+                return <ImageRenderer key={el.id} element={el as ImageElement} />;
               default:
                 return null;
             }

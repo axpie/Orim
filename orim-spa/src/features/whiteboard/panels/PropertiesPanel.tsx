@@ -44,6 +44,7 @@ import {
   DockPoint,
   HorizontalLabelAlignment,
   VerticalLabelAlignment,
+  ImageFit,
   type BoardElement,
   type BoardElementBase,
   type ShapeElement,
@@ -52,6 +53,7 @@ import {
   type FrameElement,
   type ArrowElement,
   type IconElement,
+  type ImageElement,
 } from '../../../types/models';
 import { contrastingTextColor } from '../../../utils/colorUtils';
 import { getLineDashArray } from '../../../utils/lineStyles';
@@ -367,6 +369,34 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
     ));
     setDirty(true);
     onBoardChanged?.('edit', createElementUpdatedOperation(updatedElement));
+  };
+
+  // When switching to Uniform, resize the element box to match the actual rendered image size.
+  const handleImageFitChange = async (id: string, newFit: ImageFit) => {
+    const imgEl = elements.find((e) => e.id === id) as ImageElement | undefined;
+    if (!imgEl) return;
+
+    if (newFit === ImageFit.Uniform) {
+      try {
+        const { natW, natH } = await new Promise<{ natW: number; natH: number }>((resolve, reject) => {
+          const img = new window.Image();
+          img.onload = () => resolve({ natW: img.naturalWidth, natH: img.naturalHeight });
+          img.onerror = reject;
+          img.src = imgEl.imageUrl;
+        });
+        if (natW > 0 && natH > 0) {
+          const scale = Math.min(imgEl.width / natW, imgEl.height / natH);
+          const newW = natW * scale;
+          const newH = natH * scale;
+          const cx = imgEl.x + imgEl.width / 2;
+          const cy = imgEl.y + imgEl.height / 2;
+          update(id, { imageFit: newFit, width: newW, height: newH, x: cx - newW / 2, y: cy - newH / 2 });
+          return;
+        }
+      } catch { /* fall through to plain update */ }
+    }
+
+    update(id, { imageFit: newFit });
   };
 
   return (
@@ -777,6 +807,31 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 value={(el as IconElement).color ?? '#333333'}
                 onChange={(value) => update(el.id, { color: value })}
               />
+            </>
+          )}
+
+          {/* Image-specific */}
+          {el.$type === 'image' && (
+            <>
+              <NumericSliderField
+                label={t('properties.opacity')}
+                value={Math.round(((el as ImageElement).opacity ?? 1) * 100)}
+                min={10}
+                max={100}
+                onChange={(value) => update(el.id, { opacity: value / 100 })}
+              />
+              <TextField
+                select
+                size="small"
+                label={t('properties.imageFit')}
+                value={(el as ImageElement).imageFit ?? ImageFit.Uniform}
+                onChange={(e) => { void handleImageFitChange(el.id, e.target.value as ImageFit); }}
+                fullWidth
+              >
+                <MenuItem value={ImageFit.Uniform}>{t('properties.imageFit_Uniform')}</MenuItem>
+                <MenuItem value={ImageFit.UniformToFill}>{t('properties.imageFit_UniformToFill')}</MenuItem>
+                <MenuItem value={ImageFit.Fill}>{t('properties.imageFit_Fill')}</MenuItem>
+              </TextField>
             </>
           )}
 
