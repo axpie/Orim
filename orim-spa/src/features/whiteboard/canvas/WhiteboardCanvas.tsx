@@ -1,4 +1,4 @@
-import { useRef, useCallback, useState, useEffect, useId, useMemo, type FocusEvent as ReactFocusEvent, type ReactNode } from 'react';
+import { useRef, useCallback, useState, useEffect, useId, useMemo, type FocusEvent as ReactFocusEvent } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useMediaQuery } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -8,19 +8,35 @@ import { getThemes } from '../../../api/themes';
 import { useThemeStore } from '../../../stores/themeStore';
 import { useBoardStore } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
-import { ShapeRenderer } from '../shapes/ShapeRenderer';
-import { TextRenderer } from '../shapes/TextRenderer';
-import { StickyNoteRenderer } from '../shapes/StickyNoteRenderer';
-import { FrameRenderer } from '../shapes/FrameRenderer';
-import { ArrowRenderer } from '../shapes/ArrowRenderer';
-import { IconRenderer } from '../shapes/IconRenderer';
-import { ImageRenderer } from '../shapes/ImageRenderer';
 import { SelectionOverlay, type ResizeHandle } from '../shapes/SelectionOverlay';
 import { AlignmentGuides } from '../shapes/AlignmentGuides';
 import { InlineTextEditor } from '../shapes/InlineTextEditor';
 import { CanvasAccessibilityLayer } from './CanvasAccessibilityLayer';
+import { CanvasGridLayer } from './CanvasGridLayer';
+import { CanvasElementLayer } from './CanvasElementLayer';
 import { RemoteCursorPresence } from './RemoteCursorPresence';
 import { WhiteboardContextMenu, type WhiteboardContextMenuAction } from './WhiteboardContextMenu';
+import { useCanvasViewport } from './useCanvasViewport';
+import { useCanvasShortcuts } from './useCanvasShortcuts';
+import {
+  FALLBACK_BOARD_DEFAULTS,
+  EMPTY_ELEMENTS,
+  EMPTY_COMMENTS,
+  MIN_ZOOM,
+  MAX_ZOOM,
+  MIN_ELEMENT_SIZE,
+  DOCK_SNAP_RADIUS,
+  KEYBOARD_DUPLICATE_OFFSET,
+  DEFAULT_TEXT_WIDTH,
+  DEFAULT_TEXT_HEIGHT,
+  isPointInsideElementBounds,
+  getResizeCursor,
+  cloneElementsForInsertion,
+  haveTrackedElementChanges,
+  type DockTargetState,
+  type ArrowEndpointHandleKind,
+  type TouchGestureState,
+} from './canvasUtils';
 import {
   ArrowHeadStyle,
   ArrowLineStyle,
@@ -30,7 +46,6 @@ import {
   HorizontalLabelAlignment,
   ShapeType,
   VerticalLabelAlignment,
-  type BoardComment,
   type BoardElement,
   type ShapeElement,
   type TextElement,
@@ -70,7 +85,6 @@ import {
 import { DEFAULT_STICKY_NOTE_FILL_COLOR, getStickyNotePresetById } from '../stickyNotePresets';
 import {
   applyZOrderAction,
-  getZOrderActionFromKeyboardEvent,
   getZOrderAvailability,
   type ZOrderAction,
 } from '../zOrder';
@@ -83,27 +97,6 @@ import {
   readStoredClipboardElements,
   serializeClipboardElements,
 } from '../clipboard/clipboardService';
-
-const GRID_SIZE = 24;
-const MIN_ZOOM = 0.2;
-const MAX_ZOOM = 3.5;
-const MIN_ELEMENT_SIZE = 24;
-const DOCK_SNAP_RADIUS = 28;
-const KEYBOARD_DUPLICATE_OFFSET = 32;
-const TRACKPAD_DELTA_THRESHOLD = 24;
-const DEFAULT_TEXT_WIDTH = 220;
-const DEFAULT_TEXT_HEIGHT = 56;
-const FALLBACK_BOARD_DEFAULTS = {
-  surfaceColor: '#FFFFFF',
-  gridColor: '#EEF2F7',
-  shapeFillColor: '#FFFFFF',
-  strokeColor: '#0F172A',
-  iconColor: '#0F172A',
-  selectionColor: '#2563EB',
-  selectionTintRgb: '37, 99, 235',
-  handleSurfaceColor: '#FFFFFF',
-  dockTargetColor: '#0F766E',
-};
 
 interface WhiteboardCanvasProps {
   editable?: boolean;
@@ -118,180 +111,6 @@ interface WhiteboardCanvasProps {
   onCreateCommentAnchor?: (position: { x: number; y: number }) => void;
   liveAnnouncement?: { id: number; text: string } | null;
 }
-
-type DockTargetState = {
-  elementId: string;
-  dock: DockPoint;
-  point: { x: number; y: number };
-};
-
-type ArrowEndpointHandleKind = 'source' | 'target';
-
-type TouchGestureState = {
-  initialDistance: number;
-  initialZoom: number;
-  anchorWorldX: number;
-  anchorWorldY: number;
-};
-
-type SafariGestureEvent = Event & {
-  scale: number;
-  clientX?: number;
-  clientY?: number;
-};
-
-function isInteractiveTextTarget(target: EventTarget | null): boolean {
-  if (target instanceof HTMLInputElement
-    || target instanceof HTMLTextAreaElement
-    || target instanceof HTMLSelectElement) {
-    return true;
-  }
-
-  if (target instanceof HTMLElement) {
-    if (target.dataset.whiteboardShortcutTarget === 'true') {
-      return false;
-    }
-
-    return target.isContentEditable
-      || target instanceof HTMLButtonElement
-      || target instanceof HTMLAnchorElement
-      || target.getAttribute('role') === 'button';
-  }
-
-  return false;
-}
-
-function areComparedValuesEqual(left: unknown, right: unknown): boolean {
-  if (Array.isArray(left) || Array.isArray(right)) {
-    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
-      return false;
-    }
-
-    return left.every((value, index) => Object.is(value, right[index]));
-  }
-
-  return Object.is(left, right);
-}
-
-function haveTrackedElementChanges(
-  before: BoardElement[],
-  after: BoardElement[],
-  elementIds: readonly string[],
-  keys: readonly string[],
-): boolean {
-  if (elementIds.length === 0 || keys.length === 0) {
-    return false;
-  }
-
-  const beforeById = new Map(before.map((element) => [element.id, element]));
-  const afterById = new Map(after.map((element) => [element.id, element]));
-
-  return [...new Set(elementIds)].some((elementId) => {
-    const beforeElement = beforeById.get(elementId);
-    const afterElement = afterById.get(elementId);
-    if (!beforeElement || !afterElement) {
-      return beforeElement !== afterElement;
-    }
-
-    const beforeRecord = beforeElement as unknown as Record<string, unknown>;
-    const afterRecord = afterElement as unknown as Record<string, unknown>;
-    return keys.some((key) => !areComparedValuesEqual(beforeRecord[key], afterRecord[key]));
-  });
-}
-
-function isTrackpadPanWheelEvent(event: WheelEvent): boolean {
-  const absDeltaX = Math.abs(event.deltaX);
-  const absDeltaY = Math.abs(event.deltaY);
-
-  return event.deltaMode === WheelEvent.DOM_DELTA_PIXEL
-    && !event.ctrlKey
-    && !event.metaKey
-    && (absDeltaX > 0 || absDeltaY < TRACKPAD_DELTA_THRESHOLD);
-}
-
-function cloneElementsForInsertion(
-  sourceElements: BoardElement[],
-  baseZIndex: number,
-  offsetX: number,
-  offsetY: number,
-): BoardElement[] {
-  const idMap = new Map<string, string>();
-  const groupMap = new Map<string, string>();
-
-  for (const element of sourceElements) {
-    idMap.set(element.id, uuidv4());
-    if (element.groupId && !groupMap.has(element.groupId)) {
-      groupMap.set(element.groupId, uuidv4());
-    }
-  }
-
-  return sourceElements.map((element, index) => {
-    const clone = structuredClone(element) as BoardElement;
-    clone.id = idMap.get(element.id) ?? uuidv4();
-    clone.x += offsetX;
-    clone.y += offsetY;
-    clone.zIndex = baseZIndex + index;
-
-    if (clone.groupId) {
-      clone.groupId = groupMap.get(clone.groupId) ?? clone.groupId;
-    }
-
-    if (clone.$type === 'arrow') {
-      if (clone.sourceElementId && idMap.has(clone.sourceElementId)) {
-        clone.sourceElementId = idMap.get(clone.sourceElementId) ?? clone.sourceElementId;
-      }
-      if (clone.targetElementId && idMap.has(clone.targetElementId)) {
-        clone.targetElementId = idMap.get(clone.targetElementId) ?? clone.targetElementId;
-      }
-      if (clone.sourceX != null) {
-        clone.sourceX += offsetX;
-      }
-      if (clone.sourceY != null) {
-        clone.sourceY += offsetY;
-      }
-      if (clone.targetX != null) {
-        clone.targetX += offsetX;
-      }
-      if (clone.targetY != null) {
-        clone.targetY += offsetY;
-      }
-    }
-
-    return clone;
-  });
-}
-
-function isPointInsideElementBounds(
-  point: { x: number; y: number },
-  element: Pick<BoardElement, 'x' | 'y' | 'width' | 'height'>,
-): boolean {
-  return point.x >= element.x
-    && point.x <= element.x + element.width
-    && point.y >= element.y
-    && point.y <= element.y + element.height;
-}
-
-function getResizeCursor(handle: ResizeHandle | null | undefined): string | null {
-  switch (handle) {
-    case 'n':
-    case 's':
-      return 'ns-resize';
-    case 'e':
-    case 'w':
-      return 'ew-resize';
-    case 'ne':
-    case 'sw':
-      return 'nesw-resize';
-    case 'nw':
-    case 'se':
-      return 'nwse-resize';
-    default:
-      return null;
-  }
-}
-
-const EMPTY_ELEMENTS: BoardElement[] = [];
-const EMPTY_COMMENTS: BoardComment[] = [];
 
 export function WhiteboardCanvas({
   editable = true,
@@ -420,9 +239,9 @@ export function WhiteboardCanvas({
   const [spacePanActive, setSpacePanActive] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ left: number; top: number } | null>(null);
   const [clipboardVersion, setClipboardVersion] = useState(0);
-  const viewportStateRef = useRef({ zoom, cameraX, cameraY });
-  const safariGestureRef = useRef<{ initialZoom: number; anchorWorldX: number; anchorWorldY: number } | null>(null);
-  const lastSafariGestureAtRef = useRef(0);
+  const { getWorldPos, getScreenPos, handleWheel } = useCanvasViewport(
+    stageRef, containerRef, zoom, cameraX, cameraY, setZoom, setCamera,
+  );
   const selectedElements = useMemo(
     () => elements.filter((element) => selectedIds.includes(element.id)),
     [elements, selectedIds],
@@ -859,10 +678,6 @@ export function WhiteboardCanvas({
     setIsCanvasFocused(false);
   }, []);
 
-  useEffect(() => {
-    viewportStateRef.current = { zoom, cameraX, cameraY };
-  }, [zoom, cameraX, cameraY]);
-
   // Resize observer
   useEffect(() => {
     const container = containerRef.current;
@@ -885,217 +700,34 @@ export function WhiteboardCanvas({
     return () => observer.disconnect();
   }, [setViewportSize]);
 
-  // Keyboard shortcuts
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (isInteractiveTextTarget(e.target)) {
-        return;
-      }
+  const handleUndo = useCallback(() => {
+    applyCommandExecution(peekUndo(), 'undo', commitUndo);
+  }, [applyCommandExecution, peekUndo, commitUndo]);
 
-      if (e.key === ' ' || e.code === 'Space') {
-        e.preventDefault();
-        setSpacePanActive(true);
-        return;
-      }
+  const handleRedo = useCallback(() => {
+    applyCommandExecution(peekRedo(), 'redo', commitRedo);
+  }, [applyCommandExecution, peekRedo, commitRedo]);
 
-      if (editingElement) {
-        return;
-      }
-
-      const hasModifier = e.ctrlKey || e.metaKey;
-      const key = e.key.toLowerCase();
-
-        if (hasModifier) {
-          const zOrderAction = getZOrderActionFromKeyboardEvent(e);
-          if (zOrderAction) {
-            if (!editable) {
-              return;
-            }
-
-            e.preventDefault();
-            reorderSelectedElements(zOrderAction);
-            return;
-          }
-
-          switch (key) {
-            case 'z':
-              e.preventDefault();
-              if (e.shiftKey) {
-                applyCommandExecution(peekRedo(), 'redo', commitRedo);
-              } else {
-                applyCommandExecution(peekUndo(), 'undo', commitUndo);
-              }
-              return;
-            case 'y':
-              e.preventDefault();
-              applyCommandExecution(peekRedo(), 'redo', commitRedo);
-              return;
-          case 'a':
-            if (!editable) {
-              return;
-            }
-            e.preventDefault();
-            selectAllElements();
-            return;
-          case 'c':
-            if (!editable) {
-              return;
-            }
-            e.preventDefault();
-            copySelectedElementsToClipboard();
-            return;
-          case 'x':
-            if (!editable) {
-              return;
-            }
-            e.preventDefault();
-            cutSelectedElements();
-            return;
-          case 'v':
-            if (!editable) {
-              return;
-            }
-            e.preventDefault();
-            void pasteClipboardElements();
-            return;
-          case 'd':
-            if (!editable) {
-              return;
-            }
-            e.preventDefault();
-            duplicateSelectedElements();
-            return;
-          case 'g':
-            if (!editable) {
-              return;
-            }
-            e.preventDefault();
-            if (e.shiftKey) {
-              ungroupSelectedElements();
-            } else {
-              groupSelectedElements();
-            }
-            return;
-          default:
-            break;
-        }
-      }
-
-      if (!editable) {
-        if (e.key === 'Escape') {
-          setSelectedElementIds([]);
-          setActiveTool('select');
-        }
-        return;
-      }
-
-      switch (key) {
-        case 'v':
-          setActiveTool('select');
-          return;
-        case 'r':
-          setActiveTool('rectangle');
-          return;
-        case 't':
-          setActiveTool('text');
-          return;
-        case 'h':
-          setActiveTool('hand');
-          return;
-        default:
-          break;
-      }
-
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        beginInlineEditingSelection();
-        return;
-      }
-
-      if (e.key === 'Delete' || e.key === 'Backspace') {
-        e.preventDefault();
-        deleteSelectedElements();
-        return;
-      }
-
-      const keyboardStep = e.shiftKey ? 10 : 1;
-      switch (e.key) {
-        case 'ArrowLeft':
-          e.preventDefault();
-          moveSelectedElementsBy(-keyboardStep, 0);
-          return;
-        case 'ArrowRight':
-          e.preventDefault();
-          moveSelectedElementsBy(keyboardStep, 0);
-          return;
-        case 'ArrowUp':
-          e.preventDefault();
-          moveSelectedElementsBy(0, -keyboardStep);
-          return;
-        case 'ArrowDown':
-          e.preventDefault();
-          moveSelectedElementsBy(0, keyboardStep);
-          return;
-        default:
-          break;
-      }
-
-      if (e.key === 'Escape') {
-        setSelectedElementIds([]);
-        setActiveTool('select');
-      }
-    };
-
-    const handleKeyUp = (e: KeyboardEvent) => {
-      if (isInteractiveTextTarget(e.target)) {
-        return;
-      }
-
-      if (e.key === ' ' || e.code === 'Space') {
-        e.preventDefault();
-        setSpacePanActive(false);
-      }
-    };
-
-    const handleWindowBlur = () => {
-      setSpacePanActive(false);
-    };
-
-    window.addEventListener('keydown', handleKey);
-    window.addEventListener('keyup', handleKeyUp);
-    window.addEventListener('blur', handleWindowBlur);
-    return () => {
-      window.removeEventListener('keydown', handleKey);
-      window.removeEventListener('keyup', handleKeyUp);
-      window.removeEventListener('blur', handleWindowBlur);
-    };
-  }, [
-    beginInlineEditingSelection,
-    copySelectedElementsToClipboard,
-    deleteSelectedElements,
-    duplicateSelectedElements,
+  useCanvasShortcuts({
     editable,
     editingElement,
-    elements,
-    expandSelectionWithGroups,
-    groupSelectedElements,
-    applyCommandExecution,
-    commitRedo,
-    commitUndo,
-    cutSelectedElements,
-    moveSelectedElementsBy,
-    pasteClipboardElements,
-    peekRedo,
-    peekUndo,
-    reorderSelectedElements,
-    selectAllElements,
-    selectedIds.length,
-    beginInlineEditingElement,
-    selectAccessibleElement,
-    setActiveTool,
+    setSpacePanActive,
     setSelectedElementIds,
+    setActiveTool,
+    reorderSelectedElements,
+    handleUndo,
+    handleRedo,
+    selectAllElements,
+    copySelectedElementsToClipboard,
+    cutSelectedElements,
+    pasteClipboardElements,
+    duplicateSelectedElements,
+    groupSelectedElements,
     ungroupSelectedElements,
-  ]);
+    beginInlineEditingSelection,
+    deleteSelectedElements,
+    moveSelectedElementsBy,
+  });
 
   useEffect(() => {
     if (!spacePanActive || activeTool === 'hand' || isPanning) {
@@ -1110,88 +742,6 @@ export function WhiteboardCanvas({
     window.addEventListener('mouseup', clearPanState);
     return () => window.removeEventListener('mouseup', clearPanState);
   }, [activeTool, isPanning, spacePanActive]);
-
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container) {
-      return;
-    }
-
-    const getGestureCenter = (event: SafariGestureEvent) => {
-      const bounds = container.getBoundingClientRect();
-      const centerX = typeof event.clientX === 'number' ? event.clientX - bounds.left : bounds.width / 2;
-      const centerY = typeof event.clientY === 'number' ? event.clientY - bounds.top : bounds.height / 2;
-      return { centerX, centerY };
-    };
-
-    const handleGestureStart = (event: Event) => {
-      const gestureEvent = event as SafariGestureEvent;
-      gestureEvent.preventDefault();
-      lastSafariGestureAtRef.current = Date.now();
-      const { zoom: currentZoom, cameraX: currentCameraX, cameraY: currentCameraY } = viewportStateRef.current;
-      const { centerX, centerY } = getGestureCenter(gestureEvent);
-
-      safariGestureRef.current = {
-        initialZoom: currentZoom,
-        anchorWorldX: (centerX - currentCameraX) / currentZoom,
-        anchorWorldY: (centerY - currentCameraY) / currentZoom,
-      };
-    };
-
-    const handleGestureChange = (event: Event) => {
-      const gestureEvent = event as SafariGestureEvent;
-      const activeGesture = safariGestureRef.current;
-      if (!activeGesture) {
-        return;
-      }
-
-      gestureEvent.preventDefault();
-      lastSafariGestureAtRef.current = Date.now();
-      const { centerX, centerY } = getGestureCenter(gestureEvent);
-      const nextZoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, activeGesture.initialZoom * gestureEvent.scale));
-      const nextCameraX = centerX - activeGesture.anchorWorldX * nextZoom;
-      const nextCameraY = centerY - activeGesture.anchorWorldY * nextZoom;
-
-      setZoom(nextZoom);
-      setCamera(nextCameraX, nextCameraY);
-    };
-
-    const handleGestureEnd = (event: Event) => {
-      (event as SafariGestureEvent).preventDefault();
-      lastSafariGestureAtRef.current = Date.now();
-      safariGestureRef.current = null;
-    };
-
-    container.addEventListener('gesturestart', handleGestureStart as EventListener, { passive: false });
-    container.addEventListener('gesturechange', handleGestureChange as EventListener, { passive: false });
-    container.addEventListener('gestureend', handleGestureEnd as EventListener, { passive: false });
-
-    return () => {
-      container.removeEventListener('gesturestart', handleGestureStart as EventListener);
-      container.removeEventListener('gesturechange', handleGestureChange as EventListener);
-      container.removeEventListener('gestureend', handleGestureEnd as EventListener);
-    };
-  }, [setCamera, setZoom]);
-
-  /** Convert stage pointer event position to world coords. */
-  const getWorldPos = useCallback(
-    (): { x: number; y: number } => {
-      const stage = stageRef.current;
-      if (!stage) return { x: 0, y: 0 };
-      const pos = stage.getPointerPosition();
-      if (!pos) return { x: 0, y: 0 };
-      return {
-        x: (pos.x - cameraX) / zoom,
-        y: (pos.y - cameraY) / zoom,
-      };
-    },
-    [cameraX, cameraY, zoom],
-  );
-
-  const getScreenPos = useCallback((): { x: number; y: number } | null => {
-    const stage = stageRef.current;
-    return stage?.getPointerPosition() ?? null;
-  }, []);
 
   const getTouchGestureInfo = useCallback((touches: TouchList) => {
     if (touches.length < 2 || !containerRef.current) {
@@ -2180,39 +1730,6 @@ export function WhiteboardCanvas({
     [cameraX, cameraY, getTouchGestureInfo, handleMouseUp, zoom],
   );
 
-  // ── Wheel (zoom) ──
-  const handleWheel = useCallback(
-    (e: Konva.KonvaEventObject<WheelEvent>) => {
-      e.evt.preventDefault();
-
-      if (safariGestureRef.current || Date.now() - lastSafariGestureAtRef.current < 80) {
-        return;
-      }
-
-      const stage = stageRef.current;
-      if (!stage) return;
-      const pointer = stage.getPointerPosition();
-      if (!pointer) return;
-
-      if (isTrackpadPanWheelEvent(e.evt)) {
-        setCamera(cameraX - e.evt.deltaX, cameraY - e.evt.deltaY);
-        return;
-      }
-
-      const newZoom = e.evt.ctrlKey || e.evt.metaKey
-        ? Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * Math.exp(-e.evt.deltaY * 0.0025)))
-        : Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * (e.evt.deltaY < 0 ? 1.1 : 1 / 1.1)));
-
-      // Anchor zoom at pointer position
-      const newCameraX = pointer.x - ((pointer.x - cameraX) / zoom) * newZoom;
-      const newCameraY = pointer.y - ((pointer.y - cameraY) / zoom) * newZoom;
-
-      setZoom(newZoom);
-      setCamera(newCameraX, newCameraY);
-    },
-    [zoom, cameraX, cameraY, setZoom, setCamera],
-  );
-
   // Double click → inline text editing
   const handleDblClick = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -2290,8 +1807,6 @@ export function WhiteboardCanvas({
     setEditingElement(null);
   }, []);
 
-  // Sorted elements by zIndex
-  const sorted = [...elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0));
   const resizeCursor = getResizeCursor(resizeState?.handle ?? hoveredResizeHandle);
   const draftArrowPreview = draftArrowStart && draftArrowEnd
     ? flattenPoints(
@@ -2338,42 +1853,6 @@ export function WhiteboardCanvas({
     : arrowEndpointDrag?.hoverElementId && arrowEndpointDrag.hoverDock
       ? `${arrowEndpointDrag.hoverElementId}:${arrowEndpointDrag.hoverDock}`
       : null;
-  const worldLeft = -cameraX / zoom;
-  const worldTop = -cameraY / zoom;
-  const worldRight = worldLeft + stageSize.width / zoom;
-  const worldBottom = worldTop + stageSize.height / zoom;
-
-  // Grid pattern
-  const gridLines: ReactNode[] = [];
-  if (zoom > 0.3) {
-    const step = GRID_SIZE;
-    const startX = Math.floor(worldLeft / step) * step;
-    const startY = Math.floor(worldTop / step) * step;
-
-    for (let x = startX; x <= worldRight; x += step) {
-      gridLines.push(
-        <Line
-          key={`gv${x}`}
-          points={[x, worldTop, x, worldBottom]}
-          stroke={boardDefaults.gridColor}
-          strokeWidth={0.5 / zoom}
-          listening={false}
-        />,
-      );
-    }
-    for (let y = startY; y <= worldBottom; y += step) {
-      gridLines.push(
-        <Line
-          key={`gh${y}`}
-          points={[worldLeft, y, worldRight, y]}
-          stroke={boardDefaults.gridColor}
-          strokeWidth={0.5 / zoom}
-          listening={false}
-        />,
-      );
-    }
-  }
-
   return (
     <div
       ref={containerRef}
@@ -2432,41 +1911,18 @@ export function WhiteboardCanvas({
         onTouchCancel={handleTouchEnd}
       >
         {/* Grid layer */}
-        <Layer listening={false}>
-          <Rect
-            x={worldLeft}
-            y={worldTop}
-            width={worldRight - worldLeft}
-            height={worldBottom - worldTop}
-            fill={boardDefaults.surfaceColor}
-            listening={false}
-          />
-          {gridLines}
-        </Layer>
+        <CanvasGridLayer
+          zoom={zoom}
+          cameraX={cameraX}
+          cameraY={cameraY}
+          viewportWidth={stageSize.width}
+          viewportHeight={stageSize.height}
+          gridColor={boardDefaults.gridColor}
+          surfaceColor={boardDefaults.surfaceColor}
+        />
 
         {/* Elements layer */}
-        <Layer>
-          {sorted.map((el) => {
-            switch (el.$type) {
-              case 'shape':
-                return <ShapeRenderer key={el.id} element={el} />;
-              case 'text':
-                return <TextRenderer key={el.id} element={el} />;
-              case 'sticky':
-                return <StickyNoteRenderer key={el.id} element={el} />;
-              case 'frame':
-                return <FrameRenderer key={el.id} element={el} />;
-              case 'arrow':
-                return <ArrowRenderer key={el.id} element={el} elements={elements} />;
-              case 'icon':
-                return <IconRenderer key={el.id} element={el} />;
-              case 'image':
-                return <ImageRenderer key={el.id} element={el as ImageElement} />;
-              default:
-                return null;
-            }
-          })}
-        </Layer>
+        <CanvasElementLayer elements={elements} />
 
         <Layer name="whiteboard-export-hidden">
           {/* Draft shape */}
