@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Orim.Api.Services;
 using Orim.Core;
 using Orim.Core.Interfaces;
@@ -19,7 +20,7 @@ public sealed class ThemeCatalogApiServiceTests
         services.AddSingleton<IThemeRepository>(_repository);
         var provider = services.BuildServiceProvider();
         var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
-        _sut = new ThemeCatalogApiService(scopeFactory);
+        _sut = new ThemeCatalogApiService(scopeFactory, NullLogger<ThemeCatalogApiService>.Instance);
     }
 
     [Fact]

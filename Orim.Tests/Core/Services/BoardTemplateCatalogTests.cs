@@ -85,6 +85,8 @@ public class BoardTemplateCatalogTests
         var elements = BoardTemplateCatalog.CreateElements(BoardTemplateCatalog.SwimlaneTemplateId);
 
         Assert.NotEmpty(elements);
+        Assert.Contains(elements, e => e is ShapeElement);
+        Assert.Contains(elements, e => e is TextElement);
     }
 
     [Fact]
@@ -102,6 +104,8 @@ public class BoardTemplateCatalogTests
         var elements = BoardTemplateCatalog.CreateElements(BoardTemplateCatalog.WorkshopTemplateId);
 
         Assert.NotEmpty(elements);
+        Assert.Contains(elements, e => e is ShapeElement);
+        Assert.Contains(elements, e => e is TextElement);
     }
 
     [Theory]

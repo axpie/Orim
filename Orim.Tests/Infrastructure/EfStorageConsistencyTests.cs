@@ -7,6 +7,8 @@ namespace Orim.Tests.Infrastructure;
 
 public class EfStorageConsistencyTests : IDisposable
 {
+    private const string UserPasswordHash = "hash";
+
     private readonly OrimDbContext _context;
     private readonly EfUserRepository _userRepository;
     private readonly EfBoardRepository _boardRepository;
@@ -25,8 +27,8 @@ public class EfStorageConsistencyTests : IDisposable
     [Fact]
     public async Task DeleteUserAsync_RemovesOwnedBoards()
     {
-        var owner = new User { Username = "owner", PasswordHash = "hash" };
-        var otherUser = new User { Username = "other", PasswordHash = "hash" };
+        var owner = new User { Username = "owner", PasswordHash = UserPasswordHash };
+        var otherUser = new User { Username = "other", PasswordHash = UserPasswordHash };
         await _userRepository.SaveAsync(owner);
         await _userRepository.SaveAsync(otherUser);
 
@@ -66,8 +68,8 @@ public class EfStorageConsistencyTests : IDisposable
     [Fact]
     public async Task DeleteUserAsync_RemovesMembershipsWithoutOrphanReferences()
     {
-        var owner = new User { Username = "owner", PasswordHash = "hash" };
-        var member = new User { Username = "member", PasswordHash = "hash" };
+        var owner = new User { Username = "owner", PasswordHash = UserPasswordHash };
+        var member = new User { Username = "member", PasswordHash = UserPasswordHash };
         await _userRepository.SaveAsync(owner);
         await _userRepository.SaveAsync(member);
 

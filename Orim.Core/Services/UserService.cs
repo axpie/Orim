@@ -1,3 +1,4 @@
+using Orim.Core.Exceptions;
 using Orim.Core.Interfaces;
 using Orim.Core.Models;
 
@@ -59,7 +60,7 @@ public class UserService
     {
         var normalizedDisplayName = NormalizeDisplayName(displayName);
         var user = await _userRepository.GetByIdAsync(userId)
-                   ?? throw new InvalidOperationException("User not found.");
+                   ?? throw new UserNotFoundException(userId.ToString());
 
         EnsureActive(user);
 
@@ -73,7 +74,7 @@ public class UserService
         ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
 
         var user = await _userRepository.GetByIdAsync(userId)
-                   ?? throw new InvalidOperationException("User not found.");
+                   ?? throw new UserNotFoundException(userId.ToString());
         user.PasswordHash = HashPassword(newPassword);
         await _userRepository.SaveAsync(user);
     }
@@ -84,11 +85,11 @@ public class UserService
         ArgumentException.ThrowIfNullOrWhiteSpace(newPassword);
 
         var user = await _userRepository.GetByIdAsync(userId)
-                   ?? throw new InvalidOperationException("User not found.");
+                   ?? throw new UserNotFoundException(userId.ToString());
 
         EnsureActive(user);
 
-        if (user.AuthenticationProvider != AuthenticationProvider.Local || string.IsNullOrWhiteSpace(user.PasswordHash))
+        if (user.AuthenticationProvider != AuthenticationProvider.Local|| string.IsNullOrWhiteSpace(user.PasswordHash))
         {
             throw new InvalidOperationException("This account does not have a local password.");
         }
@@ -106,7 +107,7 @@ public class UserService
     {
         var normalizedUsername = NormalizeUsername(username);
         var user = await _userRepository.GetByIdAsync(userId)
-                   ?? throw new InvalidOperationException("User not found.");
+                   ?? throw new UserNotFoundException(userId.ToString());
 
         var existing = await _userRepository.GetByUsernameAsync(normalizedUsername);
         if (existing is not null && existing.Id != userId)
@@ -217,7 +218,7 @@ public class UserService
     public async Task DeactivateUserAsync(Guid userId)
     {
         var user = await _userRepository.GetByIdAsync(userId)
-                   ?? throw new InvalidOperationException("User not found.");
+                   ?? throw new UserNotFoundException(userId.ToString());
 
         await EnsureAdminCanBeDeactivatedAsync(user);
 
@@ -228,7 +229,7 @@ public class UserService
     public async Task DeleteUserAsync(Guid userId)
     {
         var user = await _userRepository.GetByIdAsync(userId)
-                   ?? throw new InvalidOperationException("User not found.");
+                   ?? throw new UserNotFoundException(userId.ToString());
 
         await EnsureAdminCanBeRemovedAsync(user);
 

@@ -206,17 +206,20 @@ public sealed class BoardPdfExportService
         var foldSize = Math.Max(8, Math.Min(24, Math.Min(width, height) * 0.22));
         var padding = StickyPadding * scale;
 
+        var stickyBorderPen = new XPen(ParseColor(StickyBorderColor), Math.Max(0.75, scale));
+        var stickyFillBrush = new XSolidBrush(ParseColor(sticky.FillColor));
         gfx.DrawRectangle(
-            new XPen(ParseColor(StickyBorderColor), Math.Max(0.75, scale)),
-            new XSolidBrush(ParseColor(sticky.FillColor)),
+            stickyBorderPen,
+            stickyFillBrush,
             x,
             y,
             width,
             height);
 
+        var foldBrush = new XSolidBrush(ParseColor(StickyFoldColor));
         gfx.DrawPolygon(
-            new XPen(ParseColor(StickyBorderColor), Math.Max(0.75, scale)),
-            new XSolidBrush(ParseColor(StickyFoldColor)),
+            stickyBorderPen,
+            foldBrush,
             [
                 new XPoint(x + width - foldSize, y),
                 new XPoint(x + width, y),
@@ -249,9 +252,11 @@ public sealed class BoardPdfExportService
         var titleBarHeight = GetFrameTitleBarHeight(height);
         var strokeColor = ParseColor(frame.StrokeColor);
 
+        var framePen = new XPen(strokeColor, strokeWidth);
+        var frameFillBrush = new XSolidBrush(ParseColor(frame.FillColor));
         gfx.DrawRectangle(
-            new XPen(strokeColor, strokeWidth),
-            new XSolidBrush(ParseColor(frame.FillColor)),
+            framePen,
+            frameFillBrush,
             x,
             y,
             width,
@@ -259,8 +264,9 @@ public sealed class BoardPdfExportService
 
         if (height > titleBarHeight)
         {
+            var separatorPen = new XPen(strokeColor, Math.Max(0.5, strokeWidth * 0.75));
             gfx.DrawLine(
-                new XPen(strokeColor, Math.Max(0.5, strokeWidth * 0.75)),
+                separatorPen,
                 x,
                 y + titleBarHeight,
                 x + width,
@@ -356,7 +362,8 @@ public sealed class BoardPdfExportService
                 };
                 if (style == ArrowHeadStyle.FilledTriangle)
                 {
-                    gfx.DrawPolygon(pen, new XSolidBrush(strokeColor), points, XFillMode.Winding);
+                    var headBrush = new XSolidBrush(strokeColor);
+                    gfx.DrawPolygon(pen, headBrush, points, XFillMode.Winding);
                 }
                 else
                 {
@@ -372,13 +379,15 @@ public sealed class BoardPdfExportService
                 var center = MovePointToward(tip, from, GetArrowHeadCircleRadius(arrow));
                 var cx = TransformX(center.X, scale, offsetX) - radius;
                 var cy = TransformY(center.Y, scale, offsetY) - radius;
+                var circlePen = new XPen(strokeColor, strokeWidth);
                 if (style == ArrowHeadStyle.FilledCircle)
                 {
-                    gfx.DrawEllipse(new XPen(strokeColor, strokeWidth), new XSolidBrush(strokeColor), cx, cy, radius * 2, radius * 2);
+                    var circleBrush = new XSolidBrush(strokeColor);
+                    gfx.DrawEllipse(circlePen, circleBrush, cx, cy, radius * 2, radius * 2);
                 }
                 else
                 {
-                    gfx.DrawEllipse(new XPen(strokeColor, strokeWidth), XBrushes.Transparent, cx, cy, radius * 2, radius * 2);
+                    gfx.DrawEllipse(circlePen, XBrushes.Transparent, cx, cy, radius * 2, radius * 2);
                 }
 
                 break;

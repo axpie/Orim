@@ -138,6 +138,13 @@ public class BoardServiceTests
         Assert.Equal(1, board.Elements[1].ZIndex);
     }
 
+    [Fact]
+    public async Task CreateBoardFromImportAsync_NullImportedBoard_Throws()
+    {
+        await Assert.ThrowsAsync<ArgumentNullException>(
+            () => _sut.CreateBoardFromImportAsync(null!, "Title", Guid.NewGuid(), "owner"));
+    }
+
     #endregion
 
     #region Share Password
@@ -210,6 +217,17 @@ public class BoardServiceTests
         _sut.ClearSharePassword(board);
 
         Assert.Null(board.SharePasswordHash);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void SetSharePassword_NullOrWhitespacePassword_Throws(string? password)
+    {
+        var board = new Board();
+
+        Assert.ThrowsAny<ArgumentException>(() => _sut.SetSharePassword(board, password!));
     }
 
     #endregion
@@ -729,6 +747,18 @@ public class BoardServiceTests
         Assert.Single(target.Elements);
         Assert.Single(target.Comments);
         Assert.Equal("Server-owned", target.Comments[0].Text);
+    }
+
+    [Fact]
+    public void ReplaceBoardContent_NullTargetBoard_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => _sut.ReplaceBoardContent(null!, new Board()));
+    }
+
+    [Fact]
+    public void ReplaceBoardContent_NullImportedBoard_Throws()
+    {
+        Assert.Throws<ArgumentNullException>(() => _sut.ReplaceBoardContent(new Board(), null!));
     }
 
     #endregion

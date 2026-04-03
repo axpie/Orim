@@ -6,6 +6,8 @@ namespace Orim.Tests.Infrastructure;
 
 public class EfUserRepositoryTests : IDisposable
 {
+    private const string TestUsername = "alice";
+
     private readonly OrimDbContext _context;
     private readonly EfUserRepository _sut;
 
@@ -28,28 +30,28 @@ public class EfUserRepositoryTests : IDisposable
     [Fact]
     public async Task SaveAsync_NewUser_CanBeRetrieved()
     {
-        var user = new User { Username = "alice", DisplayName = "Alice Example", PasswordHash = "hash123" };
+        var user = new User { Username = TestUsername, DisplayName = "Alice Example", PasswordHash = "hash123" };
 
         await _sut.SaveAsync(user);
         var retrieved = await _sut.GetByIdAsync(user.Id);
 
         Assert.NotNull(retrieved);
-        Assert.Equal("alice", retrieved.Username);
+        Assert.Equal(TestUsername, retrieved.Username);
         Assert.Equal("Alice Example", retrieved.DisplayName);
     }
 
     [Fact]
     public async Task SaveAsync_ExistingUser_Updates()
     {
-        var user = new User { Username = "alice" };
+        var user = new User { Username = TestUsername };
         await _sut.SaveAsync(user);
 
-        user.Username = "alice-updated";
+        user.Username = TestUsername + "-updated";
         await _sut.SaveAsync(user);
 
         var all = await _sut.GetAllAsync();
         Assert.Single(all);
-        Assert.Equal("alice-updated", all[0].Username);
+        Assert.Equal(TestUsername + "-updated", all[0].Username);
     }
 
     [Fact]
@@ -59,7 +61,7 @@ public class EfUserRepositoryTests : IDisposable
         var user = new User { Username = "Alice" };
         await _sut.SaveAsync(user);
 
-        var result = await _sut.GetByUsernameAsync("alice");
+        var result = await _sut.GetByUsernameAsync(TestUsername);
 
         Assert.NotNull(result);
         Assert.Equal("Alice", result.Username);
@@ -91,7 +93,7 @@ public class EfUserRepositoryTests : IDisposable
     {
         var user = new User
         {
-            Username = "alice",
+            Username = TestUsername,
             AuthenticationProvider = AuthenticationProvider.MicrosoftEntraId,
             ExternalSubject = "OID-123"
         };
@@ -114,7 +116,7 @@ public class EfUserRepositoryTests : IDisposable
     [Fact]
     public async Task DeleteAsync_RemovesUser()
     {
-        var user = new User { Username = "alice" };
+        var user = new User { Username = TestUsername };
         await _sut.SaveAsync(user);
 
         await _sut.DeleteAsync(user.Id);
@@ -132,12 +134,28 @@ public class EfUserRepositoryTests : IDisposable
     [Fact]
     public async Task MultipleUsers_AllPersisted()
     {
-        await _sut.SaveAsync(new User { Username = "alice" });
+        await _sut.SaveAsync(new User { Username = TestUsername });
         await _sut.SaveAsync(new User { Username = "bob" });
         await _sut.SaveAsync(new User { Username = "charlie" });
 
         var users = await _sut.GetAllAsync();
 
         Assert.Equal(3, users.Count);
+    }
+
+    [Fact]
+    public async Task GetByEmailAsync_NonExistentEmail_ReturnsNull()
+    {
+        var result = await _sut.GetByEmailAsync("nobody@example.com");
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_EmptyGuid_ReturnsNull()
+    {
+        var result = await _sut.GetByIdAsync(Guid.Empty);
+
+        Assert.Null(result);
     }
 }

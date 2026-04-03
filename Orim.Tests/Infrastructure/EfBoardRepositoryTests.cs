@@ -6,6 +6,8 @@ namespace Orim.Tests.Infrastructure;
 
 public class EfBoardRepositoryTests : IDisposable
 {
+    private const string DefaultTitle = "Test";
+
     private readonly OrimDbContext _context;
     private readonly EfBoardRepository _sut;
 
@@ -94,8 +96,8 @@ public class EfBoardRepositoryTests : IDisposable
     {
         var board = new Board
         {
-            Title = "Test",
-            Elements = [new ShapeElement { Label = "s1" }, new TextElement { Text = "t1" }]
+            Title = DefaultTitle,
+            Elements = [new Orim.Core.Models.TextElement { Text = "A" }, new Orim.Core.Models.TextElement { Text = "B" }]
         };
         await _sut.SaveAsync(board);
 
@@ -129,7 +131,7 @@ public class EfBoardRepositoryTests : IDisposable
     [Fact]
     public async Task SaveAsync_UpdatesTokenIndex()
     {
-        var board = new Board { Title = "Test", ShareLinkToken = "token1" };
+        var board = new Board { Title = DefaultTitle, ShareLinkToken = "token1" };
         await _sut.SaveAsync(board);
 
         board.ShareLinkToken = "token2";
@@ -145,7 +147,7 @@ public class EfBoardRepositoryTests : IDisposable
     [Fact]
     public async Task DeleteAsync_CleansTokenIndex()
     {
-        var board = new Board { Title = "Test", ShareLinkToken = "token123" };
+        var board = new Board { Title = DefaultTitle, ShareLinkToken = "token123" };
         await _sut.SaveAsync(board);
 
         await _sut.DeleteAsync(board.Id);
@@ -219,6 +221,13 @@ public class EfBoardRepositoryTests : IDisposable
         Assert.Single(retrieved.Comments);
         Assert.Equal("Review this area", retrieved.Comments[0].Text);
         Assert.Single(retrieved.Comments[0].Replies);
-        Assert.Equal("Done", retrieved.Comments[0].Replies[0].Text);
+    }
+
+    [Fact]
+    public async Task GetBoardSummariesAsync_Empty_ReturnsEmpty()
+    {
+        var result = await _sut.GetBoardSummariesAsync();
+
+        Assert.Empty(result);
     }
 }

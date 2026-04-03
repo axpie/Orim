@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import React, { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -141,7 +141,7 @@ function createFrameRect(bounds: Rect): Rect {
   };
 }
 
-export function Toolbar({ onBoardChanged }: ToolbarProps) {
+export const Toolbar = React.memo(function Toolbar({ onBoardChanged }: ToolbarProps) {
   const { t } = useTranslation();
   const theme = useTheme();
   const isTouchDevice = useMediaQuery('(pointer: coarse)');
@@ -875,4 +875,4 @@ export function Toolbar({ onBoardChanged }: ToolbarProps) {
       />
     </Paper>
   );
-}
+});

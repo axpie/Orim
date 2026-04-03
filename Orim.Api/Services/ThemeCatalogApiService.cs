@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Orim.Core;
 using Orim.Core.Interfaces;
 
@@ -7,20 +8,15 @@ namespace Orim.Api.Services;
 
 public sealed class ThemeCatalogApiService
 {
-    private static readonly HashSet<string> BuiltInThemeKeys = new(StringComparer.Ordinal)
-    {
-        "light",
-        "dark",
-        "synthwave",
-    };
-
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILogger<ThemeCatalogApiService> _logger;
     private readonly SemaphoreSlim _gate = new(1, 1);
     private List<ApiThemeDefinition>? _cache;
 
-    public ThemeCatalogApiService(IServiceScopeFactory scopeFactory)
+    public ThemeCatalogApiService(IServiceScopeFactory scopeFactory, ILogger<ThemeCatalogApiService> logger)
     {
         _scopeFactory = scopeFactory;
+        _logger = logger;
     }
 
     public async Task<IReadOnlyList<ApiThemeDefinition>> GetThemesAsync()
@@ -209,8 +205,9 @@ public sealed class ThemeCatalogApiService
 
                 themesByKey[normalizedTheme.Key] = normalizedTheme;
             }
-            catch
+            catch (Exception ex)
             {
+                _logger.LogWarning(ex, "Failed to process theme record {Key}. Skipping.", record.Key);
                 continue;
             }
         }
@@ -521,7 +518,7 @@ public sealed class ThemeCatalogApiService
         return normalized;
     }
 
-    private static bool IsBuiltInThemeKey(string key) => BuiltInThemeKeys.Contains(key);
+    private static bool IsBuiltInThemeKey(string key) => key is "light" or "dark" or "synthwave";
 
     private static void ValidatePalette(ApiThemePaletteDefinition palette)
     {

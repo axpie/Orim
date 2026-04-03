@@ -17,6 +17,7 @@ public sealed class BoardChangeNotifier
 
     public IDisposable Subscribe(Guid boardId, string subscriberId, Func<BoardChangeNotification, Task> handler)
     {
+        if (boardId == Guid.Empty) throw new ArgumentException("boardId must not be empty.", nameof(boardId));
         ArgumentException.ThrowIfNullOrWhiteSpace(subscriberId);
         ArgumentNullException.ThrowIfNull(handler);
 
@@ -27,6 +28,8 @@ public sealed class BoardChangeNotifier
 
     public Task NotifyBoardChangedAsync(Guid boardId, string? sourceClientId = null, BoardChangeKind kind = BoardChangeKind.Content)
     {
+        if (boardId == Guid.Empty) throw new ArgumentException("boardId must not be empty.", nameof(boardId));
+
         if (!_subscriptions.TryGetValue(boardId, out var boardSubscriptions) || boardSubscriptions.Count == 0)
         {
             return Task.CompletedTask;

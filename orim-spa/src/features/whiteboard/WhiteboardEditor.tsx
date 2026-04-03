@@ -12,6 +12,7 @@ import { useCommandStack } from './store/commandStack';
 import { formatBoardCommandConflict } from './realtime/localBoardCommands';
 import { useSignalR } from '../../hooks/useSignalR';
 import { WhiteboardCanvas } from './canvas/WhiteboardCanvas';
+import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Toolbar } from './tools/Toolbar';
 import { PropertiesPanel } from './panels/PropertiesPanel';
 import { ChatPanel } from './panels/ChatPanel';
@@ -586,19 +587,21 @@ export function WhiteboardEditor() {
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
         {canEdit && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} />}
         <Box sx={{ flex: 1, position: 'relative' }}>
-          <WhiteboardCanvas
-            editable={canEdit}
-            localPresenceClientId={connectionId}
-            onBoardChanged={onBoardChanged}
-            onBoardLiveChanged={onBoardLiveChanged}
-            onPointerPresenceChanged={sendCursorUpdate}
-            onStageReady={handleStageReady}
-            selectedCommentId={activeCommentId}
-            commentPlacementMode={commentPlacementMode}
-            onSelectComment={handleSelectComment}
-            onCreateCommentAnchor={handleCommentAnchorSelected}
-            liveAnnouncement={liveAnnouncement}
-          />
+          <ErrorBoundary>
+            <WhiteboardCanvas
+              editable={canEdit}
+              localPresenceClientId={connectionId}
+              onBoardChanged={onBoardChanged}
+              onBoardLiveChanged={onBoardLiveChanged}
+              onPointerPresenceChanged={sendCursorUpdate}
+              onStageReady={handleStageReady}
+              selectedCommentId={activeCommentId}
+              commentPlacementMode={commentPlacementMode}
+              onSelectComment={handleSelectComment}
+              onCreateCommentAnchor={handleCommentAnchorSelected}
+              liveAnnouncement={liveAnnouncement}
+            />
+          </ErrorBoundary>
 
           {!isNarrowPanelMode && commentsOpen && (
             <Box

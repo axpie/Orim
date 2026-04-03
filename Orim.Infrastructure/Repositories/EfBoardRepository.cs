@@ -37,12 +37,21 @@ public class EfBoardRepository : IBoardRepository
 
     public async Task<List<BoardSummary>> GetBoardSummariesAsync()
     {
-        var boards = await _context.Boards
+        return await _context.Boards
             .AsNoTracking()
-            .Include(b => b.Members)
+            .Select(b => new BoardSummary
+            {
+                Id = b.Id,
+                Title = b.Title,
+                OwnerId = b.OwnerId,
+                Visibility = b.Visibility,
+                ShareLinkToken = b.ShareLinkToken,
+                Members = b.Members.ToList(),
+                ElementCount = b.Elements.Count,
+                CreatedAt = b.CreatedAt,
+                UpdatedAt = b.UpdatedAt
+            })
             .ToListAsync();
-
-        return boards.Select(BoardSummary.FromBoard).ToList();
     }
 
     public async Task SaveAsync(Board entity)

@@ -1,4 +1,4 @@
-import { type ReactNode } from 'react';
+import React, { type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -278,7 +278,7 @@ interface PropertiesPanelProps {
   mobile?: boolean;
 }
 
-export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: PropertiesPanelProps) {
+export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: PropertiesPanelProps) {
   const { t } = useTranslation();
   const board = useBoardStore((s) => s.board);
   const selectedIds = useBoardStore((s) => s.selectedElementIds);
@@ -476,20 +476,21 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
           <Divider />
 
           {/* Shape-specific */}
-          {el.$type === 'shape' && (
+          {el.$type === 'shape' && (() => {
+            const shape = el as ShapeElement;
+            return (
             <>
               <TextField
                 label={t('properties.label')}
                 size="small"
-                value={(el as ShapeElement).label ?? ''}
+                value={shape.label ?? ''}
                 onChange={(e) => update(el.id, { label: e.target.value })}
               />
               <FormControlLabel
                 control={
                   <Switch
-                    checked={(el as ShapeElement).labelFontSize == null}
+                    checked={shape.labelFontSize == null}
                     onChange={(e) => {
-                      const shape = el as ShapeElement;
                       update(el.id, e.target.checked
                         ? { labelFontSize: null }
                         : { labelFontSize: Math.round(resolveLabelFontSize(shape)) });
@@ -499,10 +500,10 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 }
                 label={t('properties.automaticFontSize')}
               />
-              {(el as ShapeElement).labelFontSize != null && (
+              {shape.labelFontSize != null && (
                 <NumericSliderField
                   label={t('properties.fontSize')}
-                  value={Math.round((el as ShapeElement).labelFontSize ?? getDefaultLabelFontSize(el as ShapeElement))}
+                  value={Math.round(shape.labelFontSize ?? getDefaultLabelFontSize(shape))}
                   min={8}
                   max={200}
                   onChange={(value) => update(el.id, { labelFontSize: value })}
@@ -512,7 +513,7 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 select
                 label={t('properties.fontFamily')}
                 size="small"
-                value={(el as ShapeElement).fontFamily ?? FONT_FAMILY_DEFAULT}
+                value={shape.fontFamily ?? FONT_FAMILY_DEFAULT}
                 onChange={(e) => update(el.id, { fontFamily: e.target.value === FONT_FAMILY_DEFAULT ? null : e.target.value })}
               >
                 {FONT_FAMILY_OPTIONS.map((option) => (
@@ -523,77 +524,79 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
               </TextField>
               <ColorInputField
                 label={t('properties.color')}
-                value={(el as ShapeElement).labelColor ?? contrastingTextColor((el as ShapeElement).fillColor ?? '#ffffff')}
+                value={shape.labelColor ?? contrastingTextColor(shape.fillColor ?? '#ffffff')}
                 onChange={(value) => update(el.id, { labelColor: value })}
               />
               <AlignmentControls
-                horizontal={(el as ShapeElement).labelHorizontalAlignment ?? HorizontalLabelAlignment.Center}
-                vertical={(el as ShapeElement).labelVerticalAlignment ?? VerticalLabelAlignment.Middle}
+                horizontal={shape.labelHorizontalAlignment ?? HorizontalLabelAlignment.Center}
+                vertical={shape.labelVerticalAlignment ?? VerticalLabelAlignment.Middle}
                 horizontalLabel={t('properties.horizontal')}
                 verticalLabel={t('properties.vertical')}
                 onHorizontalChange={(value) => update(el.id, { labelHorizontalAlignment: value })}
                 onVerticalChange={(value) => update(el.id, { labelVerticalAlignment: value })}
               />
               <TextStyleControls
-                element={el as ShapeElement}
+                element={shape}
                 onChange={(changes) => update(el.id, changes)}
               />
               <ColorInputField
                 label={t('properties.fillColor')}
-                value={(el as ShapeElement).fillColor ?? '#ffffff'}
+                value={shape.fillColor ?? '#ffffff'}
                 onChange={(value) => update(el.id, { fillColor: value })}
               />
               <ColorInputField
                 label={t('properties.strokeColor')}
-                value={(el as ShapeElement).strokeColor ?? '#333333'}
+                value={shape.strokeColor ?? '#333333'}
                 onChange={(value) => update(el.id, { strokeColor: value })}
               />
               <NumericSliderField
                 label={t('properties.strokeWidth')}
-                value={(el as ShapeElement).strokeWidth ?? 2}
+                value={shape.strokeWidth ?? 2}
                 min={0}
                 max={20}
                 onChange={(value) => update(el.id, { strokeWidth: value })}
               />
               <PreviewSelect
                 label={t('properties.lineStyle')}
-                value={(el as ShapeElement).borderLineStyle ?? BorderLineStyle.Solid}
+                value={shape.borderLineStyle ?? BorderLineStyle.Solid}
                 options={borderStyleOptions}
                 onChange={(value) => update(el.id, { borderLineStyle: value as ShapeElement['borderLineStyle'] })}
               />
             </>
-          )}
+            );
+          })()}
 
           {/* Text-specific */}
-          {el.$type === 'text' && (
+          {el.$type === 'text' && (() => {
+            const text = el as TextElement;
+            return (
             <>
               <TextField
                 label={t('properties.text')}
                 size="small"
                 multiline
                 minRows={3}
-                value={(el as TextElement).text ?? ''}
+                value={text.text ?? ''}
                 onChange={(e) => update(el.id, { text: e.target.value })}
               />
               <FormControlLabel
                 control={
                   <Switch
-                    checked={(el as TextElement).autoFontSize ?? false}
+                    checked={text.autoFontSize ?? false}
                     onChange={(e) => {
-                      const textElement = el as TextElement;
                       update(el.id, e.target.checked
                         ? { autoFontSize: true }
-                        : { autoFontSize: false, fontSize: Math.round(resolveTextFontSize(textElement)) });
+                        : { autoFontSize: false, fontSize: Math.round(resolveTextFontSize(text)) });
                     }}
                     size="small"
                   />
                 }
                 label={t('properties.automaticFontSize')}
               />
-              {!(el as TextElement).autoFontSize && (
+              {!text.autoFontSize && (
                 <NumericSliderField
                   label={t('properties.fontSize')}
-                  value={Math.round((el as TextElement).fontSize ?? 18)}
+                  value={Math.round(text.fontSize ?? 18)}
                   min={8}
                   max={200}
                   onChange={(value) => update(el.id, { fontSize: value, autoFontSize: false })}
@@ -603,7 +606,7 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 select
                 label={t('properties.fontFamily')}
                 size="small"
-                value={(el as TextElement).fontFamily ?? FONT_FAMILY_DEFAULT}
+                value={text.fontFamily ?? FONT_FAMILY_DEFAULT}
                 onChange={(e) => update(el.id, { fontFamily: e.target.value === FONT_FAMILY_DEFAULT ? null : e.target.value })}
               >
                 {FONT_FAMILY_OPTIONS.map((option) => (
@@ -614,39 +617,41 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
               </TextField>
               <ColorInputField
                 label={t('properties.color')}
-                value={(el as TextElement).color ?? '#333333'}
+                value={text.color ?? '#333333'}
                 onChange={(value) => update(el.id, { color: value })}
               />
               <AlignmentControls
-                horizontal={(el as TextElement).labelHorizontalAlignment ?? HorizontalLabelAlignment.Left}
-                vertical={(el as TextElement).labelVerticalAlignment ?? VerticalLabelAlignment.Top}
+                horizontal={text.labelHorizontalAlignment ?? HorizontalLabelAlignment.Left}
+                vertical={text.labelVerticalAlignment ?? VerticalLabelAlignment.Top}
                 horizontalLabel={t('properties.horizontal')}
                 verticalLabel={t('properties.vertical')}
                 onHorizontalChange={(value) => update(el.id, { labelHorizontalAlignment: value })}
                 onVerticalChange={(value) => update(el.id, { labelVerticalAlignment: value })}
               />
               <TextStyleControls
-                element={el as TextElement}
+                element={text}
                 onChange={(changes) => update(el.id, changes)}
               />
             </>
-          )}
+            );
+          })()}
 
-          {el.$type === 'sticky' && (
+          {el.$type === 'sticky' && (() => {
+            const sticky = el as StickyNoteElement;
+            return (
             <>
               <TextField
                 label={t('properties.text')}
                 size="small"
                 multiline
                 minRows={4}
-                value={(el as StickyNoteElement).text ?? ''}
+                value={sticky.text ?? ''}
                 onChange={(e) => update(el.id, { text: e.target.value })}
               />
               <ColorInputField
                 label={t('properties.fillColor')}
-                value={(el as StickyNoteElement).fillColor ?? '#FDE68A'}
+                value={sticky.fillColor ?? '#FDE68A'}
                 onChange={(value) => {
-                  const sticky = el as StickyNoteElement;
                   const fallbackColor = contrastingTextColor(sticky.fillColor ?? '#FDE68A');
                   const currentColor = sticky.color ?? fallbackColor;
                   update(el.id, currentColor === fallbackColor
@@ -657,9 +662,8 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
               <FormControlLabel
                 control={
                   <Switch
-                    checked={(el as StickyNoteElement).autoFontSize ?? false}
+                    checked={sticky.autoFontSize ?? false}
                     onChange={(e) => {
-                      const sticky = el as StickyNoteElement;
                       update(el.id, e.target.checked
                         ? { autoFontSize: true }
                         : { autoFontSize: false, fontSize: Math.round(resolveTextFontSize(sticky)) });
@@ -669,10 +673,10 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 }
                 label={t('properties.automaticFontSize')}
               />
-              {!(el as StickyNoteElement).autoFontSize && (
+              {!sticky.autoFontSize && (
                 <NumericSliderField
                   label={t('properties.fontSize')}
-                  value={Math.round((el as StickyNoteElement).fontSize ?? 16)}
+                  value={Math.round(sticky.fontSize ?? 16)}
                   min={8}
                   max={200}
                   onChange={(value) => update(el.id, { fontSize: value, autoFontSize: false })}
@@ -682,7 +686,7 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 select
                 label={t('properties.fontFamily')}
                 size="small"
-                value={(el as StickyNoteElement).fontFamily ?? FONT_FAMILY_DEFAULT}
+                value={sticky.fontFamily ?? FONT_FAMILY_DEFAULT}
                 onChange={(e) => update(el.id, { fontFamily: e.target.value === FONT_FAMILY_DEFAULT ? null : e.target.value })}
               >
                 {FONT_FAMILY_OPTIONS.map((option) => (
@@ -693,38 +697,40 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
               </TextField>
               <ColorInputField
                 label={t('properties.color')}
-                value={(el as StickyNoteElement).color ?? contrastingTextColor((el as StickyNoteElement).fillColor ?? '#FDE68A')}
+                value={sticky.color ?? contrastingTextColor(sticky.fillColor ?? '#FDE68A')}
                 onChange={(value) => update(el.id, { color: value })}
               />
               <AlignmentControls
-                horizontal={(el as StickyNoteElement).labelHorizontalAlignment ?? HorizontalLabelAlignment.Left}
-                vertical={(el as StickyNoteElement).labelVerticalAlignment ?? VerticalLabelAlignment.Top}
+                horizontal={sticky.labelHorizontalAlignment ?? HorizontalLabelAlignment.Left}
+                vertical={sticky.labelVerticalAlignment ?? VerticalLabelAlignment.Top}
                 horizontalLabel={t('properties.horizontal')}
                 verticalLabel={t('properties.vertical')}
                 onHorizontalChange={(value) => update(el.id, { labelHorizontalAlignment: value })}
                 onVerticalChange={(value) => update(el.id, { labelVerticalAlignment: value })}
               />
               <TextStyleControls
-                element={el as StickyNoteElement}
+                element={sticky}
                 onChange={(changes) => update(el.id, changes)}
               />
             </>
-          )}
+            );
+          })()}
 
-          {el.$type === 'frame' && (
+          {el.$type === 'frame' && (() => {
+            const frame = el as FrameElement;
+            return (
             <>
               <TextField
                 label={t('properties.label')}
                 size="small"
-                value={(el as FrameElement).label ?? ''}
+                value={frame.label ?? ''}
                 onChange={(e) => update(el.id, { label: e.target.value })}
               />
               <FormControlLabel
                 control={
                   <Switch
-                    checked={(el as FrameElement).labelFontSize == null}
+                    checked={frame.labelFontSize == null}
                     onChange={(e) => {
-                      const frame = el as FrameElement;
                       update(el.id, e.target.checked
                         ? { labelFontSize: null }
                         : { labelFontSize: Math.round(resolveFrameTitleFontSize(frame)) });
@@ -734,10 +740,10 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 }
                 label={t('properties.automaticFontSize')}
               />
-              {(el as FrameElement).labelFontSize != null && (
+              {frame.labelFontSize != null && (
                 <NumericSliderField
                   label={t('properties.fontSize')}
-                  value={Math.round((el as FrameElement).labelFontSize ?? resolveFrameTitleFontSize(el as FrameElement))}
+                  value={Math.round(frame.labelFontSize ?? resolveFrameTitleFontSize(frame))}
                   min={8}
                   max={64}
                   onChange={(value) => update(el.id, { labelFontSize: value })}
@@ -747,7 +753,7 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 select
                 label={t('properties.fontFamily')}
                 size="small"
-                value={(el as FrameElement).fontFamily ?? FONT_FAMILY_DEFAULT}
+                value={frame.fontFamily ?? FONT_FAMILY_DEFAULT}
                 onChange={(e) => update(el.id, { fontFamily: e.target.value === FONT_FAMILY_DEFAULT ? null : e.target.value })}
               >
                 {FONT_FAMILY_OPTIONS.map((option) => (
@@ -758,11 +764,11 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
               </TextField>
               <ColorInputField
                 label={t('properties.color')}
-                value={(el as FrameElement).labelColor ?? contrastingTextColor((el as FrameElement).fillColor ?? 'rgba(37, 99, 235, 0.08)')}
+                value={frame.labelColor ?? contrastingTextColor(frame.fillColor ?? 'rgba(37, 99, 235, 0.08)')}
                 onChange={(value) => update(el.id, { labelColor: value })}
               />
               <AlignmentControls
-                horizontal={(el as FrameElement).labelHorizontalAlignment ?? HorizontalLabelAlignment.Left}
+                horizontal={frame.labelHorizontalAlignment ?? HorizontalLabelAlignment.Left}
                 vertical={VerticalLabelAlignment.Top}
                 horizontalLabel={t('properties.horizontal')}
                 verticalLabel={t('properties.vertical')}
@@ -771,51 +777,57 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 showVertical={false}
               />
               <TextStyleControls
-                element={el as FrameElement}
+                element={frame}
                 onChange={(changes) => update(el.id, changes)}
               />
               <ColorInputField
                 label={t('properties.fillColor')}
-                value={(el as FrameElement).fillColor ?? 'rgba(37, 99, 235, 0.08)'}
+                value={frame.fillColor ?? 'rgba(37, 99, 235, 0.08)'}
                 onChange={(value) => update(el.id, { fillColor: value })}
               />
               <ColorInputField
                 label={t('properties.strokeColor')}
-                value={(el as FrameElement).strokeColor ?? 'rgba(37, 99, 235, 0.48)'}
+                value={frame.strokeColor ?? 'rgba(37, 99, 235, 0.48)'}
                 onChange={(value) => update(el.id, { strokeColor: value })}
               />
               <NumericSliderField
                 label={t('properties.strokeWidth')}
-                value={(el as FrameElement).strokeWidth ?? 2}
+                value={frame.strokeWidth ?? 2}
                 min={1}
                 max={12}
                 onChange={(value) => update(el.id, { strokeWidth: value })}
               />
             </>
-          )}
+            );
+          })()}
 
-          {el.$type === 'icon' && (
+          {el.$type === 'icon' && (() => {
+            const icon = el as IconElement;
+            return (
             <>
               <TextField
                 label={t('tools.icon')}
                 size="small"
-                value={getIconDisplayName((el as IconElement).iconName)}
+                value={getIconDisplayName(icon.iconName)}
                 slotProps={{ input: { readOnly: true } }}
               />
               <ColorInputField
                 label={t('properties.color')}
-                value={(el as IconElement).color ?? '#333333'}
+                value={icon.color ?? '#333333'}
                 onChange={(value) => update(el.id, { color: value })}
               />
             </>
-          )}
+            );
+          })()}
 
           {/* Image-specific */}
-          {el.$type === 'image' && (
+          {el.$type === 'image' && (() => {
+            const image = el as ImageElement;
+            return (
             <>
               <NumericSliderField
                 label={t('properties.opacity')}
-                value={Math.round(((el as ImageElement).opacity ?? 1) * 100)}
+                value={Math.round((image.opacity ?? 1) * 100)}
                 min={10}
                 max={100}
                 onChange={(value) => update(el.id, { opacity: value / 100 })}
@@ -824,7 +836,7 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 select
                 size="small"
                 label={t('properties.imageFit')}
-                value={(el as ImageElement).imageFit ?? ImageFit.Uniform}
+                value={image.imageFit ?? ImageFit.Uniform}
                 onChange={(e) => { void handleImageFitChange(el.id, e.target.value as ImageFit); }}
                 fullWidth
               >
@@ -833,26 +845,29 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 <MenuItem value={ImageFit.Fill}>{t('properties.imageFit_Fill')}</MenuItem>
               </TextField>
             </>
-          )}
+            );
+          })()}
 
           {/* Arrow-specific */}
-          {el.$type === 'arrow' && (
+          {el.$type === 'arrow' && (() => {
+            const arrow = el as ArrowElement;
+            return (
             <>
               <ColorInputField
                 label={t('properties.strokeColor')}
-                value={(el as ArrowElement).strokeColor ?? '#333333'}
+                value={arrow.strokeColor ?? '#333333'}
                 onChange={(value) => update(el.id, { strokeColor: value })}
               />
               <NumericSliderField
                 label={t('properties.strokeWidth')}
-                value={(el as ArrowElement).strokeWidth ?? 2}
+                value={arrow.strokeWidth ?? 2}
                 min={1}
                 max={20}
                 onChange={(value) => update(el.id, { strokeWidth: value })}
               />
               <PreviewSelect
                 label={t('properties.lineStyle')}
-                value={(el as ArrowElement).lineStyle ?? ArrowLineStyle.Solid}
+                value={arrow.lineStyle ?? ArrowLineStyle.Solid}
                 options={arrowLineStyleOptions}
                 onChange={(value) => update(el.id, { lineStyle: value as ArrowElement['lineStyle'] })}
               />
@@ -860,7 +875,7 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 select
                 label={t('properties.sourceDock')}
                 size="small"
-                value={(el as ArrowElement).sourceDock ?? DockPoint.Center}
+                value={arrow.sourceDock ?? DockPoint.Center}
                 onChange={(e) => update(el.id, { sourceDock: e.target.value as DockPoint })}
               >
                 {dockOptions.map((dock) => (
@@ -871,7 +886,7 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 select
                 label={t('properties.targetDock')}
                 size="small"
-                value={(el as ArrowElement).targetDock ?? DockPoint.Center}
+                value={arrow.targetDock ?? DockPoint.Center}
                 onChange={(e) => update(el.id, { targetDock: e.target.value as DockPoint })}
               >
                 {dockOptions.map((dock) => (
@@ -880,13 +895,13 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
               </TextField>
               <PreviewSelect
                 label={t('properties.sourceHead')}
-                value={(el as ArrowElement).sourceHeadStyle ?? ArrowHeadStyle.None}
+                value={arrow.sourceHeadStyle ?? ArrowHeadStyle.None}
                 options={sourceHeadOptions}
                 onChange={(value) => update(el.id, { sourceHeadStyle: value as ArrowElement['sourceHeadStyle'] })}
               />
               <PreviewSelect
                 label={t('properties.targetHead')}
-                value={(el as ArrowElement).targetHeadStyle ?? ArrowHeadStyle.FilledTriangle}
+                value={arrow.targetHeadStyle ?? ArrowHeadStyle.FilledTriangle}
                 options={targetHeadOptions}
                 onChange={(value) => update(el.id, { targetHeadStyle: value as ArrowElement['targetHeadStyle'] })}
               />
@@ -894,16 +909,18 @@ export function PropertiesPanel({ onClose, onBoardChanged, mobile = false }: Pro
                 select
                 label={t('properties.routeStyle')}
                 size="small"
-                value={(el as ArrowElement).routeStyle ?? 'Orthogonal'}
+                value={arrow.routeStyle ?? 'Orthogonal'}
                 onChange={(e) => update(el.id, { routeStyle: e.target.value as ArrowElement['routeStyle'] })}
               >
                 <MenuItem value="Straight">{t('properties.straight')}</MenuItem>
                 <MenuItem value="Orthogonal">{t('properties.orthogonal')}</MenuItem>
               </TextField>
             </>
-          )}
+            );
+          })()}
         </Box>
       )}
     </Paper>
   );
-}
+});
+
