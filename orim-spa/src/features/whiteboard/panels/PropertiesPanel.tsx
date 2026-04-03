@@ -28,6 +28,7 @@ import VerticalAlignBottomIcon from '@mui/icons-material/VerticalAlignBottom';
 import { useBoardStore } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
 import { ColorInputField } from '../controls/ColorInputField';
+import { NumberInputField } from '../controls/NumberInputField';
 import { PreviewSelect, type PreviewSelectOption } from '../controls/PreviewSelect';
 import { getIconDisplayName } from '../icons/iconCatalog';
 import { resolveFrameTitleFontSize } from '../shapes/FrameRenderer';
@@ -260,13 +261,13 @@ function NumericSliderField({
           onChange={(_, nextValue) => onChange(Number(Array.isArray(nextValue) ? nextValue[0] : nextValue))}
         />
       </Box>
-      <TextField
-        aria-label={label}
-        size="small"
-        type="number"
+      <NumberInputField
+        ariaLabel={label}
         value={safeValue}
-        onChange={(e) => onChange(Number(e.target.value))}
-        inputProps={{ min, max, step }}
+        onChange={(v) => onChange(v)}
+        min={min}
+        max={max}
+        step={step}
       />
     </Box>
   );
@@ -437,38 +438,32 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
         <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {/* Position */}
           <Box sx={{ display: 'flex', gap: 1 }}>
-            <TextField
+            <NumberInputField
               label="X"
-              type="number"
-              size="small"
               value={Math.round(el.x)}
-              onChange={(e) => update(el.id, { x: Number(e.target.value) })}
+              onChange={(v) => update(el.id, { x: v })}
             />
-            <TextField
+            <NumberInputField
               label="Y"
-              type="number"
-              size="small"
               value={Math.round(el.y)}
-              onChange={(e) => update(el.id, { y: Number(e.target.value) })}
+              onChange={(v) => update(el.id, { y: v })}
             />
           </Box>
 
           {/* Size */}
           {el.$type !== 'arrow' && (
             <Box sx={{ display: 'flex', gap: 1 }}>
-              <TextField
+              <NumberInputField
                 label={t('properties.size') + ' W'}
-                type="number"
-                size="small"
                 value={Math.round(el.width)}
-                onChange={(e) => update(el.id, { width: Number(e.target.value) })}
+                min={1}
+                onChange={(v) => update(el.id, { width: v })}
               />
-              <TextField
+              <NumberInputField
                 label="H"
-                type="number"
-                size="small"
                 value={Math.round(el.height)}
-                onChange={(e) => update(el.id, { height: Number(e.target.value) })}
+                min={1}
+                onChange={(v) => update(el.id, { height: v })}
               />
             </Box>
           )}

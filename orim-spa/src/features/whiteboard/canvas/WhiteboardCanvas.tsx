@@ -2662,6 +2662,7 @@ export function WhiteboardCanvas({
           zoom={zoom}
           cameraX={cameraX}
           cameraY={cameraY}
+          surfaceColor={boardDefaults.surfaceColor}
           onCommit={handleTextCommit}
           onCancel={handleTextCancel}
         />

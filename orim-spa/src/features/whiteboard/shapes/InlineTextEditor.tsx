@@ -15,6 +15,7 @@ interface InlineTextEditorProps {
   zoom: number;
   cameraX: number;
   cameraY: number;
+  surfaceColor: string;
   onCommit: (id: string, value: string) => void;
   onCancel: () => void;
 }
@@ -24,6 +25,7 @@ export function InlineTextEditor({
   zoom,
   cameraX,
   cameraY,
+  surfaceColor,
   onCommit,
   onCancel,
 }: InlineTextEditorProps) {
@@ -46,10 +48,10 @@ export function InlineTextEditor({
   const textColor = element.$type === 'frame'
     ? (element.labelColor ?? contrastingTextColor(element.fillColor ?? 'rgba(37, 99, 235, 0.08)'))
     : element.$type === 'shape'
-    ? (element.labelColor ?? contrastingTextColor(element.fillColor ?? '#ffffff'))
+    ? (element.labelColor ?? contrastingTextColor(element.fillColor ?? surfaceColor))
     : (isTextContentElement(element)
-        ? (element.color ?? (element.$type === 'sticky' ? contrastingTextColor(element.fillColor ?? '#FDE68A') : '#333333'))
-        : '#333333');
+        ? (element.color ?? (element.$type === 'sticky' ? contrastingTextColor(element.fillColor ?? '#FDE68A') : contrastingTextColor(surfaceColor)))
+        : contrastingTextColor(surfaceColor));
   const fontWeight = element.isBold ? 700 : 500;
   const fontStyle = element.isItalic ? 'italic' : 'normal';
   const textDecoration = [element.isUnderline ? 'underline' : '', element.isStrikethrough ? 'line-through' : '']
@@ -64,7 +66,9 @@ export function InlineTextEditor({
     ? (element.fillColor ?? '#FDE68A')
     : element.$type === 'frame'
       ? (element.fillColor ?? 'rgba(37, 99, 235, 0.08)')
-    : 'rgba(255, 255, 255, 0.96)';
+    : element.$type === 'shape'
+      ? (element.fillColor ?? surfaceColor)
+    : surfaceColor; // text elements: match canvas background
   const borderRadius = element.$type === 'sticky' ? 8 : element.$type === 'frame' ? 10 : 2;
 
   useEffect(() => {
@@ -81,7 +85,7 @@ export function InlineTextEditor({
   const top = element.y * zoom + cameraY;
   const width = element.width * zoom;
   const height = element.$type === 'frame'
-    ? Math.max(getFrameHeaderHeight(element.height) * zoom, 24)
+    ? Math.max(getFrameHeaderHeight(element.height, element.labelFontSize ?? undefined) * zoom, 24)
     : element.height * zoom;
 
   return (
