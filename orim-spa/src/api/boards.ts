@@ -2,6 +2,7 @@ import client from './client';
 import { BoardVisibility } from '../types/models';
 import type {
   Board,
+  BoardFolder,
   BoardSummary,
   BoardTemplateDefinition,
   BoardMember,
@@ -191,4 +192,32 @@ export async function sendAssistantMessage(
 
 export async function sendPresenceLeave(boardId: string, clientId: string): Promise<void> {
   await client.post('/api/presence/leave', { boardId, clientId });
+}
+
+// --- Folders ---
+
+export async function getFolders(): Promise<BoardFolder[]> {
+  const { data } = await client.get<BoardFolder[]>('/api/boards/folders');
+  return data;
+}
+
+export async function createFolder(name: string, parentFolderId?: string): Promise<BoardFolder> {
+  const { data } = await client.post<BoardFolder>('/api/boards/folders', { name, parentFolderId });
+  return data;
+}
+
+export async function updateFolder(id: string, name: string): Promise<void> {
+  await client.put(`/api/boards/folders/${id}`, { name });
+}
+
+export async function deleteFolder(id: string): Promise<void> {
+  await client.delete(`/api/boards/folders/${id}`);
+}
+
+export async function setBoardFolder(boardId: string, folderId: string | null): Promise<void> {
+  await client.put(`/api/boards/${boardId}/folder`, { folderId });
+}
+
+export async function setBoardTags(boardId: string, tags: string[]): Promise<void> {
+  await client.put(`/api/boards/${boardId}/tags`, { tags });
 }

@@ -3,7 +3,7 @@ import type Konva from 'konva';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Alert, Box, Drawer, Snackbar, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Button, Drawer, Snackbar, useMediaQuery, useTheme } from '@mui/material';
 import { getAssistantAvailability } from '../../api/assistantSettings';
 import { createSnapshot, getBoard, restoreSnapshot, saveBoard } from '../../api/boards';
 import { useBoardComments } from './comments/useBoardComments';
@@ -63,6 +63,7 @@ export function WhiteboardEditor() {
   const setDirty = useBoardStore((s) => s.setDirty);
   const commandConflict = useBoardStore((s) => s.commandConflict);
   const clearCommandConflict = useBoardStore((s) => s.clearCommandConflict);
+  const selectedElementIds = useBoardStore((s) => s.selectedElementIds);
   const outboxCount = useOperationOutboxStore((s) => (id ? s.countForBoard(id) : 0));
   const clearCommandStack = useCommandStack((s) => s.clear);
 
@@ -436,6 +437,22 @@ export function WhiteboardEditor() {
     }
   }, [announceLive, commentError]);
 
+  // Broadcast selected element IDs to remote collaborators
+  useEffect(() => {
+    if (connectionState === 'connected') {
+      sendCursorUpdate(null, null, selectedElementIds.length > 0 ? selectedElementIds : undefined);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedElementIds, connectionState]);
+
+  const handlePointerPresenceChanged = useCallback(
+    (worldX: number | null, worldY: number | null) => {
+      const currentSelection = useBoardStore.getState().selectedElementIds;
+      sendCursorUpdate(worldX, worldY, currentSelection.length > 0 ? currentSelection : undefined);
+    },
+    [sendCursorUpdate],
+  );
+
   const handleStageReady = useCallback((stage: Konva.Stage | null) => {
     stageRef.current = stage;
   }, []);
@@ -665,7 +682,7 @@ export function WhiteboardEditor() {
               localPresenceClientId={connectionId}
               onBoardChanged={onBoardChanged}
               onBoardLiveChanged={onBoardLiveChanged}
-              onPointerPresenceChanged={sendCursorUpdate}
+              onPointerPresenceChanged={handlePointerPresenceChanged}
               onStageReady={handleStageReady}
               selectedCommentId={activeCommentId}
               commentPlacementMode={commentPlacementMode}
@@ -850,7 +867,17 @@ export function WhiteboardEditor() {
         onClose={() => clearCommandConflict()}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
-        <Alert severity="warning" variant="filled" onClose={() => clearCommandConflict()} sx={{ width: '100%' }}>
+        <Alert
+          severity="warning"
+          variant="filled"
+          onClose={() => clearCommandConflict()}
+          sx={{ width: '100%' }}
+          action={
+            <Button color="inherit" size="small" onClick={() => clearCommandConflict()}>
+              {t('common.confirm')}
+            </Button>
+          }
+        >
           {commandConflict ? formatBoardCommandConflict(commandConflict) : ''}
         </Alert>
       </Snackbar>

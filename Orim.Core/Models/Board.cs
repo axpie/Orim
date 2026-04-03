@@ -36,6 +36,8 @@ public class Board
     public List<BoardElement> Elements { get; set; } = [];
     public List<BoardComment> Comments { get; set; } = [];
     public List<BoardSnapshot> Snapshots { get; set; } = [];
+    public string? FolderId { get; set; }
+    public List<string> Tags { get; set; } = [];
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 }

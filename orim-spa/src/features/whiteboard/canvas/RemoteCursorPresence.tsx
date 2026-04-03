@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Circle, Group, Label, Line, Tag, Text } from 'react-konva';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Circle, Group, Label, Line, Rect, Tag, Text } from 'react-konva';
 import { useBoardStore } from '../store/boardStore';
 
 const CURSOR_SMOOTHING_MS = 70;
@@ -16,6 +16,7 @@ interface VisibleRemoteCursor {
   colorHex: string;
   targetX: number;
   targetY: number;
+  selectedElementIds?: string[];
 }
 
 interface AnimatedRemoteCursor extends VisibleRemoteCursor {
@@ -23,8 +24,9 @@ interface AnimatedRemoteCursor extends VisibleRemoteCursor {
   renderedY: number;
 }
 
-export function RemoteCursorPresence({ localPresenceClientId = null, zoom }: RemoteCursorPresenceProps) {
+function RemoteCursorPresenceInner({ localPresenceClientId = null, zoom }: RemoteCursorPresenceProps) {
   const remoteCursors = useBoardStore((state) => state.remoteCursors);
+  const getElementById = useBoardStore((state) => state.getElementById);
   const [animatedCursors, setAnimatedCursors] = useState<AnimatedRemoteCursor[]>([]);
   const animationFrameRef = useRef<number | null>(null);
   const lastFrameAtRef = useRef<number | null>(null);
@@ -44,6 +46,7 @@ export function RemoteCursorPresence({ localPresenceClientId = null, zoom }: Rem
         colorHex: cursor.colorHex,
         targetX: cursor.worldX ?? 0,
         targetY: cursor.worldY ?? 0,
+        selectedElementIds: cursor.selectedElementIds,
       })),
     [localPresenceClientId, remoteCursors],
   );
@@ -141,6 +144,7 @@ export function RemoteCursorPresence({ localPresenceClientId = null, zoom }: Rem
           && existing.colorHex === cursor.colorHex
           && existing.targetX === cursor.targetX
           && existing.targetY === cursor.targetY
+          && existing.selectedElementIds === cursor.selectedElementIds
         ) {
           return existing;
         }
@@ -151,6 +155,7 @@ export function RemoteCursorPresence({ localPresenceClientId = null, zoom }: Rem
           colorHex: cursor.colorHex,
           targetX: cursor.targetX,
           targetY: cursor.targetY,
+          selectedElementIds: cursor.selectedElementIds,
         };
       });
 
@@ -179,8 +184,47 @@ export function RemoteCursorPresence({ localPresenceClientId = null, zoom }: Rem
 
   useEffect(() => stopAnimationLoop, [stopAnimationLoop]);
 
+  // Collect remote element selections for rendering outlines
+  const remoteElementSelections = useMemo(() => {
+    const selections: { elementId: string; colorHex: string; displayName: string }[] = [];
+    for (const cursor of remoteCursors) {
+      if (cursor.clientId === localPresenceClientId) continue;
+      for (const elementId of cursor.selectedElementIds ?? []) {
+        selections.push({ elementId, colorHex: cursor.colorHex, displayName: cursor.displayName });
+      }
+    }
+    return selections;
+  }, [remoteCursors, localPresenceClientId]);
+
   return (
     <>
+      {/* Element-level editing indicators */}
+      {remoteElementSelections.map(({ elementId, colorHex, displayName }) => {
+        const element = getElementById(elementId);
+        if (!element || element.x == null || element.y == null) return null;
+        const w = element.width ?? 100;
+        const h = element.height ?? 40;
+        return (
+          <Group key={`sel-${elementId}-${colorHex}`} listening={false}>
+            <Rect
+              x={element.x - 3 / zoom}
+              y={element.y - 3 / zoom}
+              width={w + 6 / zoom}
+              height={h + 6 / zoom}
+              stroke={colorHex}
+              strokeWidth={2 / zoom}
+              cornerRadius={4 / zoom}
+              dash={[6 / zoom, 3 / zoom]}
+              fillEnabled={false}
+            />
+            <Label x={element.x} y={element.y - 18 / zoom}>
+              <Tag fill={colorHex} cornerRadius={3 / zoom} opacity={0.85} />
+              <Text text={displayName} fontSize={10 / zoom} fill="#ffffff" padding={3 / zoom} />
+            </Label>
+          </Group>
+        );
+      })}
+      {/* Remote cursors */}
       {animatedCursors.map((cursor) => (
         <Group key={cursor.clientId} x={cursor.renderedX} y={cursor.renderedY} listening={false}>
           <Line
@@ -219,3 +263,5 @@ export function RemoteCursorPresence({ localPresenceClientId = null, zoom }: Rem
     </>
   );
 }
+
+export const RemoteCursorPresence = memo(RemoteCursorPresenceInner);

@@ -19,6 +19,9 @@ import {
   Grid,
   IconButton,
   InputAdornment,
+  ListItemIcon,
+  ListItemText,
+  Menu,
   MenuItem,
   TextField,
   Tooltip,
@@ -27,6 +30,9 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import FolderIcon from '@mui/icons-material/Folder';
+import FolderOpenIcon from '@mui/icons-material/FolderOpen';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -40,11 +46,16 @@ import {
   renameBoard,
   importBoard,
   getTemplates,
+  getFolders,
+  createFolder,
+  updateFolder,
+  deleteFolder,
 } from '../../api/boards';
 import { getThemes } from '../../api/themes';
 import {
   BoardRole,
   BoardVisibility,
+  type BoardFolder,
   type BoardSummary,
   type BoardTemplateDefinition,
 } from '../../types/models';
@@ -238,6 +249,13 @@ function BoardCard({
           <Typography variant="body2" color="text.secondary">
             {board.elementCount} {t('dashboard.elements')}
           </Typography>
+          {(board.tags ?? []).length > 0 && (
+            <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap', mt: 0.5 }}>
+              {(board.tags ?? []).map((tag) => (
+                <Chip key={tag} label={tag} size="small" variant="outlined" sx={{ fontSize: '0.7rem', height: 20 }} />
+              ))}
+            </Box>
+          )}
           <Typography variant="caption" color="text.secondary">
             {t('dashboard.lastModified')}: {new Date(board.updatedAt).toLocaleDateString()}
           </Typography>
@@ -292,6 +310,10 @@ export function DashboardPage() {
     queryFn: getThemes,
     staleTime: 60_000,
   });
+  const { data: folders = [] } = useQuery({
+    queryKey: ['folders'],
+    queryFn: getFolders,
+  });
 
   const createMutation = useMutation({
     mutationFn: createBoard,
@@ -325,6 +347,25 @@ export function DashboardPage() {
     },
   });
 
+  const createFolderMutation = useMutation({
+    mutationFn: (name: string) => createFolder(name),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['folders'] }),
+  });
+
+  const renameFolderMutation = useMutation({
+    mutationFn: ({ id, name }: { id: string; name: string }) => updateFolder(id, name),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['folders'] }),
+  });
+
+  const deleteFolderMutation = useMutation({
+    mutationFn: deleteFolder,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['folders'] });
+      queryClient.invalidateQueries({ queryKey: ['boards'] });
+      setSelectedFolderId(null);
+    },
+  });
+
   // Create dialog state
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
@@ -340,6 +381,17 @@ export function DashboardPage() {
   // Shared boards section collapsed by default
   const [sharedExpanded, setSharedExpanded] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+
+  // Folder & tag filter state
+  const [selectedFolderId, setSelectedFolderId] = useState<string | null>(null);
+  const [selectedTag, setSelectedTag] = useState<string | null>(null);
+  const [createFolderOpen, setCreateFolderOpen] = useState(false);
+  const [newFolderName, setNewFolderName] = useState('');
+  const [renameFolderOpen, setRenameFolderOpen] = useState(false);
+  const [renameFolderTarget, setRenameFolderTarget] = useState<BoardFolder | null>(null);
+  const [renameFolderName, setRenameFolderName] = useState('');
+  const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
+  const [folderMenuTarget, setFolderMenuTarget] = useState<BoardFolder | null>(null);
   const currentUserId = currentUser?.id ?? null;
   const [favoriteBoardIds, setFavoriteBoardIds] = useState<string[]>(() => currentUserId
     ? loadStoredIds(favoritesStorageKey(currentUserId))
@@ -433,22 +485,43 @@ export function DashboardPage() {
 
   const favoriteBoardIdSet = useMemo(() => new Set(favoriteBoardIds), [favoriteBoardIds]);
 
+  const allTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    for (const board of boards) {
+      for (const tag of board.tags ?? []) {
+        tagSet.add(tag);
+      }
+    }
+    return [...tagSet].sort();
+  }, [boards]);
+
   const filteredBoards = useMemo(() => {
-    const normalizedSearch = searchTerm.trim().toLowerCase();
-    if (!normalizedSearch) {
-      return boards;
+    let result = boards;
+
+    if (selectedFolderId) {
+      result = result.filter((board: BoardSummary) => board.folderId === selectedFolderId);
     }
 
-    return boards.filter((board: BoardSummary) => {
+    if (selectedTag) {
+      result = result.filter((board: BoardSummary) => (board.tags ?? []).includes(selectedTag));
+    }
+
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    if (!normalizedSearch) {
+      return result;
+    }
+
+    return result.filter((board: BoardSummary) => {
       const haystacks = [
         board.title,
         visibilityLabel(board.visibility),
         ...board.members.map((member) => member.username),
+        ...(board.tags ?? []),
       ].map((value) => value.toLowerCase());
 
       return haystacks.some((value) => value.includes(normalizedSearch));
     });
-  }, [boards, searchTerm, visibilityLabel]);
+  }, [boards, searchTerm, selectedFolderId, selectedTag, visibilityLabel]);
 
   const myBoards = filteredBoards.filter((b: BoardSummary) => b.ownerId === currentUser?.id);
   const sharedBoards = filteredBoards.filter((b: BoardSummary) => b.ownerId !== currentUser?.id);
@@ -590,6 +663,99 @@ export function DashboardPage() {
           </Grid>
         </Box>
       )}
+
+      {/* Folder & Tag Filters */}
+      {boards.length > 0 && (
+        <Box sx={{ mb: 3 }}>
+          {/* Folder chips */}
+          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5, alignItems: 'center' }}>
+            <Chip
+              icon={<FolderOpenIcon />}
+              label={t('dashboard.allBoards')}
+              variant={selectedFolderId === null ? 'filled' : 'outlined'}
+              color={selectedFolderId === null ? 'primary' : 'default'}
+              onClick={() => setSelectedFolderId(null)}
+            />
+            {folders.map((folder) => (
+              <Chip
+                key={folder.id}
+                icon={<FolderIcon />}
+                label={folder.name}
+                variant={selectedFolderId === folder.id ? 'filled' : 'outlined'}
+                color={selectedFolderId === folder.id ? 'primary' : 'default'}
+                onClick={() => setSelectedFolderId(selectedFolderId === folder.id ? null : folder.id)}
+                onDelete={(e) => {
+                  setFolderMenuAnchor(e.currentTarget as HTMLElement);
+                  setFolderMenuTarget(folder);
+                }}
+                deleteIcon={<MoreVertIcon />}
+              />
+            ))}
+            <Chip
+              icon={<AddIcon />}
+              label={t('dashboard.newFolder')}
+              variant="outlined"
+              onClick={() => setCreateFolderOpen(true)}
+            />
+          </Box>
+          {/* Tag filter chips */}
+          {allTags.length > 0 && (
+            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Typography variant="caption" color="text.secondary" sx={{ mr: 0.5 }}>
+                {t('dashboard.tags')}:
+              </Typography>
+              {allTags.map((tag) => (
+                <Chip
+                  key={tag}
+                  label={tag}
+                  size="small"
+                  variant={selectedTag === tag ? 'filled' : 'outlined'}
+                  color={selectedTag === tag ? 'secondary' : 'default'}
+                  onClick={() => setSelectedTag(selectedTag === tag ? null : tag)}
+                />
+              ))}
+              {selectedTag && (
+                <Chip
+                  label="✕"
+                  size="small"
+                  variant="outlined"
+                  onClick={() => setSelectedTag(null)}
+                />
+              )}
+            </Box>
+          )}
+        </Box>
+      )}
+
+      {/* Folder context menu */}
+      <Menu
+        anchorEl={folderMenuAnchor}
+        open={Boolean(folderMenuAnchor)}
+        onClose={() => { setFolderMenuAnchor(null); setFolderMenuTarget(null); }}
+      >
+        <MenuItem onClick={() => {
+          if (folderMenuTarget) {
+            setRenameFolderTarget(folderMenuTarget);
+            setRenameFolderName(folderMenuTarget.name);
+            setRenameFolderOpen(true);
+          }
+          setFolderMenuAnchor(null);
+          setFolderMenuTarget(null);
+        }}>
+          <ListItemIcon><EditIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{t('dashboard.renameFolder')}</ListItemText>
+        </MenuItem>
+        <MenuItem onClick={() => {
+          if (folderMenuTarget && window.confirm(t('dashboard.deleteFolderConfirm'))) {
+            deleteFolderMutation.mutate(folderMenuTarget.id);
+          }
+          setFolderMenuAnchor(null);
+          setFolderMenuTarget(null);
+        }}>
+          <ListItemIcon><DeleteIcon fontSize="small" /></ListItemIcon>
+          <ListItemText>{t('dashboard.deleteFolder')}</ListItemText>
+        </MenuItem>
+      </Menu>
 
       {/* Board list */}
       {isLoading ? (
@@ -875,6 +1041,62 @@ export function DashboardPage() {
           </Button>
           <Button onClick={() => { markOnboardingSeen(); setCreateOpen(true); }}>
             {t('dashboard.browseTemplates')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Create Folder Dialog */}
+      <Dialog open={createFolderOpen} onClose={() => setCreateFolderOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t('dashboard.newFolder')}</DialogTitle>
+        <DialogContent>
+          <TextField
+            label={t('dashboard.folderName')}
+            value={newFolderName}
+            onChange={(e) => setNewFolderName(e.target.value)}
+            fullWidth
+            autoFocus
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateFolderOpen(false)}>{t('common.cancel')}</Button>
+          <Button variant="contained" onClick={() => {
+            const trimmed = newFolderName.trim();
+            if (trimmed) {
+              createFolderMutation.mutate(trimmed);
+              setNewFolderName('');
+              setCreateFolderOpen(false);
+            }
+          }}>
+            {t('common.confirm')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Rename Folder Dialog */}
+      <Dialog open={renameFolderOpen} onClose={() => setRenameFolderOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t('dashboard.renameFolder')}</DialogTitle>
+        <DialogContent>
+          <TextField
+            label={t('dashboard.folderName')}
+            value={renameFolderName}
+            onChange={(e) => setRenameFolderName(e.target.value)}
+            fullWidth
+            autoFocus
+            sx={{ mt: 1 }}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenameFolderOpen(false)}>{t('common.cancel')}</Button>
+          <Button variant="contained" onClick={() => {
+            const trimmed = renameFolderName.trim();
+            if (trimmed && renameFolderTarget) {
+              renameFolderMutation.mutate({ id: renameFolderTarget.id, name: trimmed });
+              setRenameFolderOpen(false);
+              setRenameFolderTarget(null);
+            }
+          }}>
+            {t('board.save')}
           </Button>
         </DialogActions>
       </Dialog>

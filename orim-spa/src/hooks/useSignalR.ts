@@ -424,14 +424,14 @@ export function useSignalR({
   );
 
   const sendCursorUpdate = useCallback(
-    (worldX: number | null, worldY: number | null) => {
+    (worldX: number | null, worldY: number | null, selectedElementIds?: string[]) => {
       latestCursorRef.current = { x: worldX, y: worldY };
       const flushPendingCursor = () => {
         const pending = latestCursorRef.current;
         latestCursorRef.current = null;
         if (pending && boardIdRef.current) {
           lastCursorSentAtRef.current = performance.now();
-          void invokeIfConnected('UpdateCursor', boardIdRef.current, pending.x, pending.y);
+          void invokeIfConnected('UpdateCursor', boardIdRef.current, pending.x, pending.y, selectedElementIds ?? null);
         }
       };
 

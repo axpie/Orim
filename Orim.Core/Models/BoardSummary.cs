@@ -8,6 +8,8 @@ public class BoardSummary
     public BoardVisibility Visibility { get; set; }
     public string? ShareLinkToken { get; set; }
     public List<BoardMember> Members { get; set; } = [];
+    public string? FolderId { get; set; }
+    public List<string> Tags { get; set; } = [];
     public int ElementCount { get; set; }
     public DateTime CreatedAt { get; set; }
     public DateTime UpdatedAt { get; set; }
@@ -20,6 +22,8 @@ public class BoardSummary
         Visibility = board.Visibility,
         ShareLinkToken = board.ShareLinkToken,
         Members = board.Members,
+        FolderId = board.FolderId,
+        Tags = board.Tags,
         ElementCount = board.Elements.Count,
         CreatedAt = board.CreatedAt,
         UpdatedAt = board.UpdatedAt

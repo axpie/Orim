@@ -238,6 +238,14 @@ export interface StickyNotePreset {
   fillColor: string;
 }
 
+export interface BoardFolder {
+  id: string;
+  name: string;
+  ownerId: string;
+  parentFolderId: string | null;
+  createdAt: string;
+}
+
 export interface Board {
   id: string;
   title: string;
@@ -249,6 +257,8 @@ export interface Board {
   recentColors: string[];
   stickyNotePresets: StickyNotePreset[];
   ownerId: string;
+  folderId?: string | null;
+  tags?: string[];
   visibility: BoardVisibility;
   shareLinkToken?: string | null;
   sharedAllowAnonymousEditing: boolean;
@@ -265,6 +275,8 @@ export interface BoardSummary {
   id: string;
   title: string;
   ownerId: string;
+  folderId?: string | null;
+  tags?: string[];
   visibility: BoardVisibility;
   shareLinkToken?: string | null;
   members: BoardMember[];
@@ -454,6 +466,7 @@ export interface CursorPresence {
   colorHex: string;
   worldX?: number | null;
   worldY?: number | null;
+  selectedElementIds?: string[];
   updatedAtUtc: string;
 }
 

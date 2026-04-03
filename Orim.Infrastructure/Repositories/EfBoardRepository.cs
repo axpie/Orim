@@ -47,6 +47,8 @@ public class EfBoardRepository : IBoardRepository
                 Visibility = b.Visibility,
                 ShareLinkToken = b.ShareLinkToken,
                 Members = b.Members.ToList(),
+                FolderId = b.FolderId,
+                Tags = b.Tags,
                 ElementCount = b.Elements.Count,
                 CreatedAt = b.CreatedAt,
                 UpdatedAt = b.UpdatedAt
@@ -67,21 +69,67 @@ public class EfBoardRepository : IBoardRepository
         {
             _context.Entry(existing).CurrentValues.SetValues(entity);
 
-            // Sync Members: clear and re-add
-            _context.BoardMembers.RemoveRange(existing.Members);
-            foreach (var member in entity.Members)
+            // Diff Members by UserId (composite key: BoardId + UserId)
+            var existingMemberIds = existing.Members.Select(m => m.UserId).ToHashSet();
+            var newMemberIds = entity.Members.Select(m => m.UserId).ToHashSet();
+
+            var membersToRemove = existing.Members.Where(m => !newMemberIds.Contains(m.UserId)).ToList();
+            _context.BoardMembers.RemoveRange(membersToRemove);
+
+            foreach (var member in entity.Members.Where(m => !existingMemberIds.Contains(m.UserId)))
                 existing.Members.Add(member);
 
-            // Sync Comments and Replies: clear and re-add
-            foreach (var comment in existing.Comments)
+            foreach (var member in entity.Members.Where(m => existingMemberIds.Contains(m.UserId)))
+            {
+                var existingMember = existing.Members.First(m => m.UserId == member.UserId);
+                existingMember.Role = member.Role;
+                existingMember.Username = member.Username;
+            }
+
+            // Diff Comments by Id
+            var existingCommentIds = existing.Comments.Select(c => c.Id).ToHashSet();
+            var newCommentIds = entity.Comments.Select(c => c.Id).ToHashSet();
+
+            var commentsToRemove = existing.Comments.Where(c => !newCommentIds.Contains(c.Id)).ToList();
+            foreach (var comment in commentsToRemove)
+            {
                 _context.BoardCommentReplies.RemoveRange(comment.Replies);
-            _context.BoardComments.RemoveRange(existing.Comments);
-            foreach (var comment in entity.Comments)
+                _context.BoardComments.Remove(comment);
+            }
+
+            foreach (var comment in entity.Comments.Where(c => !existingCommentIds.Contains(c.Id)))
                 existing.Comments.Add(comment);
 
-            // Sync Snapshots: clear and re-add
-            _context.BoardSnapshots.RemoveRange(existing.Snapshots);
-            foreach (var snapshot in entity.Snapshots)
+            foreach (var comment in entity.Comments.Where(c => existingCommentIds.Contains(c.Id)))
+            {
+                var existingComment = existing.Comments.First(c => c.Id == comment.Id);
+                _context.Entry(existingComment).CurrentValues.SetValues(comment);
+
+                // Diff Replies by Id
+                var existingReplyIds = existingComment.Replies.Select(r => r.Id).ToHashSet();
+                var newReplyIds = comment.Replies.Select(r => r.Id).ToHashSet();
+
+                var repliesToRemove = existingComment.Replies.Where(r => !newReplyIds.Contains(r.Id)).ToList();
+                _context.BoardCommentReplies.RemoveRange(repliesToRemove);
+
+                foreach (var reply in comment.Replies.Where(r => !existingReplyIds.Contains(r.Id)))
+                    existingComment.Replies.Add(reply);
+
+                foreach (var reply in comment.Replies.Where(r => existingReplyIds.Contains(r.Id)))
+                {
+                    var existingReply = existingComment.Replies.First(r => r.Id == reply.Id);
+                    _context.Entry(existingReply).CurrentValues.SetValues(reply);
+                }
+            }
+
+            // Diff Snapshots by Id
+            var existingSnapshotIds = existing.Snapshots.Select(s => s.Id).ToHashSet();
+            var newSnapshotIds = entity.Snapshots.Select(s => s.Id).ToHashSet();
+
+            var snapshotsToRemove = existing.Snapshots.Where(s => !newSnapshotIds.Contains(s.Id)).ToList();
+            _context.BoardSnapshots.RemoveRange(snapshotsToRemove);
+
+            foreach (var snapshot in entity.Snapshots.Where(s => !existingSnapshotIds.Contains(s.Id)))
                 existing.Snapshots.Add(snapshot);
         }
 
@@ -95,6 +143,49 @@ public class EfBoardRepository : IBoardRepository
         if (board is not null)
         {
             _context.Boards.Remove(board);
+            await _context.SaveChangesAsync();
+        }
+        _context.ChangeTracker.Clear();
+    }
+
+    public async Task<IReadOnlyList<BoardFolder>> GetFoldersAsync(Guid ownerId)
+    {
+        return await _context.BoardFolders
+            .AsNoTracking()
+            .Where(f => f.OwnerId == ownerId)
+            .OrderBy(f => f.Name)
+            .ToListAsync();
+    }
+
+    public async Task SaveFolderAsync(BoardFolder folder)
+    {
+        var existing = await _context.BoardFolders.FindAsync(folder.Id);
+        if (existing is null)
+        {
+            _context.BoardFolders.Add(folder);
+        }
+        else
+        {
+            _context.Entry(existing).CurrentValues.SetValues(folder);
+        }
+
+        await _context.SaveChangesAsync();
+        _context.ChangeTracker.Clear();
+    }
+
+    public async Task DeleteFolderAsync(string folderId)
+    {
+        var folder = await _context.BoardFolders.FindAsync(folderId);
+        if (folder is not null)
+        {
+            // Clear FolderId on boards that reference this folder
+            var boards = await _context.Boards.Where(b => b.FolderId == folderId).ToListAsync();
+            foreach (var board in boards)
+            {
+                board.FolderId = null;
+            }
+
+            _context.BoardFolders.Remove(folder);
             await _context.SaveChangesAsync();
         }
         _context.ChangeTracker.Clear();

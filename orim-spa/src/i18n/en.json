@@ -79,7 +79,19 @@
     "sharedWithMe": "Shared with Me",
     "noOwnBoards": "No own boards yet.",
     "noSharedBoards": "No boards shared with you.",
-    "sharedAs": "Shared as"
+    "sharedAs": "Shared as",
+    "allBoards": "All Boards",
+    "newFolder": "New Folder",
+    "folderName": "Folder Name",
+    "renameFolder": "Rename Folder",
+    "deleteFolder": "Delete Folder",
+    "deleteFolderConfirm": "Delete this folder? Boards inside will be moved out.",
+    "noFolderBoards": "No boards in this folder.",
+    "tags": "Tags",
+    "addTag": "Add tag",
+    "filterByTag": "Filter by tag",
+    "conflictRemoteApplied": "Your edit conflicted with a remote change. Remote version applied.",
+    "conflictUndo": "Undo"
   },
   "board": {
     "untitled": "Untitled Board",

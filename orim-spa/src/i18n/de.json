@@ -79,7 +79,19 @@
     "sharedWithMe": "Geteilt mit mir",
     "noOwnBoards": "Noch keine eigenen Boards vorhanden.",
     "noSharedBoards": "Keine Boards mit Ihnen geteilt.",
-    "sharedAs": "Geteilt als"
+    "sharedAs": "Geteilt als",
+    "allBoards": "Alle Boards",
+    "newFolder": "Neuer Ordner",
+    "folderName": "Ordnername",
+    "renameFolder": "Ordner umbenennen",
+    "deleteFolder": "Ordner löschen",
+    "deleteFolderConfirm": "Diesen Ordner löschen? Boards werden herausverschoben.",
+    "noFolderBoards": "Keine Boards in diesem Ordner.",
+    "tags": "Tags",
+    "addTag": "Tag hinzufügen",
+    "filterByTag": "Nach Tag filtern",
+    "conflictRemoteApplied": "Ihre Änderung kollidierte mit einer Remote-Änderung. Remote-Version wurde übernommen.",
+    "conflictUndo": "Rückgängig"
   },
   "board": {
     "untitled": "Unbenanntes Board",
