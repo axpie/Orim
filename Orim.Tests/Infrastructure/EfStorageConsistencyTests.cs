@@ -1,34 +1,29 @@
 using Orim.Core.Models;
 using Orim.Core.Services;
+using Orim.Infrastructure.Data;
 using Orim.Infrastructure.Repositories;
 
 namespace Orim.Tests.Infrastructure;
 
-public class JsonStorageConsistencyTests : IDisposable
+public class EfStorageConsistencyTests : IDisposable
 {
-    private readonly string _tempDir;
-    private readonly JsonUserRepository _userRepository;
-    private readonly JsonBoardRepository _boardRepository;
+    private readonly OrimDbContext _context;
+    private readonly EfUserRepository _userRepository;
+    private readonly EfBoardRepository _boardRepository;
     private readonly UserService _userService;
 
-    public JsonStorageConsistencyTests()
+    public EfStorageConsistencyTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"orim-tests-{Guid.NewGuid()}");
-        _userRepository = new JsonUserRepository(_tempDir);
-        _boardRepository = new JsonBoardRepository(_tempDir);
+        _context = TestDbContextFactory.Create();
+        _userRepository = new EfUserRepository(_context);
+        _boardRepository = new EfBoardRepository(_context);
         _userService = new UserService(_userRepository, _boardRepository);
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_tempDir))
-        {
-            Directory.Delete(_tempDir, recursive: true);
-        }
-    }
+    public void Dispose() => _context.Dispose();
 
     [Fact]
-    public async Task DeleteUserAsync_RemovesOwnedBoardsFromJsonStorage()
+    public async Task DeleteUserAsync_RemovesOwnedBoards()
     {
         var owner = new User { Username = "owner", PasswordHash = "hash" };
         var otherUser = new User { Username = "other", PasswordHash = "hash" };
@@ -60,17 +55,16 @@ public class JsonStorageConsistencyTests : IDisposable
 
         await _userService.DeleteUserAsync(owner.Id);
 
-        var reloadedBoards = new JsonBoardRepository(_tempDir);
-        var remainingBoards = await reloadedBoards.GetAllAsync();
+        var remainingBoards = await _boardRepository.GetAllAsync();
 
         Assert.Single(remainingBoards);
         Assert.Equal(foreignBoard.Id, remainingBoards[0].Id);
-        Assert.Null(await reloadedBoards.GetByIdAsync(ownedBoard.Id));
-        Assert.Null(await reloadedBoards.GetByShareTokenAsync("owned-token"));
+        Assert.Null(await _boardRepository.GetByIdAsync(ownedBoard.Id));
+        Assert.Null(await _boardRepository.GetByShareTokenAsync("owned-token"));
     }
 
     [Fact]
-    public async Task DeleteUserAsync_RemovesMembershipsWithoutLeavingOrphanReferences()
+    public async Task DeleteUserAsync_RemovesMembershipsWithoutOrphanReferences()
     {
         var owner = new User { Username = "owner", PasswordHash = "hash" };
         var member = new User { Username = "member", PasswordHash = "hash" };
@@ -90,9 +84,10 @@ public class JsonStorageConsistencyTests : IDisposable
         var memberOnlyBoard = new Board
         {
             Title = "Member Only",
-            OwnerId = Guid.NewGuid(),
+            OwnerId = owner.Id,
             Members =
             [
+                new BoardMember { UserId = owner.Id, Username = owner.Username, Role = BoardRole.Owner },
                 new BoardMember { UserId = member.Id, Username = member.Username, Role = BoardRole.Viewer }
             ]
         };
@@ -102,14 +97,13 @@ public class JsonStorageConsistencyTests : IDisposable
 
         await _userService.DeleteUserAsync(member.Id);
 
-        var reloadedBoards = new JsonBoardRepository(_tempDir);
-        var reloadedSharedBoard = await reloadedBoards.GetByIdAsync(sharedBoard.Id);
-        var reloadedMemberOnlyBoard = await reloadedBoards.GetByIdAsync(memberOnlyBoard.Id);
+        var reloadedSharedBoard = await _boardRepository.GetByIdAsync(sharedBoard.Id);
+        var reloadedMemberOnlyBoard = await _boardRepository.GetByIdAsync(memberOnlyBoard.Id);
 
         Assert.NotNull(reloadedSharedBoard);
         Assert.NotNull(reloadedMemberOnlyBoard);
-        Assert.DoesNotContain(reloadedSharedBoard.Members, candidate => candidate.UserId == member.Id);
-        Assert.DoesNotContain(reloadedMemberOnlyBoard.Members, candidate => candidate.UserId == member.Id);
+        Assert.DoesNotContain(reloadedSharedBoard.Members, m => m.UserId == member.Id);
+        Assert.DoesNotContain(reloadedMemberOnlyBoard.Members, m => m.UserId == member.Id);
         Assert.Null(await _userRepository.GetByIdAsync(member.Id));
     }
 }

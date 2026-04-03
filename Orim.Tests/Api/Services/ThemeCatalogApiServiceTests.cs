@@ -1,28 +1,25 @@
 using System.Text;
 using System.Text.Json;
+using Microsoft.Extensions.DependencyInjection;
 using Orim.Api.Services;
 using Orim.Core;
+using Orim.Core.Interfaces;
 
 namespace Orim.Tests.Api.Services;
 
-public sealed class ThemeCatalogApiServiceTests : IDisposable
+public sealed class ThemeCatalogApiServiceTests
 {
-    private readonly string _tempDir;
     private readonly ThemeCatalogApiService _sut;
+    private readonly InMemoryThemeRepository _repository;
 
     public ThemeCatalogApiServiceTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"orim-api-themes-{Guid.NewGuid()}");
-        Directory.CreateDirectory(_tempDir);
-        _sut = new ThemeCatalogApiService(_tempDir);
-    }
-
-    public void Dispose()
-    {
-        if (Directory.Exists(_tempDir))
-        {
-            Directory.Delete(_tempDir, recursive: true);
-        }
+        _repository = new InMemoryThemeRepository();
+        var services = new ServiceCollection();
+        services.AddSingleton<IThemeRepository>(_repository);
+        var provider = services.BuildServiceProvider();
+        var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
+        _sut = new ThemeCatalogApiService(scopeFactory);
     }
 
     [Fact]
@@ -75,11 +72,13 @@ public sealed class ThemeCatalogApiServiceTests : IDisposable
     }
 
     [Fact]
-    public void ResolveThemesPath_ReturnsThemesFolderBelowDataPath()
+    public async Task EnsureBuiltInThemesAsync_SeedsThemesToRepository()
     {
-        var path = ThemeCatalogApiService.ResolveThemesPath("d:/orim-data");
+        await _sut.EnsureBuiltInThemesAsync();
 
-        Assert.Equal(Path.Combine("d:/orim-data", "themes"), path);
+        Assert.True(_repository.Themes.ContainsKey("light"));
+        Assert.True(_repository.Themes.ContainsKey("dark"));
+        Assert.True(_repository.Themes.ContainsKey("synthwave"));
     }
 
     private static ApiThemeDefinition CreateCustomTheme(string key, string name) => new()
@@ -122,4 +121,27 @@ public sealed class ThemeCatalogApiServiceTests : IDisposable
             DockTargetColor = "#0f766e",
         },
     };
+
+    private sealed class InMemoryThemeRepository : IThemeRepository
+    {
+        public Dictionary<string, ThemeRecord> Themes { get; } = new(StringComparer.Ordinal);
+
+        public Task<List<ThemeRecord>> GetAllAsync() =>
+            Task.FromResult(Themes.Values.ToList());
+
+        public Task<ThemeRecord?> GetByKeyAsync(string key) =>
+            Task.FromResult(Themes.TryGetValue(key, out var record) ? record : null);
+
+        public Task SaveAsync(ThemeRecord record)
+        {
+            Themes[record.Key] = record;
+            return Task.CompletedTask;
+        }
+
+        public Task DeleteAsync(string key)
+        {
+            Themes.Remove(key);
+            return Task.CompletedTask;
+        }
+    }
 }

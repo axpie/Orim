@@ -15,6 +15,9 @@ using Orim.Api.Services;
 using Orim.Core;
 using Orim.Core.Models;
 using Orim.Core.Services;
+using Microsoft.EntityFrameworkCore;
+using Orim.Infrastructure.Data;
+using Orim.Core.Interfaces;
 using Orim.Infrastructure;
 
 if (OperatingSystem.IsWindows())
@@ -24,26 +27,17 @@ if (OperatingSystem.IsWindows())
 
 var builder = WebApplication.CreateBuilder(args);
 
-// --- Data path ---
-var configuredDataPath = builder.Configuration.GetValue<string>("DataPath");
-var dataPath = ApiDataPath.ResolveDataPath(configuredDataPath, builder.Environment.ContentRootPath);
-var migratedLegacyDataPath = ApiDataPath.TryMigrateLegacyDataPath(configuredDataPath, builder.Environment.ContentRootPath, dataPath);
+// --- Database ---
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
 
-#if DEBUG
-const bool useDebugStorage = true;
-#else
-const bool useDebugStorage = false;
-#endif
-
-// --- Services ---
-builder.Services.AddOrimInfrastructure(dataPath, useDebugStorage);
+builder.Services.AddOrimInfrastructure(connectionString);
 builder.Services.AddSingleton(sp => new AssistantSettingsService(
-    Path.Combine(dataPath, "assistant-settings.json"),
+    sp.GetRequiredService<IServiceScopeFactory>(),
     builder.Configuration,
     sp.GetRequiredService<ILogger<AssistantSettingsService>>()));
 builder.Services.AddSingleton<DiagramAssistantService>();
-builder.Services.AddSingleton(new ThemeCatalogApiService(ThemeCatalogApiService.ResolveThemesPath(dataPath)));
-builder.Services.AddSingleton(new Orim.Api.Services.ImageStorageService(dataPath));
+builder.Services.AddSingleton<ThemeCatalogApiService>();
 builder.Services.AddSingleton<BoardPdfExportService>();
 builder.Services.AddSingleton<BoardCommentNotifier>();
 builder.Services.AddScoped<BoardCommentService>();
@@ -155,11 +149,19 @@ builder.Services.ConfigureHttpJsonOptions(options =>
 
 var app = builder.Build();
 
-app.Logger.LogInformation("Using data path {DataPath}.", dataPath);
-if (migratedLegacyDataPath)
+// --- Database migration & seeding ---
+#if DEBUG
+await DockerDevEnvironment.EnsurePostgresRunningAsync(app.Logger);
+#endif
+
+using (var scope = app.Services.CreateScope())
 {
-    app.Logger.LogInformation("Migrated legacy content-root data into persistent storage at {DataPath}.", dataPath);
+    var dbContext = scope.ServiceProvider.GetRequiredService<OrimDbContext>();
+    await dbContext.Database.MigrateAsync();
 }
+
+var themeCatalogService = app.Services.GetRequiredService<ThemeCatalogApiService>();
+await themeCatalogService.EnsureBuiltInThemesAsync();
 
 // --- Seed admin user ---
 using (var scope = app.Services.CreateScope())
@@ -1058,7 +1060,7 @@ app.MapPost("/api/presence/leave", async (PresenceLeaveRequest request, BoardPre
 // User Image endpoints
 // ==========================================================================
 
-app.MapPost("/api/user-images", [Authorize] async (HttpRequest request, HttpContext context, Orim.Api.Services.ImageStorageService imageService) =>
+app.MapPost("/api/user-images", [Authorize] async (HttpRequest request, HttpContext context, IImageStorageService imageService) =>
 {
     var userId = Guid.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
     if (!request.HasFormContentType) return Results.BadRequest("Expected multipart/form-data.");
@@ -1067,7 +1069,8 @@ app.MapPost("/api/user-images", [Authorize] async (HttpRequest request, HttpCont
     if (file is null) return Results.BadRequest("No file uploaded.");
     try
     {
-        var info = await imageService.SaveImageAsync(userId, file);
+        await using var stream = file.OpenReadStream();
+        var info = await imageService.SaveImageAsync(userId, file.FileName, file.ContentType, file.Length, stream);
         return Results.Ok(new { info.Id, Url = $"/api/user-images/{userId:N}/{info.Id}", info.FileName, info.Size, info.UploadedAt });
     }
     catch (InvalidOperationException ex)
@@ -1076,7 +1079,7 @@ app.MapPost("/api/user-images", [Authorize] async (HttpRequest request, HttpCont
     }
 });
 
-app.MapGet("/api/user-images", [Authorize] async (HttpContext context, Orim.Api.Services.ImageStorageService imageService) =>
+app.MapGet("/api/user-images", [Authorize] async (HttpContext context, IImageStorageService imageService) =>
 {
     var userId = Guid.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
     var images = await imageService.GetUserImagesAsync(userId);
@@ -1085,16 +1088,16 @@ app.MapGet("/api/user-images", [Authorize] async (HttpContext context, Orim.Api.
 
 // No [Authorize] — browser <img> and Konva Image cannot send JWT headers.
 // GUIDs are non-guessable, so public access is safe.
-app.MapGet("/api/user-images/{userIdStr}/{imageId}", async (string userIdStr, string imageId, Orim.Api.Services.ImageStorageService imageService, HttpContext ctx) =>
+app.MapGet("/api/user-images/{userIdStr}/{imageId}", async (string userIdStr, string imageId, IImageStorageService imageService, HttpContext ctx) =>
 {
     if (!Guid.TryParse(userIdStr, out var userId)) return Results.NotFound();
-    var result = imageService.GetImageFilePath(userId, imageId);
+    var result = await imageService.GetImageDataAsync(userId, imageId);
     if (result is null) return Results.NotFound();
     ctx.Response.Headers.Append("Cache-Control", "no-store");
-    return Results.File(result.Value.FilePath, result.Value.MimeType);
+    return Results.Bytes(result.Data, result.MimeType);
 });
 
-app.MapDelete("/api/user-images/{imageId}", [Authorize] async (string imageId, HttpContext context, Orim.Api.Services.ImageStorageService imageService) =>
+app.MapDelete("/api/user-images/{imageId}", [Authorize] async (string imageId, HttpContext context, IImageStorageService imageService) =>
 {
     var userId = Guid.Parse(context.User.FindFirst(ClaimTypes.NameIdentifier)!.Value);
     var deleted = await imageService.DeleteImageAsync(userId, imageId);

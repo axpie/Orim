@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace Orim.Core.Models;
 
+[JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
 [JsonDerivedType(typeof(ShapeElement), "shape")]
 [JsonDerivedType(typeof(TextElement), "text")]
 [JsonDerivedType(typeof(StickyNoteElement), "sticky")]

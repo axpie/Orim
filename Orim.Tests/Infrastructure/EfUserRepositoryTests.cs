@@ -1,34 +1,24 @@
 using Orim.Core.Models;
+using Orim.Infrastructure.Data;
 using Orim.Infrastructure.Repositories;
 
 namespace Orim.Tests.Infrastructure;
 
-public class JsonUserRepositoryTests : IDisposable
+public class EfUserRepositoryTests : IDisposable
 {
-    private readonly string _tempDir;
-    private readonly JsonUserRepository _sut;
+    private readonly OrimDbContext _context;
+    private readonly EfUserRepository _sut;
 
-    public JsonUserRepositoryTests()
+    public EfUserRepositoryTests()
     {
-        _tempDir = Path.Combine(Path.GetTempPath(), $"orim-tests-{Guid.NewGuid()}");
-        _sut = new JsonUserRepository(_tempDir);
+        _context = TestDbContextFactory.Create();
+        _sut = new EfUserRepository(_context);
     }
 
-    public void Dispose()
-    {
-        if (Directory.Exists(_tempDir))
-            Directory.Delete(_tempDir, recursive: true);
-    }
+    public void Dispose() => _context.Dispose();
 
     [Fact]
-    public void Constructor_CreatesDirectoryAndFile()
-    {
-        Assert.True(Directory.Exists(_tempDir));
-        Assert.True(File.Exists(Path.Combine(_tempDir, "users.json")));
-    }
-
-    [Fact]
-    public async Task GetAllAsync_EmptyFile_ReturnsEmptyList()
+    public async Task GetAllAsync_Empty_ReturnsEmptyList()
     {
         var users = await _sut.GetAllAsync();
 
@@ -65,6 +55,7 @@ public class JsonUserRepositoryTests : IDisposable
     [Fact]
     public async Task GetByUsernameAsync_CaseInsensitive()
     {
+        // EfUserRepository uses .ToLower() for case-insensitive matching
         var user = new User { Username = "Alice" };
         await _sut.SaveAsync(user);
 
@@ -85,6 +76,7 @@ public class JsonUserRepositoryTests : IDisposable
     [Fact]
     public async Task GetByEmailAsync_CaseInsensitive()
     {
+        // EfUserRepository uses .ToLower() for case-insensitive matching
         var user = new User { Username = "Alice", Email = "Alice@Contoso.com" };
         await _sut.SaveAsync(user);
 
@@ -147,29 +139,5 @@ public class JsonUserRepositoryTests : IDisposable
         var users = await _sut.GetAllAsync();
 
         Assert.Equal(3, users.Count);
-    }
-
-    [Fact]
-    public async Task CustomFileName_Works()
-    {
-        var repo = new JsonUserRepository(_tempDir, "custom_users.json");
-
-        await repo.SaveAsync(new User { Username = "test" });
-        var all = await repo.GetAllAsync();
-
-        Assert.Single(all);
-        Assert.True(File.Exists(Path.Combine(_tempDir, "custom_users.json")));
-    }
-
-    [Fact]
-    public async Task ConcurrentSaves_AllSucceed()
-    {
-        var tasks = Enumerable.Range(0, 10)
-            .Select(i => _sut.SaveAsync(new User { Username = $"user-{i}" }));
-
-        await Task.WhenAll(tasks);
-
-        var users = await _sut.GetAllAsync();
-        Assert.Equal(10, users.Count);
     }
 }

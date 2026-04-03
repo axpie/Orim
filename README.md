@@ -6,7 +6,7 @@ Orim ist ein kollaborativer Whiteboard-Editor mit ASP.NET Core API und React SPA
 
 - Backend: .NET 10, ASP.NET Core Minimal API, SignalR
 - Frontend: React 19, Vite, TypeScript, Konva, MUI
-- Persistenz: JSON-Dateien im Dateisystem
+- Persistenz: PostgreSQL via Entity Framework Core
 - Authentifizierung: JWT
 - Export: JSON und PDF
 
@@ -15,13 +15,14 @@ Orim ist ein kollaborativer Whiteboard-Editor mit ASP.NET Core API und React SPA
 - `Orim.Api`: API, SignalR-Hub, SPA-Hosting im Release-Build
 - `orim-spa`: React-Frontend fuer Whiteboard, Dashboard und Administration
 - `Orim.Core`: Domänenmodelle, Interfaces und Kernlogik
-- `Orim.Infrastructure`: JSON-Repositories und Infrastruktur-Services
+- `Orim.Infrastructure`: EF Core DbContext, PostgreSQL-Repositories und Infrastruktur-Services
 - `Orim.Tests`: xUnit-Tests
 
 ## Voraussetzungen
 
 - .NET 10 SDK
 - Node.js mit `npm`
+- Docker Desktop (fuer lokale PostgreSQL-Datenbank) oder PostgreSQL 17+
 
 ## Lokaler Start
 
@@ -48,17 +49,27 @@ dotnet run --project .\Orim.Api\Orim.Api.csproj
 
 Im Release-Build wird die SPA vor dem API-Build nach `Orim.Api/wwwroot` gebaut und von der API ausgeliefert.
 
+## Datenbank (PostgreSQL)
+
+Im DEBUG-Modus startet die API den PostgreSQL-Container automatisch via Docker Compose. Fuer manuellen Start:
+
+```powershell
+docker-compose up -d
+```
+
+Die Verbindung wird ueber den Connection-String in `Orim.Api/appsettings.json` konfiguriert:
+
+```json
+"ConnectionStrings": {
+  "OrimDb": "Host=localhost;Port=5432;Database=orim;Username=orim;Password=orim"
+}
+```
+
+Beim Start fuehrt die API automatisch `Database.MigrateAsync()` aus, sodass das Schema immer aktuell ist. Weitere Details zur Erstellung neuer Migrationen: siehe [docs/db_migration.md](docs/db_migration.md).
+
 ## Datenhaltung
 
-Standardmaessig speichert die API ihre Daten lokal unter `Orim.Api/data`.
-
-Relevante Dateien:
-
-- `data/users.json`: Benutzerkonten
-- `data/boards/*.json`: Whiteboards
-- `data/themes/*.json`: importierte oder angepasste Themes
-
-Der Pfad kann ueber `DataPath` konfiguriert werden. Auf Azure App Service werden relative `DataPath`-Werte automatisch unter `%HOME%` aufgeloest.
+Alle Daten werden in einer PostgreSQL-Datenbank gespeichert (Boards, Benutzer, Themes, Bilder). Die Persistenz erfolgt ueber Entity Framework Core.
 
 ## Konfiguration
 
@@ -66,7 +77,7 @@ Die Basiskonfiguration liegt in `Orim.Api/appsettings.json`.
 
 Wichtige Einstellungen:
 
-- `DataPath`: Speicherort fuer JSON-Daten
+- `ConnectionStrings:OrimDb`: PostgreSQL-Verbindungszeichenfolge
 - `Jwt:Key`: Signierschluessel fuer Tokens
 - `SeedAdmin:Username`: Benutzername des initialen Admins
 - `SeedAdmin:ResetPasswordOnStartup`: optionaler Passwort-Reset beim Start

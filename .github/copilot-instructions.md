@@ -18,7 +18,7 @@ There is no frontend test runner configured in `orim-spa/package.json`; automate
 
 `Orim.Core` contains the domain model and the business rules. `BoardService`, `UserService`, `BoardPresenceService`, and `BoardChangeNotifier` are the main coordination points for board lifecycle, membership/access rules, realtime presence, and change notifications.
 
-`Orim.Infrastructure` persists data as JSON files under the configured `DataPath`. `JsonBoardRepository` and `JsonUserRepository` are not thin storage wrappers: they also maintain in-memory indexes and use per-entity locking to make file-based persistence safe enough for concurrent requests.
+`Orim.Infrastructure` persists data in PostgreSQL via Entity Framework Core. `EfBoardRepository` and `EfUserRepository` implement the repository interfaces using `OrimDbContext`. Migrations are managed through EF Core and applied automatically at startup via `Database.MigrateAsync()`.
 
 `orim-spa` is a React 19 + Vite + TypeScript SPA. React Query handles API fetch/mutation flows, Zustand stores hold editor/auth/offline state, and Konva powers the whiteboard canvas. The whiteboard editor loads a board over HTTP, keeps local state in Zustand, and syncs collaboration changes through SignalR.
 
@@ -38,9 +38,9 @@ Conflict handling is explicit. Undo/redo and remote-op reconciliation surface co
 
 Authorization is role-driven at multiple layers. Board access is based on `Owner`/`Editor`/`Viewer` membership plus share-link access, and the same access rules are enforced in REST endpoints, core services, and `BoardHub`.
 
-Persistence is full-aggregate JSON persistence, not partial relational updates. Services usually load a `Board`, mutate the aggregate in memory, and save the whole object back through the repository; repository indexing and summary/token maintenance happen as part of that flow.
+Persistence uses PostgreSQL via EF Core. Services load entities through the repository interfaces, mutate them in memory, and save changes back through `SaveChangesAsync()`. Database schema changes are managed through EF Core migrations in `Orim.Infrastructure/Migrations/`.
 
-Debug builds intentionally use separate storage names in infrastructure (`user_debug.json` and `boards_debug`). If local data seems to be missing, check whether the app is running against debug storage rather than the default production-style files.
+Debug builds use Docker Compose to automatically start a local PostgreSQL container. The connection string is configured in `appsettings.json` under `ConnectionStrings:OrimDb`.
 
 External login linking has a defined precedence: first by `(provider, external subject)`, then by email, then by username, otherwise a new ORIM user is created. Preserve that order when touching SSO flows.
 
