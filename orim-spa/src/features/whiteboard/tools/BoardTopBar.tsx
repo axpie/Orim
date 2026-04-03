@@ -342,12 +342,23 @@ export function BoardTopBar({
                     border: '1px solid rgba(255,255,255,0.22)',
                     bgcolor: 'rgba(255,255,255,0.08)',
                     maxWidth: 160,
+                    '& .MuiChip-avatar': {
+                      width: 10,
+                      height: 10,
+                      minWidth: 10,
+                      minHeight: 10,
+                      display: 'block',
+                      flexShrink: 0,
+                      aspectRatio: '1 / 1',
+                      marginLeft: 1,
+                      marginRight: 0.75,
+                    },
                     '& .MuiChip-label': {
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                     },
                   }}
-                  avatar={<Box sx={{ width: 10, height: 10, borderRadius: '50%', bgcolor: collaborator.colorHex, ml: 1 }} />}
+                  avatar={<Box component="span" sx={{ borderRadius: '50%', bgcolor: collaborator.colorHex }} />}
                 />
               ))}
               {collaborators.length > 5 && <Chip size="small" label={`+${collaborators.length - 5}`} />}
