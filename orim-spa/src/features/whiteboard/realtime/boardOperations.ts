@@ -97,13 +97,15 @@ export function createElementsDeletedOperation(elementIds: string[]): BoardOpera
 }
 
 export function createBoardMetadataUpdatedOperation(
-  board: Pick<Board, 'title' | 'labelOutlineEnabled' | 'arrowOutlineEnabled' | 'customColors' | 'recentColors' | 'stickyNotePresets'>,
+  board: Pick<Board, 'title' | 'labelOutlineEnabled' | 'arrowOutlineEnabled' | 'surfaceColor' | 'themeKey' | 'customColors' | 'recentColors' | 'stickyNotePresets'>,
 ): BoardOperation {
   return {
     type: 'board.metadata.updated',
     title: board.title,
     labelOutlineEnabled: board.labelOutlineEnabled,
     arrowOutlineEnabled: board.arrowOutlineEnabled,
+    surfaceColor: board.surfaceColor,
+    themeKey: board.themeKey,
     customColors: [...board.customColors],
     recentColors: [...board.recentColors],
     stickyNotePresets: cloneStickyNotePresets(board.stickyNotePresets),
@@ -194,6 +196,8 @@ export function applyBoardOperation(board: Board, operation: BoardOperation): Bo
         title: operation.title ?? board.title,
         labelOutlineEnabled: operation.labelOutlineEnabled ?? board.labelOutlineEnabled,
         arrowOutlineEnabled: operation.arrowOutlineEnabled ?? board.arrowOutlineEnabled,
+        surfaceColor: 'surfaceColor' in operation ? operation.surfaceColor : board.surfaceColor,
+        themeKey: 'themeKey' in operation ? operation.themeKey : board.themeKey,
         customColors: operation.customColors ?? board.customColors,
         recentColors: operation.recentColors ?? board.recentColors,
         stickyNotePresets: operation.stickyNotePresets
@@ -224,6 +228,8 @@ function doesBoardMatchOperation(board: Board, operation: BoardOperation): boole
       return (operation.title === undefined || board.title === operation.title)
         && (operation.labelOutlineEnabled === undefined || board.labelOutlineEnabled === operation.labelOutlineEnabled)
         && (operation.arrowOutlineEnabled === undefined || board.arrowOutlineEnabled === operation.arrowOutlineEnabled)
+        && (!('surfaceColor' in operation) || board.surfaceColor === operation.surfaceColor)
+        && (!('themeKey' in operation) || board.themeKey === operation.themeKey)
         && (operation.customColors === undefined || areArraysEqual(board.customColors, operation.customColors))
         && (operation.recentColors === undefined || areArraysEqual(board.recentColors, operation.recentColors))
         && (operation.stickyNotePresets === undefined || areStickyNotePresetsEqual(board.stickyNotePresets, operation.stickyNotePresets));

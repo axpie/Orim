@@ -30,6 +30,7 @@ export async function createBoard(request: CreateBoardRequest): Promise<Board> {
   const { data } = await client.post<Board>('/api/boards', {
     title: request.title,
     templateId: request.templateId,
+    themeKey: request.themeKey,
   });
 
   if (request.visibility && request.visibility !== BoardVisibility.Private) {

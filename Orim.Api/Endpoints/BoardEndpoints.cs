@@ -51,7 +51,7 @@ internal static class BoardEndpoints
                 return Results.Unauthorized();
 
             var username = EndpointHelpers.GetUsername(context.User);
-            var board = await boardService.CreateBoardAsync(request.Title, userId, username, request.TemplateId);
+            var board = await boardService.CreateBoardAsync(request.Title, userId, username, request.TemplateId, request.ThemeKey);
             return Results.Created($"/api/boards/{board.Id}", board);
         });
 

@@ -35,6 +35,7 @@ import {
   importBoard,
   getTemplates,
 } from '../../api/boards';
+import { getThemes } from '../../api/themes';
 import {
   BoardRole,
   BoardVisibility,
@@ -217,6 +218,11 @@ export function DashboardPage() {
     queryKey: ['templates'],
     queryFn: getTemplates,
   });
+  const { data: themes = [] } = useQuery({
+    queryKey: ['themes'],
+    queryFn: getThemes,
+    staleTime: 60_000,
+  });
 
   const createMutation = useMutation({
     mutationFn: createBoard,
@@ -249,6 +255,7 @@ export function DashboardPage() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newTemplate, setNewTemplate] = useState('');
+  const [newThemeKey, setNewThemeKey] = useState('');
   const [newVisibility, setNewVisibility] = useState(BoardVisibility.Private);
 
   // Rename dialog state
@@ -290,11 +297,13 @@ export function DashboardPage() {
     createMutation.mutate({
       title: newTitle || t('board.untitled'),
       templateId: newTemplate || undefined,
+      themeKey: newThemeKey || undefined,
       visibility: newVisibility,
     });
     setCreateOpen(false);
     setNewTitle('');
     setNewTemplate('');
+    setNewThemeKey('');
     setNewVisibility(BoardVisibility.Private);
   };
 
@@ -529,6 +538,21 @@ export function DashboardPage() {
             {templates.map((tmpl) => (
               <MenuItem key={tmpl.id} value={tmpl.id}>
                 {getTemplateTitle(tmpl)}
+              </MenuItem>
+            ))}
+          </TextField>
+          <TextField
+            select
+            label={t('boardSettings.boardTheme', 'Board-Theme')}
+            value={newThemeKey}
+            onChange={(e) => setNewThemeKey(e.target.value)}
+            fullWidth
+            sx={{ mb: 2 }}
+          >
+            <MenuItem value="">{t('boardSettings.noFixedTheme', '— Persönliches Theme —')}</MenuItem>
+            {themes.filter((theme) => theme.isEnabled).map((theme) => (
+              <MenuItem key={theme.key} value={theme.key}>
+                {theme.name}
               </MenuItem>
             ))}
           </TextField>

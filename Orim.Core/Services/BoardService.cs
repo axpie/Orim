@@ -22,7 +22,7 @@ public class BoardService
 
     public IReadOnlyList<BoardTemplateDefinition> GetTemplates() => BoardTemplateCatalog.Definitions;
 
-    public async Task<Board> CreateBoardAsync(string title, Guid ownerId, string ownerUsername, string? templateId = null)
+    public async Task<Board> CreateBoardAsync(string title, Guid ownerId, string ownerUsername, string? templateId = null, string? themeKey = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(title);
 
@@ -36,6 +36,7 @@ public class BoardService
         {
             Title = title.Trim(),
             OwnerId = ownerId,
+            ThemeKey = themeKey,
             Elements = CloneElements(BoardTemplateCatalog.CreateElements(templateId)),
             Members =
             [
@@ -286,6 +287,8 @@ public class BoardService
 
         targetBoard.LabelOutlineEnabled = importedBoard.LabelOutlineEnabled;
         targetBoard.ArrowOutlineEnabled = importedBoard.ArrowOutlineEnabled;
+        targetBoard.SurfaceColor = importedBoard.SurfaceColor;
+        targetBoard.ThemeKey = importedBoard.ThemeKey;
         targetBoard.CustomColors = importedBoard.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         targetBoard.RecentColors = importedBoard.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         targetBoard.StickyNotePresets = CloneStickyNotePresets(importedBoard.StickyNotePresets);

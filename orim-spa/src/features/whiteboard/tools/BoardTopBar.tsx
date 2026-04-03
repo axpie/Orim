@@ -131,6 +131,8 @@ export function BoardTopBar({
           title: trimmedTitle,
           labelOutlineEnabled: board.labelOutlineEnabled,
           arrowOutlineEnabled: board.arrowOutlineEnabled,
+          surfaceColor: board.surfaceColor,
+          themeKey: board.themeKey,
           customColors: board.customColors,
           recentColors: board.recentColors,
           stickyNotePresets: board.stickyNotePresets,

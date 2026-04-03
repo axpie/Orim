@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using Orim.Infrastructure.Data;
@@ -11,9 +12,11 @@ using Orim.Infrastructure.Data;
 namespace Orim.Infrastructure.Migrations
 {
     [DbContext(typeof(OrimDbContext))]
-    partial class OrimDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260403152221_AddBoardThemeKey")]
+    partial class AddBoardThemeKey
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

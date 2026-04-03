@@ -16,7 +16,7 @@ public sealed record CreateUserRequest(string Username, string Password, UserRol
 public sealed record ChangePasswordRequest(string? CurrentPassword, string NewPassword);
 public sealed record UpdateProfileRequest(string DisplayName);
 public sealed record UpdateUserRequest(string Username, UserRole Role);
-public sealed record CreateBoardRequest(string Title, string? TemplateId = null);
+public sealed record CreateBoardRequest(string Title, string? TemplateId = null, string? ThemeKey = null);
 public sealed record SetVisibilityRequest(BoardVisibility Visibility, bool AllowAnonymousEditing = false);
 public sealed record ValidatePasswordRequest(string Password);
 public sealed record SharedBoardUpdateRequest(Board Board, string? Password, string? SourceClientId = null);
@@ -35,6 +35,8 @@ public sealed record BoardMetadataUpdatedOperationDto(
     string? Title = null,
     bool? LabelOutlineEnabled = null,
     bool? ArrowOutlineEnabled = null,
+    string? SurfaceColor = null,
+    string? ThemeKey = null,
     IReadOnlyList<string>? CustomColors = null,
     IReadOnlyList<string>? RecentColors = null,
     IReadOnlyList<StickyNotePreset>? StickyNotePresets = null) : BoardOperationDto;

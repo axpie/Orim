@@ -243,6 +243,8 @@ export interface Board {
   title: string;
   labelOutlineEnabled: boolean;
   arrowOutlineEnabled: boolean;
+  surfaceColor?: string | null;
+  themeKey?: string | null;
   customColors: string[];
   recentColors: string[];
   stickyNotePresets: StickyNotePreset[];
@@ -309,6 +311,7 @@ export interface BoardTemplateDefinition {
 export interface CreateBoardRequest {
   title: string;
   templateId?: string;
+  themeKey?: string;
   visibility?: BoardVisibility;
 }
 
@@ -488,6 +491,8 @@ export interface BoardMetadataUpdatedOperation {
   title?: string;
   labelOutlineEnabled?: boolean;
   arrowOutlineEnabled?: boolean;
+  surfaceColor?: string | null;
+  themeKey?: string | null;
   customColors?: string[];
   recentColors?: string[];
   stickyNotePresets?: StickyNotePreset[];

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useQuery } from '@tanstack/react-query';
 import {
   Alert,
   Box,
@@ -8,8 +9,11 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  FormControlLabel,
   IconButton,
+  MenuItem,
   Stack,
+  Switch,
   TextField,
   Typography,
 } from '@mui/material';
@@ -25,6 +29,7 @@ import {
   getDefaultStickyNotePresets,
   getEffectiveStickyNotePresets,
 } from '../stickyNotePresets';
+import { getThemes } from '../../../api/themes';
 
 interface BoardSettingsDialogProps {
   open: boolean;
@@ -45,6 +50,15 @@ export function BoardSettingsDialog({ open, onClose, onBoardChanged }: BoardSett
   const board = useBoardStore((s) => s.board);
   const updateBoard = useBoardStore((s) => s.updateBoard);
   const [draftPresets, setDraftPresets] = useState<StickyNotePreset[]>([]);
+  const [usePinnedSurface, setUsePinnedSurface] = useState(false);
+  const [draftSurfaceColor, setDraftSurfaceColor] = useState('#ffffff');
+  const [draftThemeKey, setDraftThemeKey] = useState<string>('');
+
+  const { data: themes = [] } = useQuery({
+    queryKey: ['themes'],
+    queryFn: getThemes,
+    staleTime: 60_000,
+  });
 
   useEffect(() => {
     if (!open || !board) {
@@ -52,6 +66,9 @@ export function BoardSettingsDialog({ open, onClose, onBoardChanged }: BoardSett
     }
 
     setDraftPresets(getEffectiveStickyNotePresets(board, t));
+    setUsePinnedSurface(!!board.surfaceColor);
+    setDraftSurfaceColor(board.surfaceColor ?? '#ffffff');
+    setDraftThemeKey(board.themeKey ?? '');
   }, [board, open, t]);
 
   const validationMessage = useMemo(() => {
@@ -96,11 +113,15 @@ export function BoardSettingsDialog({ open, onClose, onBoardChanged }: BoardSett
     }
 
     const stickyNotePresets = sanitizeStickyNotePresets(draftPresets);
-    updateBoard({ stickyNotePresets });
+    const surfaceColor = usePinnedSurface ? draftSurfaceColor : null;
+    const themeKey = draftThemeKey || null;
+    updateBoard({ stickyNotePresets, surfaceColor, themeKey });
     onBoardChanged?.('Metadata', createBoardMetadataUpdatedOperation({
       title: board.title,
       labelOutlineEnabled: board.labelOutlineEnabled,
       arrowOutlineEnabled: board.arrowOutlineEnabled,
+      surfaceColor,
+      themeKey,
       customColors: board.customColors,
       recentColors: board.recentColors,
       stickyNotePresets,
@@ -113,6 +134,62 @@ export function BoardSettingsDialog({ open, onClose, onBoardChanged }: BoardSett
       <DialogTitle>{t('boardSettings.title')}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>
+          {/* Board theme */}
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>
+              {t('boardSettings.boardTheme', 'Board-Theme')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {t('boardSettings.boardThemeDescription', 'Legt ein gemeinsames Theme für alle Nutzer fest. Ohne Auswahl nutzt jeder sein persönliches Theme.')}
+            </Typography>
+            <TextField
+              select
+              size="small"
+              value={draftThemeKey}
+              onChange={(e) => setDraftThemeKey(e.target.value)}
+              fullWidth
+            >
+              <MenuItem value="">{t('boardSettings.noFixedTheme', '— Persönliches Theme —')}</MenuItem>
+              {themes.filter((theme) => theme.isEnabled).map((theme) => (
+                <MenuItem key={theme.key} value={theme.key}>
+                  {theme.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          </Box>
+
+          {/* Board background color */}
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>
+              {t('boardSettings.canvasBackground', 'Hintergrundfarbe')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {t('boardSettings.canvasBackgroundDescription', 'Legt eine gemeinsame Hintergrundfarbe für alle Nutzer fest, unabhängig vom persönlichen Theme.')}
+            </Typography>
+            <Stack direction="row" spacing={2} alignItems="center">
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={usePinnedSurface}
+                    onChange={(e) => setUsePinnedSurface(e.target.checked)}
+                    size="small"
+                  />
+                }
+                label={t('boardSettings.useFixedBackground', 'Eigene Farbe verwenden')}
+              />
+              {usePinnedSurface && (
+                <TextField
+                  type="color"
+                  size="small"
+                  value={draftSurfaceColor}
+                  onChange={(e) => setDraftSurfaceColor(e.target.value)}
+                  InputProps={{ sx: { px: 0.5, width: 88 } }}
+                  inputProps={{ 'aria-label': t('boardSettings.canvasBackground', 'Hintergrundfarbe') }}
+                />
+              )}
+            </Stack>
+          </Box>
+
           <Box>
             <Typography variant="subtitle2" gutterBottom>
               {t('boardSettings.stickyPresets')}

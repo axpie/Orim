@@ -328,7 +328,7 @@ export function WhiteboardCanvas({
   const applyLocalCommand = useBoardStore((s) => s.applyLocalCommand);
   const pendingIconName = useBoardStore((s) => s.pendingIconName);
   const pendingStickyNotePresetId = useBoardStore((s) => s.pendingStickyNotePresetId);
-  const themeKey = useThemeStore((s) => s.themeKey);
+  const userThemeKey = useThemeStore((s) => s.themeKey);
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const dockSnapRadius = isCoarsePointer ? DOCK_SNAP_RADIUS * 1.6 : DOCK_SNAP_RADIUS;
   const keyboardNavigableElements = useMemo(
@@ -344,8 +344,13 @@ export function WhiteboardCanvas({
     queryFn: getThemes,
     staleTime: 60_000,
   });
-  const activeTheme = themes.find((theme) => theme.key === themeKey) ?? themes[0] ?? null;
-  const boardDefaults = activeTheme?.boardDefaults ?? FALLBACK_BOARD_DEFAULTS;
+  const activeTheme = themes.find((theme) => theme.key === (board?.themeKey ?? userThemeKey)) ?? themes[0] ?? null;
+  const rawBoardDefaults = activeTheme?.boardDefaults ?? FALLBACK_BOARD_DEFAULTS;
+  // If the board has a pinned surface color, use it for all users so everyone
+  // sees the same canvas background regardless of their personal theme choice.
+  const boardDefaults = board?.surfaceColor
+    ? { ...rawBoardDefaults, surfaceColor: board.surfaceColor }
+    : rawBoardDefaults;
 
   const pushCommand = useCommandStack((s) => s.push);
   const peekUndo = useCommandStack((s) => s.peekUndo);
