@@ -1536,10 +1536,10 @@ export function WhiteboardCanvas({
                 ? selectedIds.filter((id) => !groupedSelectionIds.includes(id))
                 : [...selectedIds, ...groupedSelectionIds.filter((id) => !selectedIds.includes(id))],
             );
-          } else if (
-            selectedIds.length !== groupedSelectionIds.length
-            || groupedSelectionIds.some((id) => !selectedIds.includes(id))
-          ) {
+          } else if (groupedSelectionIds.some((id) => !selectedIds.includes(id))) {
+            // Only replace selection when clicking an element not already selected.
+            // If the element is already part of a multi-selection, keep all selected
+            // elements so dragging moves the whole selection.
             setSelectedElementIds(groupedSelectionIds);
           }
 
@@ -1574,10 +1574,10 @@ export function WhiteboardCanvas({
                 ? selectedIds.filter((id) => !groupedSelectionIds.includes(id))
                 : [...selectedIds, ...groupedSelectionIds.filter((id) => !selectedIds.includes(id))],
             );
-          } else if (
-            selectedIds.length !== groupedSelectionIds.length
-            || groupedSelectionIds.some((id) => !selectedIds.includes(id))
-          ) {
+          } else if (groupedSelectionIds.some((id) => !selectedIds.includes(id))) {
+            // Only replace selection when clicking an element not already selected.
+            // If the element is already part of a multi-selection, keep all selected
+            // elements so dragging moves the whole selection.
             setSelectedElementIds(groupedSelectionIds);
           }
           // Start drag
