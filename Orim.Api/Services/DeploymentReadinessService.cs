@@ -11,6 +11,7 @@ public sealed class DeploymentReadinessService
     private static readonly string[] HealthEndpoints = ["/health/live", "/health/ready"];
 
     private readonly IHostEnvironment _environment;
+    private readonly IConfiguration _configuration;
     private readonly IOptions<MicrosoftEntraOptions> _microsoftOptions;
     private readonly IOptions<GoogleOAuthOptions> _googleOptions;
     private readonly AssistantSettingsService _assistantSettingsService;
@@ -18,12 +19,14 @@ public sealed class DeploymentReadinessService
 
     public DeploymentReadinessService(
         IHostEnvironment environment,
+        IConfiguration configuration,
         IOptions<MicrosoftEntraOptions> microsoftOptions,
         IOptions<GoogleOAuthOptions> googleOptions,
         AssistantSettingsService assistantSettingsService,
         ThemeCatalogApiService themeCatalogService)
     {
         _environment = environment;
+        _configuration = configuration;
         _microsoftOptions = microsoftOptions;
         _googleOptions = googleOptions;
         _assistantSettingsService = assistantSettingsService;
@@ -45,6 +48,9 @@ public sealed class DeploymentReadinessService
         var themes = await _themeCatalogService.GetThemesAsync();
         var assistantSettings = _assistantSettingsService.GetAdminSettings();
 
+        var redisConnection = _configuration.GetConnectionString("Redis");
+        var redisConfigured = !string.IsNullOrEmpty(redisConnection);
+
         return new DeploymentReadinessResponse(
             EnvironmentName: _environment.EnvironmentName,
             ApplicationVersion: ResolveApplicationVersion(),
@@ -63,6 +69,7 @@ public sealed class DeploymentReadinessService
             AssistantConfigured: assistantSettings.IsConfigured,
             EnabledThemeCount: themes.Count(theme => theme.IsEnabled),
             TotalThemeCount: themes.Count,
+            RedisConfigured: redisConfigured,
             HealthEndpoints: HealthEndpoints);
     }
 

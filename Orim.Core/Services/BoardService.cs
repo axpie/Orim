@@ -13,11 +13,13 @@ public class BoardService
     private const int SharePasswordSaltSize = 16;
     private const int SharePasswordKeySize = 32;
     private readonly IBoardRepository _boardRepository;
-    private readonly BoardChangeNotifier _boardChangeNotifier;
+    private readonly IBoardOperationRepository _boardOperationRepository;
+    private readonly IBoardChangeNotifier _boardChangeNotifier;
 
-    public BoardService(IBoardRepository boardRepository, BoardChangeNotifier boardChangeNotifier)
+    public BoardService(IBoardRepository boardRepository, IBoardOperationRepository boardOperationRepository, IBoardChangeNotifier boardChangeNotifier)
     {
         _boardRepository = boardRepository;
+        _boardOperationRepository = boardOperationRepository;
         _boardChangeNotifier = boardChangeNotifier;
     }
 
@@ -180,6 +182,7 @@ public class BoardService
 
     public async Task DeleteBoardAsync(Guid boardId)
     {
+        await _boardOperationRepository.DeleteBoardOperationsAsync(boardId);
         await _boardRepository.DeleteAsync(boardId);
         await _boardChangeNotifier.NotifyBoardChangedAsync(boardId);
     }

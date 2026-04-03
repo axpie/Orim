@@ -8,12 +8,13 @@ namespace Orim.Tests.Core.Services;
 public class BoardServiceTests
 {
     private readonly IBoardRepository _boardRepo = Substitute.For<IBoardRepository>();
+    private readonly IBoardOperationRepository _operationRepo = Substitute.For<IBoardOperationRepository>();
     private readonly BoardChangeNotifier _notifier = new();
     private readonly BoardService _sut;
 
     public BoardServiceTests()
     {
-        _sut = new BoardService(_boardRepo, _notifier);
+        _sut = new BoardService(_boardRepo, _operationRepo, _notifier);
     }
 
     #region CreateBoardAsync

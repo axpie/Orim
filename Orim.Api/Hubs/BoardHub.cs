@@ -1,6 +1,9 @@
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using Orim.Api.Contracts;
+using Orim.Core;
+using Orim.Core.Interfaces;
 using Orim.Core.Models;
 using Orim.Core.Services;
 
@@ -11,15 +14,17 @@ public sealed class BoardHub : Hub
     private const string JoinedBoardIdKey = "joined-board-id";
     private const string JoinedCanEditKey = "joined-can-edit";
     private const string DisplayNameKey = "display-name";
-    private readonly BoardPresenceService _presenceService;
+    private readonly IBoardPresenceService _presenceService;
     private readonly BoardService _boardService;
     private readonly UserService _userService;
+    private readonly IBoardOperationRepository _operationRepository;
 
-    public BoardHub(BoardPresenceService presenceService, BoardService boardService, UserService userService)
+    public BoardHub(IBoardPresenceService presenceService, BoardService boardService, UserService userService, IBoardOperationRepository operationRepository)
     {
         _presenceService = presenceService;
         _boardService = boardService;
         _userService = userService;
+        _operationRepository = operationRepository;
     }
 
     public static string GetUserGroupName(Guid userId) => $"user:{userId:D}";
@@ -165,6 +170,7 @@ public sealed class BoardHub : Hub
 
         ArgumentNullException.ThrowIfNull(operation);
 
+        await PersistOperationAsync(boardId, operation);
         await BroadcastBoardOperationAsync(boardId, operation);
     }
 
@@ -185,11 +191,12 @@ public sealed class BoardHub : Hub
         foreach (var operation in operations)
         {
             ArgumentNullException.ThrowIfNull(operation);
+            await PersistOperationAsync(boardId, operation);
             await BroadcastBoardOperationAsync(boardId, operation);
         }
     }
 
-    public async Task UpdateCursor(Guid boardId, double? worldX, double? worldY)
+    public async Task UpdateCursor(Guid boardId, double? worldX, double? worldY, IReadOnlyList<string>? selectedElementIds = null)
     {
         if (!IsJoinedBoard(boardId))
         {
@@ -201,7 +208,7 @@ public sealed class BoardHub : Hub
         var clientId = Context.ConnectionId;
         var color = BoardPresenceIdentity.ResolveColor(clientId);
 
-        var presence = new BoardCursorPresence(clientId, ResolveUserId(), displayName, color, worldX, worldY, DateTime.UtcNow);
+        var presence = new BoardCursorPresence(clientId, ResolveUserId(), displayName, color, worldX, worldY, DateTime.UtcNow, selectedElementIds);
         await _presenceService.UpsertCursorAsync(boardId, presence);
 
         var groupName = BoardGroup(boardId);
@@ -212,6 +219,7 @@ public sealed class BoardHub : Hub
             colorHex = color,
             worldX,
             worldY,
+            selectedElementIds,
             updatedAtUtc = DateTime.UtcNow
         });
     }
@@ -339,6 +347,29 @@ public sealed class BoardHub : Hub
         return !string.IsNullOrWhiteSpace(shareToken)
             && string.Equals(board.ShareLinkToken, shareToken, StringComparison.Ordinal)
             && _boardService.HasSharedLinkAccess(board, sharePassword, BoardRole.Editor);
+    }
+
+    private async Task PersistOperationAsync(Guid boardId, BoardOperationDto operation)
+    {
+        var operationType = operation switch
+        {
+            BoardElementAddedOperationDto => "element.added",
+            BoardElementUpdatedOperationDto => "element.updated",
+            BoardElementDeletedOperationDto => "element.deleted",
+            BoardElementsDeletedOperationDto => "elements.deleted",
+            BoardMetadataUpdatedOperationDto => "board.metadata.updated",
+            _ => operation.GetType().Name
+        };
+
+        var entry = new BoardOperationEntry
+        {
+            BoardId = boardId,
+            OperationType = operationType,
+            OperationPayload = JsonSerializer.Serialize(operation, OrimJsonOptions.Default),
+            ClientId = Context.ConnectionId,
+            UserId = ResolveUserId(),
+        };
+        await _operationRepository.AppendAsync(entry);
     }
 
     private Task BroadcastBoardOperationAsync(Guid boardId, BoardOperationDto operation) =>

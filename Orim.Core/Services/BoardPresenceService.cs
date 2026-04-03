@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Orim.Core.Interfaces;
 
 namespace Orim.Core.Services;
 
@@ -11,9 +12,10 @@ public sealed record BoardCursorPresence(
     string ColorHex,
     double? WorldX,
     double? WorldY,
-    DateTime UpdatedAtUtc);
+    DateTime UpdatedAtUtc,
+    IReadOnlyList<string>? SelectedElementIds = null);
 
-public sealed class BoardPresenceService
+public sealed class BoardPresenceService : IBoardPresenceService
 {
     private static readonly TimeSpan PresenceExpiration = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan LeaveSuppressionDuration = TimeSpan.FromMinutes(2);

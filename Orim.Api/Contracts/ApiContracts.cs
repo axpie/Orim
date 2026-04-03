@@ -63,6 +63,10 @@ public sealed record ImportBoardRequest(string BoardJson, string? Title);
 public sealed record AssistantRequest(IReadOnlyList<ChatMessageEntry> Messages);
 public sealed record AssistantSettingsRequest(bool Enabled, string Endpoint, string DeploymentName, string? ApiKey);
 public sealed record PresenceLeaveRequest(Guid BoardId, string ClientId);
+public sealed record CreateFolderRequest(string Name, string? ParentFolderId = null);
+public sealed record UpdateFolderRequest(string Name);
+public sealed record SetBoardFolderRequest(string? FolderId);
+public sealed record SetBoardTagsRequest(IReadOnlyList<string> Tags);
 public sealed record ThemeAvailabilityRequest(bool Enabled);
 public sealed record DeploymentReadinessResponse(
     string EnvironmentName,
@@ -82,4 +86,5 @@ public sealed record DeploymentReadinessResponse(
     bool AssistantConfigured,
     int EnabledThemeCount,
     int TotalThemeCount,
+    bool RedisConfigured,
     IReadOnlyList<string> HealthEndpoints);

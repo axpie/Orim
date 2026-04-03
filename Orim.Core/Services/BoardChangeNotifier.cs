@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using Orim.Core.Interfaces;
 
 namespace Orim.Core.Services;
 
@@ -11,7 +12,7 @@ public enum BoardChangeKind
 
 public sealed record BoardChangeNotification(Guid BoardId, string? SourceClientId, DateTime ChangedAtUtc, BoardChangeKind Kind);
 
-public sealed class BoardChangeNotifier
+public sealed class BoardChangeNotifier : IBoardChangeNotifier
 {
     private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, Func<BoardChangeNotification, Task>>> _subscriptions = new();
 

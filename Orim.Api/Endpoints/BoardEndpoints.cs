@@ -6,6 +6,7 @@ using Orim.Api.Hubs;
 using Orim.Api.Infrastructure;
 using Orim.Api.Services;
 using Orim.Core;
+using Orim.Core.Interfaces;
 using Orim.Core.Models;
 using Orim.Core.Services;
 
@@ -45,13 +46,14 @@ internal static class BoardEndpoints
             return Results.Ok(board);
         });
 
-        app.MapPost("/api/boards", [Authorize] async (CreateBoardRequest request, HttpContext context, BoardService boardService) =>
+        app.MapPost("/api/boards", [Authorize] async (CreateBoardRequest request, HttpContext context, BoardService boardService, AuditLogger audit) =>
         {
             if (EndpointHelpers.GetUserId(context.User) is not { } userId)
                 return Results.Unauthorized();
 
             var username = EndpointHelpers.GetUsername(context.User);
             var board = await boardService.CreateBoardAsync(request.Title, userId, username, request.TemplateId, request.ThemeKey);
+            audit.LogBoardCreated(board.Id, userId, board.Title);
             return Results.Created($"/api/boards/{board.Id}", board);
         });
 
@@ -100,7 +102,7 @@ internal static class BoardEndpoints
             return Results.Ok(board);
         });
 
-        app.MapDelete("/api/boards/{id:guid}", [Authorize] async (Guid id, HttpContext context, BoardService boardService) =>
+        app.MapDelete("/api/boards/{id:guid}", [Authorize] async (Guid id, HttpContext context, BoardService boardService, AuditLogger audit) =>
         {
             var board = await boardService.GetBoardAsync(id);
             if (board is null) return Results.NotFound();
@@ -112,6 +114,7 @@ internal static class BoardEndpoints
                 return Results.Forbid();
 
             await boardService.DeleteBoardAsync(id);
+            audit.LogBoardDeleted(id, userId);
             return Results.NoContent();
         });
 
@@ -499,7 +502,28 @@ internal static class BoardEndpoints
 
         // --- Presence (anonymous fallback for page unload) ---
 
-        app.MapPost("/api/presence/leave", async (PresenceLeaveRequest request, BoardPresenceService presenceService) =>
+        // --- Operation History ---
+
+        app.MapGet("/api/boards/{id:guid}/history", [Authorize] async (Guid id, HttpContext context, BoardService boardService, IBoardOperationRepository operationRepository, long since = 0, int limit = 100) =>
+        {
+            var board = await boardService.GetBoardAsync(id);
+            if (board is null) return Results.NotFound();
+
+            if (EndpointHelpers.GetUserId(context.User) is not { } userId)
+                return Results.Unauthorized();
+
+            if (!boardService.HasAccess(board, userId))
+                return Results.Forbid();
+
+            if (limit is < 1 or > 1000) limit = 100;
+
+            var operations = await operationRepository.GetOperationsSinceAsync(id, since, limit);
+            return Results.Ok(operations);
+        });
+
+        // --- Presence (real) ---
+
+        app.MapPost("/api/presence/leave", async (PresenceLeaveRequest request, IBoardPresenceService presenceService) =>
         {
             if (request.BoardId == Guid.Empty || string.IsNullOrWhiteSpace(request.ClientId))
                 return Results.BadRequest();
@@ -507,6 +531,92 @@ internal static class BoardEndpoints
             await presenceService.RemoveCursorAsync(request.BoardId, request.ClientId);
             return Results.Ok();
         }).AllowAnonymous();
+
+        // --- Folders ---
+
+        app.MapGet("/api/boards/folders", [Authorize] async (HttpContext context, IBoardRepository boardRepository) =>
+        {
+            if (EndpointHelpers.GetUserId(context.User) is not { } userId)
+                return Results.Unauthorized();
+
+            var folders = await boardRepository.GetFoldersAsync(userId);
+            return Results.Ok(folders);
+        });
+
+        app.MapPost("/api/boards/folders", [Authorize] async (CreateFolderRequest request, HttpContext context, IBoardRepository boardRepository) =>
+        {
+            if (EndpointHelpers.GetUserId(context.User) is not { } userId)
+                return Results.Unauthorized();
+
+            var folder = new BoardFolder
+            {
+                Name = request.Name,
+                OwnerId = userId,
+                ParentFolderId = request.ParentFolderId,
+            };
+            await boardRepository.SaveFolderAsync(folder);
+            return Results.Created($"/api/boards/folders/{folder.Id}", folder);
+        });
+
+        app.MapPut("/api/boards/folders/{id}", [Authorize] async (string id, UpdateFolderRequest request, HttpContext context, IBoardRepository boardRepository) =>
+        {
+            if (EndpointHelpers.GetUserId(context.User) is not { } userId)
+                return Results.Unauthorized();
+
+            var folders = await boardRepository.GetFoldersAsync(userId);
+            var folder = folders.FirstOrDefault(f => f.Id == id);
+            if (folder is null) return Results.NotFound();
+
+            folder.Name = request.Name;
+            await boardRepository.SaveFolderAsync(folder);
+            return Results.Ok(folder);
+        });
+
+        app.MapDelete("/api/boards/folders/{id}", [Authorize] async (string id, HttpContext context, IBoardRepository boardRepository) =>
+        {
+            if (EndpointHelpers.GetUserId(context.User) is not { } userId)
+                return Results.Unauthorized();
+
+            var folders = await boardRepository.GetFoldersAsync(userId);
+            if (folders.All(f => f.Id != id)) return Results.NotFound();
+
+            await boardRepository.DeleteFolderAsync(id);
+            return Results.NoContent();
+        });
+
+        app.MapPut("/api/boards/{id:guid}/folder", [Authorize] async (Guid id, SetBoardFolderRequest request, HttpContext context, BoardService boardService) =>
+        {
+            if (EndpointHelpers.GetUserId(context.User) is not { } userId)
+                return Results.Unauthorized();
+
+            var board = await boardService.GetBoardAsync(id);
+            if (board is null) return Results.NotFound();
+
+            if (!boardService.HasAccess(board, userId, BoardRole.Editor))
+                return Results.Forbid();
+
+            board.FolderId = request.FolderId;
+            board.UpdatedAt = DateTime.UtcNow;
+            await boardService.UpdateBoardAsync(board, kind: BoardChangeKind.Metadata);
+            return Results.Ok(board);
+        });
+
+        app.MapPut("/api/boards/{id:guid}/tags", [Authorize] async (Guid id, SetBoardTagsRequest request, HttpContext context, BoardService boardService) =>
+        {
+            if (EndpointHelpers.GetUserId(context.User) is not { } userId)
+                return Results.Unauthorized();
+
+            var board = await boardService.GetBoardAsync(id);
+            if (board is null) return Results.NotFound();
+
+            if (!boardService.HasAccess(board, userId, BoardRole.Editor))
+                return Results.Forbid();
+
+            board.Tags = request.Tags.ToList();
+            board.UpdatedAt = DateTime.UtcNow;
+            await boardService.UpdateBoardAsync(board, kind: BoardChangeKind.Metadata);
+            return Results.Ok(board);
+        });
 
         return app;
     }

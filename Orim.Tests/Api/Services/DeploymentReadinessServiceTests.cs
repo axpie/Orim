@@ -107,6 +107,7 @@ public sealed class DeploymentReadinessServiceTests
 
         return new DeploymentReadinessService(
             environment,
+            configuration,
             Options.Create(microsoftOptions),
             Options.Create(googleOptions),
             assistantSettingsService,

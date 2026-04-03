@@ -6,6 +6,8 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Trace;
 using Orim.Api.Services;
 using Orim.Core.Services;
 using Orim.Infrastructure;
@@ -184,6 +186,7 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<ILogger<AssistantSettingsService>>()));
         services.AddSingleton<DiagramAssistantService>();
         services.AddSingleton<ThemeCatalogApiService>();
+        services.AddSingleton<AuditLogger>();
         services.AddSingleton<DeploymentReadinessService>();
         services.AddSingleton<BoardPdfExportService>();
         services.AddSingleton<BoardCommentNotifier>();
@@ -195,17 +198,45 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<IGoogleTokenVerifier, GoogleTokenVerifier>();
         services.AddSingleton<GoogleIdentityTokenValidator>();
 
-        services.AddSignalR().AddJsonProtocol(options =>
+        var signalRBuilder = services.AddSignalR().AddJsonProtocol(options =>
         {
             options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
             options.PayloadSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
         });
+
+        var redisConnection = configuration.GetConnectionString("Redis");
+        if (!string.IsNullOrEmpty(redisConnection))
+        {
+            signalRBuilder.AddStackExchangeRedis(redisConnection, options =>
+            {
+                options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("orim");
+            });
+        }
 
         services.ConfigureHttpJsonOptions(options =>
         {
             options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
             options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
         });
+
+        return services;
+    }
+
+    internal static IServiceCollection AddOrimTelemetry(this IServiceCollection services, IConfiguration configuration)
+    {
+        var telemetryEnabled = configuration.GetValue<bool>("Telemetry:Enabled", false);
+        if (!telemetryEnabled)
+            return services;
+
+        services.AddOpenTelemetry()
+            .WithTracing(builder => builder
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddConsoleExporter())
+            .WithMetrics(builder => builder
+                .AddAspNetCoreInstrumentation()
+                .AddHttpClientInstrumentation()
+                .AddConsoleExporter());
 
         return services;
     }

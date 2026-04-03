@@ -20,8 +20,9 @@ public static class DependencyInjection
         services.AddScoped<IImageStorageService, EfImageStorageService>();
         services.AddScoped<IThemeRepository, EfThemeRepository>();
         services.AddScoped<IAssistantSettingsRepository, EfAssistantSettingsRepository>();
-        services.AddSingleton<BoardChangeNotifier>();
-        services.AddSingleton<BoardPresenceService>();
+        services.AddScoped<IBoardOperationRepository, EfBoardOperationRepository>();
+        services.AddSingleton<IBoardChangeNotifier, BoardChangeNotifier>();
+        services.AddSingleton<IBoardPresenceService, BoardPresenceService>();
         services.AddScoped<UserService>();
         services.AddScoped<BoardService>();
         return services;

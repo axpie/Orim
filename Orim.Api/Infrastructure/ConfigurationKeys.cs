@@ -11,4 +11,5 @@ internal static class ConfigurationKeys
     public const string SeedAdminPassword = "SeedAdmin:Password";
     public const string SeedAdminResetPasswordOnStartup = "SeedAdmin:ResetPasswordOnStartup";
     public const string ConnectionStrings = "ConnectionStrings:DefaultConnection";
+    public const string RedisConnection = "ConnectionStrings:Redis";
 }
