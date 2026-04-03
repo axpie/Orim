@@ -47,6 +47,12 @@ public sealed class AuditLogger
             boardId, userId, visibility);
     }
 
+    public void LogBoardShareConfigurationChanged(Guid boardId, Guid userId, string details)
+    {
+        _logger.LogInformation("AUDIT: Board share configuration changed | BoardId={BoardId} UserId={UserId} Details={Details}",
+            boardId, userId, details);
+    }
+
     public void LogMemberAdded(Guid boardId, Guid addedUserId, string role, Guid byUserId)
     {
         _logger.LogInformation("AUDIT: Member added | BoardId={BoardId} AddedUserId={AddedUserId} Role={Role} ByUserId={ByUserId}",
@@ -57,6 +63,12 @@ public sealed class AuditLogger
     {
         _logger.LogInformation("AUDIT: Member removed | BoardId={BoardId} RemovedUserId={RemovedUserId} ByUserId={ByUserId}",
             boardId, removedUserId, byUserId);
+    }
+
+    public void LogMemberRoleChanged(Guid boardId, Guid memberUserId, string role, Guid byUserId)
+    {
+        _logger.LogInformation("AUDIT: Member role changed | BoardId={BoardId} MemberUserId={MemberUserId} Role={Role} ByUserId={ByUserId}",
+            boardId, memberUserId, role, byUserId);
     }
 
     public void LogAdminAction(Guid adminUserId, string action, string details)

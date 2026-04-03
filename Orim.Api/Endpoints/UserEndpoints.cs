@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.SignalR;
 using Orim.Api.Contracts;
 using Orim.Api.Hubs;
 using Orim.Api.Infrastructure;
+using Orim.Api.Services;
 using Orim.Core.Models;
 using Orim.Core.Services;
 
@@ -30,11 +31,15 @@ internal static class UserEndpoints
             return user is null ? Results.NotFound() : Results.Ok(EndpointHelpers.ToUserDto(user));
         });
 
-        app.MapPost("/api/users", [Authorize(Roles = "Admin")] async (CreateUserRequest request, UserService userService, HttpContext context, ILogger<Program> logger) =>
+        app.MapPost("/api/users", [Authorize(Roles = "Admin")] async (CreateUserRequest request, UserService userService, HttpContext context, ILogger<Program> logger, AuditLogger audit) =>
         {
             try
             {
                 var user = await userService.CreateUserAsync(request.Username, request.Password, request.Role);
+                if (EndpointHelpers.GetUserId(context.User) is { } adminUserId)
+                {
+                    audit.LogAdminAction(adminUserId, "user.create", $"UserId={user.Id} Username={user.Username} Role={user.Role}");
+                }
                 return Results.Created($"/api/users/{user.Id}", EndpointHelpers.ToUserDto(user));
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
@@ -66,7 +71,7 @@ internal static class UserEndpoints
             }
         });
 
-        app.MapPut("/api/users/{id:guid}/password", [Authorize] async (Guid id, ChangePasswordRequest request, HttpContext context, UserService userService, ILogger<Program> logger) =>
+        app.MapPut("/api/users/{id:guid}/password", [Authorize] async (Guid id, ChangePasswordRequest request, HttpContext context, UserService userService, ILogger<Program> logger, AuditLogger audit) =>
         {
             if (EndpointHelpers.GetUserId(context.User) is not { } userId)
                 return Results.Unauthorized();
@@ -86,6 +91,10 @@ internal static class UserEndpoints
                     await userService.ChangePasswordAsync(id, request.CurrentPassword ?? string.Empty, request.NewPassword);
                 }
 
+                if (isAdmin && userId != id)
+                {
+                    audit.LogAdminAction(userId, "user.password.reset", $"TargetUserId={id}");
+                }
                 return Results.NoContent();
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
@@ -95,11 +104,15 @@ internal static class UserEndpoints
             }
         });
 
-        app.MapPut("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UpdateUserRequest request, UserService userService, HttpContext context, ILogger<Program> logger) =>
+        app.MapPut("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UpdateUserRequest request, UserService userService, HttpContext context, ILogger<Program> logger, AuditLogger audit) =>
         {
             try
             {
                 var user = await userService.UpdateAdminUserAsync(id, request.Username, request.Role);
+                if (EndpointHelpers.GetUserId(context.User) is { } adminUserId)
+                {
+                    audit.LogAdminAction(adminUserId, "user.update", $"TargetUserId={user.Id} Username={user.Username} Role={user.Role}");
+                }
                 return Results.Ok(EndpointHelpers.ToUserDto(user));
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
@@ -109,11 +122,15 @@ internal static class UserEndpoints
             }
         });
 
-        app.MapPut("/api/users/{id:guid}/deactivate", [Authorize(Roles = "Admin")] async (Guid id, UserService userService, HttpContext context, ILogger<Program> logger) =>
+        app.MapPut("/api/users/{id:guid}/deactivate", [Authorize(Roles = "Admin")] async (Guid id, UserService userService, HttpContext context, ILogger<Program> logger, AuditLogger audit) =>
         {
             try
             {
                 await userService.DeactivateUserAsync(id);
+                if (EndpointHelpers.GetUserId(context.User) is { } adminUserId)
+                {
+                    audit.LogAdminAction(adminUserId, "user.deactivate", $"TargetUserId={id}");
+                }
                 return Results.NoContent();
             }
             catch (InvalidOperationException ex)
@@ -123,11 +140,15 @@ internal static class UserEndpoints
             }
         });
 
-        app.MapDelete("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UserService userService, HttpContext context, ILogger<Program> logger) =>
+        app.MapDelete("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UserService userService, HttpContext context, ILogger<Program> logger, AuditLogger audit) =>
         {
             try
             {
                 await userService.DeleteUserAsync(id);
+                if (EndpointHelpers.GetUserId(context.User) is { } adminUserId)
+                {
+                    audit.LogAdminAction(adminUserId, "user.delete", $"TargetUserId={id}");
+                }
                 return Results.NoContent();
             }
             catch (InvalidOperationException ex)

@@ -120,7 +120,7 @@ internal static class BoardEndpoints
 
         // --- Sharing & Members ---
 
-        app.MapPut("/api/boards/{id:guid}/visibility", [Authorize] async (Guid id, SetVisibilityRequest request, HttpContext context, BoardService boardService) =>
+        app.MapPut("/api/boards/{id:guid}/visibility", [Authorize] async (Guid id, SetVisibilityRequest request, HttpContext context, BoardService boardService, AuditLogger audit) =>
         {
             var board = await boardService.GetBoardAsync(id);
             if (board is null) return Results.NotFound();
@@ -134,10 +134,11 @@ internal static class BoardEndpoints
             board.Visibility = request.Visibility;
             board.SharedAllowAnonymousEditing = request.Visibility == BoardVisibility.Public && request.AllowAnonymousEditing;
             await boardService.UpdateBoardAsync(board, kind: BoardChangeKind.Metadata);
+            audit.LogBoardShared(board.Id, userId, $"{board.Visibility};AnonymousEditing={board.SharedAllowAnonymousEditing}");
             return Results.Ok(board);
         });
 
-        app.MapPost("/api/boards/{id:guid}/share-token", [Authorize] async (Guid id, HttpContext context, BoardService boardService) =>
+        app.MapPost("/api/boards/{id:guid}/share-token", [Authorize] async (Guid id, HttpContext context, BoardService boardService, AuditLogger audit) =>
         {
             var board = await boardService.GetBoardAsync(id);
             if (board is null) return Results.NotFound();
@@ -150,6 +151,7 @@ internal static class BoardEndpoints
 
             board.ShareLinkToken = boardService.GenerateShareLinkToken();
             await boardService.UpdateBoardAsync(board, kind: BoardChangeKind.Metadata);
+            audit.LogBoardShareConfigurationChanged(board.Id, userId, "ShareTokenGenerated");
             return Results.Ok(new { board.ShareLinkToken });
         });
 
@@ -186,7 +188,29 @@ internal static class BoardEndpoints
             return Results.Ok(board);
         }).AllowAnonymous();
 
-        app.MapPost("/api/boards/{id:guid}/share-password", [Authorize] async (Guid id, SetSharePasswordRequest request, HttpContext context, BoardService boardService) =>
+        app.MapPost("/api/boards/shared/{token}/history", async (
+            string token,
+            SharedBoardHistoryRequest request,
+            BoardService boardService,
+            IBoardOperationRepository operationRepository) =>
+        {
+            var board = await boardService.GetBoardByShareTokenAsync(token);
+            if (board is null) return Results.NotFound();
+            if (!string.Equals(board.ShareLinkToken, token, StringComparison.Ordinal)) return Results.NotFound();
+            if (!boardService.HasSharedLinkAccess(board, request.Password, BoardRole.Viewer)) return Results.Forbid();
+
+            var limit = request.Limit;
+            if (limit is < 0 or > 1000) limit = 100;
+
+            var latestSequenceNumber = await operationRepository.GetLatestSequenceNumberAsync(board.Id);
+            var operations = limit == 0
+                ? []
+                : await operationRepository.GetOperationsSinceAsync(board.Id, request.Since, limit);
+
+            return Results.Ok(CreateHistoryResponse(request.Since, limit, latestSequenceNumber, operations));
+        }).AllowAnonymous();
+
+        app.MapPost("/api/boards/{id:guid}/share-password", [Authorize] async (Guid id, SetSharePasswordRequest request, HttpContext context, BoardService boardService, AuditLogger audit) =>
         {
             var board = await boardService.GetBoardAsync(id);
             if (board is null) return Results.NotFound();
@@ -203,10 +227,13 @@ internal static class BoardEndpoints
                 boardService.SetSharePassword(board, request.Password);
 
             await boardService.UpdateBoardAsync(board, kind: BoardChangeKind.Metadata);
+            audit.LogBoardShareConfigurationChanged(board.Id, userId, string.IsNullOrWhiteSpace(request.Password)
+                ? "SharePasswordCleared"
+                : "SharePasswordSet");
             return Results.NoContent();
         });
 
-        app.MapPost("/api/boards/{id:guid}/members", [Authorize] async (Guid id, AddMemberRequest request, HttpContext context, BoardService boardService, UserService userService) =>
+        app.MapPost("/api/boards/{id:guid}/members", [Authorize] async (Guid id, AddMemberRequest request, HttpContext context, BoardService boardService, UserService userService, AuditLogger audit) =>
         {
             var board = await boardService.GetBoardAsync(id);
             if (board is null) return Results.NotFound();
@@ -222,10 +249,11 @@ internal static class BoardEndpoints
 
             boardService.AddMember(board, user, request.Role);
             await boardService.UpdateBoardAsync(board, kind: BoardChangeKind.Metadata);
+            audit.LogMemberAdded(board.Id, user.Id, request.Role.ToString(), userId);
             return Results.Ok(board.Members);
         });
 
-        app.MapDelete("/api/boards/{id:guid}/members/{userId:guid}", [Authorize] async (Guid id, Guid userId, HttpContext context, BoardService boardService) =>
+        app.MapDelete("/api/boards/{id:guid}/members/{userId:guid}", [Authorize] async (Guid id, Guid userId, HttpContext context, BoardService boardService, AuditLogger audit) =>
         {
             var board = await boardService.GetBoardAsync(id);
             if (board is null) return Results.NotFound();
@@ -238,10 +266,11 @@ internal static class BoardEndpoints
 
             boardService.RemoveMember(board, userId);
             await boardService.UpdateBoardAsync(board, kind: BoardChangeKind.Metadata);
+            audit.LogMemberRemoved(board.Id, userId, requestingUserId);
             return Results.NoContent();
         });
 
-        app.MapPut("/api/boards/{id:guid}/members/{userId:guid}/role", [Authorize] async (Guid id, Guid userId, UpdateMemberRoleRequest request, HttpContext context, BoardService boardService) =>
+        app.MapPut("/api/boards/{id:guid}/members/{userId:guid}/role", [Authorize] async (Guid id, Guid userId, UpdateMemberRoleRequest request, HttpContext context, BoardService boardService, AuditLogger audit) =>
         {
             var board = await boardService.GetBoardAsync(id);
             if (board is null) return Results.NotFound();
@@ -254,6 +283,7 @@ internal static class BoardEndpoints
 
             boardService.UpdateMemberRole(board, userId, request.Role);
             await boardService.UpdateBoardAsync(board, kind: BoardChangeKind.Metadata);
+            audit.LogMemberRoleChanged(board.Id, userId, request.Role.ToString(), requestingUserId);
             return Results.NoContent();
         });
 
@@ -515,10 +545,14 @@ internal static class BoardEndpoints
             if (!boardService.HasAccess(board, userId))
                 return Results.Forbid();
 
-            if (limit is < 1 or > 1000) limit = 100;
+            if (limit is < 0 or > 1000) limit = 100;
 
-            var operations = await operationRepository.GetOperationsSinceAsync(id, since, limit);
-            return Results.Ok(operations);
+            var latestSequenceNumber = await operationRepository.GetLatestSequenceNumberAsync(id);
+            var operations = limit == 0
+                ? []
+                : await operationRepository.GetOperationsSinceAsync(id, since, limit);
+
+            return Results.Ok(CreateHistoryResponse(since, limit, latestSequenceNumber, operations));
         });
 
         // --- Presence (real) ---
@@ -619,5 +653,32 @@ internal static class BoardEndpoints
         });
 
         return app;
+    }
+
+    private static BoardOperationHistoryResponse CreateHistoryResponse(
+        long sinceSequenceNumber,
+        int limit,
+        long latestSequenceNumber,
+        IReadOnlyList<BoardOperationEntry> operations)
+    {
+        var mappedOperations = operations.Select(MapHistoryEntry).ToList();
+        var hasMore = limit == 0
+            ? latestSequenceNumber > sinceSequenceNumber
+            : mappedOperations.Count > 0 && mappedOperations[^1].SequenceNumber < latestSequenceNumber;
+
+        return new BoardOperationHistoryResponse(latestSequenceNumber, hasMore, mappedOperations);
+    }
+
+    private static BoardOperationHistoryEntryDto MapHistoryEntry(BoardOperationEntry entry)
+    {
+        var operation = JsonSerializer.Deserialize<BoardOperationDto>(entry.OperationPayload, OrimJsonOptions.Default)
+            ?? throw new InvalidOperationException($"Board operation '{entry.Id}' could not be deserialized.");
+
+        return new BoardOperationHistoryEntryDto(
+            entry.SequenceNumber,
+            entry.CreatedAtUtc,
+            entry.ClientId,
+            entry.UserId,
+            operation);
     }
 }

@@ -542,7 +542,22 @@ export interface BoardOperationNotification {
   boardId: string;
   sourceClientId?: string | null;
   changedAtUtc: string;
+  sequenceNumber: number;
   operation: BoardOperation;
+}
+
+export interface BoardOperationHistoryEntry {
+  sequenceNumber: number;
+  changedAtUtc: string;
+  clientId?: string | null;
+  userId?: string | null;
+  operation: BoardOperation;
+}
+
+export interface BoardOperationHistoryResponse {
+  latestSequenceNumber: number;
+  hasMore: boolean;
+  operations: BoardOperationHistoryEntry[];
 }
 
 // --- User Images ---

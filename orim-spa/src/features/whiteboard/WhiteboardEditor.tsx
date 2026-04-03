@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type Konva from 'konva';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -10,7 +10,6 @@ import { useBoardComments } from './comments/useBoardComments';
 import { useBoardStore } from './store/boardStore';
 import { useCommandStack } from './store/commandStack';
 import { formatBoardCommandConflict } from './realtime/localBoardCommands';
-import { useSignalR } from '../../hooks/useSignalR';
 import { WhiteboardCanvas } from './canvas/WhiteboardCanvas';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Toolbar } from './tools/Toolbar';
@@ -19,14 +18,12 @@ import { ChatPanel } from './panels/ChatPanel';
 import { CommentsPanel, COMMENTS_PANEL_WIDTH } from './panels/CommentsPanel';
 import { SnapshotDialog } from './panels/SnapshotDialog';
 import { BoardTopBar } from './tools/BoardTopBar';
-import { deriveBoardSyncStatus } from './boardSyncStatus';
-import { getBoardSyncAnnouncement } from './a11yAnnouncements';
+import { useWhiteboardRealtime } from './useWhiteboardRealtime';
 import { useOperationOutboxStore } from './store/outboxStore';
 import type { Board, BoardSnapshot } from '../../types/models';
 import { BoardRole } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
 import type { BoardOperationPayload } from './realtime/boardOperations';
-import { recoverBoardWithQueuedOperations } from './realtime/reconnectRecovery';
 
 const PROPERTIES_PANEL_WIDTH = 280;
 const CHAT_PANEL_WIDTH = 320;
@@ -79,7 +76,6 @@ export function WhiteboardEditor() {
   const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
   const connectionIdRef = useRef<string | null>(null);
   const liveAnnouncementIdRef = useRef(0);
-  const lastSyncAnnouncementRef = useRef<string | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
   const compactOverlayOpen = isCompactToolbarLayout && (propertiesOpen || commentsOpen || chatOpen);
 
@@ -332,98 +328,30 @@ export function WhiteboardEditor() {
     sendCursorUpdate,
     connectionId,
     connectionState,
-    lastError,
-  } = useSignalR({
+    boardSyncStatus,
+  } = useWhiteboardRealtime({
     boardId: id ?? null,
     displayName: user?.displayName ?? user?.username ?? null,
-    syncProfileDisplayNameChanges: true,
-    onBoardChanged: (notification) => {
-      if (
-        notification.kind !== 'Metadata'
-        || notification.sourceClientId === connectionIdRef.current
-        || useBoardStore.getState().isDirty
-        || !id
-      ) {
-        return;
-      }
-
-      void queryClient.invalidateQueries({ queryKey: ['board', id] });
-    },
-    beforeOutboxFlush: async ({ isReconnect }) => {
-      if (!id) {
-        return;
-      }
-
-      const currentBoard = useBoardStore.getState().board;
-      const queuedOperationsCount = useOperationOutboxStore.getState().countForBoard(id);
-      if (!isReconnect && queuedOperationsCount === 0) {
-        return;
-      }
-
-      if (currentBoard?.id === id && useBoardStore.getState().isDirty && queuedOperationsCount === 0) {
-        return;
-      }
-
-      const recovery = await recoverBoardWithQueuedOperations({
-        boardId: id,
-        fetchBoard: () => getBoard(id),
-      });
-
-      setBoard(recovery.board, { preserveSelection: true });
-      clearCommandStack();
-      queryClient.setQueryData(['board', id], recovery.board);
-    },
-    onBoardOperationApplied: (notification) => {
-      applyRemoteOperation(notification.operation);
-      const nextBoard = useBoardStore.getState().board;
-      if (id && nextBoard) {
-        queryClient.setQueryData(['board', id], nextBoard);
-      }
-    },
-    onBoardStateUpdated: (notification) => {
-      setBoard(notification.board, { preserveSelection: true });
-      clearCommandStack();
-      if (id) {
-        queryClient.setQueryData(['board', id], notification.board);
-      }
-    },
-    onCommentUpserted: handleCommentUpserted,
-    onCommentDeleted: handleCommentDeleted,
-    onPresenceUpdated: (cursors) => setRemoteCursors(cursors),
-    onCursorUpdated: (cursor) => {
-      const current = useBoardStore.getState().remoteCursors.filter((entry) => entry.clientId !== cursor.clientId);
-      setRemoteCursors([...current, cursor]);
-    },
-  });
-  connectionIdRef.current = connectionId;
-
-  const boardSyncStatus = useMemo(() => deriveBoardSyncStatus({
-    connectionState,
-    lastError,
+    canEdit,
+    board,
     isDirty,
     outboxCount,
     isSaving: saveMutation.isPending,
     saveError: saveMutation.error,
-  }), [connectionState, isDirty, lastError, outboxCount, saveMutation.error, saveMutation.isPending]);
-
+    queryClient,
+    setBoard,
+    clearCommandStack,
+    applyRemoteOperation,
+    onCommentUpserted: handleCommentUpserted,
+    onCommentDeleted: handleCommentDeleted,
+    setRemoteCursors,
+    announceLive,
+    t,
+    scheduleSave,
+  });
   useEffect(() => {
-    if (connectionState === 'connected' && canEdit && isDirty && board) {
-      scheduleSave();
-    }
-  }, [board, canEdit, connectionState, isDirty, scheduleSave]);
-
-  useEffect(() => {
-    const nextAnnouncement = getBoardSyncAnnouncement(boardSyncStatus, t);
-    if (lastSyncAnnouncementRef.current == null) {
-      lastSyncAnnouncementRef.current = nextAnnouncement;
-      return;
-    }
-
-    if (nextAnnouncement !== lastSyncAnnouncementRef.current) {
-      lastSyncAnnouncementRef.current = nextAnnouncement;
-      announceLive(nextAnnouncement);
-    }
-  }, [announceLive, boardSyncStatus, t]);
+    connectionIdRef.current = connectionId;
+  }, [connectionId]);
 
   useEffect(() => {
     if (commandConflict) {

@@ -170,8 +170,8 @@ public sealed class BoardHub : Hub
 
         ArgumentNullException.ThrowIfNull(operation);
 
-        await PersistOperationAsync(boardId, operation);
-        await BroadcastBoardOperationAsync(boardId, operation);
+        var sequenceNumber = await PersistOperationAsync(boardId, operation);
+        await BroadcastBoardOperationAsync(boardId, sequenceNumber, operation);
     }
 
     public async Task ApplyBoardOperations(Guid boardId, IReadOnlyList<BoardOperationDto> operations)
@@ -191,8 +191,8 @@ public sealed class BoardHub : Hub
         foreach (var operation in operations)
         {
             ArgumentNullException.ThrowIfNull(operation);
-            await PersistOperationAsync(boardId, operation);
-            await BroadcastBoardOperationAsync(boardId, operation);
+            var sequenceNumber = await PersistOperationAsync(boardId, operation);
+            await BroadcastBoardOperationAsync(boardId, sequenceNumber, operation);
         }
     }
 
@@ -349,7 +349,7 @@ public sealed class BoardHub : Hub
             && _boardService.HasSharedLinkAccess(board, sharePassword, BoardRole.Editor);
     }
 
-    private async Task PersistOperationAsync(Guid boardId, BoardOperationDto operation)
+    private async Task<long> PersistOperationAsync(Guid boardId, BoardOperationDto operation)
     {
         var operationType = operation switch
         {
@@ -369,14 +369,15 @@ public sealed class BoardHub : Hub
             ClientId = Context.ConnectionId,
             UserId = ResolveUserId(),
         };
-        await _operationRepository.AppendAsync(entry);
+        return await _operationRepository.AppendAsync(entry);
     }
 
-    private Task BroadcastBoardOperationAsync(Guid boardId, BoardOperationDto operation) =>
+    private Task BroadcastBoardOperationAsync(Guid boardId, long sequenceNumber, BoardOperationDto operation) =>
         Clients.OthersInGroup(BoardGroup(boardId)).SendAsync("BoardOperationApplied", new BoardOperationNotification(
             boardId,
             Context.ConnectionId,
             DateTime.UtcNow,
+            sequenceNumber,
             operation));
 
     private Task<IReadOnlyList<BoardCursorPresence>> GetPresenceSnapshot(Guid boardId)

@@ -41,6 +41,10 @@ jobs:
         working-directory: orim-spa
         run: npm run lint
 
+      - name: Run SPA tests
+        working-directory: orim-spa
+        run: npm run test
+
       - name: Build SPA
         working-directory: orim-spa
         run: npm run build

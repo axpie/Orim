@@ -54,8 +54,11 @@ public sealed record BoardMetadataUpdatedOperationDto(
     IReadOnlyList<string>? CustomColors = null,
     IReadOnlyList<string>? RecentColors = null,
     IReadOnlyList<StickyNotePreset>? StickyNotePresets = null) : BoardOperationDto;
-public sealed record BoardOperationNotification(Guid BoardId, string? SourceClientId, DateTime ChangedAtUtc, BoardOperationDto Operation);
+public sealed record BoardOperationNotification(Guid BoardId, string? SourceClientId, DateTime ChangedAtUtc, long SequenceNumber, BoardOperationDto Operation);
+public sealed record BoardOperationHistoryEntryDto(long SequenceNumber, DateTime ChangedAtUtc, string? ClientId, Guid? UserId, BoardOperationDto Operation);
+public sealed record BoardOperationHistoryResponse(long LatestSequenceNumber, bool HasMore, IReadOnlyList<BoardOperationHistoryEntryDto> Operations);
 public sealed record SetSharePasswordRequest(string? Password);
+public sealed record SharedBoardHistoryRequest(string? Password, long Since = 0, int Limit = 100);
 public sealed record AddMemberRequest(string Username, BoardRole Role);
 public sealed record UpdateMemberRoleRequest(BoardRole Role);
 public sealed record CreateSnapshotRequest(string? Name);

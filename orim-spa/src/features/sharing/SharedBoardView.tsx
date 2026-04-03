@@ -17,7 +17,7 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { getSharedBoard, replaceSharedBoardContent, validateSharePassword } from '../../api/boards';
+import { getSharedBoard, getSharedBoardHistory, replaceSharedBoardContent, validateSharePassword } from '../../api/boards';
 import { useBoardComments } from '../whiteboard/comments/useBoardComments';
 import { useBoardStore } from '../whiteboard/store/boardStore';
 import { useCommandStack } from '../whiteboard/store/commandStack';
@@ -36,7 +36,7 @@ import type { Board } from '../../types/models';
 import { BoardRole } from '../../types/models';
 import { resolveInitialGuestDisplayName } from './guestDisplayNames';
 import type { BoardOperationPayload } from '../whiteboard/realtime/boardOperations';
-import { recoverBoardWithQueuedOperations } from '../whiteboard/realtime/reconnectRecovery';
+import { primeBoardHistorySequence, recoverBoardAfterReconnect } from '../whiteboard/realtime/reconnectRecovery';
 
 const guestNameStorageKey = 'orim_guest_name';
 const PROPERTIES_PANEL_WIDTH = 280;
@@ -161,23 +161,32 @@ export function SharedBoardView() {
     shareToken: token ?? null,
     sharePassword: validatedPassword,
     displayName: guestDisplayName,
-    beforeOutboxFlush: async ({ boardId, isReconnect }) => {
+    beforeOutboxFlush: async ({ boardId, isReconnect, lastKnownSequenceNumber, updateLastKnownSequenceNumber }) => {
       if (!token) {
         return;
       }
 
-      const currentBoard = useBoardStore.getState().board;
       const queuedOperationsCount = useOperationOutboxStore.getState().countForBoard(boardId);
       if (!isReconnect && queuedOperationsCount === 0) {
+        if (lastKnownSequenceNumber != null) {
+          return;
+        }
+
+        updateLastKnownSequenceNumber(await primeBoardHistorySequence((since, limit) => (
+          getSharedBoardHistory(token, validatedPassword, since, limit)
+        )));
         return;
       }
 
+      const currentBoard = useBoardStore.getState().board;
       if (currentBoard?.id === boardId && useBoardStore.getState().isDirty && queuedOperationsCount === 0) {
         return;
       }
 
-      const recovery = await recoverBoardWithQueuedOperations({
+      const recovery = await recoverBoardAfterReconnect({
         boardId,
+        currentBoard,
+        lastKnownSequenceNumber,
         fetchBoard: async () => {
           if (validatedPassword) {
             return validateSharePassword(token, validatedPassword);
@@ -190,11 +199,13 @@ export function SharedBoardView() {
 
           return sharedBoard;
         },
+        fetchHistory: (since, limit) => getSharedBoardHistory(token, validatedPassword, since, limit),
       });
 
       setBoard(recovery.board, { preserveSelection: true });
       clearCommandStack();
       queryClient.setQueryData(['shared-board', token], recovery.board);
+      updateLastKnownSequenceNumber(recovery.latestSequenceNumber);
     },
     onBoardOperationApplied: (notification) => {
       applyRemoteOperation(notification.operation);

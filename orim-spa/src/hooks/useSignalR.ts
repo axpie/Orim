@@ -22,7 +22,12 @@ interface UseSignalROptions {
   sharePassword?: string | null;
   displayName?: string | null;
   syncProfileDisplayNameChanges?: boolean;
-  beforeOutboxFlush?: (context: { boardId: string; isReconnect: boolean }) => Promise<void> | void;
+  beforeOutboxFlush?: (context: {
+    boardId: string;
+    isReconnect: boolean;
+    lastKnownSequenceNumber: number | null;
+    updateLastKnownSequenceNumber: (sequenceNumber: number | null) => void;
+  }) => Promise<void> | void;
   onBoardChanged?: (notification: BoardChangeNotification) => void;
   onBoardOperationApplied?: (notification: BoardOperationNotification) => void;
   onBoardStateUpdated?: (notification: BoardStateUpdateNotification) => void;
@@ -76,6 +81,7 @@ export function useSignalR({
   const lastCursorSentAtRef = useRef(0);
   const isFlushingOutboxRef = useRef(false);
   const lastSyncedDisplayNameRef = useRef<string | null>(displayName?.trim() || null);
+  const lastKnownSequenceNumberRef = useRef<number | null>(null);
   const boardIdRef = useRef(boardId);
   const shareTokenRef = useRef(shareToken ?? null);
   const sharePasswordRef = useRef(sharePassword ?? null);
@@ -107,6 +113,22 @@ export function useSignalR({
   const handleInvokeError = useCallback((error: unknown) => {
     setLastError(getErrorMessage(error));
     console.error(error);
+  }, []);
+
+  const updateLastKnownSequenceNumber = useCallback((sequenceNumber: number | null) => {
+    if (typeof sequenceNumber !== 'number' || !Number.isFinite(sequenceNumber) || sequenceNumber < 0) {
+      lastKnownSequenceNumberRef.current = null;
+      return;
+    }
+
+    const normalized = Math.floor(sequenceNumber);
+    lastKnownSequenceNumberRef.current = lastKnownSequenceNumberRef.current == null
+      ? normalized
+      : Math.max(lastKnownSequenceNumberRef.current, normalized);
+  }, []);
+
+  const invalidateSequenceTracking = useCallback(() => {
+    lastKnownSequenceNumberRef.current = null;
   }, []);
 
   const invokeIfConnected = useCallback(
@@ -165,12 +187,17 @@ export function useSignalR({
       }
 
       try {
-        await callback({ boardId: currentBoardId, isReconnect });
+        await callback({
+          boardId: currentBoardId,
+          isReconnect,
+          lastKnownSequenceNumber: lastKnownSequenceNumberRef.current,
+          updateLastKnownSequenceNumber,
+        });
       } catch (error) {
         handleInvokeError(error);
       }
     },
-    [handleInvokeError],
+    [handleInvokeError, updateLastKnownSequenceNumber],
   );
 
   const flushOutbox = useCallback(async () => {
@@ -208,6 +235,7 @@ export function useSignalR({
 
   useEffect(() => {
     if (!boardId) {
+      invalidateSequenceTracking();
       setConnectionId(null);
       setConnectionState('disconnected');
       setLastError(null);
@@ -245,14 +273,17 @@ export function useSignalR({
     };
 
     connection.on('BoardChanged', (notification: BoardChangeNotification) => {
+      invalidateSequenceTracking();
       onBoardChangedRef.current?.(notification);
     });
 
     connection.on('BoardStateUpdated', (notification: BoardStateUpdateNotification) => {
+      invalidateSequenceTracking();
       onBoardStateUpdatedRef.current?.(notification);
     });
 
     connection.on('BoardOperationApplied', (notification: BoardOperationNotification) => {
+      updateLastKnownSequenceNumber(notification.sequenceNumber);
       onBoardOperationAppliedRef.current?.(notification);
     });
 
@@ -397,8 +428,9 @@ export function useSignalR({
       setConnectionId(null);
       setConnectionState('disconnected');
       setLastError(null);
+      invalidateSequenceTracking();
     };
-  }, [boardId, flushOutbox, handleInvokeError, prepareOutboxFlush, syncDisplayName, syncProfileDisplayNameChanges]);
+  }, [boardId, flushOutbox, handleInvokeError, invalidateSequenceTracking, prepareOutboxFlush, syncDisplayName, syncProfileDisplayNameChanges, updateLastKnownSequenceNumber]);
 
   useEffect(() => {
     const normalizedDisplayName = displayName?.trim() || null;
@@ -417,10 +449,15 @@ export function useSignalR({
     (sourceClientId?: string, changeKind = 'Content') => {
       const conn = connectionRef.current;
       if (conn?.state === signalR.HubConnectionState.Connected && boardIdRef.current) {
-        void invokeIfConnected('BoardUpdated', boardIdRef.current, sourceClientId, changeKind);
+        void (async () => {
+          const sent = await invokeIfConnected('BoardUpdated', boardIdRef.current, sourceClientId, changeKind);
+          if (sent) {
+            invalidateSequenceTracking();
+          }
+        })();
       }
     },
-    [invokeIfConnected],
+    [invalidateSequenceTracking, invokeIfConnected],
   );
 
   const sendCursorUpdate = useCallback(
@@ -468,10 +505,15 @@ export function useSignalR({
     (board: Board, changeKind = 'Content') => {
       const conn = connectionRef.current;
       if (conn?.state === signalR.HubConnectionState.Connected && boardIdRef.current) {
-        void invokeIfConnected('SyncBoardState', boardIdRef.current, board, changeKind);
+        void (async () => {
+          const sent = await invokeIfConnected('SyncBoardState', boardIdRef.current, board, changeKind);
+          if (sent) {
+            invalidateSequenceTracking();
+          }
+        })();
       }
     },
-    [invokeIfConnected],
+    [invalidateSequenceTracking, invokeIfConnected],
   );
 
   const sendBoardStateThrottled = useCallback(

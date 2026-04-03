@@ -10,6 +10,7 @@ import type {
   BoardSnapshot,
   AssistantResponse,
   ChatMessageEntry,
+  BoardOperationHistoryResponse,
   CreateBoardRequest,
   ImportBoardRequest,
   User,
@@ -24,6 +25,13 @@ export async function getBoards(): Promise<BoardSummary[]> {
 
 export async function getBoard(id: string): Promise<Board> {
   const { data } = await client.get<Board>(`/api/boards/${id}`);
+  return data;
+}
+
+export async function getBoardHistory(id: string, since = 0, limit = 100): Promise<BoardOperationHistoryResponse> {
+  const { data } = await client.get<BoardOperationHistoryResponse>(`/api/boards/${id}/history`, {
+    params: { since, limit },
+  });
   return data;
 }
 
@@ -119,6 +127,20 @@ export async function replaceSharedBoardContent(token: string, board: Board, pas
     board,
     password: password ?? null,
     sourceClientId: sourceClientId ?? null,
+  });
+  return data;
+}
+
+export async function getSharedBoardHistory(
+  token: string,
+  password?: string | null,
+  since = 0,
+  limit = 100,
+): Promise<BoardOperationHistoryResponse> {
+  const { data } = await client.post<BoardOperationHistoryResponse>(`/api/boards/shared/${token}/history`, {
+    password: password ?? null,
+    since,
+    limit,
   });
   return data;
 }
