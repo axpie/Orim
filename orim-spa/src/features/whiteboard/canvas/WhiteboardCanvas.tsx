@@ -417,6 +417,7 @@ export function WhiteboardCanvas({
   const dragSnapshotRef = useRef<BoardElement[] | null>(null);
   const resizeSnapshotRef = useRef<BoardElement[] | null>(null);
   const touchGestureRef = useRef<TouchGestureState | null>(null);
+  const marqueeOriginRef = useRef<{ x: number; y: number } | null>(null);
 
   // Drawing state
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
@@ -1604,6 +1605,7 @@ export function WhiteboardCanvas({
             setSelectedElementIds([]);
           }
           // Start marquee
+          marqueeOriginRef.current = { x: worldPos.x, y: worldPos.y };
           setMarquee({ x: worldPos.x, y: worldPos.y, w: 0, h: 0 });
           return;
         }
@@ -1861,10 +1863,12 @@ export function WhiteboardCanvas({
 
       // Marquee
       if (marquee) {
-        const mx = Math.min(marquee.x, worldPos.x);
-        const my = Math.min(marquee.y, worldPos.y);
-        const mw = Math.abs(worldPos.x - marquee.x);
-        const mh = Math.abs(worldPos.y - marquee.y);
+        const ox = marqueeOriginRef.current?.x ?? marquee.x;
+        const oy = marqueeOriginRef.current?.y ?? marquee.y;
+        const mx = Math.min(ox, worldPos.x);
+        const my = Math.min(oy, worldPos.y);
+        const mw = Math.abs(worldPos.x - ox);
+        const mh = Math.abs(worldPos.y - oy);
         setMarquee({ x: mx, y: my, w: mw, h: mh });
         return;
       }
@@ -2104,6 +2108,7 @@ export function WhiteboardCanvas({
         });
         setSelectedElementIds(expandSelectionWithGroups(enclosed.map((el: BoardElement) => el.id)));
       }
+      marqueeOriginRef.current = null;
       setMarquee(null);
 
       // End drag
