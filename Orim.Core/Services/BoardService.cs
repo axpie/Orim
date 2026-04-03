@@ -168,10 +168,19 @@ public class BoardService
 
     public async Task UpdateBoardAsync(Board board, string? sourceClientId = null, BoardChangeKind kind = BoardChangeKind.Content)
     {
-        EnsureOwnerMembership(board);
-        board.UpdatedAt = DateTime.UtcNow;
+        PrepareBoardForPersistence(board);
         await _boardRepository.SaveAsync(board);
         await _boardChangeNotifier.NotifyBoardChangedAsync(board.Id, sourceClientId, kind);
+    }
+
+    public async Task SaveEditorStateAsync(Board board, string? sourceClientId = null, BoardChangeKind kind = BoardChangeKind.Content, bool notifyChange = false)
+    {
+        PrepareBoardForPersistence(board);
+        await _boardRepository.SaveEditorStateAsync(board);
+        if (notifyChange)
+        {
+            await _boardChangeNotifier.NotifyBoardChangedAsync(board.Id, sourceClientId, kind);
+        }
     }
 
     public void SetBoardTitle(Board board, string title)
@@ -386,6 +395,12 @@ public class BoardService
         {
             elements[index].ZIndex = index;
         }
+    }
+
+    private static void PrepareBoardForPersistence(Board board)
+    {
+        EnsureOwnerMembership(board);
+        board.UpdatedAt = DateTime.UtcNow;
     }
 
     private static void EnsureOwnerMembership(Board board)

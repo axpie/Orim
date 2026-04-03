@@ -2,6 +2,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
 using Orim.Api.Contracts;
+using Orim.Api.Services;
 using Orim.Core;
 using Orim.Core.Interfaces;
 using Orim.Core.Models;
@@ -77,7 +78,7 @@ public sealed class BoardHub : Hub
         var displayName = await ResolveDisplayNameAsync(requestedDisplayName);
         Context.Items[DisplayNameKey] = displayName;
 
-        var existingPresence = _presenceService.GetCursor(boardId, Context.ConnectionId);
+        var existingPresence = await _presenceService.GetCursorAsync(boardId, Context.ConnectionId);
         var color = existingPresence?.ColorHex ?? BoardPresenceIdentity.ResolveColor(Context.ConnectionId);
 
         var presence = new BoardCursorPresence(
@@ -171,6 +172,7 @@ public sealed class BoardHub : Hub
         ArgumentNullException.ThrowIfNull(operation);
 
         var sequenceNumber = await PersistOperationAsync(boardId, operation);
+        await PersistBoardStateAsync(boardId, [operation]);
         await BroadcastBoardOperationAsync(boardId, sequenceNumber, operation);
     }
 
@@ -187,12 +189,20 @@ public sealed class BoardHub : Hub
         }
 
         ArgumentNullException.ThrowIfNull(operations);
+        var sequenceNumbers = new List<long>(operations.Count);
 
         foreach (var operation in operations)
         {
             ArgumentNullException.ThrowIfNull(operation);
             var sequenceNumber = await PersistOperationAsync(boardId, operation);
-            await BroadcastBoardOperationAsync(boardId, sequenceNumber, operation);
+            sequenceNumbers.Add(sequenceNumber);
+        }
+
+        await PersistBoardStateAsync(boardId, operations);
+
+        for (var index = 0; index < operations.Count; index++)
+        {
+            await BroadcastBoardOperationAsync(boardId, sequenceNumbers[index], operations[index]);
         }
     }
 
@@ -382,18 +392,22 @@ public sealed class BoardHub : Hub
 
     private Task<IReadOnlyList<BoardCursorPresence>> GetPresenceSnapshot(Guid boardId)
     {
-        var tcs = new TaskCompletionSource<IReadOnlyList<BoardCursorPresence>>();
-        var sub = _presenceService.Subscribe(boardId, $"hub-snapshot-{Guid.NewGuid()}", snapshot =>
+        return _presenceService.GetSnapshotAsync(boardId);
+    }
+
+    private async Task PersistBoardStateAsync(Guid boardId, IReadOnlyList<BoardOperationDto> operations)
+    {
+        var board = await _boardService.GetBoardAsync(boardId);
+        if (board is null)
         {
-            tcs.TrySetResult(snapshot);
-            return Task.CompletedTask;
-        });
-        sub.Dispose();
+            return;
+        }
 
-        if (!tcs.Task.IsCompleted)
-            tcs.TrySetResult([]);
-
-        return tcs.Task;
+        BoardOperationApplicator.Apply(board, operations);
+        var changeKind = operations.Any(static operation => operation is BoardMetadataUpdatedOperationDto)
+            ? BoardChangeKind.Metadata
+            : BoardChangeKind.Content;
+        await _boardService.SaveEditorStateAsync(board, Context.ConnectionId, changeKind, notifyChange: false);
     }
 
     public static string GetBoardGroupName(Guid boardId) => $"board-{boardId}";

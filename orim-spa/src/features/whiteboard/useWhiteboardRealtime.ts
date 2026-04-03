@@ -73,8 +73,7 @@ export function useWhiteboardRealtime({
     syncProfileDisplayNameChanges: true,
     onBoardChanged: (notification) => {
       if (
-        notification.kind !== 'Metadata'
-        || notification.sourceClientId === connectionIdRef.current
+        notification.sourceClientId === connectionIdRef.current
         || useBoardStore.getState().isDirty
         || !boardId
       ) {

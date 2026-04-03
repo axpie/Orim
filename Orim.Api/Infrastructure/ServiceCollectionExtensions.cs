@@ -9,8 +9,10 @@ using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Orim.Api.Services;
+using Orim.Core.Interfaces;
 using Orim.Core.Services;
 using Orim.Infrastructure;
+using StackExchange.Redis;
 
 namespace Orim.Api.Infrastructure;
 
@@ -191,6 +193,8 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<BoardPdfExportService>();
         services.AddSingleton<BoardCommentNotifier>();
         services.AddScoped<BoardCommentService>();
+        services.AddSingleton<BoardChangeNotifier>();
+        services.AddSingleton<BoardPresenceService>();
 
         services.Configure<MicrosoftEntraOptions>(configuration.GetSection("Authentication:Microsoft"));
         services.AddSingleton<MicrosoftIdentityTokenValidator>();
@@ -211,7 +215,22 @@ internal static class ServiceCollectionExtensions
             {
                 options.Configuration.ChannelPrefix = StackExchange.Redis.RedisChannel.Literal("orim");
             });
+
+            services.AddSingleton<IConnectionMultiplexer>(_ =>
+            {
+                var redisOptions = ConfigurationOptions.Parse(redisConnection);
+                redisOptions.AbortOnConnectFail = false;
+                redisOptions.ClientName = "orim";
+                return ConnectionMultiplexer.Connect(redisOptions);
+            });
+            services.AddSingleton<IBoardPresenceService, RedisBoardPresenceService>();
         }
+        else
+        {
+            services.AddSingleton<IBoardPresenceService>(sp => sp.GetRequiredService<BoardPresenceService>());
+        }
+
+        services.AddSingleton<IBoardChangeNotifier, SignalRBoardChangeNotifier>();
 
         services.ConfigureHttpJsonOptions(options =>
         {

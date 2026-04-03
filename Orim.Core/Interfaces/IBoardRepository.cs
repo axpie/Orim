@@ -6,6 +6,7 @@ public interface IBoardRepository : IRepository<Board>
 {
     Task<Board?> GetByShareTokenAsync(string token);
     Task<List<BoardSummary>> GetBoardSummariesAsync();
+    Task SaveEditorStateAsync(Board board);
     Task<IReadOnlyList<BoardFolder>> GetFoldersAsync(Guid ownerId);
     Task SaveFolderAsync(BoardFolder folder);
     Task DeleteFolderAsync(string folderId);

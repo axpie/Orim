@@ -93,15 +93,20 @@ public sealed class BoardPresenceService : IBoardPresenceService
         return NotifySubscribersAsync(boardId);
     }
 
-    public BoardCursorPresence? GetCursor(Guid boardId, string clientId)
+    public Task<BoardCursorPresence?> GetCursorAsync(Guid boardId, string clientId)
     {
         if (_presence.TryGetValue(boardId, out var boardPresence)
             && boardPresence.TryGetValue(clientId, out var presence))
         {
-            return presence;
+            return Task.FromResult<BoardCursorPresence?>(presence);
         }
 
-        return null;
+        return Task.FromResult<BoardCursorPresence?>(null);
+    }
+
+    public Task<IReadOnlyList<BoardCursorPresence>> GetSnapshotAsync(Guid boardId)
+    {
+        return Task.FromResult(GetSnapshot(boardId));
     }
 
     private IReadOnlyList<BoardCursorPresence> GetSnapshot(Guid boardId)

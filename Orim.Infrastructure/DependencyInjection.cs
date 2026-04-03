@@ -21,8 +21,6 @@ public static class DependencyInjection
         services.AddScoped<IThemeRepository, EfThemeRepository>();
         services.AddScoped<IAssistantSettingsRepository, EfAssistantSettingsRepository>();
         services.AddScoped<IBoardOperationRepository, EfBoardOperationRepository>();
-        services.AddSingleton<IBoardChangeNotifier, BoardChangeNotifier>();
-        services.AddSingleton<IBoardPresenceService, BoardPresenceService>();
         services.AddScoped<UserService>();
         services.AddScoped<BoardService>();
         return services;

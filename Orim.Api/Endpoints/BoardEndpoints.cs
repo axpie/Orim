@@ -82,7 +82,7 @@ internal static class BoardEndpoints
 
             boardService.SetBoardTitle(board, request.Title);
             boardService.ReplaceBoardContent(board, updatedBoard);
-            await boardService.UpdateBoardAsync(board, request.SourceClientId, request.ChangeKind);
+            await boardService.SaveEditorStateAsync(board, request.SourceClientId, request.ChangeKind, notifyChange: false);
             return Results.Ok(board);
         });
 
@@ -98,7 +98,7 @@ internal static class BoardEndpoints
                 return Results.Forbid();
 
             boardService.SetBoardTitle(board, request.Title);
-            await boardService.UpdateBoardAsync(board, request.SourceClientId, BoardChangeKind.Metadata);
+            await boardService.SaveEditorStateAsync(board, request.SourceClientId, BoardChangeKind.Metadata, notifyChange: true);
             return Results.Ok(board);
         });
 
@@ -184,7 +184,7 @@ internal static class BoardEndpoints
             if (!boardService.HasSharedLinkAccess(board, request.Password, BoardRole.Editor)) return Results.Forbid();
 
             boardService.ReplaceBoardContent(board, request.Board);
-            await boardService.UpdateBoardAsync(board, request.SourceClientId, BoardChangeKind.Content);
+            await boardService.SaveEditorStateAsync(board, request.SourceClientId, BoardChangeKind.Content, notifyChange: false);
             return Results.Ok(board);
         }).AllowAnonymous();
 
@@ -318,7 +318,7 @@ internal static class BoardEndpoints
                 return Results.Forbid();
 
             boardService.RestoreSnapshot(board, snapshotId);
-            await boardService.UpdateBoardAsync(board);
+            await boardService.SaveEditorStateAsync(board, kind: BoardChangeKind.Content, notifyChange: true);
             return Results.Ok(board);
         });
 
@@ -334,7 +334,7 @@ internal static class BoardEndpoints
                 return Results.Forbid();
 
             boardService.ReplaceBoardContent(board, importedBoard);
-            await boardService.UpdateBoardAsync(board);
+            await boardService.SaveEditorStateAsync(board, kind: BoardChangeKind.Content, notifyChange: true);
             return Results.Ok(board);
         });
 

@@ -8,5 +8,6 @@ public interface IBoardPresenceService
     Task UpsertCursorAsync(Guid boardId, BoardCursorPresence presence);
     Task RemoveCursorsForUserAsync(Guid boardId, Guid userId, string keepClientId);
     Task RemoveCursorAsync(Guid boardId, string clientId);
-    BoardCursorPresence? GetCursor(Guid boardId, string clientId);
+    Task<BoardCursorPresence?> GetCursorAsync(Guid boardId, string clientId);
+    Task<IReadOnlyList<BoardCursorPresence>> GetSnapshotAsync(Guid boardId);
 }

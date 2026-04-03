@@ -137,6 +137,32 @@ public class EfBoardRepository : IBoardRepository
         _context.ChangeTracker.Clear();
     }
 
+    public async Task SaveEditorStateAsync(Board entity)
+    {
+        var existing = await _context.Boards
+            .FirstOrDefaultAsync(b => b.Id == entity.Id);
+
+        if (existing is null)
+        {
+            await SaveAsync(entity);
+            return;
+        }
+
+        existing.Title = entity.Title;
+        existing.LabelOutlineEnabled = entity.LabelOutlineEnabled;
+        existing.ArrowOutlineEnabled = entity.ArrowOutlineEnabled;
+        existing.SurfaceColor = entity.SurfaceColor;
+        existing.ThemeKey = entity.ThemeKey;
+        existing.CustomColors = entity.CustomColors.ToList();
+        existing.RecentColors = entity.RecentColors.ToList();
+        existing.StickyNotePresets = entity.StickyNotePresets.ToList();
+        existing.Elements = entity.Elements.ToList();
+        existing.UpdatedAt = entity.UpdatedAt;
+
+        await _context.SaveChangesAsync();
+        _context.ChangeTracker.Clear();
+    }
+
     public async Task DeleteAsync(Guid id)
     {
         var board = await _context.Boards.FindAsync(id);
