@@ -145,7 +145,7 @@ public class OrimDbContext : DbContext
     private static ValueConverter<List<string>, string> CreateStringListConverter() =>
         new(
             v => JsonSerializer.Serialize(v, OrimJsonOptions.Default),
-            v => JsonSerializer.Deserialize<List<string>>(v, OrimJsonOptions.Default) ?? new List<string>());
+            v => string.IsNullOrEmpty(v) ? new List<string>() : JsonSerializer.Deserialize<List<string>>(v, OrimJsonOptions.Default) ?? new List<string>());
 
     private static ValueComparer<List<string>> CreateStringListComparer() =>
         new(

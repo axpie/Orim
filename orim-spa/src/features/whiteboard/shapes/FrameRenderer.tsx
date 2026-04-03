@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Group, Line, Rect, Text } from 'react-konva';
 import type { FrameElement } from '../../../types/models';
 import { contrastingTextColor } from '../../../utils/colorUtils';
@@ -14,7 +15,7 @@ interface FrameRendererProps {
   element: FrameElement;
 }
 
-export function FrameRenderer({ element: el }: FrameRendererProps) {
+function FrameRendererInner({ element: el }: FrameRendererProps) {
   const fillColor = el.fillColor ?? DEFAULT_FRAME_FILL_COLOR;
   const strokeColor = el.strokeColor ?? DEFAULT_FRAME_STROKE_COLOR;
   const headerHeight = Math.min(el.height, getFrameHeaderHeight(el.height, el.labelFontSize ?? undefined));
@@ -79,3 +80,5 @@ export function FrameRenderer({ element: el }: FrameRendererProps) {
     </Group>
   );
 }
+
+export const FrameRenderer = memo(FrameRendererInner);

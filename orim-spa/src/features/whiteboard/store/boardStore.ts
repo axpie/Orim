@@ -34,6 +34,8 @@ export interface ApplyLocalCommandResult {
 
 interface BoardState {
   board: Board | null;
+  /** Cached O(1) element lookup map; rebuilt whenever elements change. */
+  _elementsMap: Map<string, BoardElement>;
   selectedElementIds: string[];
   activeTool: ToolType;
   zoom: number;
@@ -48,6 +50,7 @@ interface BoardState {
   pendingStickyNotePresetId: string | null;
   commandConflict: BoardCommandConflict | null;
 
+  getElementById: (id: string) => BoardElement | undefined;
   setBoard: (board: Board | null, options?: SetBoardOptions) => void;
   setBoardTitle: (title: string) => void;
   updateBoard: (updater: ((board: Board) => Board) | Partial<Board>) => void;
@@ -172,8 +175,11 @@ function resolveTrackedKeys(
   return getChangedElementKeys(currentElement, nextElement);
 }
 
-function validateLocalCommand(board: Board, execution: BoardCommandExecution): BoardCommandConflict | null {
-  const elementsById = new Map(board.elements.map((element) => [element.id, element]));
+function buildElementsMap(elements: BoardElement[]): Map<string, BoardElement> {
+  return new Map(elements.map((element) => [element.id, element]));
+}
+
+function validateLocalCommand(elementsById: Map<string, BoardElement>, execution: BoardCommandExecution): BoardCommandConflict | null {
 
   for (const operation of execution.operations) {
     switch (operation.type) {
@@ -242,6 +248,7 @@ function validateLocalCommand(board: Board, execution: BoardCommandExecution): B
 
 export const useBoardStore = create<BoardState>((set, get) => ({
   board: null,
+  _elementsMap: new Map(),
   selectedElementIds: [],
   activeTool: 'select',
   zoom: 1,
@@ -256,11 +263,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   pendingStickyNotePresetId: null,
   commandConflict: null,
 
+  getElementById: (id) => get()._elementsMap.get(id),
+
   setBoard: (board, options) =>
     set((state) => {
       if (!board) {
         return {
           board: null,
+          _elementsMap: new Map(),
           isDirty: false,
           selectedElementIds: [],
           activeTool: options?.resetTool ? 'select' : state.activeTool,
@@ -268,14 +278,15 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         };
       }
 
+      const elementsMap = buildElementsMap(board.elements);
       const preserveSelection = options?.preserveSelection ?? state.board?.id === board.id;
-      const availableIds = new Set(board.elements.map((element) => element.id));
 
       return {
         board,
+        _elementsMap: elementsMap,
         isDirty: false,
         selectedElementIds: preserveSelection
-          ? state.selectedElementIds.filter((id) => availableIds.has(id))
+          ? state.selectedElementIds.filter((id) => elementsMap.has(id))
           : [],
         activeTool: options?.resetTool ? 'select' : state.activeTool,
         commandConflict: null,
@@ -304,7 +315,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         ? updater(state.board)
         : { ...state.board, ...updater };
 
-      return { board: nextBoard, isDirty: true };
+      return {
+        board: nextBoard,
+        _elementsMap: nextBoard.elements !== state.board.elements
+          ? buildElementsMap(nextBoard.elements)
+          : state._elementsMap,
+        isDirty: true,
+      };
     }),
 
   setElements: (elements) =>
@@ -312,6 +329,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       if (!state.board) return state;
       return {
         board: { ...state.board, elements },
+        _elementsMap: buildElementsMap(elements),
         isDirty: true,
       };
     }),
@@ -319,8 +337,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   addElement: (element) =>
     set((state) => {
       if (!state.board) return state;
+      const newMap = new Map(state._elementsMap);
+      newMap.set(element.id, element);
       return {
         board: { ...state.board, elements: [...state.board.elements, element] },
+        _elementsMap: newMap,
         isDirty: true,
       };
     }),
@@ -328,19 +349,23 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   updateElement: (id, updater) =>
     set((state) => {
       if (!state.board) return state;
+      const existing = state._elementsMap.get(id);
+      if (!existing) return state;
+
+      const updated = (typeof updater === 'function'
+        ? updater(existing)
+        : { ...existing, ...updater }) as BoardElement;
+
+      if (updated === existing) return state;
+
+      const newMap = new Map(state._elementsMap);
+      newMap.set(id, updated);
       return {
         board: {
           ...state.board,
-          elements: state.board.elements.map((el: BoardElement) => {
-            if (el.id !== id) {
-              return el;
-            }
-
-            return (typeof updater === 'function'
-              ? updater(el)
-              : { ...el, ...updater }) as BoardElement;
-          }),
+          elements: state.board.elements.map((el) => el.id === id ? updated : el),
         },
+        _elementsMap: newMap,
         isDirty: true,
       };
     }),
@@ -349,11 +374,14 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     set((state) => {
       if (!state.board) return state;
       const idSet = new Set(ids);
+      const newMap = new Map(state._elementsMap);
+      for (const id of ids) newMap.delete(id);
       return {
         board: {
           ...state.board,
           elements: state.board.elements.filter((el: BoardElement) => !idSet.has(el.id)),
         },
+        _elementsMap: newMap,
         selectedElementIds: state.selectedElementIds.filter((sid) => !idSet.has(sid)),
         isDirty: true,
       };
@@ -407,12 +435,13 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }),
 
   applyLocalCommand: (execution) => {
-    const currentBoard = get().board;
+    const state = get();
+    const currentBoard = state.board;
     if (!currentBoard) {
       return { success: false, operations: [] };
     }
 
-    const conflict = validateLocalCommand(currentBoard, execution);
+    const conflict = validateLocalCommand(state._elementsMap, execution);
     if (conflict) {
       set({ commandConflict: conflict });
       return { success: false, operations: [], conflict };
@@ -455,10 +484,11 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
 
     if (appliedOperations.length > 0) {
-      const availableIds = new Set(nextBoard.elements.map((element) => element.id));
+      const nextMap = buildElementsMap(nextBoard.elements);
       set((state) => ({
         board: nextBoard,
-        selectedElementIds: state.selectedElementIds.filter((id) => availableIds.has(id)),
+        _elementsMap: nextMap,
+        selectedElementIds: state.selectedElementIds.filter((id) => nextMap.has(id)),
         isDirty: true,
         commandConflict: null,
       }));
@@ -479,11 +509,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       }
 
       const nextBoard = applyBoardOperation(state.board, operation);
-      const availableIds = new Set(nextBoard.elements.map((element) => element.id));
+      const nextMap = buildElementsMap(nextBoard.elements);
 
       return {
         board: nextBoard,
-        selectedElementIds: state.selectedElementIds.filter((id) => availableIds.has(id)),
+        _elementsMap: nextMap,
+        selectedElementIds: state.selectedElementIds.filter((id) => nextMap.has(id)),
       };
     }),
 

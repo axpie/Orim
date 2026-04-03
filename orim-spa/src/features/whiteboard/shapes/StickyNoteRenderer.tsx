@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Group, Line, Rect, Text } from 'react-konva';
 import type { StickyNoteElement } from '../../../types/models';
 import { contrastingTextColor } from '../../../utils/colorUtils';
@@ -13,7 +14,7 @@ interface StickyNoteRendererProps {
   element: StickyNoteElement;
 }
 
-export function StickyNoteRenderer({ element: el }: StickyNoteRendererProps) {
+function StickyNoteRendererInner({ element: el }: StickyNoteRendererProps) {
   const fillColor = el.fillColor ?? DEFAULT_STICKY_FILL_COLOR;
   const textColor = el.color ?? contrastingTextColor(fillColor);
   const foldSize = Math.max(14, Math.min(28, Math.min(el.width, el.height) * 0.22));
@@ -91,3 +92,5 @@ export function StickyNoteRenderer({ element: el }: StickyNoteRendererProps) {
     </Group>
   );
 }
+
+export const StickyNoteRenderer = memo(StickyNoteRendererInner);

@@ -1,4 +1,4 @@
-import { useState, useEffect, useReducer } from 'react';
+import { memo, useState, useEffect, useReducer } from 'react';
 import { Group, Image as KonvaImage, Line, Rect } from 'react-konva';
 import type { ImageElement } from '../../../types/models';
 import { ImageFit } from '../../../types/models';
@@ -12,7 +12,7 @@ function extractImageId(imageUrl: string): string {
   return imageUrl.split('/').pop() ?? '';
 }
 
-export function ImageRenderer({ element: el }: ImageRendererProps) {
+function ImageRendererInner({ element: el }: ImageRendererProps) {
   const [imageState, setImageState] = useState<{
     src: string | null;
     image: HTMLImageElement | null;
@@ -127,3 +127,5 @@ export function ImageRenderer({ element: el }: ImageRendererProps) {
     </Group>
   );
 }
+
+export const ImageRenderer = memo(ImageRendererInner);

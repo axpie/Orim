@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Group, Line, Circle } from 'react-konva';
 import { ArrowHeadStyle, type ArrowElement, type BoardElement } from '../../../types/models';
 import { computeArrowPolyline, flattenPoints, arrowheadPoints } from '../../../utils/arrowRouting';
@@ -8,7 +9,7 @@ interface ArrowRendererProps {
   elements: BoardElement[];
 }
 
-export function ArrowRenderer({ element: el, elements }: ArrowRendererProps) {
+function ArrowRendererInner({ element: el, elements }: ArrowRendererProps) {
   const points = computeArrowPolyline(el, elements);
   const flat = flattenPoints(trimArrowLinePoints(points, el));
   const dash = getLineDashArray(el.lineStyle, el.strokeWidth ?? 2);
@@ -96,6 +97,8 @@ export function ArrowRenderer({ element: el, elements }: ArrowRendererProps) {
     </Group>
   );
 }
+
+export const ArrowRenderer = memo(ArrowRendererInner);
 
 function trimArrowLinePoints(points: { x: number; y: number }[], arrow: ArrowElement) {
   if (points.length < 2) {

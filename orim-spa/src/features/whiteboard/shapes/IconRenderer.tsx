@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Group, Path, Text, Rect } from 'react-konva';
 import { getIconDefinition, getIconDisplayName } from '../icons/iconCatalog';
 import type { IconElement } from '../../../types/models';
@@ -6,7 +7,7 @@ interface IconRendererProps {
   element: IconElement;
 }
 
-export function IconRenderer({ element: el }: IconRendererProps) {
+function IconRendererInner({ element: el }: IconRendererProps) {
   const definition = getIconDefinition(el.iconName);
   const iconScale = Math.min(el.width, el.height) / 24;
   const scaledSize = 24 * iconScale;
@@ -51,3 +52,5 @@ export function IconRenderer({ element: el }: IconRendererProps) {
     </Group>
   );
 }
+
+export const IconRenderer = memo(IconRendererInner);

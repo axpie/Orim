@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Rect, Group, Circle, Line } from 'react-konva';
 import type { BoardElement } from '../../../types/models';
 import { computeArrowPolyline, flattenPoints } from '../../../utils/arrowRouting';
@@ -13,7 +14,7 @@ interface SelectionOverlayProps {
   touchMode?: boolean;
 }
 
-export function SelectionOverlay({
+function SelectionOverlayInner({
   elements,
   selectedIds,
   zoom,
@@ -140,3 +141,5 @@ export function SelectionOverlay({
     </Group>
   );
 }
+
+export const SelectionOverlay = memo(SelectionOverlayInner);

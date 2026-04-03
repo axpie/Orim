@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Group, Text } from 'react-konva';
 import type { TextElement } from '../../../types/models';
 import { resolveFontFamily, resolveTextFontSize } from '../../../utils/textLayout';
@@ -6,7 +7,7 @@ interface TextRendererProps {
   element: TextElement;
 }
 
-export function TextRenderer({ element: el }: TextRendererProps) {
+function TextRendererInner({ element: el }: TextRendererProps) {
   const fontStyle = [(el.isBold ? 'bold' : ''), (el.isItalic ? 'italic' : '')]
     .filter(Boolean)
     .join(' ');
@@ -36,3 +37,5 @@ export function TextRenderer({ element: el }: TextRendererProps) {
     </Group>
   );
 }
+
+export const TextRenderer = memo(TextRendererInner);

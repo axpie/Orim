@@ -91,6 +91,8 @@ internal static class WebApplicationExtensions
                 headers.TryAdd("X-Frame-Options", "DENY");
                 headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
                 headers.TryAdd("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+                headers.TryAdd("Content-Security-Policy",
+                    "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' wss:; font-src 'self' data:; frame-ancestors 'none'");
                 return Task.CompletedTask;
             });
 

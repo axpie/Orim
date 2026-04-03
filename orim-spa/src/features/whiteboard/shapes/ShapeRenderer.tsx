@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Group, Rect, Ellipse, Line, Text } from 'react-konva';
 import { ShapeType, type ShapeElement } from '../../../types/models';
 import { contrastingTextColor } from '../../../utils/colorUtils';
@@ -8,7 +9,7 @@ interface ShapeRendererProps {
   element: ShapeElement;
 }
 
-export function ShapeRenderer({ element: el }: ShapeRendererProps) {
+function ShapeRendererInner({ element: el }: ShapeRendererProps) {
   const dash = getLineDashArray(el.borderLineStyle, el.strokeWidth ?? 2);
   const textColor = el.labelColor ?? (el.fillColor ? contrastingTextColor(el.fillColor) : '#000000');
   const fontStyle = [(el.isBold ? 'bold' : ''), (el.isItalic ? 'italic' : '')]
@@ -83,3 +84,5 @@ export function ShapeRenderer({ element: el }: ShapeRendererProps) {
     </Group>
   );
 }
+
+export const ShapeRenderer = memo(ShapeRendererInner);

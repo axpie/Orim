@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Line } from 'react-konva';
 import type { AlignmentGuide } from '../../../utils/geometry';
 
@@ -9,7 +10,7 @@ interface AlignmentGuidesProps {
   cameraY: number;
 }
 
-export function AlignmentGuides({ guides, zoom, stageSize, cameraX, cameraY }: AlignmentGuidesProps) {
+function AlignmentGuidesInner({ guides, zoom, stageSize, cameraX, cameraY }: AlignmentGuidesProps) {
   if (guides.length === 0) return null;
 
   const worldLeft = -cameraX / zoom;
@@ -50,3 +51,5 @@ export function AlignmentGuides({ guides, zoom, stageSize, cameraX, cameraY }: A
     </>
   );
 }
+
+export const AlignmentGuides = memo(AlignmentGuidesInner);

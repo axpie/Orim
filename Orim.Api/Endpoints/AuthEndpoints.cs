@@ -14,12 +14,16 @@ internal static class AuthEndpoints
 {
     internal static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/auth/login", async (LoginRequest request, HttpContext context, UserService userService, JwtConfiguration jwt) =>
+        app.MapPost("/api/auth/login", async (LoginRequest request, HttpContext context, UserService userService, JwtConfiguration jwt, AuditLogger audit) =>
         {
             var user = await userService.AuthenticateAsync(request.Username, request.Password);
             if (user is null)
+            {
+                audit.LogUserLoginFailed(request.Username, "Local", "Invalid credentials");
                 return Results.Unauthorized();
+            }
 
+            audit.LogUserLogin(user.Id, user.Username, "Local");
             return Results.Ok(EndpointHelpers.CreateLoginResponse(context, user, jwt));
         }).RequireRateLimiting("auth");
 
@@ -76,11 +80,15 @@ internal static class AuthEndpoints
                         identity.Username,
                         identity.TenantId));
 
+                    var audit = context.RequestServices.GetRequiredService<AuditLogger>();
+                    audit.LogUserLogin(user.Id, user.Username, "Microsoft");
                     return Results.Ok(EndpointHelpers.CreateLoginResponse(context, user, jwt));
                 }
                 catch (InvalidOperationException ex)
                 {
                     logger.LogWarning(ex, "Microsoft sign-in could not be linked to an ORIM user.");
+                    var audit = context.RequestServices.GetRequiredService<AuditLogger>();
+                    audit.LogUserLoginFailed(identity.Username ?? identity.Email ?? "unknown", "Microsoft", ex.Message);
                     return EndpointHelpers.BadRequest(context, "The sign-in could not be completed.");
                 }
             }).AllowAnonymous().RequireRateLimiting("auth");
@@ -122,11 +130,15 @@ internal static class AuthEndpoints
                         identity.Username,
                         string.IsNullOrWhiteSpace(identity.HostedDomain) ? null : identity.HostedDomain));
 
+                    var audit = context.RequestServices.GetRequiredService<AuditLogger>();
+                    audit.LogUserLogin(user.Id, user.Username, "Google");
                     return Results.Ok(EndpointHelpers.CreateLoginResponse(context, user, jwt));
                 }
                 catch (InvalidOperationException ex)
                 {
                     logger.LogWarning(ex, "Google sign-in could not be linked to an ORIM user.");
+                    var audit = context.RequestServices.GetRequiredService<AuditLogger>();
+                    audit.LogUserLoginFailed(identity.Username ?? identity.Email ?? "unknown", "Google", ex.Message);
                     return EndpointHelpers.BadRequest(context, "The sign-in could not be completed.");
                 }
             }).AllowAnonymous().RequireRateLimiting("auth");
@@ -143,8 +155,13 @@ internal static class AuthEndpoints
             return Results.Ok(EndpointHelpers.CreateLoginResponse(context, user, jwt));
         });
 
-        app.MapPost("/api/auth/logout", (HttpContext context) =>
+        app.MapPost("/api/auth/logout", (HttpContext context, AuditLogger audit) =>
         {
+            var userId = EndpointHelpers.GetUserId(context.User);
+            var username = EndpointHelpers.GetUsername(context.User);
+            if (userId.HasValue)
+                audit.LogUserLogout(userId.Value, username ?? "unknown");
+
             EndpointHelpers.ClearAuthCookie(context);
             return Results.NoContent();
         }).AllowAnonymous();

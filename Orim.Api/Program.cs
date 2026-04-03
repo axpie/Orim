@@ -14,6 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddOrimServices(builder.Configuration);
 builder.Services.AddOrimAuthentication(builder.Configuration);
 builder.Services.AddOrimCors(builder.Configuration);
+builder.Services.AddOrimTelemetry(builder.Configuration);
 
 var app = builder.Build();
 

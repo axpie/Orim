@@ -239,6 +239,10 @@ Tests:
 dotnet test .\Orim.Tests\Orim.Tests.csproj /p:UseAppHost=false
 ```
 
+## Enterprise Features & Self-Hosted Deployment
+
+Eine vollständige Feature-Matrix, Self-Hosted Deployment-Anleitung, SSO-Konfiguration, Observability-Setup und Sicherheitshinweise finden Sie unter [docs/enterprise-features.md](docs/enterprise-features.md).
+
 ## Lizenz
 
 Aktuell ist keine separate Lizenzdatei im Repository hinterlegt.
