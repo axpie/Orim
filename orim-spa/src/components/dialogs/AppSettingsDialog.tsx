@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import {
@@ -23,6 +23,14 @@ function normalizeLanguage(value: string): 'de' | 'en' {
 }
 
 export function AppSettingsDialog({ open, onClose }: AppSettingsDialogProps) {
+  if (!open) {
+    return null;
+  }
+
+  return <OpenAppSettingsDialog onClose={onClose} />;
+}
+
+function OpenAppSettingsDialog({ onClose }: Pick<AppSettingsDialogProps, 'onClose'>) {
   const { t, i18n } = useTranslation();
   const themeKey = useThemeStore((s) => s.themeKey);
   const setTheme = useThemeStore((s) => s.setTheme);
@@ -34,15 +42,6 @@ export function AppSettingsDialog({ open, onClose }: AppSettingsDialogProps) {
 
   const [draftLanguage, setDraftLanguage] = useState<'de' | 'en'>(normalizeLanguage(i18n.language));
   const [draftThemeKey, setDraftThemeKey] = useState(themeKey);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    setDraftLanguage(normalizeLanguage(i18n.language));
-    setDraftThemeKey(themeKey);
-  }, [open, i18n.language, themeKey]);
 
   const handleSave = async () => {
     if (draftThemeKey && draftThemeKey !== themeKey) {
@@ -58,7 +57,7 @@ export function AppSettingsDialog({ open, onClose }: AppSettingsDialogProps) {
   };
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
+    <Dialog open onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle>{t('app.settings')}</DialogTitle>
       <DialogContent>
         <TextField

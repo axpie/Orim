@@ -3,6 +3,7 @@ import type { FrameElement } from '../../../types/models';
 import { contrastingTextColor } from '../../../utils/colorUtils';
 import { formatColorValue, parseColorValue } from '../../../utils/colorValue';
 import { resolveFontFamily } from '../../../utils/textLayout';
+import { getFrameHeaderHeight, resolveFrameTitleFontSize } from './frameLayout';
 
 const DEFAULT_FRAME_FILL_COLOR = 'rgba(37, 99, 235, 0.08)';
 const DEFAULT_FRAME_STROKE_COLOR = 'rgba(37, 99, 235, 0.48)';
@@ -11,21 +12,6 @@ const FRAME_TITLE_HORIZONTAL_PADDING = 14;
 
 interface FrameRendererProps {
   element: FrameElement;
-}
-
-export function getFrameHeaderHeight(height: number, labelFontSize?: number): number {
-  const base = Math.min(40, Math.max(24, height * 0.2), Math.max(height - 16, 14));
-  if (typeof labelFontSize === 'number' && labelFontSize > 0) {
-    // Grow header so the explicitly-set font has comfortable vertical padding.
-    return Math.min(height, Math.max(base, Math.ceil(labelFontSize * 1.6)));
-  }
-  return base;
-}
-
-export function resolveFrameTitleFontSize(element: Pick<FrameElement, 'height' | 'labelFontSize'>): number {
-  return typeof element.labelFontSize === 'number'
-    ? Math.max(1, element.labelFontSize)
-    : Math.min(22, Math.max(12, getFrameHeaderHeight(element.height) * 0.48));
 }
 
 export function FrameRenderer({ element: el }: FrameRendererProps) {

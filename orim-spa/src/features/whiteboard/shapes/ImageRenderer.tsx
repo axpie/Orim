@@ -13,31 +13,50 @@ function extractImageId(imageUrl: string): string {
 }
 
 export function ImageRenderer({ element: el }: ImageRendererProps) {
-  const [image, setImage] = useState<HTMLImageElement | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [imageState, setImageState] = useState<{
+    src: string | null;
+    image: HTMLImageElement | null;
+    failed: boolean;
+  }>({
+    src: null,
+    image: null,
+    failed: false,
+  });
   // Re-render when the global deletedImageIds set changes
   const [, forceUpdate] = useReducer((x: number) => x + 1, 0);
 
   useEffect(() => {
     return onImageDeleted(forceUpdate);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [forceUpdate]);
 
   const isDeleted = deletedImageIds.has(extractImageId(el.imageUrl));
 
   useEffect(() => {
     if (isDeleted) {
-      setImage(null);
-      setFailed(true);
       return;
     }
-    setFailed(false);
+
     const img = new window.Image();
-    img.onload = () => setImage(img);
-    img.onerror = () => { setImage(null); setFailed(true); };
+    img.onload = () => {
+      setImageState({
+        src: el.imageUrl,
+        image: img,
+        failed: false,
+      });
+    };
+    img.onerror = () => {
+      setImageState({
+        src: el.imageUrl,
+        image: null,
+        failed: true,
+      });
+    };
     img.src = el.imageUrl;
     return () => { img.onload = null; img.onerror = null; };
   }, [el.imageUrl, isDeleted]);
+
+  const image = imageState.src === el.imageUrl ? imageState.image : null;
+  const failed = isDeleted || (imageState.src === el.imageUrl && imageState.failed);
 
   const { x, y, width, height, rotation } = el;
   const fit = el.imageFit ?? ImageFit.Uniform;

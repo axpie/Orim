@@ -22,7 +22,7 @@ internal static class AssistantEndpoints
             return Results.Ok(new AssistantAvailability(snapshot.IsEnabled, snapshot.IsConfigured));
         });
 
-        app.MapPut("/api/admin/assistant-settings", [Authorize(Roles = "Admin")] async (AssistantSettingsRequest request, AssistantSettingsService assistantSettingsService, HttpContext context) =>
+        app.MapPut("/api/admin/assistant-settings", [Authorize(Roles = "Admin")] async (AssistantSettingsRequest request, AssistantSettingsService assistantSettingsService, HttpContext context, ILogger<Program> logger) =>
         {
             try
             {
@@ -38,7 +38,8 @@ internal static class AssistantEndpoints
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(ex.Message);
+                logger.LogWarning(ex, "Saving assistant settings failed.");
+                return EndpointHelpers.BadRequest(context, "The assistant settings could not be saved.");
             }
         });
 

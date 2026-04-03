@@ -165,11 +165,28 @@ public sealed class BoardHub : Hub
 
         ArgumentNullException.ThrowIfNull(operation);
 
-        await Clients.OthersInGroup(BoardGroup(boardId)).SendAsync("BoardOperationApplied", new BoardOperationNotification(
-            boardId,
-            Context.ConnectionId,
-            DateTime.UtcNow,
-            operation));
+        await BroadcastBoardOperationAsync(boardId, operation);
+    }
+
+    public async Task ApplyBoardOperations(Guid boardId, IReadOnlyList<BoardOperationDto> operations)
+    {
+        if (!IsJoinedBoard(boardId))
+        {
+            return;
+        }
+
+        if (!CanEditJoinedBoard())
+        {
+            return;
+        }
+
+        ArgumentNullException.ThrowIfNull(operations);
+
+        foreach (var operation in operations)
+        {
+            ArgumentNullException.ThrowIfNull(operation);
+            await BroadcastBoardOperationAsync(boardId, operation);
+        }
     }
 
     public async Task UpdateCursor(Guid boardId, double? worldX, double? worldY)
@@ -323,6 +340,13 @@ public sealed class BoardHub : Hub
             && string.Equals(board.ShareLinkToken, shareToken, StringComparison.Ordinal)
             && _boardService.HasSharedLinkAccess(board, sharePassword, BoardRole.Editor);
     }
+
+    private Task BroadcastBoardOperationAsync(Guid boardId, BoardOperationDto operation) =>
+        Clients.OthersInGroup(BoardGroup(boardId)).SendAsync("BoardOperationApplied", new BoardOperationNotification(
+            boardId,
+            Context.ConnectionId,
+            DateTime.UtcNow,
+            operation));
 
     private Task<IReadOnlyList<BoardCursorPresence>> GetPresenceSnapshot(Guid boardId)
     {

@@ -365,7 +365,6 @@ export interface ThemeDefinition {
 // --- Auth ---
 
 export interface LoginResponse {
-  token: string;
   userId: string;
   username: string;
   displayName: string;
@@ -423,6 +422,27 @@ export interface AssistantSettingsUpdateRequest {
   endpoint: string;
   deploymentName: string;
   apiKey?: string;
+}
+
+export interface DeploymentReadiness {
+  environmentName: string;
+  applicationVersion: string;
+  databaseProvider: string;
+  isRelationalDatabase: boolean;
+  databaseConnected: boolean;
+  pendingMigrationCount: number;
+  httpsRedirectionEnabled: boolean;
+  hstsEnabled: boolean;
+  requestIdHeaderEnabled: boolean;
+  rateLimitingEnabled: boolean;
+  cookieAuthEnabled: boolean;
+  microsoftSsoConfigured: boolean;
+  googleSsoConfigured: boolean;
+  assistantEnabled: boolean;
+  assistantConfigured: boolean;
+  enabledThemeCount: number;
+  totalThemeCount: number;
+  healthEndpoints: string[];
 }
 
 // --- Cursor Presence ---

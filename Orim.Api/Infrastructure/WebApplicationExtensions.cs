@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Diagnostics;
+using Microsoft.AspNetCore.HttpLogging;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Orim.Api.Services;
 using Orim.Core.Models;
@@ -51,19 +53,52 @@ internal static class WebApplicationExtensions
         {
             exceptionHandlerApp.Run(async context =>
             {
+                var logger = context.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Orim.Api.ExceptionHandler");
                 var exceptionHandlerFeature = context.Features.Get<IExceptionHandlerFeature>();
                 var exception = exceptionHandlerFeature?.Error;
-                context.Response.StatusCode = exception switch
+                var (statusCode, publicMessage, logLevel) = exception switch
                 {
-                    UnauthorizedAccessException => StatusCodes.Status403Forbidden,
-                    KeyNotFoundException => StatusCodes.Status404NotFound,
-                    ArgumentException => StatusCodes.Status400BadRequest,
-                    _ => StatusCodes.Status500InternalServerError
+                    UnauthorizedAccessException => (StatusCodes.Status403Forbidden, "Access denied.", LogLevel.Warning),
+                    KeyNotFoundException => (StatusCodes.Status404NotFound, "The requested resource was not found.", LogLevel.Warning),
+                    ArgumentException => (StatusCodes.Status400BadRequest, "The request was invalid.", LogLevel.Warning),
+                    _ => (StatusCodes.Status500InternalServerError, "An unexpected error occurred.", LogLevel.Error)
                 };
-                await context.Response.WriteAsJsonAsync(new { error = exception?.Message ?? "An unexpected error occurred." });
+
+                if (exception is not null)
+                {
+                    logger.Log(logLevel, exception, "Unhandled exception for request {RequestId}.", context.TraceIdentifier);
+                }
+
+                context.Response.StatusCode = statusCode;
+                await context.Response.WriteAsJsonAsync(EndpointHelpers.CreateErrorPayload(context, publicMessage));
             });
         });
 
+        app.UseHttpsRedirection();
+
+        if (!app.Environment.IsDevelopment())
+        {
+            app.UseHsts();
+        }
+
+        app.Use(async (context, next) =>
+        {
+            context.Response.OnStarting(() =>
+            {
+                var headers = context.Response.Headers;
+                headers.TryAdd("X-Request-Id", context.TraceIdentifier);
+                headers.TryAdd("X-Content-Type-Options", "nosniff");
+                headers.TryAdd("X-Frame-Options", "DENY");
+                headers.TryAdd("Referrer-Policy", "strict-origin-when-cross-origin");
+                headers.TryAdd("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+                return Task.CompletedTask;
+            });
+
+            await next();
+        });
+
+        app.UseHttpLogging();
+        app.UseRateLimiter();
         app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();

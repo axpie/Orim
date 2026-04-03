@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
+  Alert,
   Box,
   Button,
   Card,
@@ -13,9 +14,11 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
+  DialogContentText,
   DialogTitle,
   Grid,
   IconButton,
+  InputAdornment,
   MenuItem,
   TextField,
   Tooltip,
@@ -27,6 +30,9 @@ import EditIcon from '@mui/icons-material/Edit';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import SearchIcon from '@mui/icons-material/Search';
+import StarBorderIcon from '@mui/icons-material/StarBorder';
+import StarIcon from '@mui/icons-material/Star';
 import {
   getBoards,
   createBoard,
@@ -43,6 +49,33 @@ import {
   type BoardTemplateDefinition,
 } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
+
+const MAX_RECENT_BOARDS = 5;
+
+function favoritesStorageKey(userId: string) {
+  return `orim_dashboard_favorites_${userId}`;
+}
+
+function recentBoardsStorageKey(userId: string) {
+  return `orim_dashboard_recent_${userId}`;
+}
+
+function onboardingStorageKey(userId: string) {
+  return `orim_dashboard_onboarding_seen_${userId}`;
+}
+
+function loadStoredIds(key: string): string[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) ?? '[]') as unknown;
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistStoredIds(key: string, values: string[]) {
+  localStorage.setItem(key, JSON.stringify(values));
+}
 
 function TemplatePreview({ templateId }: { templateId: string }) {
   const frameSx = {
@@ -61,6 +94,17 @@ function TemplatePreview({ templateId }: { templateId: string }) {
 
   const svg = (() => {
     switch (templateId) {
+      case 'welcome-board':
+        return (
+          <svg viewBox="0 0 160 90" width="100%" height="100%" aria-hidden="true" focusable="false">
+            <rect x="16" y="14" width="38" height="20" rx="6" fill="#DBEAFE" stroke="#2563EB" strokeWidth="2" />
+            <rect x="62" y="14" width="38" height="20" rx="6" fill="#DCFCE7" stroke="#16A34A" strokeWidth="2" />
+            <rect x="108" y="14" width="36" height="20" rx="6" fill="#FCE7F3" stroke="#DB2777" strokeWidth="2" />
+            <line x1="54" y1="24" x2="62" y2="24" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <line x1="100" y1="24" x2="108" y2="24" stroke="#64748B" strokeWidth="3" strokeLinecap="round" />
+            <rect x="28" y="52" width="104" height="16" rx="6" fill="#FEF3C7" stroke="#D97706" strokeWidth="2" />
+          </svg>
+        );
       case 'process-flow':
         return (
           <svg viewBox="0 0 160 90" width="100%" height="100%" aria-hidden="true" focusable="false">
@@ -138,16 +182,30 @@ function TemplatePreview({ templateId }: { templateId: string }) {
 interface BoardCardProps {
   board: BoardSummary;
   isOwner: boolean;
+  isFavorite: boolean;
   roleLabel: string | null;
   onNavigate: () => void;
   onRename: () => void;
   onDelete: () => void;
+  onToggleFavorite: () => void;
   visibilityLabel: string;
   visibilityColor: string;
   t: (key: string) => string;
 }
 
-function BoardCard({ board, isOwner, roleLabel, onNavigate, onRename, onDelete, visibilityLabel, visibilityColor, t }: BoardCardProps) {
+function BoardCard({
+  board,
+  isOwner,
+  isFavorite,
+  roleLabel,
+  onNavigate,
+  onRename,
+  onDelete,
+  onToggleFavorite,
+  visibilityLabel,
+  visibilityColor,
+  t,
+}: BoardCardProps) {
   return (
     <Card sx={{ height: '100%' }}>
       <CardActionArea onClick={onNavigate}>
@@ -156,6 +214,17 @@ function BoardCard({ board, isOwner, roleLabel, onNavigate, onRename, onDelete, 
             <Typography variant="h6" fontWeight={600} sx={{ flexGrow: 1, minWidth: 0 }} noWrap>
               {board.title}
             </Typography>
+            <Tooltip title={t('dashboard.favorites')}>
+              <IconButton
+                size="small"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onToggleFavorite();
+                }}
+              >
+                {isFavorite ? <StarIcon fontSize="small" color="warning" /> : <StarBorderIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
             <Chip
               label={visibilityLabel}
               color={visibilityColor as 'default' | 'success' | 'info'}
@@ -228,6 +297,7 @@ export function DashboardPage() {
     mutationFn: createBoard,
     onSuccess: (board) => {
       queryClient.invalidateQueries({ queryKey: ['boards'] });
+      rememberBoardVisit(board.id);
       navigate(`/board/${board.id}`);
     },
   });
@@ -247,6 +317,7 @@ export function DashboardPage() {
     mutationFn: importBoard,
     onSuccess: (board) => {
       queryClient.invalidateQueries({ queryKey: ['boards'] });
+      rememberBoardVisit(board.id);
       navigate(`/board/${board.id}`);
     },
   });
@@ -265,9 +336,15 @@ export function DashboardPage() {
 
   // Shared boards section collapsed by default
   const [sharedExpanded, setSharedExpanded] = useState(false);
-
-  const myBoards = boards.filter((b: BoardSummary) => b.ownerId === currentUser?.id);
-  const sharedBoards = boards.filter((b: BoardSummary) => b.ownerId !== currentUser?.id);
+  const [searchTerm, setSearchTerm] = useState('');
+  const currentUserId = currentUser?.id ?? null;
+  const [favoriteBoardIds, setFavoriteBoardIds] = useState<string[]>(() => currentUserId
+    ? loadStoredIds(favoritesStorageKey(currentUserId))
+    : []);
+  const [recentBoardIds, setRecentBoardIds] = useState<string[]>(() => currentUserId
+    ? loadStoredIds(recentBoardsStorageKey(currentUserId))
+    : []);
+  const [dismissedOnboardingUserId, setDismissedOnboardingUserId] = useState<string | null>(null);
 
   const getUserRole = (board: BoardSummary): BoardRole | null =>
     board.members.find((m) => m.userId === currentUser?.id)?.role ?? null;
@@ -300,6 +377,7 @@ export function DashboardPage() {
       themeKey: newThemeKey || undefined,
       visibility: newVisibility,
     });
+    markOnboardingSeen();
     setCreateOpen(false);
     setNewTitle('');
     setNewTemplate('');
@@ -337,12 +415,95 @@ export function DashboardPage() {
     }
   };
 
-  const visibilityLabel = (v: BoardVisibility) => {
+  const visibilityLabel = useCallback((v: BoardVisibility) => {
     switch (v) {
       case BoardVisibility.Public: return t('sharing.public');
       case BoardVisibility.Shared: return t('sharing.shared');
       default: return t('sharing.private');
     }
+  }, [t]);
+
+  const favoriteBoardIdSet = useMemo(() => new Set(favoriteBoardIds), [favoriteBoardIds]);
+
+  const filteredBoards = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+    if (!normalizedSearch) {
+      return boards;
+    }
+
+    return boards.filter((board: BoardSummary) => {
+      const haystacks = [
+        board.title,
+        visibilityLabel(board.visibility),
+        ...board.members.map((member) => member.username),
+      ].map((value) => value.toLowerCase());
+
+      return haystacks.some((value) => value.includes(normalizedSearch));
+    });
+  }, [boards, searchTerm, visibilityLabel]);
+
+  const myBoards = filteredBoards.filter((b: BoardSummary) => b.ownerId === currentUser?.id);
+  const sharedBoards = filteredBoards.filter((b: BoardSummary) => b.ownerId !== currentUser?.id);
+  const favoriteBoards = filteredBoards.filter((board: BoardSummary) => favoriteBoardIdSet.has(board.id));
+  const recentBoards = recentBoardIds
+    .map((boardId) => boards.find((board: BoardSummary) => board.id === boardId))
+    .filter((board): board is BoardSummary => Boolean(board));
+  const hasSeenOnboarding = currentUserId
+    ? localStorage.getItem(onboardingStorageKey(currentUserId)) === 'true'
+    : true;
+
+  const onboardingOpen = Boolean(currentUserId)
+    && boards.length === 0
+    && !hasSeenOnboarding
+    && dismissedOnboardingUserId !== currentUserId;
+
+  const markOnboardingSeen = () => {
+    if (!currentUser?.id) {
+      return;
+    }
+
+    localStorage.setItem(onboardingStorageKey(currentUser.id), 'true');
+    setDismissedOnboardingUserId(currentUser.id);
+  };
+
+  const rememberBoardVisit = (boardId: string) => {
+    if (!currentUser?.id) {
+      return;
+    }
+
+    const next = [boardId, ...recentBoardIds.filter((id) => id !== boardId)].slice(0, MAX_RECENT_BOARDS);
+    setRecentBoardIds(next);
+    persistStoredIds(recentBoardsStorageKey(currentUser.id), next);
+  };
+
+  const toggleFavorite = (boardId: string) => {
+    if (!currentUser?.id) {
+      return;
+    }
+
+    const next = favoriteBoardIdSet.has(boardId)
+      ? favoriteBoardIds.filter((id) => id !== boardId)
+      : [...favoriteBoardIds, boardId];
+
+    setFavoriteBoardIds(next);
+    persistStoredIds(favoritesStorageKey(currentUser.id), next);
+  };
+
+  const handleNavigate = (boardId: string) => {
+    rememberBoardVisit(boardId);
+    navigate(`/board/${boardId}`);
+  };
+
+  const createBoardWithPreset = (templateId?: string) => {
+    const template = templateId ? templates.find((candidate) => candidate.id === templateId) : null;
+    createMutation.mutate({
+      title: templateId === 'welcome-board'
+        ? t('dashboard.welcomeBoardTitle')
+        : template ? getTemplateTitle(template) : t('board.untitled'),
+      templateId,
+      visibility: BoardVisibility.Private,
+    });
+    markOnboardingSeen();
   };
 
   return (
@@ -351,6 +512,20 @@ export function DashboardPage() {
         <Typography variant="h5" fontWeight={700} sx={{ flexGrow: 1 }}>
           {t('app.dashboard')}
         </Typography>
+        <TextField
+          size="small"
+          value={searchTerm}
+          onChange={(event) => setSearchTerm(event.target.value)}
+          placeholder={t('dashboard.searchPlaceholder')}
+          sx={{ minWidth: { xs: '100%', sm: 320 } }}
+          InputProps={{
+            startAdornment: (
+              <InputAdornment position="start">
+                <SearchIcon fontSize="small" />
+              </InputAdornment>
+            ),
+          }}
+        />
         <Button
           component="label"
           variant="outlined"
@@ -411,6 +586,8 @@ export function DashboardPage() {
       {/* Board list */}
       {isLoading ? (
         <Typography color="text.secondary">Loading...</Typography>
+      ) : filteredBoards.length === 0 && boards.length > 0 ? (
+        <Alert severity="info">{t('dashboard.searchNoResults')}</Alert>
       ) : boards.length === 0 ? (
         <Box
           sx={{
@@ -421,11 +598,18 @@ export function DashboardPage() {
             borderRadius: 2,
           }}
         >
-          <Typography variant="h6" gutterBottom>
-            {t('dashboard.noBoards')}
+          <Chip label={t('dashboard.startHere')} color="primary" variant="outlined" sx={{ mb: 2 }} />
+          <Typography variant="h5" fontWeight={700} gutterBottom>
+            {t('dashboard.emptyStateTitle')}
+          </Typography>
+          <Typography color="text.secondary" sx={{ maxWidth: 680, mx: 'auto' }}>
+            {t('dashboard.emptyStateDescription')}
           </Typography>
           <Box sx={{ mt: 2, display: 'flex', gap: 2, justifyContent: 'center' }}>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => setCreateOpen(true)}>
+            <Button variant="contained" startIcon={<AddIcon />} onClick={() => createBoardWithPreset('welcome-board')}>
+              {t('dashboard.guidedStart')}
+            </Button>
+            <Button variant="outlined" startIcon={<AddIcon />} onClick={() => createBoardWithPreset()}>
               {t('dashboard.createBoard')}
             </Button>
             <Button component="label" variant="outlined" startIcon={<UploadFileIcon />}>
@@ -436,6 +620,68 @@ export function DashboardPage() {
         </Box>
       ) : (
         <Box>
+          {recentBoards.length > 0 && (
+            <>
+              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
+                {t('dashboard.recentBoards')}
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 4 }}>
+                {recentBoards.map((board) => (
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={board.id}>
+                    <BoardCard
+                      board={board}
+                      isOwner={board.ownerId === currentUser?.id}
+                      isFavorite={favoriteBoardIdSet.has(board.id)}
+                      roleLabel={board.ownerId === currentUser?.id ? null : roleLabel(getUserRole(board))}
+                      onNavigate={() => handleNavigate(board.id)}
+                      onRename={() => {
+                        setRenameId(board.id);
+                        setRenameTitle(board.title);
+                        setRenameOpen(true);
+                      }}
+                      onDelete={() => handleDelete(board.id)}
+                      onToggleFavorite={() => toggleFavorite(board.id)}
+                      visibilityLabel={visibilityLabel(board.visibility)}
+                      visibilityColor={visibilityColor(board.visibility)}
+                      t={t}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </>
+          )}
+
+          {favoriteBoards.length > 0 && (
+            <>
+              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
+                {t('dashboard.favorites')}
+              </Typography>
+              <Grid container spacing={2} sx={{ mb: 4 }}>
+                {favoriteBoards.map((board) => (
+                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={board.id}>
+                    <BoardCard
+                      board={board}
+                      isOwner={board.ownerId === currentUser?.id}
+                      isFavorite={favoriteBoardIdSet.has(board.id)}
+                      roleLabel={board.ownerId === currentUser?.id ? null : roleLabel(getUserRole(board))}
+                      onNavigate={() => handleNavigate(board.id)}
+                      onRename={() => {
+                        setRenameId(board.id);
+                        setRenameTitle(board.title);
+                        setRenameOpen(true);
+                      }}
+                      onDelete={() => handleDelete(board.id)}
+                      onToggleFavorite={() => toggleFavorite(board.id)}
+                      visibilityLabel={visibilityLabel(board.visibility)}
+                      visibilityColor={visibilityColor(board.visibility)}
+                      t={t}
+                    />
+                  </Grid>
+                ))}
+              </Grid>
+            </>
+          )}
+
           {/* My Boards */}
           <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
             {t('dashboard.myBoards')}
@@ -451,14 +697,16 @@ export function DashboardPage() {
                   <BoardCard
                     board={board}
                     isOwner={true}
+                    isFavorite={favoriteBoardIdSet.has(board.id)}
                     roleLabel={null}
-                    onNavigate={() => navigate(`/board/${board.id}`)}
+                    onNavigate={() => handleNavigate(board.id)}
                     onRename={() => {
                       setRenameId(board.id);
                       setRenameTitle(board.title);
                       setRenameOpen(true);
                     }}
                     onDelete={() => handleDelete(board.id)}
+                    onToggleFavorite={() => toggleFavorite(board.id)}
                     visibilityLabel={visibilityLabel(board.visibility)}
                     visibilityColor={visibilityColor(board.visibility)}
                     t={t}
@@ -497,10 +745,12 @@ export function DashboardPage() {
                       <BoardCard
                         board={board}
                         isOwner={false}
+                        isFavorite={favoriteBoardIdSet.has(board.id)}
                         roleLabel={roleLabel(role)}
-                        onNavigate={() => navigate(`/board/${board.id}`)}
+                        onNavigate={() => handleNavigate(board.id)}
                         onRename={() => {}}
                         onDelete={() => {}}
+                        onToggleFavorite={() => toggleFavorite(board.id)}
                         visibilityLabel={visibilityLabel(board.visibility)}
                         visibilityColor={visibilityColor(board.visibility)}
                         t={t}
@@ -592,6 +842,31 @@ export function DashboardPage() {
           <Button onClick={() => setRenameOpen(false)}>{t('common.cancel')}</Button>
           <Button variant="contained" onClick={handleRename}>
             {t('board.save')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={onboardingOpen} onClose={markOnboardingSeen} maxWidth="sm" fullWidth>
+        <DialogTitle>{t('dashboard.onboardingTitle')}</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            {t('dashboard.onboardingDescription')}
+          </DialogContentText>
+          <Box sx={{ display: 'grid', gap: 1.25 }}>
+            <Typography variant="body2">{t('dashboard.onboardingValue1')}</Typography>
+            <Typography variant="body2">{t('dashboard.onboardingValue2')}</Typography>
+            <Typography variant="body2">{t('dashboard.onboardingValue3')}</Typography>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 3, gap: 1, flexWrap: 'wrap', justifyContent: 'flex-start' }}>
+          <Button variant="contained" onClick={() => createBoardWithPreset('welcome-board')}>
+            {t('dashboard.guidedStart')}
+          </Button>
+          <Button variant="outlined" onClick={() => createBoardWithPreset()}>
+            {t('dashboard.createBoard')}
+          </Button>
+          <Button onClick={() => { markOnboardingSeen(); setCreateOpen(true); }}>
+            {t('dashboard.browseTemplates')}
           </Button>
         </DialogActions>
       </Dialog>

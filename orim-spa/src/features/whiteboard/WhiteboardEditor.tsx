@@ -26,9 +26,11 @@ import type { Board, BoardSnapshot } from '../../types/models';
 import { BoardRole } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
 import type { BoardOperationPayload } from './realtime/boardOperations';
+import { recoverBoardWithQueuedOperations } from './realtime/reconnectRecovery';
 
 const PROPERTIES_PANEL_WIDTH = 280;
 const CHAT_PANEL_WIDTH = 320;
+const EMPTY_COMMENTS: Board['comments'] = [];
 
 function sortSnapshots(snapshots: BoardSnapshot[]) {
   return [...snapshots].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
@@ -85,7 +87,7 @@ export function WhiteboardEditor() {
     : null;
   const canEdit = currentMembership != null && currentMembership.role !== BoardRole.Viewer;
   const canShare = currentMembership?.role === BoardRole.Owner;
-  const comments = board?.comments ?? [];
+  const comments = board?.comments ?? EMPTY_COMMENTS;
 
   const announceLive = useCallback((text: string | null | undefined) => {
     const normalized = text?.trim();
@@ -275,6 +277,7 @@ export function WhiteboardEditor() {
 
     scheduleSave();
   }, [
+    board,
     board?.elements,
     board?.title,
     board?.labelOutlineEnabled,
@@ -334,6 +337,30 @@ export function WhiteboardEditor() {
     boardId: id ?? null,
     displayName: user?.displayName ?? user?.username ?? null,
     syncProfileDisplayNameChanges: true,
+    beforeOutboxFlush: async ({ isReconnect }) => {
+      if (!id) {
+        return;
+      }
+
+      const currentBoard = useBoardStore.getState().board;
+      const queuedOperationsCount = useOperationOutboxStore.getState().countForBoard(id);
+      if (!isReconnect && queuedOperationsCount === 0) {
+        return;
+      }
+
+      if (currentBoard?.id === id && useBoardStore.getState().isDirty && queuedOperationsCount === 0) {
+        return;
+      }
+
+      const recovery = await recoverBoardWithQueuedOperations({
+        boardId: id,
+        fetchBoard: () => getBoard(id),
+      });
+
+      setBoard(recovery.board, { preserveSelection: true });
+      clearCommandStack();
+      queryClient.setQueryData(['board', id], recovery.board);
+    },
     onBoardOperationApplied: (notification) => {
       applyRemoteOperation(notification.operation);
       const nextBoard = useBoardStore.getState().board;
@@ -365,6 +392,12 @@ export function WhiteboardEditor() {
     isSaving: saveMutation.isPending,
     saveError: saveMutation.error,
   }), [connectionState, isDirty, lastError, outboxCount, saveMutation.error, saveMutation.isPending]);
+
+  useEffect(() => {
+    if (connectionState === 'connected' && canEdit && isDirty && board) {
+      scheduleSave();
+    }
+  }, [board, canEdit, connectionState, isDirty, scheduleSave]);
 
   useEffect(() => {
     const nextAnnouncement = getBoardSyncAnnouncement(boardSyncStatus, t);

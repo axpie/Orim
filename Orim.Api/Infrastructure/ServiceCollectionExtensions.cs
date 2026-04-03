@@ -1,7 +1,10 @@
 using System.Security.Claims;
+using System.Threading.RateLimiting;
 using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.HttpLogging;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.IdentityModel.Tokens;
 using Orim.Api.Services;
 using Orim.Core.Services;
@@ -50,6 +53,13 @@ internal static class ServiceCollectionExtensions
                 {
                     OnMessageReceived = context =>
                     {
+                        var cookieToken = context.Request.Cookies[EndpointHelpers.AuthCookieName];
+                        if (!string.IsNullOrWhiteSpace(cookieToken))
+                        {
+                            context.Token = cookieToken;
+                            return Task.CompletedTask;
+                        }
+
                         var accessToken = context.Request.Query["access_token"];
                         var path = context.HttpContext.Request.Path;
                         if (!string.IsNullOrEmpty(accessToken) && path.StartsWithSegments("/hubs"))
@@ -116,6 +126,57 @@ internal static class ServiceCollectionExtensions
             ?? throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
 
         services.AddOrimInfrastructure(connectionString);
+        services.AddHttpLogging(options =>
+        {
+            options.LoggingFields =
+                HttpLoggingFields.RequestMethod
+                | HttpLoggingFields.RequestPath
+                | HttpLoggingFields.ResponseStatusCode
+                | HttpLoggingFields.Duration;
+        });
+        services.AddRateLimiter(options =>
+        {
+            options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+            options.OnRejected = static async (context, cancellationToken) =>
+            {
+                if (!context.HttpContext.Response.HasStarted)
+                {
+                    await context.HttpContext.Response.WriteAsJsonAsync(
+                        EndpointHelpers.CreateErrorPayload(context.HttpContext, "Too many requests. Please try again later."),
+                        cancellationToken: cancellationToken);
+                }
+            };
+
+            options.AddPolicy("auth", httpContext =>
+            {
+                var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey,
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 5,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        AutoReplenishment = true
+                    });
+            });
+
+            options.AddPolicy("signalr", httpContext =>
+            {
+                var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+                return RateLimitPartition.GetFixedWindowLimiter(
+                    partitionKey,
+                    _ => new FixedWindowRateLimiterOptions
+                    {
+                        PermitLimit = 30,
+                        Window = TimeSpan.FromMinutes(1),
+                        QueueLimit = 0,
+                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
+                        AutoReplenishment = true
+                    });
+            });
+        });
 
         services.AddSingleton(sp => new AssistantSettingsService(
             sp.GetRequiredService<IServiceScopeFactory>(),
@@ -123,6 +184,7 @@ internal static class ServiceCollectionExtensions
             sp.GetRequiredService<ILogger<AssistantSettingsService>>()));
         services.AddSingleton<DiagramAssistantService>();
         services.AddSingleton<ThemeCatalogApiService>();
+        services.AddSingleton<DeploymentReadinessService>();
         services.AddSingleton<BoardPdfExportService>();
         services.AddSingleton<BoardCommentNotifier>();
         services.AddScoped<BoardCommentService>();

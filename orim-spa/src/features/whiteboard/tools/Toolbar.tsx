@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import React, { useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -183,7 +183,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged }: ToolbarPr
   const [arrangeAnchorEl, setArrangeAnchorEl] = useState<HTMLElement | null>(null);
   const [stickyPresetAnchorEl, setStickyPresetAnchorEl] = useState<HTMLElement | null>(null);
   const [iconSearch, setIconSearch] = useState('');
-  const [collapsed, setCollapsed] = useState(isCompactLayout);
+  const [compactCollapsed, setCompactCollapsed] = useState(isCompactLayout);
 
   const selectedElements = useMemo(
     () => board?.elements.filter((element) => selectedIds.includes(element.id)) ?? [],
@@ -236,14 +236,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged }: ToolbarPr
     [board, selectedIds],
   );
 
-  useEffect(() => {
-    if (!isCompactLayout) {
-      setCollapsed(false);
-      return;
-    }
-
-    setCollapsed(true);
-  }, [isCompactLayout]);
+  const collapsed = isCompactLayout ? compactCollapsed : false;
 
   const selectedIcon = getIconDefinition(pendingIconName);
   const filteredIcons = useMemo(() => filterIconDefinitions(iconSearch), [iconSearch]);
@@ -746,7 +739,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged }: ToolbarPr
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 1 }}>
             <Tooltip title={collapsed ? t('tools.expandToolbar', 'Werkzeugleiste öffnen') : t('tools.collapseToolbar', 'Werkzeugleiste einklappen')} placement="top">
-              <IconButton onClick={() => setCollapsed((current) => !current)} size="medium" sx={{ flexShrink: 0 }}>
+              <IconButton onClick={() => setCompactCollapsed((current) => !current)} size="medium" sx={{ flexShrink: 0 }}>
                 {collapsed ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
               </IconButton>
             </Tooltip>

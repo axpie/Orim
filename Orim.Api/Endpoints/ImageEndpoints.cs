@@ -9,7 +9,7 @@ internal static class ImageEndpoints
 {
     internal static IEndpointRouteBuilder MapImageEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/user-images", [Authorize] async (HttpRequest request, HttpContext context, IImageStorageService imageService) =>
+        app.MapPost("/api/user-images", [Authorize] async (HttpRequest request, HttpContext context, IImageStorageService imageService, ILogger<Program> logger) =>
         {
             if (EndpointHelpers.GetUserId(context.User) is not { } userId)
                 return Results.Unauthorized();
@@ -27,7 +27,8 @@ internal static class ImageEndpoints
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(ex.Message);
+                logger.LogWarning(ex, "Uploading an image failed for user {UserId}.", userId);
+                return EndpointHelpers.BadRequest(context, "The image could not be uploaded.");
             }
         });
 

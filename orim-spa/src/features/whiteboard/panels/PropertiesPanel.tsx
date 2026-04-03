@@ -31,7 +31,7 @@ import { ColorInputField } from '../controls/ColorInputField';
 import { NumberInputField } from '../controls/NumberInputField';
 import { PreviewSelect, type PreviewSelectOption } from '../controls/PreviewSelect';
 import { getIconDisplayName } from '../icons/iconCatalog';
-import { resolveFrameTitleFontSize } from '../shapes/FrameRenderer';
+import { resolveFrameTitleFontSize } from '../shapes/frameLayout';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
 import { createElementUpdatedOperation } from '../realtime/boardOperations';
 import {

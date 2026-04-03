@@ -36,9 +36,11 @@ import type { Board } from '../../types/models';
 import { BoardRole } from '../../types/models';
 import { resolveInitialGuestDisplayName } from './guestDisplayNames';
 import type { BoardOperationPayload } from '../whiteboard/realtime/boardOperations';
+import { recoverBoardWithQueuedOperations } from '../whiteboard/realtime/reconnectRecovery';
 
 const guestNameStorageKey = 'orim_guest_name';
 const PROPERTIES_PANEL_WIDTH = 280;
+const EMPTY_COMMENTS: Board['comments'] = [];
 
 function isProtectedBoardResponse(value: unknown): value is { requiresPassword: boolean; boardId: string; title: string } {
   return !!value && typeof value === 'object' && 'requiresPassword' in value;
@@ -91,7 +93,7 @@ export function SharedBoardView() {
   const liveAnnouncementIdRef = useRef(0);
   const lastSyncAnnouncementRef = useRef<string | null>(null);
   const compactOverlayOpen = isCompactToolbarLayout && (propertiesOpen || commentsOpen);
-  const comments = board?.comments ?? [];
+  const comments = board?.comments ?? EMPTY_COMMENTS;
   const currentMembership = user && board
     ? board.members.find((member) => member.userId === user.id) ?? (board.ownerId === user.id
       ? { userId: user.id, username: user.username, role: BoardRole.Owner }
@@ -159,6 +161,41 @@ export function SharedBoardView() {
     shareToken: token ?? null,
     sharePassword: validatedPassword,
     displayName: guestDisplayName,
+    beforeOutboxFlush: async ({ boardId, isReconnect }) => {
+      if (!token) {
+        return;
+      }
+
+      const currentBoard = useBoardStore.getState().board;
+      const queuedOperationsCount = useOperationOutboxStore.getState().countForBoard(boardId);
+      if (!isReconnect && queuedOperationsCount === 0) {
+        return;
+      }
+
+      if (currentBoard?.id === boardId && useBoardStore.getState().isDirty && queuedOperationsCount === 0) {
+        return;
+      }
+
+      const recovery = await recoverBoardWithQueuedOperations({
+        boardId,
+        fetchBoard: async () => {
+          if (validatedPassword) {
+            return validateSharePassword(token, validatedPassword);
+          }
+
+          const sharedBoard = await getSharedBoard(token);
+          if (isProtectedBoardResponse(sharedBoard)) {
+            throw new Error('Shared board password is required.');
+          }
+
+          return sharedBoard;
+        },
+      });
+
+      setBoard(recovery.board, { preserveSelection: true });
+      clearCommandStack();
+      queryClient.setQueryData(['shared-board', token], recovery.board);
+    },
     onBoardOperationApplied: (notification) => {
       applyRemoteOperation(notification.operation);
       const nextBoard = useBoardStore.getState().board;
@@ -311,6 +348,12 @@ export function SharedBoardView() {
 
     scheduleSave();
   }, [board?.elements, board?.sharedAllowAnonymousEditing, board?.title, isDirty, scheduleSave]);
+
+  useEffect(() => {
+    if (connectionState === 'connected' && board?.sharedAllowAnonymousEditing && isDirty) {
+      scheduleSave();
+    }
+  }, [board?.sharedAllowAnonymousEditing, connectionState, isDirty, scheduleSave]);
 
   useEffect(() => {
     return () => {

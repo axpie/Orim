@@ -1,6 +1,12 @@
 import { create } from 'zustand';
 import type { LoginResponse, UserRole } from '../types/models';
-import { exchangeGoogleIdToken, exchangeMicrosoftIdToken, login as apiLogin } from '../api/auth';
+import {
+  exchangeGoogleIdToken,
+  exchangeMicrosoftIdToken,
+  login as apiLogin,
+  logout as apiLogout,
+  refreshToken,
+} from '../api/auth';
 
 interface AuthUser {
   id: string;
@@ -11,15 +17,15 @@ interface AuthUser {
 
 interface AuthState {
   user: AuthUser | null;
-  token: string | null;
   isAuthenticated: boolean;
+  isHydrating: boolean;
   login: (username: string, password: string) => Promise<void>;
   loginWithMicrosoft: (idToken: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
   setSession: (response: LoginResponse) => void;
   setUser: (user: AuthUser) => void;
-  logout: () => void;
-  hydrate: () => void;
+  logout: () => Promise<void>;
+  hydrate: () => Promise<void>;
 }
 
 let storageSyncInitialized = false;
@@ -42,14 +48,12 @@ function persistUser(user: AuthUser) {
 function persistAuth(response: LoginResponse) {
   const user = toAuthUser(response);
 
-  localStorage.setItem('orim_token', response.token);
   persistUser(user);
 
-  return { user, token: response.token, isAuthenticated: true } satisfies Pick<AuthState, 'user' | 'token' | 'isAuthenticated'>;
+  return { user, isAuthenticated: true } satisfies Pick<AuthState, 'user' | 'isAuthenticated'>;
 }
 
 function clearPersistedAuth() {
-  localStorage.removeItem('orim_token');
   localStorage.removeItem('orim_user');
 }
 
@@ -69,8 +73,8 @@ function parsePersistedUser(userJson: string): AuthUser {
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  token: null,
   isAuthenticated: false,
+  isHydrating: true,
 
   login: async (username, password) => {
     const response = await apiLogin(username, password);
@@ -96,40 +100,45 @@ export const useAuthStore = create<AuthState>((set) => ({
     set((state) => ({ ...state, user }));
   },
 
-  logout: () => {
-    clearPersistedAuth();
-    set({ user: null, token: null, isAuthenticated: false });
+  logout: async () => {
+    try {
+      await apiLogout();
+    } finally {
+      clearPersistedAuth();
+      set({ user: null, isAuthenticated: false, isHydrating: false });
+    }
   },
 
-  hydrate: () => {
-    const syncFromStorage = () => {
-      const token = localStorage.getItem('orim_token');
+  hydrate: async () => {
+    const syncFromStorage = async () => {
       const userJson = localStorage.getItem('orim_user');
 
-      if (token && userJson) {
+      if (userJson) {
         try {
           const user = parsePersistedUser(userJson);
           const normalizedUserJson = JSON.stringify(user);
           if (normalizedUserJson !== userJson) {
             localStorage.setItem('orim_user', normalizedUserJson);
           }
-          set({ user, token, isAuthenticated: true });
+          set({ user, isAuthenticated: true, isHydrating: true });
+          const refreshed = await refreshToken();
+          set({ ...persistAuth(refreshed), isHydrating: false });
           return;
         } catch {
           clearPersistedAuth();
         }
       }
 
-      set({ user: null, token: null, isAuthenticated: false });
+      set({ user: null, isAuthenticated: false, isHydrating: false });
     };
 
-    syncFromStorage();
+    await syncFromStorage();
 
     if (!storageSyncInitialized && typeof window !== 'undefined') {
       storageSyncInitialized = true;
       window.addEventListener('storage', (event) => {
-        if (event.key === null || event.key === 'orim_token' || event.key === 'orim_user') {
-          syncFromStorage();
+        if (event.key === null || event.key === 'orim_user') {
+          void syncFromStorage();
         }
       });
     }

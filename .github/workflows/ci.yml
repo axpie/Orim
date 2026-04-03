@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: windows-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: orim-spa/package-lock.json
+
+      - name: Restore SPA dependencies
+        working-directory: orim-spa
+        run: npm ci
+
+      - name: Build API
+        run: dotnet build Orim.Api\Orim.Api.csproj --no-incremental
+
+      - name: Run .NET tests
+        run: dotnet test Orim.Tests\Orim.Tests.csproj
+
+      - name: Lint SPA
+        working-directory: orim-spa
+        run: npm run lint
+
+      - name: Build SPA
+        working-directory: orim-spa
+        run: npm run build

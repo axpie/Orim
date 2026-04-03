@@ -649,12 +649,12 @@ public class BoardServiceTests
     #region GenerateShareLinkToken
 
     [Fact]
-    public void GenerateShareLinkToken_Returns16CharHexString()
+    public void GenerateShareLinkToken_Returns64CharHexString()
     {
         var token = _sut.GenerateShareLinkToken();
 
-        Assert.Equal(16, token.Length);
-        Assert.Matches("^[0-9a-f]{16}$", token);
+        Assert.Equal(64, token.Length);
+        Assert.Matches("^[0-9a-f]{64}$", token);
     }
 
     [Fact]
@@ -801,7 +801,7 @@ public class BoardServiceTests
     {
         var templates = _sut.GetTemplates();
 
-        Assert.Equal(6, templates.Count);
+        Assert.Equal(7, templates.Count);
     }
 
     #endregion

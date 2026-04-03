@@ -1,4 +1,76 @@
-import * as mdiIcons from '@mdi/js';
+import {
+  mdiAbacus,
+  mdiAccount,
+  mdiAccountGroup,
+  mdiApi,
+  mdiApplicationBracketsOutline,
+  mdiArchiveOutline,
+  mdiArrowDecision,
+  mdiBell,
+  mdiBriefcaseOutline,
+  mdiBug,
+  mdiCalculatorVariantOutline,
+  mdiCalendarMonthOutline,
+  mdiCameraOutline,
+  mdiCashMultiple,
+  mdiChartBar,
+  mdiCheckCircle,
+  mdiCheckDecagram,
+  mdiChip,
+  mdiCloud,
+  mdiCloudOutline,
+  mdiCodeBraces,
+  mdiCog,
+  mdiCompassOutline,
+  mdiCubeOutline,
+  mdiDatabase,
+  mdiDocker,
+  mdiDomain,
+  mdiEarth,
+  mdiEmail,
+  mdiFileDocumentOutline,
+  mdiFileTreeOutline,
+  mdiFire,
+  mdiFolderOutline,
+  mdiGit,
+  mdiGoogleCloud,
+  mdiHarddisk,
+  mdiHeadCogOutline,
+  mdiHomeOutline,
+  mdiKeyOutline,
+  mdiLan,
+  mdiLaptop,
+  mdiLightbulbOutline,
+  mdiLock,
+  mdiMagnify,
+  mdiMapMarkerOutline,
+  mdiMessageOutline,
+  mdiMonitor,
+  mdiNetworkOutline,
+  mdiOfficeBuildingOutline,
+  mdiPaletteOutline,
+  mdiPhoneOutline,
+  mdiPrinterOutline,
+  mdiPuzzleOutline,
+  mdiRobot,
+  mdiRouterNetwork,
+  mdiSafeSquareOutline,
+  mdiServer,
+  mdiServerNetwork,
+  mdiShieldCheck,
+  mdiSitemapOutline,
+  mdiSourceBranch,
+  mdiStar,
+  mdiTableLarge,
+  mdiTagOutline,
+  mdiTextBoxOutline,
+  mdiTimerOutline,
+  mdiTools,
+  mdiTruckDeliveryOutline,
+  mdiWeb,
+  mdiWebhook,
+  mdiWifi,
+} from '@mdi/js';
 
 export interface IconDefinition {
   name: string;
@@ -112,17 +184,87 @@ const KEYWORD_OVERRIDES: Record<string, string[]> = {
   'mdi-wifi': ['wireless', 'signal'],
 };
 
-export const ICON_DEFINITIONS: IconDefinition[] = Object.entries(mdiIcons)
-  .filter(([exportName, value]) => exportName.startsWith('mdi') && typeof value === 'string')
-  .map(([exportName, path]) => {
-    const name = exportNameToIconName(exportName);
-    return {
-      name,
-      label: exportNameToLabel(exportName),
-      path,
-      keywords: buildKeywords(name, exportName),
-    } satisfies IconDefinition;
-  })
+const ICON_PATHS: Record<string, string> = {
+  'mdi-star': mdiStar,
+  'mdi-account': mdiAccount,
+  'mdi-account-group': mdiAccountGroup,
+  'mdi-abacus': mdiAbacus,
+  'mdi-api': mdiApi,
+  'mdi-application-brackets-outline': mdiApplicationBracketsOutline,
+  'mdi-archive-outline': mdiArchiveOutline,
+  'mdi-arrow-decision': mdiArrowDecision,
+  'mdi-bell': mdiBell,
+  'mdi-bug': mdiBug,
+  'mdi-briefcase-outline': mdiBriefcaseOutline,
+  'mdi-calculator-variant-outline': mdiCalculatorVariantOutline,
+  'mdi-calendar-month-outline': mdiCalendarMonthOutline,
+  'mdi-camera-outline': mdiCameraOutline,
+  'mdi-cash-multiple': mdiCashMultiple,
+  'mdi-chart-bar': mdiChartBar,
+  'mdi-check-circle': mdiCheckCircle,
+  'mdi-check-decagram': mdiCheckDecagram,
+  'mdi-chip': mdiChip,
+  'mdi-cloud': mdiCloud,
+  'mdi-cloud-outline': mdiCloudOutline,
+  'mdi-code-braces': mdiCodeBraces,
+  'mdi-cog': mdiCog,
+  'mdi-compass-outline': mdiCompassOutline,
+  'mdi-cube-outline': mdiCubeOutline,
+  'mdi-database': mdiDatabase,
+  'mdi-docker': mdiDocker,
+  'mdi-domain': mdiDomain,
+  'mdi-earth': mdiEarth,
+  'mdi-email': mdiEmail,
+  'mdi-file-document-outline': mdiFileDocumentOutline,
+  'mdi-file-tree-outline': mdiFileTreeOutline,
+  'mdi-fire': mdiFire,
+  'mdi-folder-outline': mdiFolderOutline,
+  'mdi-git': mdiGit,
+  'mdi-google-cloud': mdiGoogleCloud,
+  'mdi-harddisk': mdiHarddisk,
+  'mdi-head-cog-outline': mdiHeadCogOutline,
+  'mdi-home-outline': mdiHomeOutline,
+  'mdi-key-outline': mdiKeyOutline,
+  'mdi-lan': mdiLan,
+  'mdi-laptop': mdiLaptop,
+  'mdi-lightbulb-outline': mdiLightbulbOutline,
+  'mdi-lock': mdiLock,
+  'mdi-magnify': mdiMagnify,
+  'mdi-map-marker-outline': mdiMapMarkerOutline,
+  'mdi-message-outline': mdiMessageOutline,
+  'mdi-monitor': mdiMonitor,
+  'mdi-network-outline': mdiNetworkOutline,
+  'mdi-office-building-outline': mdiOfficeBuildingOutline,
+  'mdi-palette-outline': mdiPaletteOutline,
+  'mdi-phone-outline': mdiPhoneOutline,
+  'mdi-printer-outline': mdiPrinterOutline,
+  'mdi-puzzle-outline': mdiPuzzleOutline,
+  'mdi-robot': mdiRobot,
+  'mdi-router-network': mdiRouterNetwork,
+  'mdi-safe-square-outline': mdiSafeSquareOutline,
+  'mdi-server': mdiServer,
+  'mdi-server-network': mdiServerNetwork,
+  'mdi-shield-check': mdiShieldCheck,
+  'mdi-sitemap-outline': mdiSitemapOutline,
+  'mdi-source-branch': mdiSourceBranch,
+  'mdi-table-large': mdiTableLarge,
+  'mdi-tag-outline': mdiTagOutline,
+  'mdi-text-box-outline': mdiTextBoxOutline,
+  'mdi-timer-outline': mdiTimerOutline,
+  'mdi-tools': mdiTools,
+  'mdi-truck-delivery-outline': mdiTruckDeliveryOutline,
+  'mdi-web': mdiWeb,
+  'mdi-webhook': mdiWebhook,
+  'mdi-wifi': mdiWifi,
+};
+
+export const ICON_DEFINITIONS: IconDefinition[] = Object.entries(ICON_PATHS)
+  .map(([name, path]) => ({
+    name,
+    label: iconNameToLabel(name),
+    path,
+    keywords: buildKeywords(name),
+  }))
   .sort((left, right) => {
     const leftPreferred = PREFERRED_ICON_NAMES.has(left.name);
     const rightPreferred = PREFERRED_ICON_NAMES.has(right.name);
@@ -170,24 +312,17 @@ export function getIconDisplayName(iconName?: string | null): string {
     .join(' ');
 }
 
-function exportNameToIconName(exportName: string): string {
-  return `mdi-${exportName
-    .slice(3)
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1-$2')
-    .toLowerCase()}`;
+function iconNameToLabel(iconName: string): string {
+  return iconName
+    .replace(/^mdi-/, '')
+    .split('-')
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase() + part.slice(1))
+    .join(' ');
 }
 
-function exportNameToLabel(exportName: string): string {
-  return exportName
-    .slice(3)
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
-    .trim();
-}
-
-function buildKeywords(iconName: string, exportName: string): string[] {
-  const label = exportNameToLabel(exportName).toLowerCase();
+function buildKeywords(iconName: string): string[] {
+  const label = iconNameToLabel(iconName).toLowerCase();
   const parts = iconName.replace(/^mdi-/, '').split('-');
   return Array.from(new Set([...parts, ...label.split(/\s+/), ...(KEYWORD_OVERRIDES[iconName] ?? [])]));
 }

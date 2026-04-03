@@ -184,7 +184,7 @@ public class BoardService
     }
 
     public string GenerateShareLinkToken() =>
-        Convert.ToHexString(RandomNumberGenerator.GetBytes(8)).ToLowerInvariant();
+        Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
 
     public void AddMember(Board board, User user, BoardRole role)
     {

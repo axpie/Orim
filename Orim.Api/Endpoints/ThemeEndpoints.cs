@@ -1,6 +1,7 @@
 using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Orim.Api.Contracts;
+using Orim.Api.Infrastructure;
 using Orim.Api.Services;
 
 namespace Orim.Api.Endpoints;
@@ -21,7 +22,7 @@ internal static class ThemeEndpoints
             return Results.Ok(themes);
         });
 
-        app.MapPost("/api/admin/themes/import", [Authorize(Roles = "Admin")] async (HttpRequest request, ThemeCatalogApiService themeCatalogService) =>
+        app.MapPost("/api/admin/themes/import", [Authorize(Roles = "Admin")] async (HttpRequest request, HttpContext context, ThemeCatalogApiService themeCatalogService, ILogger<Program> logger) =>
         {
             var form = await request.ReadFormAsync();
             var file = form.Files["file"];
@@ -38,11 +39,12 @@ internal static class ThemeEndpoints
             }
             catch (Exception ex) when (ex is InvalidOperationException or System.Text.Json.JsonException)
             {
-                return Results.BadRequest(ex.Message);
+                logger.LogWarning(ex, "Importing a theme failed.");
+                return EndpointHelpers.BadRequest(context, "The theme file could not be imported.");
             }
         });
 
-        app.MapPut("/api/admin/themes/{key}/enabled", [Authorize(Roles = "Admin")] async (string key, ThemeAvailabilityRequest request, ThemeCatalogApiService themeCatalogService) =>
+        app.MapPut("/api/admin/themes/{key}/enabled", [Authorize(Roles = "Admin")] async (string key, ThemeAvailabilityRequest request, ThemeCatalogApiService themeCatalogService, HttpContext context, ILogger<Program> logger) =>
         {
             try
             {
@@ -51,11 +53,12 @@ internal static class ThemeEndpoints
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(ex.Message);
+                logger.LogWarning(ex, "Updating enabled state failed for theme {ThemeKey}.", key);
+                return EndpointHelpers.BadRequest(context, "The theme could not be updated.");
             }
         });
 
-        app.MapGet("/api/admin/themes/{key}/export", [Authorize(Roles = "Admin")] async (string key, ThemeCatalogApiService themeCatalogService) =>
+        app.MapGet("/api/admin/themes/{key}/export", [Authorize(Roles = "Admin")] async (string key, ThemeCatalogApiService themeCatalogService, HttpContext context, ILogger<Program> logger) =>
         {
             try
             {
@@ -64,11 +67,12 @@ internal static class ThemeEndpoints
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(ex.Message);
+                logger.LogWarning(ex, "Exporting theme {ThemeKey} failed.", key);
+                return EndpointHelpers.BadRequest(context, "The theme could not be exported.");
             }
         });
 
-        app.MapDelete("/api/admin/themes/{key}", [Authorize(Roles = "Admin")] async (string key, ThemeCatalogApiService themeCatalogService) =>
+        app.MapDelete("/api/admin/themes/{key}", [Authorize(Roles = "Admin")] async (string key, ThemeCatalogApiService themeCatalogService, HttpContext context, ILogger<Program> logger) =>
         {
             try
             {
@@ -77,7 +81,8 @@ internal static class ThemeEndpoints
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(ex.Message);
+                logger.LogWarning(ex, "Deleting theme {ThemeKey} failed.", key);
+                return EndpointHelpers.BadRequest(context, "The theme could not be deleted.");
             }
         });
 

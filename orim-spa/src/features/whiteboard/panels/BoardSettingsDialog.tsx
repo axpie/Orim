@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
@@ -20,7 +20,7 @@ import {
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import type { StickyNotePreset } from '../../../types/models';
+import type { Board, StickyNotePreset } from '../../../types/models';
 import { useBoardStore } from '../store/boardStore';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
 import { createBoardMetadataUpdatedOperation } from '../realtime/boardOperations';
@@ -46,30 +46,40 @@ function sanitizeStickyNotePresets(presets: StickyNotePreset[]): StickyNotePrese
 }
 
 export function BoardSettingsDialog({ open, onClose, onBoardChanged }: BoardSettingsDialogProps) {
-  const { t } = useTranslation();
   const board = useBoardStore((s) => s.board);
+
+  if (!open || !board) {
+    return null;
+  }
+
+  return (
+    <OpenBoardSettingsDialog
+      board={board}
+      onClose={onClose}
+      onBoardChanged={onBoardChanged}
+    />
+  );
+}
+
+interface OpenBoardSettingsDialogProps {
+  board: Board;
+  onClose: () => void;
+  onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
+}
+
+function OpenBoardSettingsDialog({ board, onClose, onBoardChanged }: OpenBoardSettingsDialogProps) {
+  const { t } = useTranslation();
   const updateBoard = useBoardStore((s) => s.updateBoard);
-  const [draftPresets, setDraftPresets] = useState<StickyNotePreset[]>([]);
-  const [usePinnedSurface, setUsePinnedSurface] = useState(false);
-  const [draftSurfaceColor, setDraftSurfaceColor] = useState('#ffffff');
-  const [draftThemeKey, setDraftThemeKey] = useState<string>('');
+  const [draftPresets, setDraftPresets] = useState<StickyNotePreset[]>(() => getEffectiveStickyNotePresets(board, t));
+  const [usePinnedSurface, setUsePinnedSurface] = useState(() => !!board.surfaceColor);
+  const [draftSurfaceColor, setDraftSurfaceColor] = useState(() => board.surfaceColor ?? '#ffffff');
+  const [draftThemeKey, setDraftThemeKey] = useState<string>(() => board.themeKey ?? '');
 
   const { data: themes = [] } = useQuery({
     queryKey: ['themes'],
     queryFn: getThemes,
     staleTime: 60_000,
   });
-
-  useEffect(() => {
-    if (!open || !board) {
-      return;
-    }
-
-    setDraftPresets(getEffectiveStickyNotePresets(board, t));
-    setUsePinnedSurface(!!board.surfaceColor);
-    setDraftSurfaceColor(board.surfaceColor ?? '#ffffff');
-    setDraftThemeKey(board.themeKey ?? '');
-  }, [board, open, t]);
 
   const validationMessage = useMemo(() => {
     if (draftPresets.length === 0) {
@@ -82,10 +92,6 @@ export function BoardSettingsDialog({ open, onClose, onBoardChanged }: BoardSett
 
     return null;
   }, [draftPresets, t]);
-
-  if (!board) {
-    return null;
-  }
 
   const handlePresetChange = (presetId: string, changes: Partial<StickyNotePreset>) => {
     setDraftPresets((current) => current.map((preset) => (
@@ -130,7 +136,7 @@ export function BoardSettingsDialog({ open, onClose, onBoardChanged }: BoardSett
   };
 
   return (
-    <Dialog open={open} onClose={onClose} fullWidth maxWidth="sm">
+    <Dialog open onClose={onClose} fullWidth maxWidth="sm">
       <DialogTitle>{t('boardSettings.title')}</DialogTitle>
       <DialogContent dividers>
         <Stack spacing={2}>

@@ -2,7 +2,7 @@ import { useEffect, useRef, type CSSProperties } from 'react';
 import type { BoardElement } from '../../../types/models';
 import { contrastingTextColor } from '../../../utils/colorUtils';
 import { resolveFontFamily, resolveLabelFontSize, resolveTextFontSize } from '../../../utils/textLayout';
-import { getFrameHeaderHeight, resolveFrameTitleFontSize } from './FrameRenderer';
+import { getFrameHeaderHeight, resolveFrameTitleFontSize } from './frameLayout';
 
 function isTextContentElement(
   element: BoardElement,

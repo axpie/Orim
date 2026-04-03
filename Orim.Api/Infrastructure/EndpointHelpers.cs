@@ -9,11 +9,20 @@ namespace Orim.Api.Infrastructure;
 
 internal static class EndpointHelpers
 {
+    internal const string AuthCookieName = "orim_auth";
+
     internal static string ResolveDisplayName(User user) =>
         string.IsNullOrWhiteSpace(user.DisplayName) ? user.Username : user.DisplayName.Trim();
 
-    internal static LoginResponse CreateLoginResponse(User user, JwtConfiguration jwt) =>
-        new(GenerateJwtToken(user, jwt), user.Id, user.Username, ResolveDisplayName(user), user.Role);
+    internal static LoginResponse CreateLoginResponse(HttpContext context, User user, JwtConfiguration jwt)
+    {
+        var token = GenerateJwtToken(user, jwt);
+        context.Response.Cookies.Append(AuthCookieName, token, CreateAuthCookieOptions(context, jwt.ExpiryMinutes));
+        return new(user.Id, user.Username, ResolveDisplayName(user), user.Role);
+    }
+
+    internal static void ClearAuthCookie(HttpContext context) =>
+        context.Response.Cookies.Delete(AuthCookieName, CreateAuthCookieOptions(context, 0));
 
     internal static UserDto ToUserDto(User user) =>
         new(user.Id, user.Username, ResolveDisplayName(user), user.Role, user.IsActive, user.CreatedAt);
@@ -38,6 +47,38 @@ internal static class EndpointHelpers
         }
 
         identity.AddClaim(new Claim(claimType, value));
+    }
+
+    internal static object CreateErrorPayload(HttpContext context, string message) => new
+    {
+        error = message,
+        message,
+        requestId = context.TraceIdentifier
+    };
+
+    internal static IResult BadRequest(HttpContext context, string message) =>
+        Results.Json(CreateErrorPayload(context, message), statusCode: StatusCodes.Status400BadRequest);
+
+    internal static IResult NotFound(HttpContext context, string message) =>
+        Results.Json(CreateErrorPayload(context, message), statusCode: StatusCodes.Status404NotFound);
+
+    internal static IResult ServiceUnavailable(HttpContext context, string message) =>
+        Results.Json(CreateErrorPayload(context, message), statusCode: StatusCodes.Status503ServiceUnavailable);
+
+    private static CookieOptions CreateAuthCookieOptions(HttpContext context, int expiryMinutes)
+    {
+        var environment = context.RequestServices.GetRequiredService<IHostEnvironment>();
+        return new CookieOptions
+        {
+            HttpOnly = true,
+            IsEssential = true,
+            Path = "/",
+            SameSite = SameSiteMode.Lax,
+            Secure = !environment.IsDevelopment(),
+            Expires = expiryMinutes > 0
+                ? DateTimeOffset.UtcNow.AddMinutes(expiryMinutes)
+                : DateTimeOffset.UnixEpoch
+        };
     }
 
     private static string GenerateJwtToken(User user, JwtConfiguration jwt)

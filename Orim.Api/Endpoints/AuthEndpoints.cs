@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
 using Orim.Api.Contracts;
@@ -13,14 +14,14 @@ internal static class AuthEndpoints
 {
     internal static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder app)
     {
-        app.MapPost("/api/auth/login", async (LoginRequest request, UserService userService, JwtConfiguration jwt) =>
+        app.MapPost("/api/auth/login", async (LoginRequest request, HttpContext context, UserService userService, JwtConfiguration jwt) =>
         {
             var user = await userService.AuthenticateAsync(request.Username, request.Password);
             if (user is null)
                 return Results.Unauthorized();
 
-            return Results.Ok(EndpointHelpers.CreateLoginResponse(user, jwt));
-        });
+            return Results.Ok(EndpointHelpers.CreateLoginResponse(context, user, jwt));
+        }).RequireRateLimiting("auth");
 
         app.MapGet("/api/auth/providers", (IOptions<MicrosoftEntraOptions> msOptions, IOptions<GoogleOAuthOptions> googleOptions) =>
         {
@@ -46,6 +47,7 @@ internal static class AuthEndpoints
                 IOptions<MicrosoftEntraOptions> options,
                 JwtConfiguration jwt,
                 ILogger<Program> logger,
+                HttpContext context,
                 CancellationToken cancellationToken) =>
             {
                 if (!options.Value.IsConfigured)
@@ -74,14 +76,14 @@ internal static class AuthEndpoints
                         identity.Username,
                         identity.TenantId));
 
-                    return Results.Ok(EndpointHelpers.CreateLoginResponse(user, jwt));
+                    return Results.Ok(EndpointHelpers.CreateLoginResponse(context, user, jwt));
                 }
                 catch (InvalidOperationException ex)
                 {
                     logger.LogWarning(ex, "Microsoft sign-in could not be linked to an ORIM user.");
-                    return Results.BadRequest(ex.Message);
+                    return EndpointHelpers.BadRequest(context, "The sign-in could not be completed.");
                 }
-            }).AllowAnonymous();
+            }).AllowAnonymous().RequireRateLimiting("auth");
 
         app.MapPost(
             "/api/auth/google/exchange",
@@ -91,6 +93,7 @@ internal static class AuthEndpoints
                 IOptions<GoogleOAuthOptions> options,
                 JwtConfiguration jwt,
                 ILogger<Program> logger,
+                HttpContext context,
                 CancellationToken cancellationToken) =>
             {
                 if (!options.Value.IsConfigured)
@@ -119,14 +122,14 @@ internal static class AuthEndpoints
                         identity.Username,
                         string.IsNullOrWhiteSpace(identity.HostedDomain) ? null : identity.HostedDomain));
 
-                    return Results.Ok(EndpointHelpers.CreateLoginResponse(user, jwt));
+                    return Results.Ok(EndpointHelpers.CreateLoginResponse(context, user, jwt));
                 }
                 catch (InvalidOperationException ex)
                 {
                     logger.LogWarning(ex, "Google sign-in could not be linked to an ORIM user.");
-                    return Results.BadRequest(ex.Message);
+                    return EndpointHelpers.BadRequest(context, "The sign-in could not be completed.");
                 }
-            }).AllowAnonymous();
+            }).AllowAnonymous().RequireRateLimiting("auth");
 
         app.MapPost("/api/auth/refresh", [Authorize] async (HttpContext context, UserService userService, JwtConfiguration jwt) =>
         {
@@ -137,8 +140,14 @@ internal static class AuthEndpoints
             if (user is null || !user.IsActive)
                 return Results.Unauthorized();
 
-            return Results.Ok(EndpointHelpers.CreateLoginResponse(user, jwt));
+            return Results.Ok(EndpointHelpers.CreateLoginResponse(context, user, jwt));
         });
+
+        app.MapPost("/api/auth/logout", (HttpContext context) =>
+        {
+            EndpointHelpers.ClearAuthCookie(context);
+            return Results.NoContent();
+        }).AllowAnonymous();
 
         return app;
     }

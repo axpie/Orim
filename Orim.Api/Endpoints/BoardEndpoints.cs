@@ -299,7 +299,8 @@ internal static class BoardEndpoints
             HttpContext context,
             BoardService boardService,
             BoardCommentService boardCommentService,
-            BoardCommentNotifier boardCommentNotifier) =>
+            BoardCommentNotifier boardCommentNotifier,
+            ILogger<Program> logger) =>
         {
             var board = await boardService.GetBoardAsync(id);
             if (board is null) return Results.NotFound();
@@ -318,7 +319,8 @@ internal static class BoardEndpoints
             }
             catch (ArgumentException exception)
             {
-                return Results.BadRequest(exception.Message);
+                logger.LogWarning(exception, "Creating a comment failed for board {BoardId}.", id);
+                return EndpointHelpers.BadRequest(context, "The comment could not be created.");
             }
         });
 
@@ -329,7 +331,8 @@ internal static class BoardEndpoints
             HttpContext context,
             BoardService boardService,
             BoardCommentService boardCommentService,
-            BoardCommentNotifier boardCommentNotifier) =>
+            BoardCommentNotifier boardCommentNotifier,
+            ILogger<Program> logger) =>
         {
             var board = await boardService.GetBoardAsync(id);
             if (board is null) return Results.NotFound();
@@ -348,11 +351,13 @@ internal static class BoardEndpoints
             }
             catch (ArgumentException exception)
             {
-                return Results.BadRequest(exception.Message);
+                logger.LogWarning(exception, "Creating a comment reply failed for board {BoardId}.", id);
+                return EndpointHelpers.BadRequest(context, "The reply could not be created.");
             }
             catch (InvalidOperationException exception)
             {
-                return Results.NotFound(exception.Message);
+                logger.LogWarning(exception, "Creating a comment reply failed because the comment was missing for board {BoardId}.", id);
+                return EndpointHelpers.NotFound(context, "The comment could not be found.");
             }
         });
 

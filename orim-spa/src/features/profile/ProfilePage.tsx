@@ -29,7 +29,7 @@ export function ProfilePage() {
   const currentUser = useAuthStore((s) => s.user);
   const setUser = useAuthStore((s) => s.setUser);
   const [message, setMessage] = useState<MessageState>(null);
-  const [displayName, setDisplayName] = useState('');
+  const [displayNameDraft, setDisplayNameDraft] = useState<string | null>(null);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
@@ -50,12 +50,6 @@ export function ProfilePage() {
     return () => window.clearTimeout(timeoutId);
   }, [message]);
 
-  useEffect(() => {
-    if (profileQuery.data) {
-      setDisplayName(profileQuery.data.displayName);
-    }
-  }, [profileQuery.data]);
-
   const profileMutation = useMutation({
     mutationFn: (value: string) => updateProfile(userId, { displayName: value }),
     onSuccess: (updatedUser) => {
@@ -70,7 +64,7 @@ export function ProfilePage() {
         });
       }
 
-      setDisplayName(updatedUser.displayName);
+      setDisplayNameDraft(null);
       setMessage({ severity: 'success', text: t('profile.profileUpdated') });
     },
     onError: (error) => {
@@ -102,6 +96,7 @@ export function ProfilePage() {
     && confirmPassword.length > 0
     && !isPasswordMismatch;
   const currentDisplayName = profileQuery.data?.displayName ?? currentUser.displayName;
+  const displayName = displayNameDraft ?? currentDisplayName;
   const normalizedDisplayName = displayName.trim();
   const canSaveProfile =
     normalizedDisplayName.length > 0
@@ -144,7 +139,7 @@ export function ProfilePage() {
                 <TextField
                   label={t('profile.displayName')}
                   value={displayName}
-                  onChange={(event) => setDisplayName(event.target.value)}
+                  onChange={(event) => setDisplayNameDraft(event.target.value)}
                   fullWidth
                   disabled={profileMutation.isPending}
                   helperText={t('profile.displayNameHint')}

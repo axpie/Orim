@@ -1,4 +1,5 @@
 using PdfSharp.Fonts;
+using Microsoft.AspNetCore.RateLimiting;
 using Orim.Api.Endpoints;
 using Orim.Api.Hubs;
 using Orim.Api.Infrastructure;
@@ -22,12 +23,14 @@ app.UseOrimMiddleware();
 
 app.MapAuthEndpoints();
 app.MapUserEndpoints();
+app.MapAdminEndpoints();
 app.MapBoardEndpoints();
 app.MapThemeEndpoints();
 app.MapAssistantEndpoints();
 app.MapImageEndpoints();
+app.MapHealthEndpoints();
 
-app.MapHub<BoardHub>("/hubs/board");
+app.MapHub<BoardHub>("/hubs/board").RequireRateLimiting("signalr");
 app.MapFallbackToFile("/index.html");
 
 app.Run();

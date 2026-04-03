@@ -5,6 +5,7 @@ namespace Orim.Core.Services;
 public static class BoardTemplateCatalog
 {
     public const string BlankTemplateId = "blank";
+    public const string WelcomeTemplateId = "welcome-board";
     public const string ProcessTemplateId = "process-flow";
     public const string OrgChartTemplateId = "org-chart";
     public const string SwimlaneTemplateId = "swimlane";
@@ -14,6 +15,7 @@ public static class BoardTemplateCatalog
     public static IReadOnlyList<BoardTemplateDefinition> Definitions { get; } =
     [
         new(BlankTemplateId, "Dashboard", "TemplateBlankTitle", "TemplateBlankDescription"),
+        new(WelcomeTemplateId, "School", "TemplateWelcomeTitle", "TemplateWelcomeDescription"),
         new(ProcessTemplateId, "AltRoute", "TemplateProcessTitle", "TemplateProcessDescription"),
         new(OrgChartTemplateId, "AccountTree", "TemplateOrgChartTitle", "TemplateOrgChartDescription"),
         new(SwimlaneTemplateId, "ViewWeek", "TemplateSwimlaneTitle", "TemplateSwimlaneDescription"),
@@ -29,6 +31,7 @@ public static class BoardTemplateCatalog
         var normalizedTemplateId = string.IsNullOrWhiteSpace(templateId) ? BlankTemplateId : templateId;
         var elements = normalizedTemplateId switch
         {
+            WelcomeTemplateId => CreateWelcomeTemplate(),
             ProcessTemplateId => CreateProcessFlowTemplate(),
             OrgChartTemplateId => CreateOrgChartTemplate(),
             SwimlaneTemplateId => CreateSwimlaneTemplate(),
@@ -66,6 +69,39 @@ public static class BoardTemplateCatalog
             Arrow(analyze, DockPoint.Right, decision, DockPoint.Left),
             Arrow(decision, DockPoint.Right, finish, DockPoint.Left),
             Text("Nutze dieses Board als Ausgangspunkt fuer Prozessdiagramme.", 120, 260, 500, 40, "#334155")
+        ];
+    }
+
+    private static List<BoardElement> CreateWelcomeTemplate()
+    {
+        var title = Text("Willkommen bei ORIM", 120, 60, 540, 48, "#0F172A");
+        title.FontSize = 32;
+        title.IsBold = true;
+
+        var stepOne = Shape("1. Klicke eine Form an", 120, 180, 260, 110, ShapeType.Rectangle, "#DBEAFE");
+        var stepTwo = Shape("2. Ziehe Elemente frei", 450, 180, 260, 110, ShapeType.Rectangle, "#DCFCE7");
+        var stepThree = Shape("3. Teile dein Board", 780, 180, 260, 110, ShapeType.Rectangle, "#FCE7F3");
+        var note = Shape("Probiere danach Kommentare, Farben und Vorlagen aus.", 285, 390, 590, 110, ShapeType.Rectangle, "#FEF3C7");
+
+        var arrowOne = Arrow(stepOne, DockPoint.Right, stepTwo, DockPoint.Left);
+        arrowOne.Label = "bearbeiten";
+
+        var arrowTwo = Arrow(stepTwo, DockPoint.Right, stepThree, DockPoint.Left);
+        arrowTwo.Label = "zusammenarbeiten";
+
+        var helper = Text("Dieses Starter-Board fuehrt dich durch die ersten drei Aktionen, die neue Teams am schnellsten produktiv machen.", 120, 560, 880, 56, "#334155");
+        helper.FontSize = 22;
+
+        return
+        [
+            title,
+            stepOne,
+            stepTwo,
+            stepThree,
+            note,
+            arrowOne,
+            arrowTwo,
+            helper
         ];
     }
 

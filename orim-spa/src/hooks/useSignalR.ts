@@ -22,6 +22,7 @@ interface UseSignalROptions {
   sharePassword?: string | null;
   displayName?: string | null;
   syncProfileDisplayNameChanges?: boolean;
+  beforeOutboxFlush?: (context: { boardId: string; isReconnect: boolean }) => Promise<void> | void;
   onBoardChanged?: (notification: BoardChangeNotification) => void;
   onBoardOperationApplied?: (notification: BoardOperationNotification) => void;
   onBoardStateUpdated?: (notification: BoardStateUpdateNotification) => void;
@@ -48,6 +49,7 @@ function getErrorMessage(error: unknown): string {
 }
 
 const CURSOR_UPDATE_INTERVAL_MS = 40;
+const OUTBOX_FLUSH_BATCH_SIZE = 25;
 
 export function useSignalR({
   boardId,
@@ -55,6 +57,7 @@ export function useSignalR({
   sharePassword,
   displayName,
   syncProfileDisplayNameChanges = false,
+  beforeOutboxFlush,
   onBoardChanged,
   onBoardOperationApplied,
   onBoardStateUpdated,
@@ -77,6 +80,14 @@ export function useSignalR({
   const shareTokenRef = useRef(shareToken ?? null);
   const sharePasswordRef = useRef(sharePassword ?? null);
   const displayNameRef = useRef(displayName ?? null);
+  const beforeOutboxFlushRef = useRef(beforeOutboxFlush);
+  const onBoardChangedRef = useRef(onBoardChanged);
+  const onBoardOperationAppliedRef = useRef(onBoardOperationApplied);
+  const onBoardStateUpdatedRef = useRef(onBoardStateUpdated);
+  const onCommentUpsertedRef = useRef(onCommentUpserted);
+  const onCommentDeletedRef = useRef(onCommentDeleted);
+  const onCursorUpdatedRef = useRef(onCursorUpdated);
+  const onPresenceUpdatedRef = useRef(onPresenceUpdated);
   const [connectionId, setConnectionId] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<RealtimeConnectionState>('disconnected');
   const [lastError, setLastError] = useState<string | null>(null);
@@ -84,6 +95,14 @@ export function useSignalR({
   shareTokenRef.current = shareToken ?? null;
   sharePasswordRef.current = sharePassword ?? null;
   displayNameRef.current = displayName ?? null;
+  beforeOutboxFlushRef.current = beforeOutboxFlush;
+  onBoardChangedRef.current = onBoardChanged;
+  onBoardOperationAppliedRef.current = onBoardOperationApplied;
+  onBoardStateUpdatedRef.current = onBoardStateUpdated;
+  onCommentUpsertedRef.current = onCommentUpserted;
+  onCommentDeletedRef.current = onCommentDeleted;
+  onCursorUpdatedRef.current = onCursorUpdated;
+  onPresenceUpdatedRef.current = onPresenceUpdated;
 
   const handleInvokeError = useCallback((error: unknown) => {
     setLastError(getErrorMessage(error));
@@ -137,6 +156,23 @@ export function useSignalR({
     useOperationOutboxStore.getState().enqueueOperations(currentBoardId, operations);
   }, []);
 
+  const prepareOutboxFlush = useCallback(
+    async (isReconnect: boolean) => {
+      const currentBoardId = boardIdRef.current;
+      const callback = beforeOutboxFlushRef.current;
+      if (!currentBoardId || !callback) {
+        return;
+      }
+
+      try {
+        await callback({ boardId: currentBoardId, isReconnect });
+      } catch (error) {
+        handleInvokeError(error);
+      }
+    },
+    [handleInvokeError],
+  );
+
   const flushOutbox = useCallback(async () => {
     const currentBoardId = boardIdRef.current;
     if (!currentBoardId || isFlushingOutboxRef.current) {
@@ -147,17 +183,23 @@ export function useSignalR({
 
     try {
       while (true) {
-        const [entry] = useOperationOutboxStore.getState().getBoardEntries(currentBoardId);
-        if (!entry) {
+        const entries = useOperationOutboxStore.getState().getBoardEntries(currentBoardId);
+        if (entries.length === 0) {
           break;
         }
 
-        const sent = await invokeIfConnected('ApplyBoardOperation', currentBoardId, entry.operation);
+        const batchEntries = entries.slice(0, OUTBOX_FLUSH_BATCH_SIZE);
+        const batchOperations = batchEntries.map((entry) => entry.operation);
+        const sent = batchOperations.length === 1
+          ? await invokeIfConnected('ApplyBoardOperation', currentBoardId, batchOperations[0])
+          : await invokeIfConnected('ApplyBoardOperations', currentBoardId, batchOperations);
         if (!sent) {
           break;
         }
 
-        useOperationOutboxStore.getState().removeEntry(entry.id);
+        for (const entry of batchEntries) {
+          useOperationOutboxStore.getState().removeEntry(entry.id);
+        }
       }
     } finally {
       isFlushingOutboxRef.current = false;
@@ -176,7 +218,7 @@ export function useSignalR({
 
     const connection = new signalR.HubConnectionBuilder()
       .withUrl(hubUrl, {
-        accessTokenFactory: () => localStorage.getItem('orim_token') ?? '',
+        withCredentials: true,
       })
       .withAutomaticReconnect()
       .configureLogging(signalR.LogLevel.Warning)
@@ -203,31 +245,31 @@ export function useSignalR({
     };
 
     connection.on('BoardChanged', (notification: BoardChangeNotification) => {
-      onBoardChanged?.(notification);
+      onBoardChangedRef.current?.(notification);
     });
 
     connection.on('BoardStateUpdated', (notification: BoardStateUpdateNotification) => {
-      onBoardStateUpdated?.(notification);
+      onBoardStateUpdatedRef.current?.(notification);
     });
 
     connection.on('BoardOperationApplied', (notification: BoardOperationNotification) => {
-      onBoardOperationApplied?.(notification);
+      onBoardOperationAppliedRef.current?.(notification);
     });
 
     connection.on('CommentUpserted', (notification: BoardCommentNotification) => {
-      onCommentUpserted?.(notification);
+      onCommentUpsertedRef.current?.(notification);
     });
 
     connection.on('CommentDeleted', (notification: BoardCommentDeletedNotification) => {
-      onCommentDeleted?.(notification);
+      onCommentDeletedRef.current?.(notification);
     });
 
     connection.on('CursorUpdated', (cursor: CursorPresence) => {
-      onCursorUpdated?.(cursor);
+      onCursorUpdatedRef.current?.(cursor);
     });
 
     connection.on('PresenceUpdated', (cursors: CursorPresence[]) => {
-      onPresenceUpdated?.(cursors);
+      onPresenceUpdatedRef.current?.(cursors);
     });
 
     if (syncProfileDisplayNameChanges) {
@@ -249,18 +291,23 @@ export function useSignalR({
       });
     }
 
-    connection
-      .start()
-      .then(async () => {
-        await joinCurrentBoard();
-        if (isDisposed) {
-          return;
-        }
+      connection
+        .start()
+        .then(async () => {
+          await joinCurrentBoard();
+          if (isDisposed) {
+            return;
+          }
 
-        setConnectionId(connection.connectionId ?? null);
-        setConnectionState('connected');
-        setLastError(null);
-        void flushOutbox();
+          await prepareOutboxFlush(false);
+          if (isDisposed) {
+            return;
+          }
+
+          setConnectionId(connection.connectionId ?? null);
+          setConnectionState('connected');
+          setLastError(null);
+          void flushOutbox();
       })
       .catch((error) => {
         if (isDisposed) {
@@ -289,6 +336,11 @@ export function useSignalR({
 
       try {
         await joinCurrentBoard();
+        if (isDisposed) {
+          return;
+        }
+
+        await prepareOutboxFlush(true);
         if (isDisposed) {
           return;
         }
@@ -346,8 +398,7 @@ export function useSignalR({
       setConnectionState('disconnected');
       setLastError(null);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [boardId, flushOutbox, handleInvokeError, syncDisplayName, syncProfileDisplayNameChanges]);
+  }, [boardId, flushOutbox, handleInvokeError, prepareOutboxFlush, syncDisplayName, syncProfileDisplayNameChanges]);
 
   useEffect(() => {
     const normalizedDisplayName = displayName?.trim() || null;
@@ -457,13 +508,12 @@ export function useSignalR({
       }
 
       void (async () => {
-        for (let index = 0; index < operations.length; index += 1) {
-          const sent = await invokeIfConnected('ApplyBoardOperation', currentBoardId, operations[index]);
-          if (!sent) {
-            enqueueOperations(operations.slice(index));
-            void flushOutbox();
-            break;
-          }
+        const sent = operations.length === 1
+          ? await invokeIfConnected('ApplyBoardOperation', currentBoardId, operations[0])
+          : await invokeIfConnected('ApplyBoardOperations', currentBoardId, operations);
+        if (!sent) {
+          enqueueOperations(operations);
+          void flushOutbox();
         }
       })();
     },

@@ -30,6 +30,7 @@ import {
   HorizontalLabelAlignment,
   ShapeType,
   VerticalLabelAlignment,
+  type BoardComment,
   type BoardElement,
   type ShapeElement,
   type TextElement,
@@ -289,6 +290,9 @@ function getResizeCursor(handle: ResizeHandle | null | undefined): string | null
   }
 }
 
+const EMPTY_ELEMENTS: BoardElement[] = [];
+const EMPTY_COMMENTS: BoardComment[] = [];
+
 export function WhiteboardCanvas({
   editable = true,
   onBoardChanged,
@@ -310,8 +314,8 @@ export function WhiteboardCanvas({
   const [isCanvasFocused, setIsCanvasFocused] = useState(false);
 
   const board = useBoardStore((s) => s.board);
-  const elements = board?.elements ?? [];
-  const comments = board?.comments ?? [];
+  const elements = board?.elements ?? EMPTY_ELEMENTS;
+  const comments = board?.comments ?? EMPTY_COMMENTS;
   const selectedIds = useBoardStore((s) => s.selectedElementIds);
   const activeTool = useBoardStore((s) => s.activeTool);
   const zoom = useBoardStore((s) => s.zoom);
@@ -346,11 +350,12 @@ export function WhiteboardCanvas({
   });
   const activeTheme = themes.find((theme) => theme.key === (board?.themeKey ?? userThemeKey)) ?? themes[0] ?? null;
   const rawBoardDefaults = activeTheme?.boardDefaults ?? FALLBACK_BOARD_DEFAULTS;
+  const boardSurfaceColor = board?.surfaceColor ?? null;
   // If the board has a pinned surface color, use it for all users so everyone
   // sees the same canvas background regardless of their personal theme choice.
-  const boardDefaults = board?.surfaceColor
-    ? { ...rawBoardDefaults, surfaceColor: board.surfaceColor }
-    : rawBoardDefaults;
+  const boardDefaults = useMemo(() => (boardSurfaceColor
+    ? { ...rawBoardDefaults, surfaceColor: boardSurfaceColor }
+    : rawBoardDefaults), [boardSurfaceColor, rawBoardDefaults]);
 
   const pushCommand = useCommandStack((s) => s.push);
   const peekUndo = useCommandStack((s) => s.peekUndo);
@@ -437,7 +442,10 @@ export function WhiteboardCanvas({
       || selectedElements[0].$type === 'frame');
   const canSelectAll = editable && elements.length > 0 && selectedIds.length !== elements.length;
   const canPaste = useMemo(
-    () => hasClipboardElementsAvailable(),
+    () => {
+      void clipboardVersion;
+      return hasClipboardElementsAvailable();
+    },
     [clipboardVersion],
   );
   const zOrderAvailability = useMemo(
@@ -1085,6 +1093,7 @@ export function WhiteboardCanvas({
     beginInlineEditingElement,
     selectAccessibleElement,
     setActiveTool,
+    setSelectedElementIds,
     ungroupSelectedElements,
   ]);
 
@@ -1594,7 +1603,7 @@ export function WhiteboardCanvas({
         }
       }
     },
-    [editable, activeTool, elements, selectedIds, cameraX, cameraY, zoom, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, expandSelectionWithGroups, findTopmostFrameAtPoint, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pendingStickyNotePresetId, pushCommand, onBoardChanged, board, boardDefaults, spacePanActive, commentPlacementMode, onCreateCommentAnchor],
+    [editable, activeTool, elements, selectedIds, cameraX, cameraY, getWorldPos, getScreenPos, getElementIdFromTarget, getResizeHandleFromTarget, getArrowEndpointHandleFromTarget, resolveArrowEndpoint, expandSelectionWithGroups, findTopmostFrameAtPoint, setSelectedElementIds, setActiveTool, addElement, pendingIconName, pendingStickyNotePresetId, pushCommand, onBoardChanged, board, boardDefaults, spacePanActive, commentPlacementMode, onCreateCommentAnchor, dockSnapRadius],
   );
 
   const handleContextMenu = useCallback((e: Konva.KonvaEventObject<PointerEvent>) => {
@@ -2088,7 +2097,7 @@ export function WhiteboardCanvas({
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, zoom, getResizeHandleFromTarget, getWorldPos, setCamera, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, updateElement, boardDefaults, emitUpdatedOperations, selectedIds],
+    [isPanning, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, emitUpdatedOperations, selectedIds, onBoardChanged],
   );
 
   const handleTouchStart = useCallback(

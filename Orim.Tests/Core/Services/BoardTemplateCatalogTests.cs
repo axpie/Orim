@@ -6,9 +6,9 @@ namespace Orim.Tests.Core.Services;
 public class BoardTemplateCatalogTests
 {
     [Fact]
-    public void Definitions_Contains6Templates()
+    public void Definitions_Contains7Templates()
     {
-        Assert.Equal(6, BoardTemplateCatalog.Definitions.Count);
+        Assert.Equal(7, BoardTemplateCatalog.Definitions.Count);
     }
 
     [Fact]
@@ -17,6 +17,7 @@ public class BoardTemplateCatalogTests
         var ids = BoardTemplateCatalog.Definitions.Select(d => d.Id).ToList();
 
         Assert.Contains(BoardTemplateCatalog.BlankTemplateId, ids);
+        Assert.Contains(BoardTemplateCatalog.WelcomeTemplateId, ids);
         Assert.Contains(BoardTemplateCatalog.ProcessTemplateId, ids);
         Assert.Contains(BoardTemplateCatalog.OrgChartTemplateId, ids);
         Assert.Contains(BoardTemplateCatalog.SwimlaneTemplateId, ids);
@@ -29,6 +30,7 @@ public class BoardTemplateCatalogTests
     [InlineData("")]
     [InlineData("   ")]
     [InlineData("blank")]
+    [InlineData("welcome-board")]
     [InlineData("process-flow")]
     [InlineData("org-chart")]
     [InlineData("swimlane")]
@@ -57,6 +59,17 @@ public class BoardTemplateCatalogTests
         var elements = BoardTemplateCatalog.CreateElements(templateId);
 
         Assert.Empty(elements);
+    }
+
+    [Fact]
+    public void CreateElements_Welcome_ReturnsElements()
+    {
+        var elements = BoardTemplateCatalog.CreateElements(BoardTemplateCatalog.WelcomeTemplateId);
+
+        Assert.NotEmpty(elements);
+        Assert.Contains(elements, e => e is ShapeElement);
+        Assert.Contains(elements, e => e is ArrowElement a && !string.IsNullOrEmpty(a.Label));
+        Assert.Contains(elements, e => e is TextElement);
     }
 
     [Fact]
@@ -110,6 +123,7 @@ public class BoardTemplateCatalogTests
 
     [Theory]
     [InlineData("process-flow")]
+    [InlineData("welcome-board")]
     [InlineData("org-chart")]
     [InlineData("swimlane")]
     [InlineData("decision-tree")]
@@ -126,6 +140,7 @@ public class BoardTemplateCatalogTests
 
     [Theory]
     [InlineData("process-flow")]
+    [InlineData("welcome-board")]
     [InlineData("org-chart")]
     [InlineData("swimlane")]
     [InlineData("decision-tree")]
@@ -139,6 +154,7 @@ public class BoardTemplateCatalogTests
     }
 
     [Theory]
+    [InlineData("welcome-board")]
     [InlineData("process-flow")]
     [InlineData("org-chart")]
     [InlineData("decision-tree")]

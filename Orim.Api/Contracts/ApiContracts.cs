@@ -5,7 +5,7 @@ using Orim.Core.Models;
 namespace Orim.Api.Contracts;
 
 public sealed record LoginRequest(string Username, string Password);
-public sealed record LoginResponse(string Token, Guid UserId, string Username, string DisplayName, UserRole Role);
+public sealed record LoginResponse(Guid UserId, string Username, string DisplayName, UserRole Role);
 public sealed record MicrosoftTokenExchangeRequest(string IdToken);
 public sealed record GoogleTokenExchangeRequest(string IdToken);
 public sealed record MicrosoftAuthProviderDto(string ClientId, string Authority, IReadOnlyList<string> Scopes);
@@ -50,3 +50,22 @@ public sealed record AssistantRequest(IReadOnlyList<ChatMessageEntry> Messages);
 public sealed record AssistantSettingsRequest(bool Enabled, string Endpoint, string DeploymentName, string? ApiKey);
 public sealed record PresenceLeaveRequest(Guid BoardId, string ClientId);
 public sealed record ThemeAvailabilityRequest(bool Enabled);
+public sealed record DeploymentReadinessResponse(
+    string EnvironmentName,
+    string ApplicationVersion,
+    string DatabaseProvider,
+    bool IsRelationalDatabase,
+    bool DatabaseConnected,
+    int PendingMigrationCount,
+    bool HttpsRedirectionEnabled,
+    bool HstsEnabled,
+    bool RequestIdHeaderEnabled,
+    bool RateLimitingEnabled,
+    bool CookieAuthEnabled,
+    bool MicrosoftSsoConfigured,
+    bool GoogleSsoConfigured,
+    bool AssistantEnabled,
+    bool AssistantConfigured,
+    int EnabledThemeCount,
+    int TotalThemeCount,
+    IReadOnlyList<string> HealthEndpoints);

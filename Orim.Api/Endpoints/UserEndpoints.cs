@@ -30,7 +30,7 @@ internal static class UserEndpoints
             return user is null ? Results.NotFound() : Results.Ok(EndpointHelpers.ToUserDto(user));
         });
 
-        app.MapPost("/api/users", [Authorize(Roles = "Admin")] async (CreateUserRequest request, UserService userService) =>
+        app.MapPost("/api/users", [Authorize(Roles = "Admin")] async (CreateUserRequest request, UserService userService, HttpContext context, ILogger<Program> logger) =>
         {
             try
             {
@@ -39,11 +39,12 @@ internal static class UserEndpoints
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
             {
-                return Results.BadRequest(ex.Message);
+                logger.LogWarning(ex, "Creating a user failed.");
+                return EndpointHelpers.BadRequest(context, "The user could not be created.");
             }
         });
 
-        app.MapPut("/api/users/{id:guid}/profile", [Authorize] async (Guid id, UpdateProfileRequest request, HttpContext context, UserService userService, IHubContext<BoardHub> boardHubContext) =>
+        app.MapPut("/api/users/{id:guid}/profile", [Authorize] async (Guid id, UpdateProfileRequest request, HttpContext context, UserService userService, IHubContext<BoardHub> boardHubContext, ILogger<Program> logger) =>
         {
             if (EndpointHelpers.GetUserId(context.User) is not { } userId)
                 return Results.Unauthorized();
@@ -60,11 +61,12 @@ internal static class UserEndpoints
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
             {
-                return Results.BadRequest(ex.Message);
+                logger.LogWarning(ex, "Updating profile failed for user {UserId}.", id);
+                return EndpointHelpers.BadRequest(context, "The profile could not be updated.");
             }
         });
 
-        app.MapPut("/api/users/{id:guid}/password", [Authorize] async (Guid id, ChangePasswordRequest request, HttpContext context, UserService userService) =>
+        app.MapPut("/api/users/{id:guid}/password", [Authorize] async (Guid id, ChangePasswordRequest request, HttpContext context, UserService userService, ILogger<Program> logger) =>
         {
             if (EndpointHelpers.GetUserId(context.User) is not { } userId)
                 return Results.Unauthorized();
@@ -88,11 +90,12 @@ internal static class UserEndpoints
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
             {
-                return Results.BadRequest(ex.Message);
+                logger.LogWarning(ex, "Updating password failed for user {UserId}.", id);
+                return EndpointHelpers.BadRequest(context, "The password could not be updated.");
             }
         });
 
-        app.MapPut("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UpdateUserRequest request, UserService userService) =>
+        app.MapPut("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UpdateUserRequest request, UserService userService, HttpContext context, ILogger<Program> logger) =>
         {
             try
             {
@@ -101,11 +104,12 @@ internal static class UserEndpoints
             }
             catch (Exception ex) when (ex is ArgumentException or InvalidOperationException)
             {
-                return Results.BadRequest(ex.Message);
+                logger.LogWarning(ex, "Updating admin-managed user {UserId} failed.", id);
+                return EndpointHelpers.BadRequest(context, "The user could not be updated.");
             }
         });
 
-        app.MapPut("/api/users/{id:guid}/deactivate", [Authorize(Roles = "Admin")] async (Guid id, UserService userService) =>
+        app.MapPut("/api/users/{id:guid}/deactivate", [Authorize(Roles = "Admin")] async (Guid id, UserService userService, HttpContext context, ILogger<Program> logger) =>
         {
             try
             {
@@ -114,11 +118,12 @@ internal static class UserEndpoints
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(ex.Message);
+                logger.LogWarning(ex, "Deactivating user {UserId} failed.", id);
+                return EndpointHelpers.BadRequest(context, "The user could not be deactivated.");
             }
         });
 
-        app.MapDelete("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UserService userService) =>
+        app.MapDelete("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UserService userService, HttpContext context, ILogger<Program> logger) =>
         {
             try
             {
@@ -127,7 +132,8 @@ internal static class UserEndpoints
             }
             catch (InvalidOperationException ex)
             {
-                return Results.BadRequest(ex.Message);
+                logger.LogWarning(ex, "Deleting user {UserId} failed.", id);
+                return EndpointHelpers.BadRequest(context, "The user could not be deleted.");
             }
         });
 

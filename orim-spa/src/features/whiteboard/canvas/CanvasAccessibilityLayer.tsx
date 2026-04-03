@@ -84,7 +84,11 @@ export function CanvasAccessibilityLayer({
 
     if (selectionAnnouncement !== lastSelectionAnnouncementRef.current) {
       lastSelectionAnnouncementRef.current = selectionAnnouncement;
-      announce(selectionAnnouncement);
+      const timeoutId = window.setTimeout(() => {
+        announce(selectionAnnouncement);
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
     }
   }, [announce, selectionAnnouncement]);
 
@@ -97,7 +101,11 @@ export function CanvasAccessibilityLayer({
 
     if (toolAnnouncement !== lastToolAnnouncementRef.current) {
       lastToolAnnouncementRef.current = toolAnnouncement;
-      announce(toolAnnouncement);
+      const timeoutId = window.setTimeout(() => {
+        announce(toolAnnouncement);
+      }, 0);
+
+      return () => window.clearTimeout(timeoutId);
     }
   }, [announce, toolAnnouncement]);
 
@@ -107,15 +115,23 @@ export function CanvasAccessibilityLayer({
       return;
     }
 
-    announce(
-      commentPlacementMode
-        ? t('a11y.commentPlacementActive')
-        : t('a11y.commentPlacementCancelled'),
-    );
+    const timeoutId = window.setTimeout(() => {
+      announce(
+        commentPlacementMode
+          ? t('a11y.commentPlacementActive')
+          : t('a11y.commentPlacementCancelled'),
+      );
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [announce, commentPlacementMode, t]);
 
   useEffect(() => {
-    announce(externalAnnouncement?.text);
+    const timeoutId = window.setTimeout(() => {
+      announce(externalAnnouncement?.text);
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
   }, [announce, externalAnnouncement]);
 
   return (
