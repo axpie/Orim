@@ -66,6 +66,7 @@ interface BoardTopBarProps {
   showBackButton?: boolean;
   onBack?: () => void;
   onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
+  onRenameTitle?: (title: string, previousTitle: string) => void;
   onOpenSnapshots?: () => void;
   onExportPng?: () => Promise<void> | void;
   collaborators?: CursorPresence[];
@@ -90,6 +91,7 @@ export function BoardTopBar({
   showBackButton = true,
   onBack,
   onBoardChanged,
+  onRenameTitle,
   onOpenSnapshots,
   onExportPng,
   collaborators = [],
@@ -100,6 +102,7 @@ export function BoardTopBar({
   const isCompact = useMediaQuery(theme.breakpoints.down('sm'));
   const navigate = useNavigate();
   const board = useBoardStore((s) => s.board);
+  const setBoardTitle = useBoardStore((s) => s.setBoardTitle);
   const updateBoard = useBoardStore((s) => s.updateBoard);
 
   const [editing, setEditing] = useState(false);
@@ -124,7 +127,15 @@ export function BoardTopBar({
   const handleTitleBlur = () => {
     setEditing(false);
     const trimmedTitle = title.trim();
-    if (trimmedTitle && trimmedTitle !== board?.title) {
+    const previousTitle = board?.title ?? '';
+
+    if (trimmedTitle && trimmedTitle !== previousTitle) {
+      if (onRenameTitle) {
+        setBoardTitle(trimmedTitle);
+        onRenameTitle(trimmedTitle, previousTitle);
+        return;
+      }
+
       updateBoard({ title: trimmedTitle });
       if (board) {
         onBoardChanged?.('Metadata', createBoardMetadataUpdatedOperation({

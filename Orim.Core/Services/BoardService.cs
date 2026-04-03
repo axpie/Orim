@@ -7,6 +7,7 @@ namespace Orim.Core.Services;
 
 public class BoardService
 {
+    private const int MaxBoardTitleLength = 200;
     private const int MaxSnapshots = 30;
     private const int SharePasswordIterations = 100_000;
     private const int SharePasswordSaltSize = 16;
@@ -24,17 +25,12 @@ public class BoardService
 
     public async Task<Board> CreateBoardAsync(string title, Guid ownerId, string ownerUsername, string? templateId = null, string? themeKey = null)
     {
-        ArgumentException.ThrowIfNullOrWhiteSpace(title);
-
-        if (title.Length > 200)
-            throw new ArgumentException("Board title must not exceed 200 characters.", nameof(title));
-
         if (!BoardTemplateCatalog.IsKnownTemplate(templateId))
             throw new InvalidOperationException($"Unknown board template '{templateId}'.");
 
         var board = new Board
         {
-            Title = title.Trim(),
+            Title = NormalizeBoardTitle(title),
             OwnerId = ownerId,
             ThemeKey = themeKey,
             Elements = CloneElements(BoardTemplateCatalog.CreateElements(templateId)),
@@ -50,11 +46,10 @@ public class BoardService
     public async Task<Board> CreateBoardFromImportAsync(Board importedBoard, string title, Guid ownerId, string ownerUsername)
     {
         ArgumentNullException.ThrowIfNull(importedBoard);
-        ArgumentException.ThrowIfNullOrWhiteSpace(title);
 
         var board = new Board
         {
-            Title = title.Trim(),
+            Title = NormalizeBoardTitle(title),
             OwnerId = ownerId,
             LabelOutlineEnabled = importedBoard.LabelOutlineEnabled,
             ArrowOutlineEnabled = importedBoard.ArrowOutlineEnabled,
@@ -175,6 +170,12 @@ public class BoardService
         board.UpdatedAt = DateTime.UtcNow;
         await _boardRepository.SaveAsync(board);
         await _boardChangeNotifier.NotifyBoardChangedAsync(board.Id, sourceClientId, kind);
+    }
+
+    public void SetBoardTitle(Board board, string title)
+    {
+        ArgumentNullException.ThrowIfNull(board);
+        board.Title = NormalizeBoardTitle(title);
     }
 
     public async Task DeleteBoardAsync(Guid boardId)
@@ -357,6 +358,17 @@ public class BoardService
             })
             .DistinctBy(preset => preset.Id, StringComparer.OrdinalIgnoreCase)
             .ToList();
+    }
+
+    private static string NormalizeBoardTitle(string title, string paramName = "title")
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(title, paramName);
+
+        var normalizedTitle = title.Trim();
+        if (normalizedTitle.Length > MaxBoardTitleLength)
+            throw new ArgumentException($"Board title must not exceed {MaxBoardTitleLength} characters.", paramName);
+
+        return normalizedTitle;
     }
 
     private static List<BoardElement> CloneElements(IEnumerable<BoardElement> elements)

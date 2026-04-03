@@ -55,7 +55,7 @@ internal static class BoardEndpoints
             return Results.Created($"/api/boards/{board.Id}", board);
         });
 
-        app.MapPut("/api/boards/{id:guid}", [Authorize] async (Guid id, Board updatedBoard, HttpContext context, BoardService boardService) =>
+        app.MapPut("/api/boards/{id:guid}", [Authorize] async (Guid id, SaveBoardStateRequest request, HttpContext context, BoardService boardService) =>
         {
             var board = await boardService.GetBoardAsync(id);
             if (board is null) return Results.NotFound();
@@ -66,9 +66,37 @@ internal static class BoardEndpoints
             if (!boardService.HasAccess(board, userId, BoardRole.Editor))
                 return Results.Forbid();
 
-            board.Title = updatedBoard.Title;
+            var updatedBoard = new Board
+            {
+                LabelOutlineEnabled = request.LabelOutlineEnabled,
+                ArrowOutlineEnabled = request.ArrowOutlineEnabled,
+                SurfaceColor = request.SurfaceColor,
+                ThemeKey = request.ThemeKey,
+                CustomColors = request.CustomColors?.ToList() ?? [],
+                RecentColors = request.RecentColors?.ToList() ?? [],
+                StickyNotePresets = request.StickyNotePresets?.ToList() ?? [],
+                Elements = request.Elements?.ToList() ?? []
+            };
+
+            boardService.SetBoardTitle(board, request.Title);
             boardService.ReplaceBoardContent(board, updatedBoard);
-            await boardService.UpdateBoardAsync(board);
+            await boardService.UpdateBoardAsync(board, request.SourceClientId, request.ChangeKind);
+            return Results.Ok(board);
+        });
+
+        app.MapPut("/api/boards/{id:guid}/title", [Authorize] async (Guid id, RenameBoardRequest request, HttpContext context, BoardService boardService) =>
+        {
+            var board = await boardService.GetBoardAsync(id);
+            if (board is null) return Results.NotFound();
+
+            if (EndpointHelpers.GetUserId(context.User) is not { } userId)
+                return Results.Unauthorized();
+
+            if (!boardService.HasAccess(board, userId, BoardRole.Editor))
+                return Results.Forbid();
+
+            boardService.SetBoardTitle(board, request.Title);
+            await boardService.UpdateBoardAsync(board, request.SourceClientId, BoardChangeKind.Metadata);
             return Results.Ok(board);
         });
 

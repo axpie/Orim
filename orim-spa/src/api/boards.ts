@@ -40,8 +40,33 @@ export async function createBoard(request: CreateBoardRequest): Promise<Board> {
   return data;
 }
 
-export async function updateBoard(id: string, boardPatch: Partial<Board>): Promise<Board> {
-  const { data } = await client.put<Board>(`/api/boards/${id}`, boardPatch);
+export async function saveBoard(
+  id: string,
+  board: Pick<Board, 'title' | 'labelOutlineEnabled' | 'arrowOutlineEnabled' | 'surfaceColor' | 'themeKey' | 'customColors' | 'recentColors' | 'stickyNotePresets' | 'elements'>,
+  sourceClientId?: string | null,
+  changeKind: 'Content' | 'Metadata' = 'Content',
+): Promise<Board> {
+  const { data } = await client.put<Board>(`/api/boards/${id}`, {
+    title: board.title,
+    labelOutlineEnabled: board.labelOutlineEnabled,
+    arrowOutlineEnabled: board.arrowOutlineEnabled,
+    surfaceColor: board.surfaceColor ?? null,
+    themeKey: board.themeKey ?? null,
+    customColors: board.customColors,
+    recentColors: board.recentColors,
+    stickyNotePresets: board.stickyNotePresets,
+    elements: board.elements,
+    sourceClientId: sourceClientId ?? null,
+    changeKind,
+  });
+  return data;
+}
+
+export async function renameBoard(id: string, title: string, sourceClientId?: string | null): Promise<Board> {
+  const { data } = await client.put<Board>(`/api/boards/${id}/title`, {
+    title,
+    sourceClientId: sourceClientId ?? null,
+  });
   return data;
 }
 

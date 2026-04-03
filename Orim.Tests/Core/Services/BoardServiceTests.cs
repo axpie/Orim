@@ -763,6 +763,42 @@ public class BoardServiceTests
 
     #endregion
 
+    #region SetBoardTitle
+
+    [Fact]
+    public void SetBoardTitle_TrimsTitle()
+    {
+        var board = new Board();
+
+        _sut.SetBoardTitle(board, "  Renamed Board  ");
+
+        Assert.Equal("Renamed Board", board.Title);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void SetBoardTitle_NullOrWhitespace_Throws(string? title)
+    {
+        var board = new Board();
+
+        Assert.ThrowsAny<ArgumentException>(() => _sut.SetBoardTitle(board, title!));
+    }
+
+    [Fact]
+    public void SetBoardTitle_TitleTooLong_Throws()
+    {
+        var board = new Board();
+        var longTitle = new string('x', 201);
+
+        var exception = Assert.Throws<ArgumentException>(() => _sut.SetBoardTitle(board, longTitle));
+
+        Assert.Contains("200 characters", exception.Message);
+    }
+
+    #endregion
+
     #region UpdateBoardAsync
 
     [Fact]

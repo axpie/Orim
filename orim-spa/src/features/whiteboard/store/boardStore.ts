@@ -49,6 +49,7 @@ interface BoardState {
   commandConflict: BoardCommandConflict | null;
 
   setBoard: (board: Board | null, options?: SetBoardOptions) => void;
+  setBoardTitle: (title: string) => void;
   updateBoard: (updater: ((board: Board) => Board) | Partial<Board>) => void;
   setElements: (elements: BoardElement[]) => void;
   addElement: (element: BoardElement) => void;
@@ -278,6 +279,20 @@ export const useBoardStore = create<BoardState>((set, get) => ({
           : [],
         activeTool: options?.resetTool ? 'select' : state.activeTool,
         commandConflict: null,
+      };
+    }),
+
+  setBoardTitle: (title) =>
+    set((state) => {
+      if (!state.board || state.board.title === title) {
+        return state;
+      }
+
+      return {
+        board: {
+          ...state.board,
+          title,
+        },
       };
     }),
 

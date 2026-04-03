@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using Orim.Api.Services;
 using Orim.Core.Models;
+using Orim.Core.Services;
 
 namespace Orim.Api.Contracts;
 
@@ -17,6 +18,19 @@ public sealed record ChangePasswordRequest(string? CurrentPassword, string NewPa
 public sealed record UpdateProfileRequest(string DisplayName);
 public sealed record UpdateUserRequest(string Username, UserRole Role);
 public sealed record CreateBoardRequest(string Title, string? TemplateId = null, string? ThemeKey = null);
+public sealed record SaveBoardStateRequest(
+    string Title,
+    bool LabelOutlineEnabled,
+    bool ArrowOutlineEnabled,
+    string? SurfaceColor,
+    string? ThemeKey,
+    IReadOnlyList<string>? CustomColors,
+    IReadOnlyList<string>? RecentColors,
+    IReadOnlyList<StickyNotePreset>? StickyNotePresets,
+    IReadOnlyList<BoardElement>? Elements,
+    string? SourceClientId = null,
+    BoardChangeKind ChangeKind = BoardChangeKind.Content);
+public sealed record RenameBoardRequest(string Title, string? SourceClientId = null);
 public sealed record SetVisibilityRequest(BoardVisibility Visibility, bool AllowAnonymousEditing = false);
 public sealed record ValidatePasswordRequest(string Password);
 public sealed record SharedBoardUpdateRequest(Board Board, string? Password, string? SourceClientId = null);

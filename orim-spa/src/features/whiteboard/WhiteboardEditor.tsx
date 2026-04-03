@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Alert, Box, Drawer, Snackbar, useMediaQuery, useTheme } from '@mui/material';
 import { getAssistantAvailability } from '../../api/assistantSettings';
-import { createSnapshot, getBoard, restoreSnapshot, updateBoard } from '../../api/boards';
+import { createSnapshot, getBoard, restoreSnapshot, saveBoard } from '../../api/boards';
 import { useBoardComments } from './comments/useBoardComments';
 import { useBoardStore } from './store/boardStore';
 import { useCommandStack } from './store/commandStack';
@@ -52,6 +52,7 @@ export function WhiteboardEditor() {
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const isCompactToolbarLayout = isMediumDown || isCoarsePointer;
   const setBoard = useBoardStore((s) => s.setBoard);
+  const setBoardTitle = useBoardStore((s) => s.setBoardTitle);
   const applyRemoteOperation = useBoardStore((s) => s.applyRemoteOperation);
   const setRemoteCursors = useBoardStore((s) => s.setRemoteCursors);
   const setViewportInsets = useBoardStore((s) => s.setViewportInsets);
@@ -75,6 +76,7 @@ export function WhiteboardEditor() {
   const [liveAnnouncement, setLiveAnnouncement] = useState<{ id: number; text: string } | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
+  const connectionIdRef = useRef<string | null>(null);
   const liveAnnouncementIdRef = useRef(0);
   const lastSyncAnnouncementRef = useRef<string | null>(null);
   const stageRef = useRef<Konva.Stage | null>(null);
@@ -186,7 +188,8 @@ export function WhiteboardEditor() {
   }, [isError, navigate]);
 
   const saveMutation = useMutation({
-    mutationFn: (boardPatch: Partial<Board>) => updateBoard(id!, boardPatch),
+    mutationFn: ({ board: currentBoard, changeKind }: { board: Board; changeKind: 'Content' | 'Metadata' }) =>
+      saveBoard(id!, currentBoard, connectionIdRef.current, changeKind),
   });
 
   const clearScheduledSave = useCallback(() => {
@@ -196,7 +199,7 @@ export function WhiteboardEditor() {
     }
   }, []);
 
-  const persistCurrentBoard = useCallback(async (): Promise<Board | null> => {
+  const persistCurrentBoard = useCallback(async (changeKind: 'Content' | 'Metadata' = 'Content'): Promise<Board | null> => {
     if (activeSavePromiseRef.current) {
       try {
         await activeSavePromiseRef.current;
@@ -204,7 +207,7 @@ export function WhiteboardEditor() {
         // Keep the latest mutation error in React Query state.
       }
 
-      if (!useBoardStore.getState().isDirty) {
+      if (changeKind === 'Content' && !useBoardStore.getState().isDirty) {
         return useBoardStore.getState().board;
       }
     }
@@ -215,21 +218,17 @@ export function WhiteboardEditor() {
     }
 
     const elementsAtSaveStart = current.elements;
+    const titleAtSaveStart = current.title;
 
     const savePromise = saveMutation.mutateAsync({
-      title: current.title,
-      labelOutlineEnabled: current.labelOutlineEnabled,
-      arrowOutlineEnabled: current.arrowOutlineEnabled,
-      customColors: current.customColors,
-      recentColors: current.recentColors,
-      stickyNotePresets: current.stickyNotePresets,
-      elements: current.elements,
+      board: current,
+      changeKind,
     }).then(() => {
       const latestBoard = useBoardStore.getState().board;
       // Only mark clean when no new element changes arrived during the in-flight save.
-      // Zustand produces a new array reference on every mutation, so reference equality
-      // reliably detects concurrent edits without deep comparison.
-      if (latestBoard?.elements === elementsAtSaveStart) {
+      // Zustand produces a new array reference on element edits, and title renames replace
+      // the board object, so this preserves dirty state when a newer local edit landed.
+      if (latestBoard?.elements === elementsAtSaveStart && latestBoard?.title === titleAtSaveStart) {
         setDirty(false);
       }
       // Persist local (potentially newer) state into the query cache rather than
@@ -337,6 +336,18 @@ export function WhiteboardEditor() {
     boardId: id ?? null,
     displayName: user?.displayName ?? user?.username ?? null,
     syncProfileDisplayNameChanges: true,
+    onBoardChanged: (notification) => {
+      if (
+        notification.kind !== 'Metadata'
+        || notification.sourceClientId === connectionIdRef.current
+        || useBoardStore.getState().isDirty
+        || !id
+      ) {
+        return;
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ['board', id] });
+    },
     beforeOutboxFlush: async ({ isReconnect }) => {
       if (!id) {
         return;
@@ -383,6 +394,7 @@ export function WhiteboardEditor() {
       setRemoteCursors([...current, cursor]);
     },
   });
+  connectionIdRef.current = connectionId;
 
   const boardSyncStatus = useMemo(() => deriveBoardSyncStatus({
     connectionState,
@@ -522,6 +534,32 @@ export function WhiteboardEditor() {
     }
   }, [canEdit, sendBoardState, sendOperation, setDirty]);
 
+  const handleRenameTitle = useCallback((nextTitle: string, previousTitle: string) => {
+    if (!id) {
+      return;
+    }
+
+    const currentBoard = useBoardStore.getState().board;
+    if (!currentBoard) {
+      return;
+    }
+
+    queryClient.setQueryData(['board', id], currentBoard);
+    clearScheduledSave();
+    void persistCurrentBoard('Metadata').catch(() => {
+      const latestBoard = useBoardStore.getState().board;
+      if (!latestBoard || latestBoard.id !== id || latestBoard.title !== nextTitle) {
+        return;
+      }
+
+      setBoardTitle(previousTitle);
+      queryClient.setQueryData(['board', id], {
+        ...latestBoard,
+        title: previousTitle,
+      });
+    });
+  }, [clearScheduledSave, id, persistCurrentBoard, queryClient, setBoardTitle]);
+
   const onBoardLiveChanged = useCallback((_changeKind: string, operation?: BoardOperationPayload) => {
     if (!canEdit) {
       return;
@@ -611,6 +649,7 @@ export function WhiteboardEditor() {
         showComments
         showChat={canUseAssistant}
         showSnapshots={canEdit}
+        onRenameTitle={handleRenameTitle}
         onBoardChanged={onBoardChanged}
         onOpenSnapshots={() => setSnapshotsOpen(true)}
         onExportPng={handleExportPng}

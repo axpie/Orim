@@ -37,7 +37,7 @@ import {
   getBoards,
   createBoard,
   deleteBoard,
-  updateBoard,
+  renameBoard,
   importBoard,
   getTemplates,
 } from '../../api/boards';
@@ -309,8 +309,11 @@ export function DashboardPage() {
 
   const renameMutation = useMutation({
     mutationFn: ({ id, title }: { id: string; title: string }) =>
-      updateBoard(id, { title }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['boards'] }),
+      renameBoard(id, title),
+    onSuccess: (board) => {
+      queryClient.invalidateQueries({ queryKey: ['boards'] });
+      queryClient.setQueryData(['board', board.id], board);
+    },
   });
 
   const importMutation = useMutation({
@@ -392,7 +395,12 @@ export function DashboardPage() {
   };
 
   const handleRename = () => {
-    renameMutation.mutate({ id: renameId, title: renameTitle });
+    const trimmedTitle = renameTitle.trim();
+    if (!trimmedTitle) {
+      return;
+    }
+
+    renameMutation.mutate({ id: renameId, title: trimmedTitle });
     setRenameOpen(false);
   };
 
