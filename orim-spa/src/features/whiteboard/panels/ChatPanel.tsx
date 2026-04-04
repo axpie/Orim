@@ -4,19 +4,18 @@ import {
   Box,
   Divider,
   IconButton,
-  Paper,
   TextField,
   Typography,
   List,
   ListItem,
   CircularProgress,
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
 import SendIcon from '@mui/icons-material/Send';
 import { sendAssistantMessage } from '../../../api/boards';
 import { useBoardStore } from '../store/boardStore';
 import type { ChatMessageEntry } from '../../../types/models';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
+import { AuxiliaryPanelShell } from './AuxiliaryPanelShell';
 
 interface ChatPanelProps {
   boardId: string;
@@ -119,30 +118,7 @@ export function ChatPanel({ boardId, onClose, onBoardChanged, mobile = false }: 
   };
 
   return (
-    <Paper
-      elevation={3}
-      sx={{
-        width: mobile ? '100%' : 320,
-        height: '100%',
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        borderRadius: 0,
-        borderLeft: mobile ? 'none' : (theme) => `1px solid ${theme.palette.divider}`,
-        pt: mobile ? 'env(safe-area-inset-top)' : 0,
-        pb: mobile ? 'env(safe-area-inset-bottom)' : 0,
-      }}
-    >
-      <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1 }}>
-        <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
-          {t('assistant.title')}
-        </Typography>
-        <IconButton size="small" onClick={onClose}>
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      </Box>
-      <Divider />
-
+    <AuxiliaryPanelShell title={t('assistant.title')} onClose={onClose} mobile={mobile}>
       <List
         ref={listRef}
         sx={{
@@ -215,6 +191,6 @@ export function ChatPanel({ boardId, onClose, onBoardChanged, mobile = false }: 
           <SendIcon />
         </IconButton>
       </Box>
-    </Paper>
+    </AuxiliaryPanelShell>
   );
 }

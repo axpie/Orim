@@ -8,19 +8,16 @@ import {
   IconButton,
   List,
   ListItemButton,
-  Paper,
   Stack,
   TextField,
   Tooltip,
   Typography,
 } from '@mui/material';
 import AddCommentIcon from '@mui/icons-material/AddComment';
-import CloseIcon from '@mui/icons-material/Close';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import SendIcon from '@mui/icons-material/Send';
 import type { BoardComment } from '../../../types/models';
-
-export const COMMENTS_PANEL_WIDTH = 360;
+import { AuxiliaryPanelShell } from './AuxiliaryPanelShell';
 
 interface CommentsPanelProps {
   comments: BoardComment[];
@@ -208,35 +205,12 @@ export function CommentsPanel({
     !!currentUserId && (currentUserId === authorUserId || currentUserId === boardOwnerId);
 
   return (
-    <Paper
-      elevation={3}
-      sx={{
-        width: mobile ? '100%' : COMMENTS_PANEL_WIDTH,
-        height: '100%',
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        borderRadius: 0,
-        borderLeft: mobile ? 'none' : (theme) => `1px solid ${theme.palette.divider}`,
-        pt: mobile ? 'env(safe-area-inset-top)' : 0,
-        pb: mobile ? 'env(safe-area-inset-bottom)' : 0,
-      }}
-    >
-      <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1 }}>
-        <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
-          {t('comments.title')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mr: 1 }}>
-          {comments.length}
-        </Typography>
-        <IconButton size="small" onClick={onClose}>
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      </Box>
-      <Divider />
-
+    <AuxiliaryPanelShell title={t('comments.title')} onClose={onClose} mobile={mobile}>
       <Box sx={{ px: 2, py: 1.5 }}>
-        <Stack direction="row" spacing={1}>
+        <Stack direction="row" spacing={1} alignItems="center">
+          <Typography variant="body2" color="text.secondary" sx={{ minWidth: 'fit-content' }}>
+            {comments.length}
+          </Typography>
           {canCreateComments && (
             <Button
               variant={commentPlacementMode ? 'contained' : 'outlined'}
@@ -410,6 +384,6 @@ export function CommentsPanel({
           </>
         )}
       </Box>
-    </Paper>
+    </AuxiliaryPanelShell>
   );
 }

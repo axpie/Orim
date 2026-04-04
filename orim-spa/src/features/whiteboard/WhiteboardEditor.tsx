@@ -3,7 +3,7 @@ import type Konva from 'konva';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Alert, Box, Button, Drawer, Snackbar, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Button, Snackbar, useMediaQuery, useTheme } from '@mui/material';
 import { getAssistantAvailability } from '../../api/assistantSettings';
 import { createSnapshot, getBoard, restoreSnapshot, saveBoard } from '../../api/boards';
 import { useBoardComments } from './comments/useBoardComments';
@@ -15,8 +15,10 @@ import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Toolbar } from './tools/Toolbar';
 import { PropertiesPanel } from './panels/PropertiesPanel';
 import { ChatPanel } from './panels/ChatPanel';
-import { CommentsPanel, COMMENTS_PANEL_WIDTH } from './panels/CommentsPanel';
+import { CommentsPanel } from './panels/CommentsPanel';
 import { SnapshotDialog } from './panels/SnapshotDialog';
+import { AuxiliaryPanelHost } from './panels/AuxiliaryPanelHost';
+import { getAuxiliaryPanelWidth, toggleAuxiliaryPanel, type AuxiliaryPanelKind } from './panels/auxiliaryPanels';
 import { BoardTopBar } from './tools/BoardTopBar';
 import { useWhiteboardRealtime } from './useWhiteboardRealtime';
 import { useOperationOutboxStore } from './store/outboxStore';
@@ -25,8 +27,6 @@ import { BoardRole } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
 import type { BoardOperationPayload } from './realtime/boardOperations';
 
-const PROPERTIES_PANEL_WIDTH = 280;
-const CHAT_PANEL_WIDTH = 320;
 const EMPTY_COMMENTS: Board['comments'] = [];
 
 function sortSnapshots(snapshots: BoardSnapshot[]) {
@@ -45,9 +45,6 @@ export function WhiteboardEditor() {
   const queryClient = useQueryClient();
   const theme = useTheme();
   const isNarrowPanelMode = useMediaQuery(theme.breakpoints.down('sm'));
-  const isMediumDown = useMediaQuery(theme.breakpoints.down('md'));
-  const isCoarsePointer = useMediaQuery('(pointer: coarse)');
-  const isCompactToolbarLayout = isMediumDown || isCoarsePointer;
   const setBoard = useBoardStore((s) => s.setBoard);
   const setBoardTitle = useBoardStore((s) => s.setBoardTitle);
   const applyRemoteOperation = useBoardStore((s) => s.applyRemoteOperation);
@@ -64,9 +61,7 @@ export function WhiteboardEditor() {
   const outboxCount = useOperationOutboxStore((s) => (id ? s.countForBoard(id) : 0));
   const clearCommandStack = useCommandStack((s) => s.clear);
 
-  const [propertiesOpen, setPropertiesOpen] = useState(false);
-  const [commentsOpen, setCommentsOpen] = useState(false);
-  const [chatOpen, setChatOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<AuxiliaryPanelKind | null>(null);
   const [snapshotsOpen, setSnapshotsOpen] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [pendingCommentAnchor, setPendingCommentAnchor] = useState<{ x: number; y: number } | null>(null);
@@ -78,7 +73,10 @@ export function WhiteboardEditor() {
   const liveAnnouncementIdRef = useRef(0);
   const stageRef = useRef<Konva.Stage | null>(null);
   const canvasBoxRef = useRef<HTMLDivElement | null>(null);
-  const compactOverlayOpen = isCompactToolbarLayout && (propertiesOpen || commentsOpen || chatOpen);
+  const propertiesOpen = activePanel === 'properties';
+  const commentsOpen = activePanel === 'comments';
+  const chatOpen = activePanel === 'assistant';
+  const compactOverlayOpen = isNarrowPanelMode && activePanel != null;
 
   const currentMembership = user && board
     ? board.members.find((member) => member.userId === user.id) ?? (board.ownerId === user.id
@@ -124,42 +122,20 @@ export function WhiteboardEditor() {
   const canUseAssistant = canEdit && Boolean(assistantAvailability?.isConfigured);
 
   const openPropertiesPanel = useCallback(() => {
-    setPropertiesOpen((current) => {
-      const next = !current;
-      if (next && isNarrowPanelMode) {
-        setChatOpen(false);
-      }
-
-      return next;
-    });
-  }, [isNarrowPanelMode]);
+    setActivePanel((current) => toggleAuxiliaryPanel(current, 'properties'));
+  }, []);
 
   const openChatPanel = useCallback(() => {
-    setChatOpen((current) => {
-      const next = !current;
-      if (next && isNarrowPanelMode) {
-        setPropertiesOpen(false);
-        setCommentsOpen(false);
-      }
-
-      return next;
-    });
-  }, [isNarrowPanelMode]);
+    setActivePanel((current) => toggleAuxiliaryPanel(current, 'assistant'));
+  }, []);
 
   const openCommentsPanel = useCallback(() => {
-    setCommentsOpen((current) => {
-      const next = !current;
-      if (next && isNarrowPanelMode) {
-        setPropertiesOpen(false);
-        setChatOpen(false);
-      } else if (!next) {
-        setCommentPlacementMode(false);
-        setPendingCommentAnchor(null);
-      }
+    setActivePanel((current) => toggleAuxiliaryPanel(current, 'comments'));
+  }, []);
 
-      return next;
-    });
-  }, [isNarrowPanelMode]);
+  const closeActivePanel = useCallback(() => {
+    setActivePanel(null);
+  }, []);
 
   const { data, isError } = useQuery({
     queryKey: ['board', id],
@@ -294,27 +270,32 @@ export function WhiteboardEditor() {
   }, [clearScheduledSave]);
 
   useEffect(() => {
-    if (!canUseAssistant && chatOpen) {
-      setChatOpen(false);
+    if (!canUseAssistant && activePanel === 'assistant') {
+      setActivePanel(null);
     }
-  }, [canUseAssistant, chatOpen]);
+  }, [activePanel, canUseAssistant]);
 
   useEffect(() => {
-    if (!canEdit || isNarrowPanelMode) {
-      setViewportInsets({ top: 0, right: 0, bottom: 0, left: 0 });
-      return;
+    if (!canEdit && (activePanel === 'assistant' || activePanel === 'properties')) {
+      setActivePanel(null);
     }
+  }, [activePanel, canEdit]);
 
+  useEffect(() => {
     setViewportInsets({
       top: 0,
-      right:
-        (commentsOpen ? COMMENTS_PANEL_WIDTH : 0)
-        + (chatOpen ? CHAT_PANEL_WIDTH : 0)
-        + (propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0),
+      right: 0,
       bottom: 0,
       left: 0,
     });
-  }, [canEdit, chatOpen, commentsOpen, isNarrowPanelMode, propertiesOpen, setViewportInsets]);
+  }, [setViewportInsets]);
+
+  useEffect(() => {
+    if (activePanel !== 'comments') {
+      setCommentPlacementMode(false);
+      setPendingCommentAnchor(null);
+    }
+  }, [activePanel]);
 
   useEffect(() => {
     if (activeCommentId && !comments.some((comment) => comment.id === activeCommentId)) {
@@ -518,7 +499,7 @@ export function WhiteboardEditor() {
 
   const handleSelectComment = useCallback((commentId: string) => {
     setActiveCommentId(commentId);
-    setCommentsOpen(true);
+    setActivePanel('comments');
     setCommentPlacementMode(false);
     setPendingCommentAnchor(null);
   }, []);
@@ -528,7 +509,7 @@ export function WhiteboardEditor() {
       return;
     }
 
-    setCommentsOpen(true);
+    setActivePanel('comments');
     setCommentPlacementMode(true);
     setPendingCommentAnchor(null);
   }, [canEdit]);
@@ -538,7 +519,7 @@ export function WhiteboardEditor() {
       return;
     }
 
-    setCommentsOpen(true);
+    setActivePanel('comments');
     setCommentPlacementMode(false);
     setPendingCommentAnchor(position);
   }, [canEdit]);
@@ -557,7 +538,7 @@ export function WhiteboardEditor() {
     setPendingCommentAnchor(null);
     setCommentPlacementMode(false);
     setActiveCommentId(comment.id);
-    setCommentsOpen(true);
+    setActivePanel('comments');
   }, [createCommentAt, pendingCommentAnchor]);
 
   const handleCreateReply = useCallback(async (commentId: string, text: string) => {
@@ -602,9 +583,9 @@ export function WhiteboardEditor() {
         collaborators={remoteCursors}
         localConnectionId={connectionId}
       />
-      <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
+      <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
         {canEdit && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} canvasContainerRef={canvasBoxRef} />}
-        <Box ref={canvasBoxRef} sx={{ flex: 1, position: 'relative' }}>
+        <Box ref={canvasBoxRef} sx={{ flex: 1, position: 'relative', minWidth: 0, minHeight: 0 }}>
           <ErrorBoundary>
             <WhiteboardCanvas
               editable={canEdit}
@@ -621,18 +602,13 @@ export function WhiteboardEditor() {
             />
           </ErrorBoundary>
 
-          {!isNarrowPanelMode && commentsOpen && (
-            <Box
-              sx={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                right: (propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0) + (chatOpen ? CHAT_PANEL_WIDTH : 0),
-                width: COMMENTS_PANEL_WIDTH,
-                zIndex: 4,
-                boxShadow: 6,
-              }}
-            >
+          <AuxiliaryPanelHost
+            open={activePanel != null}
+            mobile={isNarrowPanelMode}
+            width={getAuxiliaryPanelWidth(activePanel)}
+            onClose={closeActivePanel}
+          >
+            {activePanel === 'comments' && (
               <CommentsPanel
                 comments={comments}
                 activeCommentId={activeCommentId}
@@ -645,11 +621,8 @@ export function WhiteboardEditor() {
                 isCreatingReply={isCreatingReply}
                 deletingCommentId={deletingCommentId}
                 deletingReply={deletingReply}
-                onClose={() => {
-                  setCommentsOpen(false);
-                  setCommentPlacementMode(false);
-                  setPendingCommentAnchor(null);
-                }}
+                mobile={isNarrowPanelMode}
+                onClose={closeActivePanel}
                 onSelectComment={handleSelectComment}
                 onStartComment={handleStartComment}
                 onCancelPendingComment={handleCancelPendingComment}
@@ -658,127 +631,25 @@ export function WhiteboardEditor() {
                 onDeleteComment={handleDeleteComment}
                 onDeleteReply={handleDeleteReply}
               />
-            </Box>
-          )}
-
-          {canEdit && !isNarrowPanelMode && chatOpen && (
-            <Box
-              sx={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                right: `${propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0}px`,
-                width: CHAT_PANEL_WIDTH,
-                zIndex: 4,
-                boxShadow: 6,
-              }}
-            >
-              <ChatPanel boardId={id!} onClose={() => setChatOpen(false)} onBoardChanged={onBoardChanged} />
-            </Box>
-          )}
-
-          {canEdit && !isNarrowPanelMode && propertiesOpen && (
-            <Box
-              sx={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                right: 0,
-                width: PROPERTIES_PANEL_WIDTH,
-                zIndex: 5,
-                boxShadow: 6,
-              }}
-            >
-              <PropertiesPanel onClose={() => setPropertiesOpen(false)} onBoardChanged={onBoardChanged} />
-            </Box>
-          )}
+            )}
+            {activePanel === 'assistant' && canEdit && (
+              <ChatPanel
+                boardId={id!}
+                mobile={isNarrowPanelMode}
+                onClose={closeActivePanel}
+                onBoardChanged={onBoardChanged}
+              />
+            )}
+            {activePanel === 'properties' && canEdit && (
+              <PropertiesPanel
+                mobile={isNarrowPanelMode}
+                onClose={closeActivePanel}
+                onBoardChanged={onBoardChanged}
+              />
+            )}
+          </AuxiliaryPanelHost>
         </Box>
       </Box>
-
-      {isNarrowPanelMode && (
-        <Drawer
-          anchor="right"
-          open={commentsOpen}
-          onClose={() => {
-            setCommentsOpen(false);
-            setCommentPlacementMode(false);
-            setPendingCommentAnchor(null);
-          }}
-          ModalProps={{ keepMounted: true }}
-          PaperProps={{
-            sx: {
-              width: '100vw',
-              maxWidth: '100vw',
-            },
-          }}
-        >
-          <CommentsPanel
-            comments={comments}
-            activeCommentId={activeCommentId}
-            pendingAnchor={pendingCommentAnchor}
-            commentPlacementMode={commentPlacementMode}
-            canCreateComments={canEdit}
-            currentUserId={user?.id ?? null}
-            boardOwnerId={board.ownerId}
-            isCreatingComment={isCreatingComment}
-            isCreatingReply={isCreatingReply}
-            deletingCommentId={deletingCommentId}
-            deletingReply={deletingReply}
-            mobile
-            onClose={() => {
-              setCommentsOpen(false);
-              setCommentPlacementMode(false);
-              setPendingCommentAnchor(null);
-            }}
-            onSelectComment={handleSelectComment}
-            onStartComment={handleStartComment}
-            onCancelPendingComment={handleCancelPendingComment}
-            onCreateComment={handleCreateComment}
-            onCreateReply={handleCreateReply}
-            onDeleteComment={handleDeleteComment}
-            onDeleteReply={handleDeleteReply}
-          />
-        </Drawer>
-      )}
-
-      {canEdit && isNarrowPanelMode && (
-        <Drawer
-          anchor="right"
-          open={chatOpen}
-          onClose={() => setChatOpen(false)}
-          ModalProps={{ keepMounted: true }}
-          PaperProps={{
-            sx: {
-              width: '100vw',
-              maxWidth: '100vw',
-            },
-          }}
-        >
-          <ChatPanel
-            boardId={id!}
-            mobile
-            onClose={() => setChatOpen(false)}
-            onBoardChanged={onBoardChanged}
-          />
-        </Drawer>
-      )}
-
-      {canEdit && isNarrowPanelMode && (
-        <Drawer
-          anchor="right"
-          open={propertiesOpen}
-          onClose={() => setPropertiesOpen(false)}
-          ModalProps={{ keepMounted: true }}
-          PaperProps={{
-            sx: {
-              width: '100vw',
-              maxWidth: '100vw',
-            },
-          }}
-        >
-          <PropertiesPanel mobile onClose={() => setPropertiesOpen(false)} onBoardChanged={onBoardChanged} />
-        </Drawer>
-      )}
 
       {canEdit && (
         <SnapshotDialog

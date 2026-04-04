@@ -7,7 +7,6 @@ import {
   Box,
   Card,
   CardContent,
-  Drawer,
   Snackbar,
   TextField,
   Button,
@@ -25,7 +24,9 @@ import { WhiteboardCanvas } from '../whiteboard/canvas/WhiteboardCanvas';
 import { Toolbar } from '../whiteboard/tools/Toolbar';
 import { BoardTopBar } from '../whiteboard/tools/BoardTopBar';
 import { PropertiesPanel } from '../whiteboard/panels/PropertiesPanel';
-import { CommentsPanel, COMMENTS_PANEL_WIDTH } from '../whiteboard/panels/CommentsPanel';
+import { CommentsPanel } from '../whiteboard/panels/CommentsPanel';
+import { AuxiliaryPanelHost } from '../whiteboard/panels/AuxiliaryPanelHost';
+import { getAuxiliaryPanelWidth, toggleAuxiliaryPanel, type AuxiliaryPanelKind } from '../whiteboard/panels/auxiliaryPanels';
 import { deriveBoardSyncStatus } from '../whiteboard/boardSyncStatus';
 import { getBoardSyncAnnouncement } from '../whiteboard/a11yAnnouncements';
 import { formatBoardCommandConflict } from '../whiteboard/realtime/localBoardCommands';
@@ -39,7 +40,6 @@ import type { BoardOperationPayload } from '../whiteboard/realtime/boardOperatio
 import { primeBoardHistorySequence, recoverBoardAfterReconnect } from '../whiteboard/realtime/reconnectRecovery';
 
 const guestNameStorageKey = 'orim_guest_name';
-const PROPERTIES_PANEL_WIDTH = 280;
 const EMPTY_COMMENTS: Board['comments'] = [];
 
 function isProtectedBoardResponse(value: unknown): value is { requiresPassword: boolean; boardId: string; title: string } {
@@ -52,9 +52,6 @@ export function SharedBoardView() {
   const queryClient = useQueryClient();
   const theme = useTheme();
   const isNarrowPanelMode = useMediaQuery(theme.breakpoints.down('sm'));
-  const isMediumDown = useMediaQuery(theme.breakpoints.down('md'));
-  const isCoarsePointer = useMediaQuery('(pointer: coarse)');
-  const isCompactToolbarLayout = isMediumDown || isCoarsePointer;
   const setBoard = useBoardStore((s) => s.setBoard);
   const applyRemoteOperation = useBoardStore((s) => s.applyRemoteOperation);
   const setRemoteCursors = useBoardStore((s) => s.setRemoteCursors);
@@ -75,8 +72,7 @@ export function SharedBoardView() {
   const [validatedPassword, setValidatedPassword] = useState<string | null>(null);
   const [needsPassword, setNeedsPassword] = useState(false);
   const [passwordError, setPasswordError] = useState(false);
-  const [propertiesOpen, setPropertiesOpen] = useState(false);
-  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState<AuxiliaryPanelKind | null>(null);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [pendingCommentAnchor, setPendingCommentAnchor] = useState<{ x: number; y: number } | null>(null);
   const [commentPlacementMode, setCommentPlacementMode] = useState(false);
@@ -94,7 +90,9 @@ export function SharedBoardView() {
   const liveAnnouncementIdRef = useRef(0);
   const canvasBoxRef = useRef<HTMLDivElement | null>(null);
   const lastSyncAnnouncementRef = useRef<string | null>(null);
-  const compactOverlayOpen = isCompactToolbarLayout && (propertiesOpen || commentsOpen);
+  const propertiesOpen = activePanel === 'properties';
+  const commentsOpen = activePanel === 'comments';
+  const compactOverlayOpen = isNarrowPanelMode && activePanel != null;
   const comments = board?.comments ?? EMPTY_COMMENTS;
   const currentMembership = user && board
     ? board.members.find((member) => member.userId === user.id) ?? (board.ownerId === user.id
@@ -335,18 +333,26 @@ export function SharedBoardView() {
   }, [guestNameSaved]);
 
   useEffect(() => {
-    if (!board?.sharedAllowAnonymousEditing || isNarrowPanelMode) {
-      setViewportInsets({ top: 0, right: 0, bottom: 0, left: 0 });
-      return;
-    }
-
     setViewportInsets({
       top: 0,
-      right: (commentsOpen ? COMMENTS_PANEL_WIDTH : 0) + (propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0),
+      right: 0,
       bottom: 0,
       left: 0,
     });
-  }, [board?.sharedAllowAnonymousEditing, commentsOpen, isNarrowPanelMode, propertiesOpen, setViewportInsets]);
+  }, [setViewportInsets]);
+
+  useEffect(() => {
+    if (activePanel !== 'comments') {
+      setCommentPlacementMode(false);
+      setPendingCommentAnchor(null);
+    }
+  }, [activePanel]);
+
+  useEffect(() => {
+    if (!board?.sharedAllowAnonymousEditing && activePanel === 'properties') {
+      setActivePanel(null);
+    }
+  }, [activePanel, board?.sharedAllowAnonymousEditing]);
 
   useEffect(() => {
     if (activeCommentId && !comments.some((comment) => comment.id === activeCommentId)) {
@@ -424,22 +430,20 @@ export function SharedBoardView() {
   }, [sendOperationThrottled]);
 
   const handleToggleComments = useCallback(() => {
-    setCommentsOpen((current) => {
-      const next = !current;
-      if (next && isNarrowPanelMode) {
-        setPropertiesOpen(false);
-      } else if (!next) {
-        setCommentPlacementMode(false);
-        setPendingCommentAnchor(null);
-      }
+    setActivePanel((current) => toggleAuxiliaryPanel(current, 'comments'));
+  }, []);
 
-      return next;
-    });
-  }, [isNarrowPanelMode]);
+  const handleToggleProperties = useCallback(() => {
+    setActivePanel((current) => toggleAuxiliaryPanel(current, 'properties'));
+  }, []);
+
+  const closeActivePanel = useCallback(() => {
+    setActivePanel(null);
+  }, []);
 
   const handleSelectComment = useCallback((commentId: string) => {
     setActiveCommentId(commentId);
-    setCommentsOpen(true);
+    setActivePanel('comments');
     setCommentPlacementMode(false);
     setPendingCommentAnchor(null);
   }, []);
@@ -449,7 +453,7 @@ export function SharedBoardView() {
       return;
     }
 
-    setCommentsOpen(true);
+    setActivePanel('comments');
     setCommentPlacementMode(true);
     setPendingCommentAnchor(null);
   }, [canCreateComments]);
@@ -459,7 +463,7 @@ export function SharedBoardView() {
       return;
     }
 
-    setCommentsOpen(true);
+    setActivePanel('comments');
     setCommentPlacementMode(false);
     setPendingCommentAnchor(position);
   }, [canCreateComments]);
@@ -478,7 +482,7 @@ export function SharedBoardView() {
     setPendingCommentAnchor(null);
     setCommentPlacementMode(false);
     setActiveCommentId(comment.id);
-    setCommentsOpen(true);
+    setActivePanel('comments');
   }, [createCommentAt, pendingCommentAnchor]);
 
   const handleCreateReply = useCallback(async (commentId: string, text: string) => {
@@ -560,7 +564,7 @@ export function SharedBoardView() {
   return (
     <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', pb: 'env(safe-area-inset-bottom)' }}>
       <BoardTopBar
-        onOpenProperties={() => setPropertiesOpen((current) => !current)}
+        onOpenProperties={handleToggleProperties}
         onOpenComments={handleToggleComments}
         onOpenChat={() => {}}
         propertiesOpen={propertiesOpen}
@@ -613,9 +617,9 @@ export function SharedBoardView() {
           )}
         </Box>
       )}
-      <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
+      <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
         {board.sharedAllowAnonymousEditing && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} canvasContainerRef={canvasBoxRef} />}
-        <Box ref={canvasBoxRef} sx={{ flex: 1, position: 'relative' }}>
+        <Box ref={canvasBoxRef} sx={{ flex: 1, position: 'relative', minWidth: 0, minHeight: 0 }}>
           <WhiteboardCanvas
             editable={board.sharedAllowAnonymousEditing}
             localPresenceClientId={connectionId}
@@ -629,18 +633,13 @@ export function SharedBoardView() {
             liveAnnouncement={liveAnnouncement}
           />
 
-          {!isNarrowPanelMode && commentsOpen && (
-            <Box
-              sx={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                right: propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0,
-                width: COMMENTS_PANEL_WIDTH,
-                zIndex: 5,
-                boxShadow: 6,
-              }}
-            >
+          <AuxiliaryPanelHost
+            open={activePanel != null}
+            mobile={isNarrowPanelMode}
+            width={getAuxiliaryPanelWidth(activePanel)}
+            onClose={closeActivePanel}
+          >
+            {activePanel === 'comments' && (
               <CommentsPanel
                 comments={comments}
                 activeCommentId={activeCommentId}
@@ -653,11 +652,8 @@ export function SharedBoardView() {
                 isCreatingReply={isCreatingReply}
                 deletingCommentId={deletingCommentId}
                 deletingReply={deletingReply}
-                onClose={() => {
-                  setCommentsOpen(false);
-                  setCommentPlacementMode(false);
-                  setPendingCommentAnchor(null);
-                }}
+                mobile={isNarrowPanelMode}
+                onClose={closeActivePanel}
                 onSelectComment={handleSelectComment}
                 onStartComment={handleStartComment}
                 onCancelPendingComment={handleCancelPendingComment}
@@ -666,89 +662,17 @@ export function SharedBoardView() {
                 onDeleteComment={handleDeleteComment}
                 onDeleteReply={handleDeleteReply}
               />
-            </Box>
-          )}
-
-          {board.sharedAllowAnonymousEditing && !isNarrowPanelMode && propertiesOpen && (
-            <Box
-              sx={{
-                position: 'absolute',
-                top: 0,
-                bottom: 0,
-                right: commentsOpen ? COMMENTS_PANEL_WIDTH : 0,
-                width: PROPERTIES_PANEL_WIDTH,
-                zIndex: 5,
-                boxShadow: 6,
-              }}
-            >
-              <PropertiesPanel onClose={() => setPropertiesOpen(false)} onBoardChanged={onBoardChanged} />
-            </Box>
-          )}
+            )}
+            {activePanel === 'properties' && board.sharedAllowAnonymousEditing && (
+              <PropertiesPanel
+                mobile={isNarrowPanelMode}
+                onClose={closeActivePanel}
+                onBoardChanged={onBoardChanged}
+              />
+            )}
+          </AuxiliaryPanelHost>
         </Box>
       </Box>
-
-      {isNarrowPanelMode && (
-        <Drawer
-          anchor="right"
-          open={commentsOpen}
-          onClose={() => {
-            setCommentsOpen(false);
-            setCommentPlacementMode(false);
-            setPendingCommentAnchor(null);
-          }}
-          ModalProps={{ keepMounted: true }}
-          PaperProps={{
-            sx: {
-              width: '100vw',
-              maxWidth: '100vw',
-            },
-          }}
-        >
-          <CommentsPanel
-            comments={comments}
-            activeCommentId={activeCommentId}
-            pendingAnchor={pendingCommentAnchor}
-            commentPlacementMode={commentPlacementMode}
-            canCreateComments={canCreateComments}
-            currentUserId={user?.id ?? null}
-            boardOwnerId={board.ownerId}
-            isCreatingComment={isCreatingComment}
-            isCreatingReply={isCreatingReply}
-            deletingCommentId={deletingCommentId}
-            deletingReply={deletingReply}
-            mobile
-            onClose={() => {
-              setCommentsOpen(false);
-              setCommentPlacementMode(false);
-              setPendingCommentAnchor(null);
-            }}
-            onSelectComment={handleSelectComment}
-            onStartComment={handleStartComment}
-            onCancelPendingComment={handleCancelPendingComment}
-            onCreateComment={handleCreateComment}
-            onCreateReply={handleCreateReply}
-            onDeleteComment={handleDeleteComment}
-            onDeleteReply={handleDeleteReply}
-          />
-        </Drawer>
-      )}
-
-      {board.sharedAllowAnonymousEditing && isNarrowPanelMode && (
-        <Drawer
-          anchor="right"
-          open={propertiesOpen}
-          onClose={() => setPropertiesOpen(false)}
-          ModalProps={{ keepMounted: true }}
-          PaperProps={{
-            sx: {
-              width: '100vw',
-              maxWidth: '100vw',
-            },
-          }}
-        >
-          <PropertiesPanel mobile onClose={() => setPropertiesOpen(false)} onBoardChanged={onBoardChanged} />
-        </Drawer>
-      )}
 
       <Snackbar
         open={!!commandConflict}

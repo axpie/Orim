@@ -3,8 +3,6 @@ import { useTranslation } from 'react-i18next';
 import {
   Box,
   Divider,
-  IconButton,
-  Paper,
   TextField,
   MenuItem,
   FormControlLabel,
@@ -14,7 +12,6 @@ import {
   ToggleButtonGroup,
   Typography,
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
 import FormatBoldIcon from '@mui/icons-material/FormatBold';
 import FormatAlignLeftIcon from '@mui/icons-material/FormatAlignLeft';
 import FormatAlignCenterIcon from '@mui/icons-material/FormatAlignCenter';
@@ -59,7 +56,7 @@ import {
 import { contrastingTextColor } from '../../../utils/colorUtils';
 import { getLineDashArray } from '../../../utils/lineStyles';
 import { getDefaultLabelFontSize, resolveLabelFontSize, resolveTextFontSize } from '../../../utils/textLayout';
-
+import { AuxiliaryPanelShell } from './AuxiliaryPanelShell';
 const FONT_FAMILY_DEFAULT = '__default__';
 
 const FONT_FAMILY_OPTIONS = [
@@ -401,75 +398,51 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
   };
 
   return (
-    <Paper
-      elevation={3}
-      sx={{
-        width: mobile ? '100%' : 280,
-        height: '100%',
-        flexShrink: 0,
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: 'auto',
-        borderRadius: 0,
-        borderLeft: mobile ? 'none' : (theme) => `1px solid ${theme.palette.divider}`,
-        pt: mobile ? 'env(safe-area-inset-top)' : 0,
-        pb: mobile ? 'env(safe-area-inset-bottom)' : 0,
-      }}
-    >
-      <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 1 }}>
-        <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
-          {t('properties.title', 'Eigenschaften')}
-        </Typography>
-        <IconButton size="small" onClick={onClose}>
-          <CloseIcon fontSize="small" />
-        </IconButton>
-      </Box>
-      <Divider />
-
-      {!el ? (
-        <Box sx={{ p: 2 }}>
-          <Typography variant="body2" color="text.secondary">
-            {selected.length === 0
-              ? t('properties.noElementSelected', 'Kein Element ausgewählt.')
-              : t('properties.elementsSelected', { count: selected.length, defaultValue: '{{count}} Elemente ausgewählt.' })}
-          </Typography>
-        </Box>
-      ) : (
-        <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {/* Position */}
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            <NumberInputField
-              label="X"
-              value={Math.round(el.x)}
-              onChange={(v) => update(el.id, { x: v })}
-            />
-            <NumberInputField
-              label="Y"
-              value={Math.round(el.y)}
-              onChange={(v) => update(el.id, { y: v })}
-            />
+    <AuxiliaryPanelShell title={t('properties.title', 'Eigenschaften')} onClose={onClose} mobile={mobile}>
+      <Box sx={{ flex: 1, overflow: 'auto' }}>
+        {!el ? (
+          <Box sx={{ p: 2 }}>
+            <Typography variant="body2" color="text.secondary">
+              {selected.length === 0
+                ? t('properties.noElementSelected', 'Kein Element ausgewählt.')
+                : t('properties.elementsSelected', { count: selected.length, defaultValue: '{{count}} Elemente ausgewählt.' })}
+            </Typography>
           </Box>
-
-          {/* Size */}
-          {el.$type !== 'arrow' && (
+        ) : (
+          <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Position */}
             <Box sx={{ display: 'flex', gap: 1 }}>
               <NumberInputField
-                label={t('properties.size') + ' W'}
-                value={Math.round(el.width)}
-                min={1}
-                onChange={(v) => update(el.id, { width: v })}
+                label="X"
+                value={Math.round(el.x)}
+                onChange={(v) => update(el.id, { x: v })}
               />
               <NumberInputField
-                label="H"
-                value={Math.round(el.height)}
-                min={1}
-                onChange={(v) => update(el.id, { height: v })}
+                label="Y"
+                value={Math.round(el.y)}
+                onChange={(v) => update(el.id, { y: v })}
               />
             </Box>
-          )}
 
-          <Divider />
+            {/* Size */}
+            {el.$type !== 'arrow' && (
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <NumberInputField
+                  label={t('properties.size') + ' W'}
+                  value={Math.round(el.width)}
+                  min={1}
+                  onChange={(v) => update(el.id, { width: v })}
+                />
+                <NumberInputField
+                  label="H"
+                  value={Math.round(el.height)}
+                  min={1}
+                  onChange={(v) => update(el.id, { height: v })}
+                />
+              </Box>
+            )}
 
+            <Divider />
           {/* Shape-specific */}
           {el.$type === 'shape' && (() => {
             const shape = el as ShapeElement;
@@ -913,9 +886,10 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
             </>
             );
           })()}
-        </Box>
-      )}
-    </Paper>
+          </Box>
+        )}
+      </Box>
+    </AuxiliaryPanelShell>
   );
 });
 
