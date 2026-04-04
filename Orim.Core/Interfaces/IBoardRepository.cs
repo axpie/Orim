@@ -9,5 +9,5 @@ public interface IBoardRepository : IRepository<Board>
     Task SaveEditorStateAsync(Board board);
     Task<IReadOnlyList<BoardFolder>> GetFoldersAsync(Guid ownerId);
     Task SaveFolderAsync(BoardFolder folder);
-    Task DeleteFolderAsync(string folderId);
+    Task DeleteFolderAsync(string folderId, bool deleteBoards = false);
 }

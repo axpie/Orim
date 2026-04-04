@@ -232,8 +232,8 @@ export async function updateFolder(id: string, name: string): Promise<void> {
   await client.put(`/api/boards/folders/${id}`, { name });
 }
 
-export async function deleteFolder(id: string): Promise<void> {
-  await client.delete(`/api/boards/folders/${id}`);
+export async function deleteFolder(id: string, deleteBoards = false): Promise<void> {
+  await client.delete(`/api/boards/folders/${id}`, { params: { deleteBoards } });
 }
 
 export async function setBoardFolder(boardId: string, folderId: string | null): Promise<void> {

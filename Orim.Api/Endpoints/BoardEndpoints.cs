@@ -606,7 +606,7 @@ internal static class BoardEndpoints
             return Results.Ok(folder);
         });
 
-        app.MapDelete("/api/boards/folders/{id}", [Authorize] async (string id, HttpContext context, IBoardRepository boardRepository) =>
+        app.MapDelete("/api/boards/folders/{id}", [Authorize] async (string id, bool deleteBoards, HttpContext context, IBoardRepository boardRepository) =>
         {
             if (EndpointHelpers.GetUserId(context.User) is not { } userId)
                 return Results.Unauthorized();
@@ -614,7 +614,7 @@ internal static class BoardEndpoints
             var folders = await boardRepository.GetFoldersAsync(userId);
             if (folders.All(f => f.Id != id)) return Results.NotFound();
 
-            await boardRepository.DeleteFolderAsync(id);
+            await boardRepository.DeleteFolderAsync(id, deleteBoards);
             return Results.NoContent();
         });
 

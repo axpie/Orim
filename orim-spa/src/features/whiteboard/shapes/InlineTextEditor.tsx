@@ -73,11 +73,16 @@ export function InlineTextEditor({
 
   useLayoutEffect(() => {
     const ta = ref.current;
-    if (ta) {
-      ta.value = initialValue;
-      ta.focus();
-      ta.select();
-    }
+    if (!ta) return;
+    ta.value = initialValue;
+    const frame = requestAnimationFrame(() => {
+      const el = ref.current;
+      if (el) {
+        el.focus();
+        el.select();
+      }
+    });
+    return () => cancelAnimationFrame(frame);
   }, [initialValue]);
 
   // Position in screen space

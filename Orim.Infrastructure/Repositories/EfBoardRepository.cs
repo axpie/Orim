@@ -228,16 +228,22 @@ public class EfBoardRepository : IBoardRepository
         _context.ChangeTracker.Clear();
     }
 
-    public async Task DeleteFolderAsync(string folderId)
+    public async Task DeleteFolderAsync(string folderId, bool deleteBoards = false)
     {
         var folder = await _context.BoardFolders.FindAsync(folderId);
         if (folder is not null)
         {
-            // Clear FolderId on boards that reference this folder
             var boards = await _context.Boards.Where(b => b.FolderId == folderId).ToListAsync();
-            foreach (var board in boards)
+            if (deleteBoards)
             {
-                board.FolderId = null;
+                _context.Boards.RemoveRange(boards);
+            }
+            else
+            {
+                foreach (var board in boards)
+                {
+                    board.FolderId = null;
+                }
             }
 
             _context.BoardFolders.Remove(folder);

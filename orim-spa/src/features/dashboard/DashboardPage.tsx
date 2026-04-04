@@ -23,6 +23,7 @@ import {
   ListItemText,
   Menu,
   MenuItem,
+  Stack,
   TextField,
   Tooltip,
   Typography,
@@ -40,8 +41,6 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SearchIcon from '@mui/icons-material/Search';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import StarIcon from '@mui/icons-material/Star';
-import VisibilityIcon from '@mui/icons-material/Visibility';
-import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import {
   getBoards,
   createBoard,
@@ -398,7 +397,8 @@ export function DashboardPage() {
   });
 
   const deleteFolderMutation = useMutation({
-    mutationFn: deleteFolder,
+    mutationFn: ({ id, deleteBoards }: { id: string; deleteBoards: boolean }) =>
+      deleteFolder(id, deleteBoards),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['folders'] });
       queryClient.invalidateQueries({ queryKey: ['boards'] });
@@ -460,6 +460,10 @@ export function DashboardPage() {
   const [moveToFolderOpen, setMoveToFolderOpen] = useState(false);
   const [moveToFolderBoardId, setMoveToFolderBoardId] = useState('');
   const [moveToFolderSelectedId, setMoveToFolderSelectedId] = useState('');
+
+  // Delete folder dialog state
+  const [deleteFolderDialogOpen, setDeleteFolderDialogOpen] = useState(false);
+  const [deleteFolderTarget, setDeleteFolderTarget] = useState<BoardFolder | null>(null);
 
   // Drag & drop state
   const [draggingBoardId, setDraggingBoardId] = useState<string | null>(null);
@@ -707,21 +711,15 @@ export function DashboardPage() {
       {templates.length > 0 && (
         <Box sx={{ mb: 4 }}>
           <Box
-            sx={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              mb: 1,
-            }}
+            sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', mb: 1 }}
+            onClick={toggleTemplatesVisibility}
           >
-            <Typography variant="subtitle1" fontWeight={600}>
+            <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
               {t('dashboard.templates')}
             </Typography>
-            <Tooltip title={templatesVisible ? t('dashboard.hideTemplates') : t('dashboard.showTemplates')}>
-              <IconButton size="small" onClick={toggleTemplatesVisibility} aria-label={templatesVisible ? t('dashboard.hideTemplates') : t('dashboard.showTemplates')}>
-                {templatesVisible ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-              </IconButton>
-            </Tooltip>
+            <IconButton size="small" aria-label={templatesVisible ? t('dashboard.hideTemplates') : t('dashboard.showTemplates')}>
+              {templatesVisible ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </IconButton>
           </Box>
           <Collapse in={templatesVisible}>
             <Grid container spacing={2}>
@@ -856,8 +854,9 @@ export function DashboardPage() {
           <ListItemText>{t('dashboard.renameFolder')}</ListItemText>
         </MenuItem>
         <MenuItem onClick={() => {
-          if (folderMenuTarget && window.confirm(t('dashboard.deleteFolderConfirm'))) {
-            deleteFolderMutation.mutate(folderMenuTarget.id);
+          if (folderMenuTarget) {
+            setDeleteFolderTarget(folderMenuTarget);
+            setDeleteFolderDialogOpen(true);
           }
           setFolderMenuAnchor(null);
           setFolderMenuTarget(null);
@@ -1286,6 +1285,52 @@ export function DashboardPage() {
             }}
           >
             {t('board.save')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete folder dialog */}
+      <Dialog open={deleteFolderDialogOpen} onClose={() => setDeleteFolderDialogOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t('dashboard.deleteFolderTitle')}</DialogTitle>
+        <DialogContent>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+            <strong>{deleteFolderTarget?.name}</strong>
+          </Typography>
+          <Stack spacing={1.5}>
+            <Button
+              variant="outlined"
+              fullWidth
+              onClick={() => {
+                if (deleteFolderTarget) deleteFolderMutation.mutate({ id: deleteFolderTarget.id, deleteBoards: false });
+                setDeleteFolderDialogOpen(false);
+                setDeleteFolderTarget(null);
+              }}
+            >
+              <Box sx={{ textAlign: 'left', width: '100%' }}>
+                <Typography variant="body1">{t('dashboard.deleteFolderOnly')}</Typography>
+                <Typography variant="caption" color="text.secondary">{t('dashboard.deleteFolderOnlyHint')}</Typography>
+              </Box>
+            </Button>
+            <Button
+              variant="outlined"
+              color="error"
+              fullWidth
+              onClick={() => {
+                if (deleteFolderTarget) deleteFolderMutation.mutate({ id: deleteFolderTarget.id, deleteBoards: true });
+                setDeleteFolderDialogOpen(false);
+                setDeleteFolderTarget(null);
+              }}
+            >
+              <Box sx={{ textAlign: 'left', width: '100%' }}>
+                <Typography variant="body1">{t('dashboard.deleteFolderAndBoards')}</Typography>
+                <Typography variant="caption" color="text.secondary">{t('dashboard.deleteFolderAndBoardsHint')}</Typography>
+              </Box>
+            </Button>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => { setDeleteFolderDialogOpen(false); setDeleteFolderTarget(null); }}>
+            {t('common.cancel')}
           </Button>
         </DialogActions>
       </Dialog>
