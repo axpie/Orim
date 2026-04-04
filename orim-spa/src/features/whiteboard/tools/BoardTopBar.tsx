@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   AppBar,
+  Avatar,
+  AvatarGroup,
   Badge,
   Box,
   Chip,
@@ -11,7 +13,6 @@ import {
   ListItemText,
   Menu,
   MenuItem,
-  Stack,
   TextField,
   Toolbar,
   Tooltip,
@@ -33,6 +34,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import KeyboardIcon from '@mui/icons-material/Keyboard';
+import VisibilityIcon from '@mui/icons-material/Visibility';
 import { useBoardStore } from '../store/boardStore';
 import { AppSettingsDialog } from '../../../components/dialogs/AppSettingsDialog';
 import { exportBoardJson, exportBoardPdf } from '../../../api/boards';
@@ -104,6 +106,9 @@ export function BoardTopBar({
   const board = useBoardStore((s) => s.board);
   const setBoardTitle = useBoardStore((s) => s.setBoardTitle);
   const updateBoard = useBoardStore((s) => s.updateBoard);
+  const setCamera = useBoardStore((s) => s.setCamera);
+  const followingClientId = useBoardStore((s) => s.followingClientId);
+  const setFollowingClientId = useBoardStore((s) => s.setFollowingClientId);
 
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState('');
@@ -114,6 +119,38 @@ export function BoardTopBar({
   const [appSettingsOpen, setAppSettingsOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [mobileActionsAnchor, setMobileActionsAnchor] = useState<null | HTMLElement>(null);
+  const [followMenuAnchor, setFollowMenuAnchor] = useState<null | HTMLElement>(null);
+  const [followMenuTarget, setFollowMenuTarget] = useState<CursorPresence | null>(null);
+
+  const remoteCollaborators = collaborators.filter((c) => c.clientId !== localConnectionId);
+
+  const handleAvatarClick = (collaborator: CursorPresence) => {
+    if (collaborator.worldX == null || collaborator.worldY == null) return;
+    const { zoom, viewportWidth, viewportHeight } = useBoardStore.getState();
+    const newCameraX = collaborator.worldX - viewportWidth / (2 * zoom);
+    const newCameraY = collaborator.worldY - viewportHeight / (2 * zoom);
+    setCamera(newCameraX, newCameraY);
+  };
+
+  const handleAvatarContextMenu = (event: MouseEvent<HTMLElement>, collaborator: CursorPresence) => {
+    event.preventDefault();
+    setFollowMenuAnchor(event.currentTarget);
+    setFollowMenuTarget(collaborator);
+  };
+
+  const handleFollowUser = () => {
+    if (followMenuTarget) {
+      setFollowingClientId(followMenuTarget.clientId);
+      handleAvatarClick(followMenuTarget);
+    }
+    setFollowMenuAnchor(null);
+    setFollowMenuTarget(null);
+  };
+
+  const closeFollowMenu = () => {
+    setFollowMenuAnchor(null);
+    setFollowMenuTarget(null);
+  };
 
   const handleTitleFocus = () => {
     if (!titleEditable) {
@@ -190,9 +227,6 @@ export function BoardTopBar({
     setSettingsMenuAnchor(event.currentTarget);
   };
 
-  const compactCollaborators = collaborators.length > 0
-    ? collaborators.filter((collaborator) => collaborator.clientId !== localConnectionId).length
-    : 0;
   const commentCount = board?.comments?.length ?? 0;
   const statusLabelKey = (() => {
     switch (syncStatus.kind) {
@@ -330,43 +364,41 @@ export function BoardTopBar({
 
           <Box sx={{ flexGrow: 1 }} />
 
-          {!isCompact && collaborators.length > 0 && (
-            <Stack direction="row" spacing={1} sx={{ mr: 2, overflow: 'hidden', maxWidth: 420 }}>
-              {collaborators.slice(0, 5).map((collaborator) => (
-                <Chip
-                  key={collaborator.clientId}
-                  size="small"
-                  label={collaborator.clientId === localConnectionId ? `${collaborator.displayName} (You)` : collaborator.displayName}
-                  sx={{
-                    color: 'inherit',
-                    border: '1px solid rgba(255,255,255,0.22)',
-                    bgcolor: 'rgba(255,255,255,0.08)',
-                    maxWidth: 160,
-                    '& .MuiChip-avatar': {
-                      width: 10,
-                      height: 10,
-                      minWidth: 10,
-                      minHeight: 10,
-                      display: 'block',
-                      flexShrink: 0,
-                      aspectRatio: '1 / 1',
-                      marginLeft: 1,
-                      marginRight: 0.75,
-                    },
-                    '& .MuiChip-label': {
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    },
-                  }}
-                  avatar={<Box component="span" sx={{ borderRadius: '50%', bgcolor: collaborator.colorHex }} />}
-                />
+          {!isCompact && remoteCollaborators.length > 0 && (
+            <AvatarGroup
+              max={6}
+              sx={{
+                mr: 2,
+                '& .MuiAvatar-root': { width: 28, height: 28, fontSize: 13, cursor: 'pointer' },
+              }}
+            >
+              {remoteCollaborators.slice(0, 5).map((collaborator) => (
+                <Tooltip key={collaborator.clientId} title={collaborator.displayName}>
+                  <Avatar
+                    sx={{
+                      bgcolor: collaborator.colorHex,
+                      border: followingClientId === collaborator.clientId
+                        ? '2px solid'
+                        : undefined,
+                      borderColor: followingClientId === collaborator.clientId
+                        ? 'primary.main'
+                        : undefined,
+                    }}
+                    onClick={() => handleAvatarClick(collaborator)}
+                    onContextMenu={(e) => handleAvatarContextMenu(e, collaborator)}
+                  >
+                    {collaborator.displayName.charAt(0).toUpperCase()}
+                  </Avatar>
+                </Tooltip>
               ))}
-              {collaborators.length > 5 && <Chip size="small" label={`+${collaborators.length - 5}`} />}
-            </Stack>
+              {remoteCollaborators.length > 5 && (
+                <Avatar sx={{ bgcolor: 'grey.600' }}>+{remoteCollaborators.length - 5}</Avatar>
+              )}
+            </AvatarGroup>
           )}
 
-          {isCompact && compactCollaborators > 0 && (
-            <Chip size="small" label={`+${compactCollaborators}`} sx={{ mr: 0.5 }} />
+          {isCompact && remoteCollaborators.length > 0 && (
+            <Chip size="small" label={`+${remoteCollaborators.length}`} sx={{ mr: 0.5 }} />
           )}
 
           {isCompact ? (
@@ -572,6 +604,19 @@ export function BoardTopBar({
       />
 
       <AppSettingsDialog open={appSettingsOpen} onClose={() => setAppSettingsOpen(false)} />
+
+      <Menu
+        anchorEl={followMenuAnchor}
+        open={Boolean(followMenuAnchor)}
+        onClose={closeFollowMenu}
+      >
+        {followMenuTarget && (
+          <MenuItem onClick={handleFollowUser}>
+            <ListItemIcon><VisibilityIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('board.followUser', { name: followMenuTarget.displayName, defaultValue: 'Follow {{name}}' })}</ListItemText>
+          </MenuItem>
+        )}
+      </Menu>
     </>
   );
 }

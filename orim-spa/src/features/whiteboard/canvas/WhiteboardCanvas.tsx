@@ -285,7 +285,7 @@ export function WhiteboardCanvas({
     getTouchGestureInfo,
     getResizeHandleFromTarget,
     applyDraggedArrowEndpoint,
-    handleMouseDown,
+    handleMouseDown: handleMouseDownBase,
     handleContextMenu,
     handleDblClick,
   } = useCanvasStartInteractions({
@@ -337,6 +337,14 @@ export function WhiteboardCanvas({
     setDragStart,
     setDrawingElementId,
   });
+
+  const handleMouseDown = useCallback(
+    (e: Parameters<typeof handleMouseDownBase>[0]) => {
+      clearFollowOnInteraction();
+      handleMouseDownBase(e);
+    },
+    [clearFollowOnInteraction, handleMouseDownBase],
+  );
 
   const handleContainerFocus = useCallback(() => {
     setIsCanvasFocused(true);
@@ -929,6 +937,7 @@ export function WhiteboardCanvas({
 
   const handleTouchStart = useCallback(
     (e: Konva.KonvaEventObject<TouchEvent>) => {
+      clearFollowOnInteraction();
       if (e.evt.touches.length >= 2) {
         e.evt.preventDefault();
         const gesture = getTouchGestureInfo(e.evt.touches);
@@ -951,7 +960,7 @@ export function WhiteboardCanvas({
 
       handleMouseDown(e as unknown as Konva.KonvaEventObject<MouseEvent>);
     },
-    [cameraX, cameraY, getTouchGestureInfo, handleMouseDown, zoom],
+    [cameraX, cameraY, clearFollowOnInteraction, getTouchGestureInfo, handleMouseDown, zoom],
   );
 
   const handleTouchMove = useCallback(

@@ -49,6 +49,7 @@ interface BoardState {
   pendingIconName: string | null;
   pendingStickyNotePresetId: string | null;
   commandConflict: BoardCommandConflict | null;
+  followingClientId: string | null;
 
   getElementById: (id: string) => BoardElement | undefined;
   setBoard: (board: Board | null, options?: SetBoardOptions) => void;
@@ -74,6 +75,7 @@ interface BoardState {
   setDirty: (dirty: boolean) => void;
   setPendingIconName: (iconName: string | null) => void;
   setPendingStickyNotePresetId: (presetId: string | null) => void;
+  setFollowingClientId: (clientId: string | null) => void;
 }
 
 function areValuesEqual(left: unknown, right: unknown): boolean {
@@ -262,6 +264,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   pendingIconName: 'mdi-star',
   pendingStickyNotePresetId: null,
   commandConflict: null,
+  followingClientId: null,
 
   getElementById: (id) => get()._elementsMap.get(id),
 
@@ -534,4 +537,5 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   setDirty: (dirty) => set({ isDirty: dirty }),
   setPendingIconName: (iconName) => set({ pendingIconName: iconName }),
   setPendingStickyNotePresetId: (presetId) => set({ pendingStickyNotePresetId: presetId }),
+  setFollowingClientId: (clientId) => set({ followingClientId: clientId }),
 }));
