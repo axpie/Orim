@@ -58,6 +58,7 @@ export function SharedBoardView() {
   const setBoard = useBoardStore((s) => s.setBoard);
   const applyRemoteOperation = useBoardStore((s) => s.applyRemoteOperation);
   const setRemoteCursors = useBoardStore((s) => s.setRemoteCursors);
+  const selectedElementIds = useBoardStore((s) => s.selectedElementIds);
   const setViewportInsets = useBoardStore((s) => s.setViewportInsets);
   const board = useBoardStore((s) => s.board);
   const remoteCursors = useBoardStore((s) => s.remoteCursors);
@@ -372,6 +373,22 @@ export function SharedBoardView() {
     };
   }, [clearScheduledSave]);
 
+  // Broadcast selected element IDs to remote collaborators (including anonymous users)
+  useEffect(() => {
+    if (connectionState === 'connected') {
+      sendCursorUpdate(null, null, selectedElementIds.length > 0 ? selectedElementIds : undefined);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedElementIds, connectionState]);
+
+  const handlePointerPresenceChanged = useCallback(
+    (worldX: number | null, worldY: number | null) => {
+      const currentSelection = useBoardStore.getState().selectedElementIds;
+      sendCursorUpdate(worldX, worldY, currentSelection.length > 0 ? currentSelection : undefined);
+    },
+    [sendCursorUpdate],
+  );
+
   const handlePasswordSubmit = async () => {
     try {
       const result = await validateSharePassword(token!, password);
@@ -603,7 +620,7 @@ export function SharedBoardView() {
             localPresenceClientId={connectionId}
             onBoardChanged={onBoardChanged}
             onBoardLiveChanged={onBoardLiveChanged}
-            onPointerPresenceChanged={sendCursorUpdate}
+            onPointerPresenceChanged={handlePointerPresenceChanged}
             selectedCommentId={activeCommentId}
             commentPlacementMode={commentPlacementMode}
             onSelectComment={handleSelectComment}

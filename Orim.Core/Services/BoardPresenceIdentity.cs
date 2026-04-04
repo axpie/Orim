@@ -4,16 +4,16 @@ public static class BoardPresenceIdentity
 {
     private static readonly string[] CursorPalette =
     [
-        "#ef4444",
-        "#f97316",
-        "#eab308",
-        "#22c55e",
-        "#14b8a6",
-        "#06b6d4",
-        "#3b82f6",
-        "#6366f1",
-        "#8b5cf6",
-        "#ec4899"
+        "#ef4444",  // red
+        "#f97316",  // orange
+        "#eab308",  // yellow
+        "#84cc16",  // lime  (replaces teal, which was too close to cyan)
+        "#22c55e",  // green
+        "#06b6d4",  // cyan
+        "#3b82f6",  // blue
+        "#c026d3",  // fuchsia (replaces indigo, which was too close to blue)
+        "#8b5cf6",  // violet
+        "#ec4899"   // pink
     ];
 
     private static readonly string[] Adjectives =
