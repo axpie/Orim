@@ -1,4 +1,4 @@
-import { useEffect, useRef, type CSSProperties } from 'react';
+import { useLayoutEffect, useRef, type CSSProperties } from 'react';
 import type { BoardElement } from '../../../types/models';
 import { contrastingTextColor } from '../../../utils/colorUtils';
 import { resolveFontFamily, resolveLabelFontSize, resolveTextFontSize } from '../../../utils/textLayout';
@@ -71,7 +71,7 @@ export function InlineTextEditor({
     : surfaceColor; // text elements: match canvas background
   const borderRadius = element.$type === 'sticky' ? 8 : element.$type === 'frame' ? 10 : 2;
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const ta = ref.current;
     if (ta) {
       ta.value = initialValue;

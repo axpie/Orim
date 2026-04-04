@@ -230,4 +230,93 @@ public class EfBoardRepositoryTests : IDisposable
 
         Assert.Empty(result);
     }
+
+    [Fact]
+    public async Task SaveAsync_NewSnapshot_PersistsAndRetrievesSnapshot()
+    {
+        var board = new Board { Title = "Board With Snapshot", Elements = [new ShapeElement { Label = "A" }] };
+        await _sut.SaveAsync(board);
+
+        // Reload the board (as the endpoint does via GetBoardAsync → AsNoTracking)
+        var reloaded = await _sut.GetByIdAsync(board.Id);
+        Assert.NotNull(reloaded);
+
+        var snapshot = new BoardSnapshot
+        {
+            Name = "v1",
+            CreatedByUserId = Guid.NewGuid(),
+            CreatedByUsername = "alice",
+            ContentJson = "{\"elements\":[]}",
+        };
+        reloaded.Snapshots.Add(snapshot);
+        await _sut.SaveAsync(reloaded);
+
+        var retrieved = await _sut.GetByIdAsync(board.Id);
+        Assert.NotNull(retrieved);
+        Assert.Single(retrieved.Snapshots);
+        Assert.Equal("v1", retrieved.Snapshots[0].Name);
+        Assert.Equal("alice", retrieved.Snapshots[0].CreatedByUsername);
+        Assert.Equal(board.Id, retrieved.Snapshots[0].BoardId);
+    }
+
+    [Fact]
+    public async Task SaveAsync_MultipleSnapshots_PersistsAll()
+    {
+        var board = new Board { Title = "Snap Board" };
+        await _sut.SaveAsync(board);
+
+        var reloaded1 = await _sut.GetByIdAsync(board.Id);
+        Assert.NotNull(reloaded1);
+        reloaded1.Snapshots.Add(new BoardSnapshot { Name = "snap-1", CreatedByUserId = Guid.NewGuid(), CreatedByUsername = "alice", ContentJson = "{}" });
+        await _sut.SaveAsync(reloaded1);
+
+        var reloaded2 = await _sut.GetByIdAsync(board.Id);
+        Assert.NotNull(reloaded2);
+        reloaded2.Snapshots.Add(new BoardSnapshot { Name = "snap-2", CreatedByUserId = Guid.NewGuid(), CreatedByUsername = "alice", ContentJson = "{}" });
+        await _sut.SaveAsync(reloaded2);
+
+        var retrieved = await _sut.GetByIdAsync(board.Id);
+        Assert.NotNull(retrieved);
+        Assert.Equal(2, retrieved.Snapshots.Count);
+    }
+
+    [Fact]
+    public async Task SaveAsync_SnapshotExceedsMax_OldestAreDropped()
+    {
+        var board = new Board { Title = "Max Snap Board" };
+        await _sut.SaveAsync(board);
+
+        // Add 30 snapshots one at a time (simulating endpoint flow each time)
+        for (var i = 0; i < 30; i++)
+        {
+            var b = await _sut.GetByIdAsync(board.Id);
+            Assert.NotNull(b);
+            b.Snapshots.Insert(0, new BoardSnapshot
+            {
+                Name = $"snap-{i}",
+                CreatedByUserId = Guid.NewGuid(),
+                CreatedByUsername = "alice",
+                ContentJson = "{}",
+            });
+            await _sut.SaveAsync(b);
+        }
+
+        var retrieved = await _sut.GetByIdAsync(board.Id);
+        Assert.NotNull(retrieved);
+        Assert.Equal(30, retrieved.Snapshots.Count);
+
+        // Add a 31st snapshot — oldest should be trimmed (done at service layer before SaveAsync)
+        var reloaded = await _sut.GetByIdAsync(board.Id);
+        Assert.NotNull(reloaded);
+        var newSnap = new BoardSnapshot { Name = "snap-30", CreatedByUserId = Guid.NewGuid(), CreatedByUsername = "alice", ContentJson = "{}" };
+        reloaded.Snapshots.Insert(0, newSnap);
+        reloaded.Snapshots = reloaded.Snapshots.Take(30).ToList();
+        await _sut.SaveAsync(reloaded);
+
+        var final = await _sut.GetByIdAsync(board.Id);
+        Assert.NotNull(final);
+        Assert.Equal(30, final.Snapshots.Count);
+        Assert.Contains(final.Snapshots, s => s.Name == "snap-30");
+        Assert.DoesNotContain(final.Snapshots, s => s.Name == "snap-29"); // oldest was trimmed
+    }
 }

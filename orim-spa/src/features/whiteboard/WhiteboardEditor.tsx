@@ -667,7 +667,7 @@ export function WhiteboardEditor() {
                 position: 'absolute',
                 top: 0,
                 bottom: 0,
-                right: `${(propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0) + (commentsOpen ? COMMENTS_PANEL_WIDTH : 0)}px`,
+                right: `${propertiesOpen ? PROPERTIES_PANEL_WIDTH : 0}px`,
                 width: CHAT_PANEL_WIDTH,
                 zIndex: 4,
                 boxShadow: 6,

@@ -85,9 +85,26 @@ export function ChatPanel({ boardId, onClose, onBoardChanged, mobile = false }: 
         onBoardChanged?.('edit');
       }
 
+      const toolActionSummary = (type: string): string | null => {
+        switch (type) {
+          case 'ElementAdded': return '🧰 Element added';
+          case 'ElementUpdated': return '🧰 Element updated';
+          case 'ElementRemoved': return '🧰 Element removed';
+          case 'BoardCleared': return '🧰 Board cleared';
+          default: return null;
+        }
+      };
+
+      const lines = response.events
+        .map((event) => {
+          if (event.type === 'Message' || event.type === 'Error') return event.content;
+          return toolActionSummary(event.type);
+        })
+        .filter((line): line is string => line !== null && line.length > 0);
+
       const assistantMsg: ChatMessageEntry = {
         role: 'assistant',
-        content: response.events.map((event) => event.content).join('\n') || 'Done.',
+        content: lines.join('\n') || 'Done.',
       };
       setMessages([...updatedMessages, assistantMsg]);
     } catch (error) {

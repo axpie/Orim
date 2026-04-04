@@ -67,7 +67,24 @@ public class EfBoardRepository : IBoardRepository
         }
         else
         {
-            _context.Entry(existing).CurrentValues.SetValues(entity);
+            existing.Title = entity.Title;
+            existing.OwnerId = entity.OwnerId;
+            existing.LabelOutlineEnabled = entity.LabelOutlineEnabled;
+            existing.ArrowOutlineEnabled = entity.ArrowOutlineEnabled;
+            existing.SurfaceColor = entity.SurfaceColor;
+            existing.ThemeKey = entity.ThemeKey;
+            existing.Visibility = entity.Visibility;
+            existing.ShareLinkToken = entity.ShareLinkToken;
+            existing.SharedAllowAnonymousEditing = entity.SharedAllowAnonymousEditing;
+            existing.SharePasswordHash = entity.SharePasswordHash;
+            existing.FolderId = entity.FolderId;
+            existing.CustomColors = entity.CustomColors.ToList();
+            existing.RecentColors = entity.RecentColors.ToList();
+            existing.StickyNotePresets = entity.StickyNotePresets.ToList();
+            existing.Tags = entity.Tags.ToList();
+            existing.Elements = entity.Elements.ToList();
+            existing.CreatedAt = entity.CreatedAt;
+            existing.UpdatedAt = entity.UpdatedAt;
 
             // Diff Members by UserId (composite key: BoardId + UserId)
             var existingMemberIds = existing.Members.Select(m => m.UserId).ToHashSet();
@@ -77,7 +94,10 @@ public class EfBoardRepository : IBoardRepository
             _context.BoardMembers.RemoveRange(membersToRemove);
 
             foreach (var member in entity.Members.Where(m => !existingMemberIds.Contains(m.UserId)))
+            {
                 existing.Members.Add(member);
+                _context.Entry(member).State = EntityState.Added;
+            }
 
             foreach (var member in entity.Members.Where(m => existingMemberIds.Contains(m.UserId)))
             {
@@ -98,7 +118,10 @@ public class EfBoardRepository : IBoardRepository
             }
 
             foreach (var comment in entity.Comments.Where(c => !existingCommentIds.Contains(c.Id)))
-                existing.Comments.Add(comment);
+            {
+                comment.BoardId = existing.Id;
+                _context.BoardComments.Add(comment);
+            }
 
             foreach (var comment in entity.Comments.Where(c => existingCommentIds.Contains(c.Id)))
             {
@@ -113,7 +136,10 @@ public class EfBoardRepository : IBoardRepository
                 _context.BoardCommentReplies.RemoveRange(repliesToRemove);
 
                 foreach (var reply in comment.Replies.Where(r => !existingReplyIds.Contains(r.Id)))
-                    existingComment.Replies.Add(reply);
+                {
+                    reply.CommentId = existingComment.Id;
+                    _context.BoardCommentReplies.Add(reply);
+                }
 
                 foreach (var reply in comment.Replies.Where(r => existingReplyIds.Contains(r.Id)))
                 {
@@ -130,7 +156,10 @@ public class EfBoardRepository : IBoardRepository
             _context.BoardSnapshots.RemoveRange(snapshotsToRemove);
 
             foreach (var snapshot in entity.Snapshots.Where(s => !existingSnapshotIds.Contains(s.Id)))
-                existing.Snapshots.Add(snapshot);
+            {
+                snapshot.BoardId = existing.Id;
+                _context.BoardSnapshots.Add(snapshot);
+            }
         }
 
         await _context.SaveChangesAsync();
