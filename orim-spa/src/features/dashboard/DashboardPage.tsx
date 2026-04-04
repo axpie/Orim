@@ -39,6 +39,8 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SearchIcon from '@mui/icons-material/Search';
 import StarBorderIcon from '@mui/icons-material/StarBorder';
 import StarIcon from '@mui/icons-material/Star';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 import {
   getBoards,
   createBoard,
@@ -73,6 +75,10 @@ function recentBoardsStorageKey(userId: string) {
 
 function onboardingStorageKey(userId: string) {
   return `orim_dashboard_onboarding_seen_${userId}`;
+}
+
+function templatesVisibilityKey(userId: string) {
+  return `orim_dashboard_templates_visible_${userId}`;
 }
 
 function loadStoredIds(key: string): string[] {
@@ -373,6 +379,22 @@ export function DashboardPage() {
   const [newThemeKey, setNewThemeKey] = useState('');
   const [newVisibility, setNewVisibility] = useState(BoardVisibility.Private);
 
+  // Templates visibility state
+  const [templatesVisible, setTemplatesVisible] = useState(() => {
+    if (!currentUser) return true;
+    const stored = localStorage.getItem(templatesVisibilityKey(currentUser.id));
+    return stored !== null ? stored === 'true' : true; // default to visible
+  });
+
+  const toggleTemplatesVisibility = useCallback(() => {
+    if (!currentUser) return;
+    setTemplatesVisible((prev) => {
+      const next = !prev;
+      localStorage.setItem(templatesVisibilityKey(currentUser.id), String(next));
+      return next;
+    });
+  }, [currentUser]);
+
   // Rename dialog state
   const [renameOpen, setRenameOpen] = useState(false);
   const [renameId, setRenameId] = useState('');
@@ -632,35 +654,51 @@ export function DashboardPage() {
       {/* Template Quick Start */}
       {templates.length > 0 && (
         <Box sx={{ mb: 4 }}>
-          <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1 }}>
-            {t('dashboard.templates')}
-          </Typography>
-          <Grid container spacing={2}>
-            {templates.map((tmpl) => (
-              <Grid size={{ xs: 6, sm: 4, md: 2 }} key={tmpl.id}>
-                <Card variant="outlined" sx={{ height: '100%', textAlign: 'left' }}>
-                  <CardActionArea
-                    sx={{ p: 2, height: '100%', display: 'grid', gap: 1.25, alignContent: 'start' }}
-                    onClick={() => {
-                      setNewTemplate(tmpl.id);
-                      setNewTitle(getTemplateTitle(tmpl));
-                      setCreateOpen(true);
-                    }}
-                  >
-                    <TemplatePreview templateId={tmpl.id} />
-                    <Typography variant="body2" fontWeight={600}>
-                      {getTemplateTitle(tmpl)}
-                    </Typography>
-                    {getTemplateDescription(tmpl) && (
-                      <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
-                        {getTemplateDescription(tmpl)}
+          <Box
+            sx={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              mb: 1,
+            }}
+          >
+            <Typography variant="subtitle1" fontWeight={600}>
+              {t('dashboard.templates')}
+            </Typography>
+            <Tooltip title={templatesVisible ? t('dashboard.hideTemplates') : t('dashboard.showTemplates')}>
+              <IconButton size="small" onClick={toggleTemplatesVisibility} aria-label={templatesVisible ? t('dashboard.hideTemplates') : t('dashboard.showTemplates')}>
+                {templatesVisible ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+              </IconButton>
+            </Tooltip>
+          </Box>
+          <Collapse in={templatesVisible}>
+            <Grid container spacing={2}>
+              {templates.map((tmpl) => (
+                <Grid size={{ xs: 6, sm: 4, md: 2 }} key={tmpl.id}>
+                  <Card variant="outlined" sx={{ height: '100%', textAlign: 'left' }}>
+                    <CardActionArea
+                      sx={{ p: 2, height: '100%', display: 'grid', gap: 1.25, alignContent: 'start' }}
+                      onClick={() => {
+                        setNewTemplate(tmpl.id);
+                        setNewTitle(getTemplateTitle(tmpl));
+                        setCreateOpen(true);
+                      }}
+                    >
+                      <TemplatePreview templateId={tmpl.id} />
+                      <Typography variant="body2" fontWeight={600}>
+                        {getTemplateTitle(tmpl)}
                       </Typography>
-                    )}
-                  </CardActionArea>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
+                      {getTemplateDescription(tmpl) && (
+                        <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+                          {getTemplateDescription(tmpl)}
+                        </Typography>
+                      )}
+                    </CardActionArea>
+                  </Card>
+                </Grid>
+              ))}
+            </Grid>
+          </Collapse>
         </Box>
       )}
 

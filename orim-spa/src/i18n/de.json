@@ -75,6 +75,8 @@
     "elements": "Elemente",
     "lastModified": "Zuletzt geändert",
     "templates": "Vorlagen",
+    "hideTemplates": "Vorlagen ausblenden",
+    "showTemplates": "Vorlagen anzeigen",
     "myBoards": "Meine Boards",
     "sharedWithMe": "Geteilt mit mir",
     "noOwnBoards": "Noch keine eigenen Boards vorhanden.",

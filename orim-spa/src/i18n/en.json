@@ -75,6 +75,8 @@
     "elements": "Elements",
     "lastModified": "Last Modified",
     "templates": "Templates",
+    "hideTemplates": "Hide templates",
+    "showTemplates": "Show templates",
     "myBoards": "My Boards",
     "sharedWithMe": "Shared with Me",
     "noOwnBoards": "No own boards yet.",
