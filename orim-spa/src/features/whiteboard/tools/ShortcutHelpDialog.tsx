@@ -36,6 +36,7 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
       items: [
         { keys: 'V', label: t('tools.select') },
         { keys: 'R', label: t('tools.rectangle') },
+        { keys: 'A', label: t('tools.arrow') },
         { keys: 'T', label: t('tools.text') },
         { keys: 'H', label: t('tools.hand') },
         { keys: 'Enter', label: t('shortcuts.startInlineEdit') },

@@ -77,6 +77,7 @@ export function WhiteboardEditor() {
   const connectionIdRef = useRef<string | null>(null);
   const liveAnnouncementIdRef = useRef(0);
   const stageRef = useRef<Konva.Stage | null>(null);
+  const canvasBoxRef = useRef<HTMLDivElement | null>(null);
   const compactOverlayOpen = isCompactToolbarLayout && (propertiesOpen || commentsOpen || chatOpen);
 
   const currentMembership = user && board
@@ -602,8 +603,8 @@ export function WhiteboardEditor() {
         localConnectionId={connectionId}
       />
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
-        {canEdit && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} />}
-        <Box sx={{ flex: 1, position: 'relative' }}>
+        {canEdit && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} canvasContainerRef={canvasBoxRef} />}
+        <Box ref={canvasBoxRef} sx={{ flex: 1, position: 'relative' }}>
           <ErrorBoundary>
             <WhiteboardCanvas
               editable={canEdit}

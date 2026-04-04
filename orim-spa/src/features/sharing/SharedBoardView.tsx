@@ -92,6 +92,7 @@ export function SharedBoardView() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
   const liveAnnouncementIdRef = useRef(0);
+  const canvasBoxRef = useRef<HTMLDivElement | null>(null);
   const lastSyncAnnouncementRef = useRef<string | null>(null);
   const compactOverlayOpen = isCompactToolbarLayout && (propertiesOpen || commentsOpen);
   const comments = board?.comments ?? EMPTY_COMMENTS;
@@ -613,8 +614,8 @@ export function SharedBoardView() {
         </Box>
       )}
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
-        {board.sharedAllowAnonymousEditing && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} />}
-        <Box sx={{ flex: 1, position: 'relative' }}>
+        {board.sharedAllowAnonymousEditing && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} canvasContainerRef={canvasBoxRef} />}
+        <Box ref={canvasBoxRef} sx={{ flex: 1, position: 'relative' }}>
           <WhiteboardCanvas
             editable={board.sharedAllowAnonymousEditing}
             localPresenceClientId={connectionId}

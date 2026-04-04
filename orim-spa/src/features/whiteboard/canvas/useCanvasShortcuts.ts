@@ -154,6 +154,9 @@ export function useCanvasShortcuts({
         case 'r':
           setActiveTool('rectangle');
           return;
+        case 'a':
+          setActiveTool('arrow');
+          return;
         case 't':
           setActiveTool('text');
           return;

@@ -72,6 +72,8 @@ import { v4 as uuidv4 } from 'uuid';
 
 interface ToolbarProps {
   onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
+  /** Ref to the canvas container element, used for accurate fit-to-screen viewport measurement. */
+  canvasContainerRef?: React.RefObject<HTMLElement | null>;
 }
 
 const FRAME_WRAP_HORIZONTAL_PADDING = 24;
@@ -141,7 +143,7 @@ function createFrameRect(bounds: Rect): Rect {
   };
 }
 
-export const Toolbar = React.memo(function Toolbar({ onBoardChanged }: ToolbarProps) {
+export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasContainerRef }: ToolbarProps) {
   const { t } = useTranslation();
   const theme = useTheme();
   const isTouchDevice = useMediaQuery('(pointer: coarse)');
@@ -444,8 +446,15 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged }: ToolbarPr
 
     const contentW = Math.max(1, bounds.width);
     const contentH = Math.max(1, bounds.height);
-    const visibleWidth = Math.max(1, viewportWidth - viewportInsets.left - viewportInsets.right);
-    const visibleHeight = Math.max(1, viewportHeight - viewportInsets.top - viewportInsets.bottom);
+
+    // Prefer live DOM measurement to avoid using stale store values (e.g. from a
+    // previously-maximised window that has since been resized).
+    const containerRect = canvasContainerRef?.current?.getBoundingClientRect();
+    const effectiveW = containerRect ? containerRect.width : viewportWidth;
+    const effectiveH = containerRect ? containerRect.height : viewportHeight;
+
+    const visibleWidth = Math.max(1, effectiveW - viewportInsets.left - viewportInsets.right);
+    const visibleHeight = Math.max(1, effectiveH - viewportInsets.top - viewportInsets.bottom);
     const margin = 64;
     const clampedZoom = Math.max(0.2, Math.min(
       (Math.max(1, visibleWidth - margin * 2)) / contentW,
@@ -718,21 +727,28 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged }: ToolbarPr
       elevation={2}
       sx={{
         display: 'flex',
-        flexDirection: isCompactLayout ? 'column' : 'column',
+        flexDirection: 'column',
         alignItems: 'center',
         py: isCompactLayout ? 0.75 : 1,
         px: isCompactLayout ? 0.75 : 0.5,
         gap: 0.5,
         borderRadius: isCompactLayout ? 3 : 0,
         flexShrink: 0,
-        width: isCompactLayout ? 'auto' : 48,
-        maxWidth: isCompactLayout ? 'calc(100% - 24px)' : 48,
+        // Non-compact: start at 48px, allow wrapping into a 2nd column (≤96px)
+        // when content exceeds the available height. Using flexWrap on a column
+        // flex causes overflow items to spill into a new column to the right.
+        width: isCompactLayout ? 'auto' : 'fit-content',
+        minWidth: isCompactLayout ? undefined : 48,
+        maxWidth: isCompactLayout ? 'calc(100% - 24px)' : 96,
+        maxHeight: isCompactLayout ? undefined : '100%',
+        flexWrap: isCompactLayout ? undefined : 'wrap',
+        alignContent: isCompactLayout ? undefined : 'flex-start',
         position: isCompactLayout ? 'absolute' : 'relative',
         left: isCompactLayout ? 12 : 'auto',
         right: isCompactLayout ? 12 : 'auto',
         bottom: isCompactLayout ? 'calc(12px + env(safe-area-inset-bottom))' : 'auto',
         zIndex: isCompactLayout ? 6 : 'auto',
-        overflow: 'hidden',
+        overflow: 'visible',
       }}
     >
       {isCompactLayout ? (

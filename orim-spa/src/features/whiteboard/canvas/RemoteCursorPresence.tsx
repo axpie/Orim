@@ -201,7 +201,8 @@ function RemoteCursorPresenceInner({ localPresenceClientId = null, zoom }: Remot
       {/* Element-level editing indicators */}
       {remoteElementSelections.map(({ elementId, colorHex, displayName }) => {
         const element = getElementById(elementId);
-        if (!element || element.x == null || element.y == null) return null;
+        // Arrows don't have meaningful x/y/width/height bounds; skip them to avoid floating rectangles.
+        if (!element || element.$type === 'arrow' || element.x == null || element.y == null) return null;
         const w = element.width ?? 100;
         const h = element.height ?? 40;
         return (
