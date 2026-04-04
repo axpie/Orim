@@ -64,6 +64,7 @@ import {
   type CreateBoardRequest,
 } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
+import { useDashboardPrefsStore } from '../../stores/dashboardPrefsStore';
 
 const MAX_RECENT_BOARDS = 5;
 
@@ -81,6 +82,10 @@ function onboardingStorageKey(userId: string) {
 
 function templatesVisibilityKey(userId: string) {
   return `orim_dashboard_templates_visible_${userId}`;
+}
+
+function recentVisibilityKey(userId: string) {
+  return `orim_dashboard_recent_visible_${userId}`;
 }
 
 function loadStoredIds(key: string): string[] {
@@ -328,6 +333,7 @@ export function DashboardPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const currentUser = useAuthStore((s) => s.user);
+  const dashboardPrefs = useDashboardPrefsStore();
 
   const { data: boards = [], isLoading } = useQuery({
     queryKey: ['boards'],
@@ -424,7 +430,7 @@ export function DashboardPage() {
   const [templatesVisible, setTemplatesVisible] = useState(() => {
     if (!currentUser) return true;
     const stored = localStorage.getItem(templatesVisibilityKey(currentUser.id));
-    return stored !== null ? stored === 'true' : true; // default to visible
+    return stored !== null ? stored === 'true' : true;
   });
 
   const toggleTemplatesVisibility = useCallback(() => {
@@ -432,6 +438,22 @@ export function DashboardPage() {
     setTemplatesVisible((prev) => {
       const next = !prev;
       localStorage.setItem(templatesVisibilityKey(currentUser.id), String(next));
+      return next;
+    });
+  }, [currentUser]);
+
+  // Recent boards visibility state
+  const [recentVisible, setRecentVisible] = useState(() => {
+    if (!currentUser) return true;
+    const stored = localStorage.getItem(recentVisibilityKey(currentUser.id));
+    return stored !== null ? stored === 'true' : true;
+  });
+
+  const toggleRecentVisibility = useCallback(() => {
+    if (!currentUser) return;
+    setRecentVisible((prev) => {
+      const next = !prev;
+      localStorage.setItem(recentVisibilityKey(currentUser.id), String(next));
       return next;
     });
   }, [currentUser]);
@@ -464,6 +486,7 @@ export function DashboardPage() {
   // Delete folder dialog state
   const [deleteFolderDialogOpen, setDeleteFolderDialogOpen] = useState(false);
   const [deleteFolderTarget, setDeleteFolderTarget] = useState<BoardFolder | null>(null);
+  const [deleteFolderWithBoardsConfirmName, setDeleteFolderWithBoardsConfirmName] = useState('');
 
   // Drag & drop state
   const [draggingBoardId, setDraggingBoardId] = useState<string | null>(null);
@@ -603,7 +626,8 @@ export function DashboardPage() {
 
   const myBoards = filteredBoards.filter((b: BoardSummary) => b.ownerId === currentUser?.id);
   const sharedBoards = filteredBoards.filter((b: BoardSummary) => b.ownerId !== currentUser?.id);
-  const favoriteBoards = filteredBoards.filter((board: BoardSummary) => favoriteBoardIdSet.has(board.id));
+  // Favorites and recent are derived from all boards (not folder/tag-filtered) so they always show above the filters
+  const favoriteBoards = boards.filter((board: BoardSummary) => favoriteBoardIdSet.has(board.id));
   const recentBoards = recentBoardIds
     .map((boardId) => boards.find((board: BoardSummary) => board.id === boardId))
     .filter((board): board is BoardSummary => Boolean(board));
@@ -708,7 +732,7 @@ export function DashboardPage() {
       </Box>
 
       {/* Template Quick Start */}
-      {templates.length > 0 && (
+      {templates.length > 0 && dashboardPrefs.showTemplates && (
         <Box sx={{ mb: 4 }}>
           <Box
             sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', mb: 1 }}
@@ -749,6 +773,80 @@ export function DashboardPage() {
               ))}
             </Grid>
           </Collapse>
+        </Box>
+      )}
+
+      {/* Recently Opened — above folder filter */}
+      {boards.length > 0 && recentBoards.length > 0 && dashboardPrefs.showRecent && (
+        <Box sx={{ mb: 4 }}>
+          <Box
+            sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', mb: 1.5 }}
+            onClick={toggleRecentVisibility}
+          >
+            <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
+              {t('dashboard.recentBoards')}
+            </Typography>
+            <IconButton size="small" aria-label={recentVisible ? t('dashboard.hideRecent') : t('dashboard.showRecent')}>
+              {recentVisible ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+            </IconButton>
+          </Box>
+          <Collapse in={recentVisible}>
+            <Grid container spacing={2}>
+              {recentBoards.map((board) => (
+                <Grid size={{ xs: 12, sm: 6, md: 4 }} key={board.id}>
+                  <BoardCard
+                    board={board}
+                    isOwner={board.ownerId === currentUser?.id}
+                    isFavorite={favoriteBoardIdSet.has(board.id)}
+                    roleLabel={board.ownerId === currentUser?.id ? null : roleLabel(getUserRole(board))}
+                    onNavigate={() => handleNavigate(board.id)}
+                    onRename={() => { setRenameId(board.id); setRenameTitle(board.title); setRenameOpen(true); }}
+                    onDelete={() => handleDelete(board.id)}
+                    onMoveToFolder={() => { setMoveToFolderBoardId(board.id); setMoveToFolderSelectedId(board.folderId ?? ''); setMoveToFolderOpen(true); }}
+                    onToggleFavorite={() => toggleFavorite(board.id)}
+                    visibilityLabel={visibilityLabel(board.visibility)}
+                    visibilityColor={visibilityColor(board.visibility)}
+                    draggable={board.ownerId === currentUser?.id}
+                    onDragStart={() => setDraggingBoardId(board.id)}
+                    onDragEnd={() => { setDraggingBoardId(null); setDragOverFolderId(null); }}
+                    t={t}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Collapse>
+        </Box>
+      )}
+
+      {/* Favorites — above folder filter */}
+      {boards.length > 0 && favoriteBoards.length > 0 && (
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
+            {t('dashboard.favorites')}
+          </Typography>
+          <Grid container spacing={2}>
+            {favoriteBoards.map((board) => (
+              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={board.id}>
+                <BoardCard
+                  board={board}
+                  isOwner={board.ownerId === currentUser?.id}
+                  isFavorite={favoriteBoardIdSet.has(board.id)}
+                  roleLabel={board.ownerId === currentUser?.id ? null : roleLabel(getUserRole(board))}
+                  onNavigate={() => handleNavigate(board.id)}
+                  onRename={() => { setRenameId(board.id); setRenameTitle(board.title); setRenameOpen(true); }}
+                  onDelete={() => handleDelete(board.id)}
+                  onMoveToFolder={() => { setMoveToFolderBoardId(board.id); setMoveToFolderSelectedId(board.folderId ?? ''); setMoveToFolderOpen(true); }}
+                  onToggleFavorite={() => toggleFavorite(board.id)}
+                  visibilityLabel={visibilityLabel(board.visibility)}
+                  visibilityColor={visibilityColor(board.visibility)}
+                  draggable={board.ownerId === currentUser?.id}
+                  onDragStart={() => setDraggingBoardId(board.id)}
+                  onDragEnd={() => { setDraggingBoardId(null); setDragOverFolderId(null); }}
+                  t={t}
+                />
+              </Grid>
+            ))}
+          </Grid>
         </Box>
       )}
 
@@ -903,84 +1001,6 @@ export function DashboardPage() {
         </Box>
       ) : (
         <Box>
-          {recentBoards.length > 0 && (
-            <>
-              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
-                {t('dashboard.recentBoards')}
-              </Typography>
-              <Grid container spacing={2} sx={{ mb: 4 }}>
-                {recentBoards.map((board) => (
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={board.id}>
-                    <BoardCard
-                      board={board}
-                      isOwner={board.ownerId === currentUser?.id}
-                      isFavorite={favoriteBoardIdSet.has(board.id)}
-                      roleLabel={board.ownerId === currentUser?.id ? null : roleLabel(getUserRole(board))}
-                      onNavigate={() => handleNavigate(board.id)}
-                      onRename={() => {
-                        setRenameId(board.id);
-                        setRenameTitle(board.title);
-                        setRenameOpen(true);
-                      }}
-                      onDelete={() => handleDelete(board.id)}
-                      onMoveToFolder={() => {
-                        setMoveToFolderBoardId(board.id);
-                        setMoveToFolderSelectedId(board.folderId ?? '');
-                        setMoveToFolderOpen(true);
-                      }}
-                      onToggleFavorite={() => toggleFavorite(board.id)}
-                      visibilityLabel={visibilityLabel(board.visibility)}
-                      visibilityColor={visibilityColor(board.visibility)}
-                      draggable={board.ownerId === currentUser?.id}
-                      onDragStart={() => setDraggingBoardId(board.id)}
-                      onDragEnd={() => { setDraggingBoardId(null); setDragOverFolderId(null); }}
-                      t={t}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </>
-          )}
-
-          {favoriteBoards.length > 0 && (
-            <>
-              <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
-                {t('dashboard.favorites')}
-              </Typography>
-              <Grid container spacing={2} sx={{ mb: 4 }}>
-                {favoriteBoards.map((board) => (
-                  <Grid size={{ xs: 12, sm: 6, md: 4 }} key={board.id}>
-                    <BoardCard
-                      board={board}
-                      isOwner={board.ownerId === currentUser?.id}
-                      isFavorite={favoriteBoardIdSet.has(board.id)}
-                      roleLabel={board.ownerId === currentUser?.id ? null : roleLabel(getUserRole(board))}
-                      onNavigate={() => handleNavigate(board.id)}
-                      onRename={() => {
-                        setRenameId(board.id);
-                        setRenameTitle(board.title);
-                        setRenameOpen(true);
-                      }}
-                      onDelete={() => handleDelete(board.id)}
-                      onMoveToFolder={() => {
-                        setMoveToFolderBoardId(board.id);
-                        setMoveToFolderSelectedId(board.folderId ?? '');
-                        setMoveToFolderOpen(true);
-                      }}
-                      onToggleFavorite={() => toggleFavorite(board.id)}
-                      visibilityLabel={visibilityLabel(board.visibility)}
-                      visibilityColor={visibilityColor(board.visibility)}
-                      draggable={board.ownerId === currentUser?.id}
-                      onDragStart={() => setDraggingBoardId(board.id)}
-                      onDragEnd={() => { setDraggingBoardId(null); setDragOverFolderId(null); }}
-                      t={t}
-                    />
-                  </Grid>
-                ))}
-              </Grid>
-            </>
-          )}
-
           {/* My Boards */}
           <Typography variant="subtitle1" fontWeight={600} sx={{ mb: 1.5 }}>
             {t('dashboard.myBoards')}
@@ -1024,51 +1044,55 @@ export function DashboardPage() {
           )}
 
           {/* Shared with Me */}
-          <Box
-            sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', mb: 1.5 }}
-            onClick={() => setSharedExpanded((v) => !v)}
-          >
-            <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
-              {t('dashboard.sharedWithMe')}
-              {sharedBoards.length > 0 && (
-                <Chip label={sharedBoards.length} size="small" sx={{ ml: 1 }} />
-              )}
-            </Typography>
-            <IconButton size="small">
-              {sharedExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
-            </IconButton>
-          </Box>
-          <Collapse in={sharedExpanded}>
-            {sharedBoards.length === 0 ? (
-              <Typography color="text.secondary" sx={{ mb: 3 }}>
-                {t('dashboard.noSharedBoards')}
-              </Typography>
-            ) : (
-              <Grid container spacing={2} sx={{ mb: 4 }}>
-                {sharedBoards.map((board: BoardSummary) => {
-                  const role = getUserRole(board);
-                  return (
-                    <Grid size={{ xs: 12, sm: 6, md: 4 }} key={board.id}>
-                      <BoardCard
-                        board={board}
-                        isOwner={false}
-                        isFavorite={favoriteBoardIdSet.has(board.id)}
-                        roleLabel={roleLabel(role)}
-                        onNavigate={() => handleNavigate(board.id)}
-                        onRename={() => {}}
-                        onDelete={() => {}}
-                        onMoveToFolder={() => {}}
-                        onToggleFavorite={() => toggleFavorite(board.id)}
-                        visibilityLabel={visibilityLabel(board.visibility)}
-                        visibilityColor={visibilityColor(board.visibility)}
-                        t={t}
-                      />
-                    </Grid>
-                  );
-                })}
-              </Grid>
-            )}
-          </Collapse>
+          {dashboardPrefs.showSharedWithMe && (
+            <>
+              <Box
+                sx={{ display: 'flex', alignItems: 'center', cursor: 'pointer', mb: 1.5 }}
+                onClick={() => setSharedExpanded((v) => !v)}
+              >
+                <Typography variant="subtitle1" fontWeight={600} sx={{ flexGrow: 1 }}>
+                  {t('dashboard.sharedWithMe')}
+                  {sharedBoards.length > 0 && (
+                    <Chip label={sharedBoards.length} size="small" sx={{ ml: 1 }} />
+                  )}
+                </Typography>
+                <IconButton size="small">
+                  {sharedExpanded ? <ExpandLessIcon /> : <ExpandMoreIcon />}
+                </IconButton>
+              </Box>
+              <Collapse in={sharedExpanded}>
+                {sharedBoards.length === 0 ? (
+                  <Typography color="text.secondary" sx={{ mb: 3 }}>
+                    {t('dashboard.noSharedBoards')}
+                  </Typography>
+                ) : (
+                  <Grid container spacing={2} sx={{ mb: 4 }}>
+                    {sharedBoards.map((board: BoardSummary) => {
+                      const role = getUserRole(board);
+                      return (
+                        <Grid size={{ xs: 12, sm: 6, md: 4 }} key={board.id}>
+                          <BoardCard
+                            board={board}
+                            isOwner={false}
+                            isFavorite={favoriteBoardIdSet.has(board.id)}
+                            roleLabel={roleLabel(role)}
+                            onNavigate={() => handleNavigate(board.id)}
+                            onRename={() => {}}
+                            onDelete={() => {}}
+                            onMoveToFolder={() => {}}
+                            onToggleFavorite={() => toggleFavorite(board.id)}
+                            visibilityLabel={visibilityLabel(board.visibility)}
+                            visibilityColor={visibilityColor(board.visibility)}
+                            t={t}
+                          />
+                        </Grid>
+                      );
+                    })}
+                  </Grid>
+                )}
+              </Collapse>
+            </>
+          )}
         </Box>
       )}
 
@@ -1290,7 +1314,12 @@ export function DashboardPage() {
       </Dialog>
 
       {/* Delete folder dialog */}
-      <Dialog open={deleteFolderDialogOpen} onClose={() => setDeleteFolderDialogOpen(false)} maxWidth="xs" fullWidth>
+      <Dialog
+        open={deleteFolderDialogOpen}
+        onClose={() => { setDeleteFolderDialogOpen(false); setDeleteFolderTarget(null); setDeleteFolderWithBoardsConfirmName(''); }}
+        maxWidth="xs"
+        fullWidth
+      >
         <DialogTitle>{t('dashboard.deleteFolderTitle')}</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
@@ -1304,6 +1333,7 @@ export function DashboardPage() {
                 if (deleteFolderTarget) deleteFolderMutation.mutate({ id: deleteFolderTarget.id, deleteBoards: false });
                 setDeleteFolderDialogOpen(false);
                 setDeleteFolderTarget(null);
+                setDeleteFolderWithBoardsConfirmName('');
               }}
             >
               <Box sx={{ textAlign: 'left', width: '100%' }}>
@@ -1315,10 +1345,12 @@ export function DashboardPage() {
               variant="outlined"
               color="error"
               fullWidth
+              disabled={deleteFolderWithBoardsConfirmName !== deleteFolderTarget?.name}
               onClick={() => {
                 if (deleteFolderTarget) deleteFolderMutation.mutate({ id: deleteFolderTarget.id, deleteBoards: true });
                 setDeleteFolderDialogOpen(false);
                 setDeleteFolderTarget(null);
+                setDeleteFolderWithBoardsConfirmName('');
               }}
             >
               <Box sx={{ textAlign: 'left', width: '100%' }}>
@@ -1326,10 +1358,18 @@ export function DashboardPage() {
                 <Typography variant="caption" color="text.secondary">{t('dashboard.deleteFolderAndBoardsHint')}</Typography>
               </Box>
             </Button>
+            <TextField
+              size="small"
+              fullWidth
+              placeholder={deleteFolderTarget?.name ?? ''}
+              value={deleteFolderWithBoardsConfirmName}
+              onChange={(e) => setDeleteFolderWithBoardsConfirmName(e.target.value)}
+              helperText={t('dashboard.deleteFolderConfirmNameHint')}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => { setDeleteFolderDialogOpen(false); setDeleteFolderTarget(null); }}>
+          <Button onClick={() => { setDeleteFolderDialogOpen(false); setDeleteFolderTarget(null); setDeleteFolderWithBoardsConfirmName(''); }}>
             {t('common.cancel')}
           </Button>
         </DialogActions>

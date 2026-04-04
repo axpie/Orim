@@ -14,6 +14,10 @@ public sealed class BoardPdfExportService
         {
             GlobalFontSettings.UseWindowsFontsUnderWindows = true;
         }
+        else
+        {
+            GlobalFontSettings.FontResolver = new LinuxFontResolver();
+        }
     }
 
     private const double PageWidthPoints = 842;
@@ -1052,4 +1056,159 @@ public sealed class BoardPdfExportService
     }
 
     private readonly record struct ExpandedRect(double Left, double Top, double Right, double Bottom);
+
+    /// <summary>
+    /// Font resolver for non-Windows (Linux/macOS) environments such as Azure App Service on Linux.
+    /// Maps common Windows font family names to TTF files found in standard system font directories,
+    /// falling back to any available TTF when an exact match is not found.
+    /// </summary>
+    private sealed class LinuxFontResolver : IFontResolver
+    {
+        private static readonly string[] SearchDirectories =
+        [
+            "/usr/share/fonts",
+            "/usr/local/share/fonts",
+            $"{Environment.GetFolderPath(Environment.SpecialFolder.UserProfile)}/.fonts",
+        ];
+
+        // Map common Windows font names to Linux equivalents (DejaVu and Liberation are pre-installed on most Debian/Ubuntu images)
+        private static readonly Dictionary<string, string> FamilyAliases = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Arial"] = "DejaVu Sans",
+            ["Helvetica"] = "DejaVu Sans",
+            ["sans-serif"] = "DejaVu Sans",
+            ["Calibri"] = "DejaVu Sans",
+            ["Verdana"] = "DejaVu Sans",
+            ["Tahoma"] = "DejaVu Sans",
+            ["Times New Roman"] = "DejaVu Serif",
+            ["Georgia"] = "DejaVu Serif",
+            ["serif"] = "DejaVu Serif",
+            ["Courier New"] = "DejaVu Sans Mono",
+            ["monospace"] = "DejaVu Sans Mono",
+        };
+
+        // File name patterns per family + style; ordered by preference
+        private static readonly Dictionary<string, string[]> FamilyFilePatterns = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["DejaVu Sans"] = ["DejaVuSans-BoldOblique.ttf", "DejaVuSans-Bold.ttf", "DejaVuSans-Oblique.ttf", "DejaVuSans.ttf"],
+            ["DejaVu Serif"] = ["DejaVuSerif-BoldItalic.ttf", "DejaVuSerif-Bold.ttf", "DejaVuSerif-Italic.ttf", "DejaVuSerif.ttf"],
+            ["DejaVu Sans Mono"] = ["DejaVuSansMono-BoldOblique.ttf", "DejaVuSansMono-Bold.ttf", "DejaVuSansMono-Oblique.ttf", "DejaVuSansMono.ttf"],
+            ["Liberation Sans"] = ["LiberationSans-BoldItalic.ttf", "LiberationSans-Bold.ttf", "LiberationSans-Italic.ttf", "LiberationSans-Regular.ttf"],
+            ["Liberation Serif"] = ["LiberationSerif-BoldItalic.ttf", "LiberationSerif-Bold.ttf", "LiberationSerif-Italic.ttf", "LiberationSerif-Regular.ttf"],
+            ["Liberation Mono"] = ["LiberationMono-BoldItalic.ttf", "LiberationMono-Bold.ttf", "LiberationMono-Italic.ttf", "LiberationMono-Regular.ttf"],
+        };
+
+        private static readonly Lock CacheLock = new();
+        private static readonly Dictionary<string, string?> FilePathCache = new(StringComparer.OrdinalIgnoreCase);
+        private static string? _anyFontFallback;
+
+        public FontResolverInfo? ResolveTypeface(string familyName, bool isBold, bool isItalic)
+        {
+            if (FamilyAliases.TryGetValue(familyName, out var mapped))
+                familyName = mapped;
+
+            var styleSuffix = (isBold, isItalic) switch
+            {
+                (true, true)   => "BoldItalic",
+                (true, false)  => "Bold",
+                (false, true)  => "Italic",
+                _              => "Regular",
+            };
+
+            return new FontResolverInfo($"{familyName}|{styleSuffix}");
+        }
+
+        public byte[]? GetFont(string faceName)
+        {
+            var path = ResolvePath(faceName);
+            return path is not null ? File.ReadAllBytes(path) : null;
+        }
+
+        private static string? ResolvePath(string faceName)
+        {
+            lock (CacheLock)
+            {
+                if (FilePathCache.TryGetValue(faceName, out var cached))
+                    return cached;
+            }
+
+            var separatorIndex = faceName.IndexOf('|');
+            var family = separatorIndex > 0 ? faceName[..separatorIndex] : faceName;
+            var style  = separatorIndex > 0 ? faceName[(separatorIndex + 1)..] : "Regular";
+
+            var allFiles = EnumerateAllTtfFiles();
+            var path = FindBestMatch(family, style, allFiles) ?? GetAnyFontFallback(allFiles);
+
+            lock (CacheLock)
+            {
+                FilePathCache[faceName] = path;
+            }
+
+            return path;
+        }
+
+        private static string? FindBestMatch(string family, string style, IReadOnlyList<string> allFiles)
+        {
+            if (!FamilyFilePatterns.TryGetValue(family, out var patterns))
+            {
+                // Build patterns from family + style on the fly
+                patterns =
+                [
+                    $"{family.Replace(" ", "")}-{style}.ttf",
+                    $"{family.Replace(" ", "")}.ttf",
+                    $"{family}-{style}.ttf",
+                    $"{family}.ttf",
+                ];
+            }
+            else
+            {
+                // Pick the pattern matching the requested style
+                var styleIndex = style switch
+                {
+                    "BoldItalic" => 0,
+                    "Bold"       => 1,
+                    "Italic"     => 2,
+                    _            => 3,
+                };
+                // Fall back to lower-style variants if exact index isn't available
+                patterns = patterns.Skip(styleIndex).Concat(patterns.Take(styleIndex)).ToArray();
+            }
+
+            foreach (var pattern in patterns)
+            {
+                var match = allFiles.FirstOrDefault(f =>
+                    string.Equals(Path.GetFileName(f), pattern, StringComparison.OrdinalIgnoreCase));
+                if (match is not null)
+                    return match;
+            }
+
+            return null;
+        }
+
+        private static string? GetAnyFontFallback(IReadOnlyList<string> allFiles)
+        {
+            if (_anyFontFallback is not null)
+                return _anyFontFallback;
+
+            _anyFontFallback = allFiles.FirstOrDefault();
+            return _anyFontFallback;
+        }
+
+        private static IReadOnlyList<string> EnumerateAllTtfFiles()
+        {
+            var files = new List<string>();
+            foreach (var dir in SearchDirectories)
+            {
+                if (!Directory.Exists(dir))
+                    continue;
+                try
+                {
+                    files.AddRange(Directory.EnumerateFiles(dir, "*.ttf", SearchOption.AllDirectories));
+                }
+                catch (UnauthorizedAccessException) { }
+                catch (IOException) { }
+            }
+            return files;
+        }
+    }
 }

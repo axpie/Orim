@@ -1,4 +1,360 @@
-# Orim
+﻿# ORIM
+
+ORIM is a collaborative whiteboard editor with an ASP.NET Core API and a React SPA.
+
+## Overview
+
+- Backend: .NET 10, ASP.NET Core Minimal API, SignalR
+- Frontend: React 19, Vite, TypeScript, Konva, MUI
+- Persistence: PostgreSQL via Entity Framework Core
+- Authentication: JWT via httpOnly cookie session
+- Export: JSON, PNG and PDF
+
+## Positioning
+
+ORIM is not a generic whiteboard clone. The product is focused on **secure internal collaboration**:
+
+- Self-hosted or privately managed deployments
+- SSO-backed team access for organisations with governance requirements
+- Controlled sharing, comments, snapshots and traceable administration
+- Whiteboard collaboration for internal teams, consulting, and regulated environments
+
+## Project Structure
+
+- `Orim.Api`: API, SignalR hub, SPA hosting in release builds
+- `orim-spa`: React frontend for whiteboard, dashboard and administration
+- `Orim.Core`: Domain models, interfaces and core logic
+- `Orim.Infrastructure`: EF Core DbContext, PostgreSQL repositories and infrastructure services
+- `Orim.Tests`: xUnit tests
+
+## Prerequisites
+
+- .NET 10 SDK
+- Node.js with `npm`
+- Docker Desktop (for local PostgreSQL database) or PostgreSQL 17+
+
+## Local Setup
+
+In the repository root:
+
+```powershell
+dotnet restore .\Orim.slnx
+cd .\orim-spa
+npm install
+```
+
+Frontend in development mode:
+
+```powershell
+cd .\orim-spa
+npm run dev
+```
+
+Start the API in parallel:
+
+```powershell
+dotnet run --project .\Orim.Api\Orim.Api.csproj
+```
+
+In a release build, the SPA is built into `Orim.Api/wwwroot` before the API build and served by the API.
+
+## Database (PostgreSQL)
+
+In DEBUG mode the API starts a PostgreSQL container automatically via Docker Compose. For manual startup:
+
+```powershell
+docker-compose up -d
+```
+
+The connection is configured via the connection string in `Orim.Api/appsettings.json`:
+
+```json
+"ConnectionStrings": {
+  "OrimDb": "Host=localhost;Port=5432;Database=orim;Username=orim;Password=orim"
+}
+```
+
+On startup the API automatically runs `Database.MigrateAsync()` so the schema is always up to date. For details on creating new migrations see [docs/db_migration.md](docs/db_migration.md).
+
+## Data Storage
+
+All data is stored in a PostgreSQL database (boards, users, themes, images). Persistence is handled via Entity Framework Core.
+
+## Configuration
+
+The base configuration lives in `Orim.Api/appsettings.json`.
+
+Important settings:
+
+- `ConnectionStrings:OrimDb`: PostgreSQL connection string
+- `Jwt:Key`: signing key for tokens
+- `SeedAdmin:Username`: username of the initial admin
+- `SeedAdmin:ResetPasswordOnStartup`: optional password reset on startup
+- `Authentication:Microsoft:*`: Single-tenant Microsoft 365 / Entra SSO for this ORIM deployment
+
+## Microsoft 365 / Entra SSO
+
+ORIM supports Microsoft Entra SSO as a **single-tenant** login per deployment. The SPA signs users in via Microsoft and then exchanges the Microsoft ID token for an ORIM JWT used for the API and SignalR.
+
+Key properties:
+
+- An existing local login remains available as fallback
+- Users are automatically linked or created on their first successful Microsoft login
+- Tenant verification happens server-side via `tid` claim validation
+
+## Google SSO
+
+ORIM supports Google SSO as an additional login option. The SPA uses the official Google Identity Services (client-side) to obtain an ID token. The backend validates the Google ID token server-side (Google.Apis.Auth), requires a verified email, and exchanges the external identity for an ORIM JWT.
+
+Key properties:
+
+- Local login remains available as fallback
+- Only verified Google email addresses are accepted
+- The login can optionally be restricted to a Google Workspace / hosted domain (`Authentication:Google:HostedDomain`)
+
+Example configuration in `Orim.Api/appsettings.json` or via environment variables:
+
+```json
+"Authentication": {
+  "Microsoft": {
+    "Enabled": true,
+    "TenantId": "11111111-2222-3333-4444-555555555555",
+    "ClientId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+    "Scopes": [ "openid", "profile", "email" ]
+  },
+  "Google": {
+    "Enabled": true,
+    "ClientId": "000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com",
+    "HostedDomain": ""
+  }
+}
+```
+
+For local user secrets:
+
+```powershell
+dotnet user-secrets set "Authentication:Microsoft:Enabled" "true" --project .\Orim.Api\Orim.Api.csproj
+dotnet user-secrets set "Authentication:Microsoft:TenantId" "<tenant-id>" --project .\Orim.Api\Orim.Api.csproj
+dotnet user-secrets set "Authentication:Microsoft:ClientId" "<client-id>" --project .\Orim.Api\Orim.Api.csproj
+```
+
+Azure App Registration:
+
+- Platform: `Single-page application`
+- Redirect URI local: `http://localhost:5173/login`
+- Redirect URI production: `<your-orim-url>/login`
+- Account type: accounts in this organisational directory only
+
+User matching precedence:
+
+- ORIM first looks for an already linked external identity
+- then for a matching email
+- then for a matching username
+- if nothing matches, a new ORIM user with the `User` role is created
+
+## Admin Seed Password
+
+The initial admin password is intentionally not stored in the repository and must be injected via configuration.
+
+For the local **development/debug configuration**, `SeedAdmin:Password` is set to `Admin123!` and `SeedAdmin:ResetPasswordOnStartup` is enabled. This resets the local admin account to `admin` / `Admin123!` on every debug start.
+
+Local user secrets:
+
+```powershell
+dotnet user-secrets init --project .\Orim.Api\Orim.Api.csproj
+dotnet user-secrets set "SeedAdmin:Password" "ASecurePassword!" --project .\Orim.Api\Orim.Api.csproj
+```
+
+Temporarily via environment variable:
+
+```powershell
+$Env:SeedAdmin__Password = "ASecurePassword!"
+dotnet run --project .\Orim.Api\Orim.Api.csproj
+```
+
+## Profile and User Management
+
+ORIM includes integrated account and user management:
+
+- Users can change their display name and password at `/profile`.
+- Administrators can create, deactivate, delete users, change usernames, switch roles between `User` and `Admin`, and reset passwords at `/admin/users`.
+- ORIM prevents the last active administrator from being deactivated, deleted or demoted.
+
+## Display Names in Live Collaboration
+
+Live presence in the whiteboard is based on SignalR. Display names are kept in sync for active board sessions:
+
+- New or updated display names are resolved server-side from the user profile when joining a board
+- Open browser tabs pick up profile changes via storage sync
+- Active board connections update their presence entries automatically so other participants see the new display name
+
+Note: comments, snapshots and board memberships continue to use the username as the stable technical identifier.
+
+## Deployment Readiness
+
+ORIM includes an operational readiness layer for closed betas and design-partner pilots:
+
+- `/admin/settings` shows a deployment readiness check with environment, version, database provider, migrations, SSO, assistant and theme status.
+- `/api/admin/deployment-readiness` exposes the same signals in a machine-readable format.
+- `/health/live` and `/health/ready` are available for liveness and readiness probes.
+- API responses include `X-Request-Id` for correlating support cases and log entries.
+- Auth and SignalR endpoints are rate-limited.
+- Browser sessions use httpOnly cookies instead of frontend-stored tokens.
+
+For a credible design-partner pilot, the following should be met:
+
+1. PostgreSQL is reachable and there are no pending migrations.
+2. The deployment runs outside `Development` so HSTS is active.
+3. At least one enterprise SSO provider is configured if the pilot expects SSO.
+4. CI and local validation pass before every release.
+
+## Validation and CI
+
+The GitHub Actions CI under `.github/workflows/ci.yml` validates:
+
+- `dotnet build Orim.Api\Orim.Api.csproj --no-incremental`
+- `dotnet test Orim.Tests\Orim.Tests.csproj`
+- `cd orim-spa && npm run lint`
+- `cd orim-spa && npm run build`
+
+## Useful Commands
+
+Build the full solution:
+
+```powershell
+dotnet build .\Orim.slnx /p:UseAppHost=false
+```
+
+Frontend build:
+
+```powershell
+cd .\orim-spa
+npm run build
+```
+
+Tests:
+
+```powershell
+dotnet test .\Orim.Tests\Orim.Tests.csproj /p:UseAppHost=false
+```
+
+## Enterprise Features & Self-Hosted Deployment
+
+A complete feature matrix, self-hosted deployment guide, SSO configuration, observability setup and security notes can be found at [docs/enterprise-features.md](docs/enterprise-features.md).
+
+## Export
+
+### PNG Export
+
+The whiteboard can be exported as a PNG image directly from the browser. Open any board, click the **Export** menu in the toolbar and choose **Export as PNG**. The export uses the current canvas at ≥2× pixel density (retina-quality). The resulting file is named after the board title.
+
+The PNG export is entirely client-side — the canvas is rendered via [Konva](https://konvajs.org/)'s `stage.toDataURL()` and no data is sent to the server.
+
+### PDF Export
+
+Boards can also be exported as PDF. Click **Export → Export as PDF** in the toolbar. The PDF is generated on the server (`BoardPdfExportService`) using [PDFsharp 6.2.0](https://docs.pdfsharp.net/) and downloaded as a single A4 landscape page.
+
+#### PDF Export on Linux (Azure App Service)
+
+PDFsharp requires system TrueType fonts to render text. On Linux hosts (including Azure App Service for Linux), ORIM automatically uses a built-in `LinuxFontResolver` that searches the standard font directories (`/usr/share/fonts`, `/usr/local/share/fonts`, `~/.fonts`) for TTF files and maps common Windows font names (Arial, Calibri, Times New Roman, …) to their Linux equivalents.
+
+The **DejaVu** font family is used by default on Linux and is pre-installed on most Debian/Ubuntu-based images. If the Azure App Service image does not include it, install it via a startup command or `apt-get install fonts-dejavu-core`. The Liberation fonts (`fonts-liberation`) are a metric-compatible alternative and work equally well.
+
+## Dependencies
+
+### NuGet Packages (Backend)
+
+#### Orim.Api
+| Package | Version |
+|---|---|
+| Azure.AI.OpenAI | 2.1.0 |
+| Azure.Core | 1.51.1 |
+| Google.Apis.Auth | 1.73.0 |
+| Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.5 |
+| Microsoft.AspNetCore.SignalR.StackExchangeRedis | (latest) |
+| OpenTelemetry.Exporter.Console | 1.15.1 |
+| OpenTelemetry.Extensions.Hosting | 1.15.1 |
+| OpenTelemetry.Instrumentation.AspNetCore | 1.15.1 |
+| OpenTelemetry.Instrumentation.Http | 1.15.0 |
+| PDFsharp | 6.2.0 |
+
+#### Orim.Core
+| Package | Version |
+|---|---|
+| BCrypt.Net-Next | 4.1.0 |
+
+#### Orim.Infrastructure
+| Package | Version |
+|---|---|
+| Microsoft.EntityFrameworkCore | 10.0.4 |
+| Microsoft.EntityFrameworkCore.Design | 10.0.4 |
+| Microsoft.Extensions.DependencyInjection.Abstractions | 10.0.5 |
+| Npgsql.EntityFrameworkCore.PostgreSQL | 10.0.1 |
+
+#### Orim.Tests
+| Package | Version |
+|---|---|
+| Microsoft.NET.Test.Sdk | 17.14.0 |
+| xunit | 2.9.3 |
+| xunit.runner.visualstudio | 3.1.0 |
+| NSubstitute | 5.3.0 |
+| Microsoft.EntityFrameworkCore.InMemory | 10.0.4 |
+
+### npm Packages (Frontend — orim-spa)
+
+#### Dependencies
+| Package | Version |
+|---|---|
+| @azure/msal-browser | ^4.26.0 |
+| @emotion/react | ^11.14.0 |
+| @emotion/styled | ^11.14.1 |
+| @mdi/js | ^7.4.47 |
+| @microsoft/signalr | ^10.0.0 |
+| @mui/icons-material | ^7.3.9 |
+| @mui/material | ^7.3.9 |
+| @react-oauth/google | ^0.13.4 |
+| @tanstack/react-query | ^5.95.2 |
+| axios | ^1.14.0 |
+| i18next | ^26.0.1 |
+| konva | ^10.2.3 |
+| react | ^19.2.4 |
+| react-dom | ^19.2.4 |
+| react-i18next | ^17.0.1 |
+| react-konva | ^19.2.3 |
+| react-router-dom | ^7.13.2 |
+| uuid | ^13.0.0 |
+| zustand | ^5.0.12 |
+
+#### Dev Dependencies
+| Package | Version |
+|---|---|
+| @eslint/js | ^9.39.4 |
+| @testing-library/jest-dom | ^6.9.1 |
+| @testing-library/react | ^16.3.2 |
+| @types/node | ^24.12.0 |
+| @types/react | ^19.2.14 |
+| @types/react-dom | ^19.2.3 |
+| @types/uuid | ^10.0.0 |
+| @vitejs/plugin-react | ^6.0.1 |
+| eslint | ^9.39.4 |
+| eslint-plugin-react-hooks | ^7.0.1 |
+| eslint-plugin-react-refresh | ^0.5.2 |
+| globals | ^17.4.0 |
+| jsdom | ^29.0.1 |
+| typescript | ~5.9.3 |
+| typescript-eslint | ^8.57.0 |
+| vite | ^8.0.1 |
+| vitest | ^4.1.2 |
+
+## License
+
+ORIM is released under the [MIT License](LICENSE). You are free to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the software.
+
+See [LICENSE](LICENSE) for the full terms.
+
+---
+
+# ORIM — Deutsch
 
 Orim ist ein kollaborativer Whiteboard-Editor mit ASP.NET Core API und React SPA.
 
@@ -8,7 +364,7 @@ Orim ist ein kollaborativer Whiteboard-Editor mit ASP.NET Core API und React SPA
 - Frontend: React 19, Vite, TypeScript, Konva, MUI
 - Persistenz: PostgreSQL via Entity Framework Core
 - Authentifizierung: JWT via httpOnly Cookie-Session
-- Export: JSON und PDF
+- Export: JSON, PNG und PDF
 
 ## Positionierung
 
@@ -111,53 +467,12 @@ Wichtige Eigenschaften:
 - lokale Anmeldung bleibt als Fallback erhalten
 - nur verifizierte Google-E-Mails werden akzeptiert (verringert Risiko von Konto-Übernahmen)
 - optional kann die Anmeldung auf eine Google Workspace / Hosted-Domain eingeschränkt werden (konfigurierbar über `Authentication:Google:HostedDomain`)
-- Hosted-Domain wird serverseitig case-insensitiv geprüft; wenn gesetzt, wird die Domain als `ExternalTenantId` gespeichert
-
-Beispielkonfiguration in `Orim.Api/appsettings.json` oder ueber Umgebungsvariablen:
-
-```json
-"Authentication": {
-  "Microsoft": {
-    "Enabled": true,
-    "TenantId": "11111111-2222-3333-4444-555555555555",
-    "ClientId": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-    "Scopes": [ "openid", "profile", "email" ]
-  },
-  "Google": {
-    "Enabled": true,
-    "ClientId": "000000000000-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx.apps.googleusercontent.com",
-    "HostedDomain": ""
-  }
-}
-```
-
-Fuer lokale User-Secrets:
-
-```powershell
-dotnet user-secrets set "Authentication:Microsoft:Enabled" "true" --project .\Orim.Api\Orim.Api.csproj
-dotnet user-secrets set "Authentication:Microsoft:TenantId" "<tenant-id>" --project .\Orim.Api\Orim.Api.csproj
-dotnet user-secrets set "Authentication:Microsoft:ClientId" "<client-id>" --project .\Orim.Api\Orim.Api.csproj
-```
-
-Azure-App-Registration:
-
-- Plattform: `Single-page application`
-- Redirect URI lokal: `http://localhost:5173/login`
-- Redirect URI Produktion: `<deine-orim-url>/login`
-- Konto-Typ: nur Konten in diesem Organisationsverzeichnis
-
-Hinweis zum Benutzerabgleich:
-
-- ORIM sucht zuerst nach bereits verknuepfter externer Identitaet
-- danach nach passender E-Mail
-- zuletzt nach passendem Benutzernamen
-- wenn nichts passt, wird ein neuer ORIM-Benutzer mit Rolle `User` angelegt
 
 ## Admin-Seed-Passwort
 
 Das initiale Admin-Passwort wird absichtlich nicht im Repository gespeichert und muss ueber Konfiguration von aussen gesetzt werden.
 
-Für die lokale **Development-/Debug-Konfiguration** ist `SeedAdmin:Password` auf `Admin123!` gesetzt und `SeedAdmin:ResetPasswordOnStartup` aktiviert. Dadurch wird das lokale Admin-Konto beim Debug-Start deterministisch auf `admin` / `Admin123!` zurückgesetzt, auch wenn die Development-Datenbank bereits existiert.
+Für die lokale **Development-/Debug-Konfiguration** ist `SeedAdmin:Password` auf `Admin123!` gesetzt und `SeedAdmin:ResetPasswordOnStartup` aktiviert. Dadurch wird das lokale Admin-Konto beim Debug-Start deterministisch auf `admin` / `Admin123!` zurückgesetzt.
 
 User-Secrets lokal:
 
@@ -187,7 +502,7 @@ Die Live-Praesenz im Whiteboard basiert auf SignalR. Anzeigenamen werden fuer ak
 
 - neue oder aktualisierte Anzeigenamen werden bei Board-Beitritt serverseitig aus dem Benutzerprofil aufgeloest
 - geoeffnete Browser-Tabs uebernehmen Profil-Aenderungen per Storage-Sync
-- laufende Board-Verbindungen aktualisieren ihre Presence-Eintraege automatisch, damit andere aktive Teilnehmer den neuen Anzeigenamen sehen
+- laufende Board-Verbindungen aktualisieren ihre Presence-Eintraege automatisch
 
 Hinweis: Kommentare, Snapshots und Board-Mitgliedschaften verwenden weiterhin den Benutzernamen als stabile technische Kennung.
 
@@ -196,18 +511,8 @@ Hinweis: Kommentare, Snapshots und Board-Mitgliedschaften verwenden weiterhin de
 ORIM bringt eine betriebliche Readiness-Schicht für geschlossene Betas und Design-Partner-Piloten mit:
 
 - `/admin/settings` zeigt einen Deployment-Readiness-Check mit Umgebung, Version, Datenbank-Provider, Migrationen, SSO-, Assistant- und Theme-Status
-- `/api/admin/deployment-readiness` liefert dieselben Signale maschinenlesbar für Admin-Oberflächen oder spätere Ops-Automation
+- `/api/admin/deployment-readiness` liefert dieselben Signale maschinenlesbar
 - `/health/live` und `/health/ready` stehen für Liveness- und Readiness-Probes bereit
-- API-Antworten enthalten `X-Request-Id` zur Korrelation von Support-Fällen und Log-Einträgen
-- Auth- und SignalR-Zugänge sind rate-limitiert
-- Browser-Sessions verwenden httpOnly-Cookies statt im Frontend gespeicherter Tokens
-
-Für einen glaubwürdigen Design-Partner-Pilot sollten mindestens folgende Punkte erfüllt sein:
-
-1. PostgreSQL ist erreichbar und es gibt keine offenen Migrationen.
-2. Das Deployment läuft außerhalb von `Development`, damit HSTS aktiv ist.
-3. Mindestens ein Enterprise-SSO-Provider ist konfiguriert, wenn der Pilot SSO erwartet.
-4. CI und lokale Validierung laufen vor jedem Release durch.
 
 ## Validierung und CI
 
@@ -243,6 +548,30 @@ dotnet test .\Orim.Tests\Orim.Tests.csproj /p:UseAppHost=false
 
 Eine vollständige Feature-Matrix, Self-Hosted Deployment-Anleitung, SSO-Konfiguration, Observability-Setup und Sicherheitshinweise finden Sie unter [docs/enterprise-features.md](docs/enterprise-features.md).
 
+## Export
+
+### PNG-Export
+
+Das Whiteboard kann direkt im Browser als PNG exportiert werden. Board öffnen, im Toolbar auf **Exportieren** klicken und **Als PNG exportieren** wählen. Das Bild wird mit mindestens 2-facher Pixeldichte (Retina-Qualität) erstellt und nach dem Board-Titel benannt.
+
+Der PNG-Export ist vollständig clientseitig – der Canvas wird via Konvas `stage.toDataURL()` gerendert, es werden keine Daten an den Server übertragen.
+
+### PDF-Export
+
+Boards können auch als PDF exportiert werden (**Exportieren → Als PDF exportieren**). Die PDF wird serverseitig vom `BoardPdfExportService` über PDFsharp 6.2.0 erzeugt und als einseitige A4-Querformat-Datei heruntergeladen.
+
+#### PDF-Export unter Linux (Azure App Service)
+
+PDFsharp benötigt TrueType-Schriftarten des Systems. Auf Linux-Hosts (inkl. Azure App Service for Linux) verwendet ORIM automatisch einen eingebauten `LinuxFontResolver`, der die Standard-Schriftartenverzeichnisse (`/usr/share/fonts`, `/usr/local/share/fonts`, `~/.fonts`) nach TTF-Dateien durchsucht und gebräuchliche Windows-Schriftarten (Arial, Calibri, Times New Roman, …) auf Linux-Äquivalente abbildet.
+
+Standardmäßig wird auf Linux die **DejaVu**-Schriftfamilie verwendet, die in den meisten Debian/Ubuntu-Images vorinstalliert ist. Falls nicht vorhanden, kann sie per `apt-get install fonts-dejavu-core` oder einem Startup-Skript nachinstalliert werden. Alternativ funktionieren die Liberation-Fonts (`apt-get install fonts-liberation`) gleichermaßen.
+
+## Verwendete Pakete
+
+Eine vollständige Paketliste mit Versionsnummern befindet sich im englischen Abschnitt oben unter [Dependencies](#dependencies).
+
 ## Lizenz
 
-Aktuell ist keine separate Lizenzdatei im Repository hinterlegt.
+ORIM steht unter der [MIT-Lizenz](LICENSE). Nutzung, Kopieren, Modifizieren, Weiterverbreitung und Verkauf sind frei gestattet.
+
+Die vollständigen Lizenzbedingungen finden Sie in [LICENSE](LICENSE).

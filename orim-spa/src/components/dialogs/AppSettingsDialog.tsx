@@ -7,11 +7,16 @@ import {
   DialogActions,
   DialogContent,
   DialogTitle,
+  Divider,
+  FormControlLabel,
   MenuItem,
+  Switch,
   TextField,
+  Typography,
 } from '@mui/material';
 import { getThemes } from '../../api/themes';
 import { useThemeStore } from '../../stores/themeStore';
+import { useDashboardPrefsStore } from '../../stores/dashboardPrefsStore';
 
 interface AppSettingsDialogProps {
   open: boolean;
@@ -40,8 +45,12 @@ function OpenAppSettingsDialog({ onClose }: Pick<AppSettingsDialogProps, 'onClos
     staleTime: 60_000,
   });
 
+  const prefs = useDashboardPrefsStore();
   const [draftLanguage, setDraftLanguage] = useState<'de' | 'en'>(normalizeLanguage(i18n.language));
   const [draftThemeKey, setDraftThemeKey] = useState(themeKey);
+  const [draftShowTemplates, setDraftShowTemplates] = useState(prefs.showTemplates);
+  const [draftShowRecent, setDraftShowRecent] = useState(prefs.showRecent);
+  const [draftShowSharedWithMe, setDraftShowSharedWithMe] = useState(prefs.showSharedWithMe);
 
   const handleSave = async () => {
     if (draftThemeKey && draftThemeKey !== themeKey) {
@@ -52,6 +61,10 @@ function OpenAppSettingsDialog({ onClose }: Pick<AppSettingsDialogProps, 'onClos
     if (draftLanguage !== currentLanguage) {
       await i18n.changeLanguage(draftLanguage);
     }
+
+    prefs.setShowTemplates(draftShowTemplates);
+    prefs.setShowRecent(draftShowRecent);
+    prefs.setShowSharedWithMe(draftShowSharedWithMe);
 
     onClose();
   };
@@ -79,6 +92,7 @@ function OpenAppSettingsDialog({ onClose }: Pick<AppSettingsDialogProps, 'onClos
           value={draftThemeKey}
           onChange={(e) => setDraftThemeKey(e.target.value)}
           disabled={themes.length === 0}
+          sx={{ mb: 2 }}
         >
           {themes.length > 0 ? themes.map((theme) => (
             <MenuItem key={theme.key} value={theme.key}>
@@ -88,6 +102,26 @@ function OpenAppSettingsDialog({ onClose }: Pick<AppSettingsDialogProps, 'onClos
             <MenuItem value={draftThemeKey}>{draftThemeKey}</MenuItem>
           )}
         </TextField>
+
+        <Divider sx={{ my: 1 }} />
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+          {t('app.dashboardSections')}
+        </Typography>
+
+        <FormControlLabel
+          control={<Switch checked={draftShowTemplates} onChange={(e) => setDraftShowTemplates(e.target.checked)} />}
+          label={t('dashboard.templates')}
+        />
+        <br />
+        <FormControlLabel
+          control={<Switch checked={draftShowRecent} onChange={(e) => setDraftShowRecent(e.target.checked)} />}
+          label={t('dashboard.recentBoards')}
+        />
+        <br />
+        <FormControlLabel
+          control={<Switch checked={draftShowSharedWithMe} onChange={(e) => setDraftShowSharedWithMe(e.target.checked)} />}
+          label={t('dashboard.sharedWithMe')}
+        />
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>{t('common.cancel')}</Button>

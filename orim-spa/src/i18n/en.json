@@ -10,7 +10,8 @@
     "language": "Language",
     "theme": "Theme",
     "darkMode": "Dark mode",
-    "lightMode": "Light mode"
+    "lightMode": "Light mode",
+    "dashboardSections": "Dashboard Sections"
   },
   "common": {
     "cancel": "Cancel",
@@ -102,7 +103,10 @@
     "moveToFolder": "Move to Folder",
     "selectFolder": "Select Folder",
     "folder": "Folder",
-    "noFolder": "No Folder"
+    "noFolder": "No Folder",
+    "hideRecent": "Hide recent boards",
+    "showRecent": "Show recent boards",
+    "deleteFolderConfirmNameHint": "Enter the folder name to delete the folder and all its boards"
   },
   "board": {
     "untitled": "Untitled Board",

@@ -10,7 +10,8 @@
     "language": "Sprache",
     "theme": "Farbschema",
     "darkMode": "Dunkelmodus",
-    "lightMode": "Hellmodus"
+    "lightMode": "Hellmodus",
+    "dashboardSections": "Dashboard-Bereiche"
   },
   "common": {
     "cancel": "Abbrechen",
@@ -102,7 +103,10 @@
     "moveToFolder": "In Ordner verschieben",
     "selectFolder": "Ordner auswählen",
     "folder": "Ordner",
-    "noFolder": "Kein Ordner"
+    "noFolder": "Kein Ordner",
+    "hideRecent": "Zuletzt geöffnet ausblenden",
+    "showRecent": "Zuletzt geöffnet anzeigen",
+    "deleteFolderConfirmNameHint": "Ordnernamen eingeben, um Ordner und alle Boards zu löschen"
   },
   "board": {
     "untitled": "Unbenanntes Board",
