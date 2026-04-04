@@ -93,7 +93,11 @@
     "addTag": "Add tag",
     "filterByTag": "Filter by tag",
     "conflictRemoteApplied": "Your edit conflicted with a remote change. Remote version applied.",
-    "conflictUndo": "Undo"
+    "conflictUndo": "Undo",
+    "moveToFolder": "Move to Folder",
+    "selectFolder": "Select Folder",
+    "folder": "Folder",
+    "noFolder": "No Folder"
   },
   "board": {
     "untitled": "Untitled Board",

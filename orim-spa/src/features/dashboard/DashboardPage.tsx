@@ -29,6 +29,7 @@ import {
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
+import DriveFileMoveIcon from '@mui/icons-material/DriveFileMove';
 import EditIcon from '@mui/icons-material/Edit';
 import FolderIcon from '@mui/icons-material/Folder';
 import FolderOpenIcon from '@mui/icons-material/FolderOpen';
@@ -52,6 +53,7 @@ import {
   createFolder,
   updateFolder,
   deleteFolder,
+  setBoardFolder,
 } from '../../api/boards';
 import { getThemes } from '../../api/themes';
 import {
@@ -60,6 +62,7 @@ import {
   type BoardFolder,
   type BoardSummary,
   type BoardTemplateDefinition,
+  type CreateBoardRequest,
 } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
 
@@ -204,9 +207,13 @@ interface BoardCardProps {
   onNavigate: () => void;
   onRename: () => void;
   onDelete: () => void;
+  onMoveToFolder: () => void;
   onToggleFavorite: () => void;
   visibilityLabel: string;
   visibilityColor: string;
+  draggable?: boolean;
+  onDragStart?: React.DragEventHandler;
+  onDragEnd?: React.DragEventHandler;
   t: (key: string) => string;
 }
 
@@ -218,13 +225,22 @@ function BoardCard({
   onNavigate,
   onRename,
   onDelete,
+  onMoveToFolder,
   onToggleFavorite,
   visibilityLabel,
   visibilityColor,
+  draggable,
+  onDragStart,
+  onDragEnd,
   t,
 }: BoardCardProps) {
   return (
-    <Card sx={{ height: '100%' }}>
+    <Card
+      sx={{ height: '100%', cursor: draggable ? 'grab' : undefined }}
+      draggable={draggable}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+    >
       <CardActionArea onClick={onNavigate}>
         <CardContent>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 0.75 }}>
@@ -269,6 +285,17 @@ function BoardCard({
       </CardActionArea>
       {isOwner && (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', px: 1, pb: 1 }}>
+          <Tooltip title={t('dashboard.moveToFolder')}>
+            <IconButton
+              size="small"
+              onClick={(e) => {
+                e.stopPropagation();
+                onMoveToFolder();
+              }}
+            >
+              <DriveFileMoveIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
           <Tooltip title={t('board.rename')}>
             <IconButton
               size="small"
@@ -322,7 +349,14 @@ export function DashboardPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: createBoard,
+    mutationFn: async (params: CreateBoardRequest & { folderId?: string }) => {
+      const { folderId, ...request } = params;
+      const board = await createBoard(request);
+      if (folderId) {
+        await setBoardFolder(board.id, folderId);
+      }
+      return board;
+    },
     onSuccess: (board) => {
       queryClient.invalidateQueries({ queryKey: ['boards'] });
       rememberBoardVisit(board.id);
@@ -372,12 +406,19 @@ export function DashboardPage() {
     },
   });
 
+  const moveFolderMutation = useMutation({
+    mutationFn: ({ boardId, folderId }: { boardId: string; folderId: string | null }) =>
+      setBoardFolder(boardId, folderId),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['boards'] }),
+  });
+
   // Create dialog state
   const [createOpen, setCreateOpen] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newTemplate, setNewTemplate] = useState('');
   const [newThemeKey, setNewThemeKey] = useState('');
   const [newVisibility, setNewVisibility] = useState(BoardVisibility.Private);
+  const [newFolderId, setNewFolderId] = useState('');
 
   // Templates visibility state
   const [templatesVisible, setTemplatesVisible] = useState(() => {
@@ -414,6 +455,15 @@ export function DashboardPage() {
   const [renameFolderName, setRenameFolderName] = useState('');
   const [folderMenuAnchor, setFolderMenuAnchor] = useState<null | HTMLElement>(null);
   const [folderMenuTarget, setFolderMenuTarget] = useState<BoardFolder | null>(null);
+
+  // Move to folder dialog state
+  const [moveToFolderOpen, setMoveToFolderOpen] = useState(false);
+  const [moveToFolderBoardId, setMoveToFolderBoardId] = useState('');
+  const [moveToFolderSelectedId, setMoveToFolderSelectedId] = useState('');
+
+  // Drag & drop state
+  const [draggingBoardId, setDraggingBoardId] = useState<string | null>(null);
+  const [dragOverFolderId, setDragOverFolderId] = useState<string | null>(null);
   const currentUserId = currentUser?.id ?? null;
   const [favoriteBoardIds, setFavoriteBoardIds] = useState<string[]>(() => currentUserId
     ? loadStoredIds(favoritesStorageKey(currentUserId))
@@ -453,6 +503,7 @@ export function DashboardPage() {
       templateId: newTemplate || undefined,
       themeKey: newThemeKey || undefined,
       visibility: newVisibility,
+      folderId: newFolderId || undefined,
     });
     markOnboardingSeen();
     setCreateOpen(false);
@@ -460,6 +511,7 @@ export function DashboardPage() {
     setNewTemplate('');
     setNewThemeKey('');
     setNewVisibility(BoardVisibility.Private);
+    setNewFolderId('');
   };
 
   const handleDelete = (id: string) => {
@@ -710,23 +762,43 @@ export function DashboardPage() {
             <Chip
               icon={<FolderOpenIcon />}
               label={t('dashboard.allBoards')}
-              variant={selectedFolderId === null ? 'filled' : 'outlined'}
-              color={selectedFolderId === null ? 'primary' : 'default'}
+              variant={selectedFolderId === null && dragOverFolderId !== 'root' ? 'filled' : 'outlined'}
+              color={selectedFolderId === null || dragOverFolderId === 'root' ? 'primary' : 'default'}
               onClick={() => setSelectedFolderId(null)}
+              onDragOver={(e) => { if (draggingBoardId) { e.preventDefault(); setDragOverFolderId('root'); } }}
+              onDragLeave={() => setDragOverFolderId(null)}
+              onDrop={() => {
+                if (draggingBoardId) {
+                  moveFolderMutation.mutate({ boardId: draggingBoardId, folderId: null });
+                  setDraggingBoardId(null);
+                  setDragOverFolderId(null);
+                }
+              }}
+              sx={dragOverFolderId === 'root' ? { outline: '2px solid', outlineColor: 'primary.main' } : undefined}
             />
             {folders.map((folder) => (
               <Chip
                 key={folder.id}
                 icon={<FolderIcon />}
                 label={folder.name}
-                variant={selectedFolderId === folder.id ? 'filled' : 'outlined'}
-                color={selectedFolderId === folder.id ? 'primary' : 'default'}
+                variant={selectedFolderId === folder.id && dragOverFolderId !== folder.id ? 'filled' : 'outlined'}
+                color={selectedFolderId === folder.id || dragOverFolderId === folder.id ? 'primary' : 'default'}
                 onClick={() => setSelectedFolderId(selectedFolderId === folder.id ? null : folder.id)}
                 onDelete={(e) => {
                   setFolderMenuAnchor(e.currentTarget as HTMLElement);
                   setFolderMenuTarget(folder);
                 }}
                 deleteIcon={<MoreVertIcon />}
+                onDragOver={(e) => { if (draggingBoardId) { e.preventDefault(); setDragOverFolderId(folder.id); } }}
+                onDragLeave={() => setDragOverFolderId(null)}
+                onDrop={() => {
+                  if (draggingBoardId) {
+                    moveFolderMutation.mutate({ boardId: draggingBoardId, folderId: folder.id });
+                    setDraggingBoardId(null);
+                    setDragOverFolderId(null);
+                  }
+                }}
+                sx={dragOverFolderId === folder.id ? { outline: '2px solid', outlineColor: 'primary.main' } : undefined}
               />
             ))}
             <Chip
@@ -852,9 +924,17 @@ export function DashboardPage() {
                         setRenameOpen(true);
                       }}
                       onDelete={() => handleDelete(board.id)}
+                      onMoveToFolder={() => {
+                        setMoveToFolderBoardId(board.id);
+                        setMoveToFolderSelectedId(board.folderId ?? '');
+                        setMoveToFolderOpen(true);
+                      }}
                       onToggleFavorite={() => toggleFavorite(board.id)}
                       visibilityLabel={visibilityLabel(board.visibility)}
                       visibilityColor={visibilityColor(board.visibility)}
+                      draggable={board.ownerId === currentUser?.id}
+                      onDragStart={() => setDraggingBoardId(board.id)}
+                      onDragEnd={() => { setDraggingBoardId(null); setDragOverFolderId(null); }}
                       t={t}
                     />
                   </Grid>
@@ -883,9 +963,17 @@ export function DashboardPage() {
                         setRenameOpen(true);
                       }}
                       onDelete={() => handleDelete(board.id)}
+                      onMoveToFolder={() => {
+                        setMoveToFolderBoardId(board.id);
+                        setMoveToFolderSelectedId(board.folderId ?? '');
+                        setMoveToFolderOpen(true);
+                      }}
                       onToggleFavorite={() => toggleFavorite(board.id)}
                       visibilityLabel={visibilityLabel(board.visibility)}
                       visibilityColor={visibilityColor(board.visibility)}
+                      draggable={board.ownerId === currentUser?.id}
+                      onDragStart={() => setDraggingBoardId(board.id)}
+                      onDragEnd={() => { setDraggingBoardId(null); setDragOverFolderId(null); }}
                       t={t}
                     />
                   </Grid>
@@ -918,9 +1006,17 @@ export function DashboardPage() {
                       setRenameOpen(true);
                     }}
                     onDelete={() => handleDelete(board.id)}
+                    onMoveToFolder={() => {
+                      setMoveToFolderBoardId(board.id);
+                      setMoveToFolderSelectedId(board.folderId ?? '');
+                      setMoveToFolderOpen(true);
+                    }}
                     onToggleFavorite={() => toggleFavorite(board.id)}
                     visibilityLabel={visibilityLabel(board.visibility)}
                     visibilityColor={visibilityColor(board.visibility)}
+                    draggable
+                    onDragStart={() => setDraggingBoardId(board.id)}
+                    onDragEnd={() => { setDraggingBoardId(null); setDragOverFolderId(null); }}
                     t={t}
                   />
                 </Grid>
@@ -962,6 +1058,7 @@ export function DashboardPage() {
                         onNavigate={() => handleNavigate(board.id)}
                         onRename={() => {}}
                         onDelete={() => {}}
+                        onMoveToFolder={() => {}}
                         onToggleFavorite={() => toggleFavorite(board.id)}
                         visibilityLabel={visibilityLabel(board.visibility)}
                         visibilityColor={visibilityColor(board.visibility)}
@@ -1024,10 +1121,27 @@ export function DashboardPage() {
             value={newVisibility}
             onChange={(e) => setNewVisibility(e.target.value as BoardVisibility)}
             fullWidth
+            sx={{ mb: 2 }}
           >
             <MenuItem value={BoardVisibility.Private}>{t('sharing.private')}</MenuItem>
             <MenuItem value={BoardVisibility.Public}>{t('sharing.public')}</MenuItem>
           </TextField>
+          {folders.length > 0 && (
+            <TextField
+              select
+              label={t('dashboard.folder')}
+              value={newFolderId}
+              onChange={(e) => setNewFolderId(e.target.value)}
+              fullWidth
+            >
+              <MenuItem value="">{t('dashboard.noFolder')}</MenuItem>
+              {folders.map((folder) => (
+                <MenuItem key={folder.id} value={folder.id}>
+                  {folder.name}
+                </MenuItem>
+              ))}
+            </TextField>
+          )}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setCreateOpen(false)}>{t('common.cancel')}</Button>
@@ -1134,6 +1248,43 @@ export function DashboardPage() {
               setRenameFolderTarget(null);
             }
           }}>
+            {t('board.save')}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Move to Folder Dialog */}
+      <Dialog open={moveToFolderOpen} onClose={() => setMoveToFolderOpen(false)} maxWidth="xs" fullWidth>
+        <DialogTitle>{t('dashboard.moveToFolder')}</DialogTitle>
+        <DialogContent>
+          <TextField
+            select
+            label={t('dashboard.selectFolder')}
+            value={moveToFolderSelectedId}
+            onChange={(e) => setMoveToFolderSelectedId(e.target.value)}
+            fullWidth
+            sx={{ mt: 1 }}
+          >
+            <MenuItem value="">{t('dashboard.noFolder')}</MenuItem>
+            {folders.map((folder) => (
+              <MenuItem key={folder.id} value={folder.id}>
+                {folder.name}
+              </MenuItem>
+            ))}
+          </TextField>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setMoveToFolderOpen(false)}>{t('common.cancel')}</Button>
+          <Button
+            variant="contained"
+            onClick={() => {
+              moveFolderMutation.mutate({
+                boardId: moveToFolderBoardId,
+                folderId: moveToFolderSelectedId || null,
+              });
+              setMoveToFolderOpen(false);
+            }}
+          >
             {t('board.save')}
           </Button>
         </DialogActions>

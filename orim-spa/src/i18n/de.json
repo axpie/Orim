@@ -93,7 +93,11 @@
     "addTag": "Tag hinzufügen",
     "filterByTag": "Nach Tag filtern",
     "conflictRemoteApplied": "Ihre Änderung kollidierte mit einer Remote-Änderung. Remote-Version wurde übernommen.",
-    "conflictUndo": "Rückgängig"
+    "conflictUndo": "Rückgängig",
+    "moveToFolder": "In Ordner verschieben",
+    "selectFolder": "Ordner auswählen",
+    "folder": "Ordner",
+    "noFolder": "Kein Ordner"
   },
   "board": {
     "untitled": "Unbenanntes Board",
