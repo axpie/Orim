@@ -3,7 +3,8 @@ import type Konva from 'konva';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Alert, Box, Button, Snackbar, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Button, IconButton, Snackbar, Typography, useMediaQuery, useTheme } from '@mui/material';
+import CloseIcon from '@mui/icons-material/Close';
 import { getAssistantAvailability } from '../../api/assistantSettings';
 import { createSnapshot, getBoard, restoreSnapshot, saveBoard } from '../../api/boards';
 import { useBoardComments } from './comments/useBoardComments';
@@ -11,6 +12,9 @@ import { useBoardStore } from './store/boardStore';
 import { useCommandStack } from './store/commandStack';
 import { formatBoardCommandConflict } from './realtime/localBoardCommands';
 import { WhiteboardCanvas } from './canvas/WhiteboardCanvas';
+import { FloatingToolbar } from './canvas/FloatingToolbar';
+import { CanvasSearch } from './canvas/CanvasSearch';
+import { Minimap } from './canvas/Minimap';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Toolbar } from './tools/Toolbar';
 import { PropertiesPanel } from './panels/PropertiesPanel';
@@ -20,6 +24,7 @@ import { SnapshotDialog } from './panels/SnapshotDialog';
 import { AuxiliaryPanelHost } from './panels/AuxiliaryPanelHost';
 import { getAuxiliaryPanelWidth, toggleAuxiliaryPanel, type AuxiliaryPanelKind } from './panels/auxiliaryPanels';
 import { BoardTopBar } from './tools/BoardTopBar';
+import { PresentationMode } from './PresentationMode';
 import { useWhiteboardRealtime } from './useWhiteboardRealtime';
 import { useOperationOutboxStore } from './store/outboxStore';
 import type { Board, BoardSnapshot } from '../../types/models';
@@ -55,17 +60,30 @@ export function WhiteboardEditor() {
   const remoteCursors = useBoardStore((s) => s.remoteCursors);
   const isDirty = useBoardStore((s) => s.isDirty);
   const setDirty = useBoardStore((s) => s.setDirty);
+  const followingClientId = useBoardStore((s) => s.followingClientId);
+  const setFollowingClientId = useBoardStore((s) => s.setFollowingClientId);
+  const setCamera = useBoardStore((s) => s.setCamera);
   const commandConflict = useBoardStore((s) => s.commandConflict);
   const clearCommandConflict = useBoardStore((s) => s.clearCommandConflict);
   const selectedElementIds = useBoardStore((s) => s.selectedElementIds);
+  const activeTool = useBoardStore((s) => s.activeTool);
+  const cameraX = useBoardStore((s) => s.cameraX);
+  const cameraY = useBoardStore((s) => s.cameraY);
+  const zoom = useBoardStore((s) => s.zoom);
+  const viewportWidth = useBoardStore((s) => s.viewportWidth);
+  const viewportHeight = useBoardStore((s) => s.viewportHeight);
+  const setCamera = useBoardStore((s) => s.setCamera);
   const outboxCount = useOperationOutboxStore((s) => (id ? s.countForBoard(id) : 0));
   const clearCommandStack = useCommandStack((s) => s.clear);
 
   const [activePanel, setActivePanel] = useState<AuxiliaryPanelKind | null>(null);
   const [snapshotsOpen, setSnapshotsOpen] = useState(false);
+  const [minimapVisible, setMinimapVisible] = useState(false);
   const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
   const [pendingCommentAnchor, setPendingCommentAnchor] = useState<{ x: number; y: number } | null>(null);
   const [commentPlacementMode, setCommentPlacementMode] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [presentationMode, setPresentationMode] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState<{ id: number; text: string } | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
@@ -355,6 +373,22 @@ export function WhiteboardEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedElementIds, connectionState]);
 
+  // Auto-follow: pan to the followed user's cursor position on cursor updates
+  useEffect(() => {
+    if (!followingClientId) return;
+    const followed = remoteCursors.find((c) => c.clientId === followingClientId);
+    if (!followed) {
+      setFollowingClientId(null);
+      return;
+    }
+    if (followed.worldX == null || followed.worldY == null) return;
+    const { zoom, viewportWidth, viewportHeight } = useBoardStore.getState();
+    setCamera(
+      followed.worldX - viewportWidth / (2 * zoom),
+      followed.worldY - viewportHeight / (2 * zoom),
+    );
+  }, [followingClientId, remoteCursors, setCamera, setFollowingClientId]);
+
   const handlePointerPresenceChanged = useCallback(
     (worldX: number | null, worldY: number | null) => {
       const currentSelection = useBoardStore.getState().selectedElementIds;
@@ -558,33 +592,48 @@ export function WhiteboardEditor() {
     setActiveCommentId(comment.id);
   }, [removeBoardCommentReply]);
 
+  const toggleMinimap = useCallback(() => setMinimapVisible((v) => !v), []);
+
+  const handleMinimapNavigate = useCallback((worldX: number, worldY: number) => {
+    setCamera(
+      -(worldX * zoom) + viewportWidth / 2,
+      -(worldY * zoom) + viewportHeight / 2,
+    );
+  }, [setCamera, zoom, viewportWidth, viewportHeight]);
+
   if (!board) return null;
+
+  const hasFrames = board.elements.some((el) => el.$type === 'frame');
 
   return (
     <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', pb: 'env(safe-area-inset-bottom)' }}>
-      <BoardTopBar
-        onOpenProperties={openPropertiesPanel}
-        onOpenComments={openCommentsPanel}
-        onOpenChat={openChatPanel}
-        propertiesOpen={propertiesOpen}
-        commentsOpen={commentsOpen}
-        chatOpen={chatOpen}
-        syncStatus={boardSyncStatus}
-        titleEditable={canEdit}
-        showShare={canShare}
-        showProperties={canEdit}
-        showComments
-        showChat={canUseAssistant}
-        showSnapshots={canEdit}
-        onRenameTitle={handleRenameTitle}
-        onBoardChanged={onBoardChanged}
-        onOpenSnapshots={() => setSnapshotsOpen(true)}
-        onExportPng={handleExportPng}
-        collaborators={remoteCursors}
-        localConnectionId={connectionId}
-      />
+      {!presentationMode && (
+        <BoardTopBar
+          onOpenProperties={openPropertiesPanel}
+          onOpenComments={openCommentsPanel}
+          onOpenChat={openChatPanel}
+          propertiesOpen={propertiesOpen}
+          commentsOpen={commentsOpen}
+          chatOpen={chatOpen}
+          syncStatus={boardSyncStatus}
+          titleEditable={canEdit}
+          showShare={canShare}
+          showProperties={canEdit}
+          showComments
+          showChat={canUseAssistant}
+          showSnapshots={canEdit}
+          onRenameTitle={handleRenameTitle}
+          onBoardChanged={onBoardChanged}
+          onOpenSnapshots={() => setSnapshotsOpen(true)}
+          onExportPng={handleExportPng}
+          onStartPresentation={() => setPresentationMode(true)}
+          hasFrames={hasFrames}
+          collaborators={remoteCursors}
+          localConnectionId={connectionId}
+        />
+      )}
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
-        {canEdit && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} canvasContainerRef={canvasBoxRef} />}
+        {canEdit && !compactOverlayOpen && !presentationMode && <Toolbar onBoardChanged={onBoardChanged} canvasContainerRef={canvasBoxRef} minimapVisible={minimapVisible} onToggleMinimap={toggleMinimap} />}
         <Box ref={canvasBoxRef} sx={{ flex: 1, position: 'relative', minWidth: 0, minHeight: 0 }}>
           <ErrorBoundary>
             <WhiteboardCanvas
@@ -599,15 +648,76 @@ export function WhiteboardEditor() {
               onSelectComment={handleSelectComment}
               onCreateCommentAnchor={handleCommentAnchorSelected}
               liveAnnouncement={liveAnnouncement}
+              onOpenSearch={() => setSearchOpen(true)}
             />
           </ErrorBoundary>
 
-          <AuxiliaryPanelHost
-            open={activePanel != null}
-            mobile={isNarrowPanelMode}
-            width={getAuxiliaryPanelWidth(activePanel)}
-            onClose={closeActivePanel}
-          >
+          {followingClientId && (() => {
+            const followed = remoteCursors.find((c) => c.clientId === followingClientId);
+            if (!followed) return null;
+            return (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 32,
+                  bgcolor: followed.colorHex,
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 10,
+                  gap: 1,
+                }}
+              >
+                <Typography variant="caption" fontWeight={600}>
+                  {t('board.followingUser', { name: followed.displayName, defaultValue: 'Following {{name}}' })}
+                </Typography>
+                <IconButton size="small" onClick={() => setFollowingClientId(null)} sx={{ color: 'white', p: 0.25 }}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            );
+          })()}
+
+          {canEdit && !presentationMode && selectedElementIds.length > 0 && activeTool === 'select' && (
+            <FloatingToolbar
+              elements={board.elements}
+              selectedIds={selectedElementIds}
+              zoom={zoom}
+              cameraX={cameraX}
+              cameraY={cameraY}
+              onBoardChanged={onBoardChanged}
+              onOpenPropertiesPanel={() => setActivePanel('properties')}
+            />
+          )}
+
+          {searchOpen && !presentationMode && <CanvasSearch onClose={() => setSearchOpen(false)} />}
+
+          {minimapVisible && !presentationMode && (
+            <Box sx={{ position: 'absolute', bottom: 80, right: 16, zIndex: 10 }}>
+              <Minimap
+                elements={board.elements}
+                cameraX={cameraX}
+                cameraY={cameraY}
+                zoom={zoom}
+                viewportWidth={viewportWidth}
+                viewportHeight={viewportHeight}
+                onNavigate={handleMinimapNavigate}
+                onClose={toggleMinimap}
+              />
+            </Box>
+          )}
+
+          {!presentationMode && (
+            <AuxiliaryPanelHost
+              open={activePanel != null}
+              mobile={isNarrowPanelMode}
+              width={getAuxiliaryPanelWidth(activePanel)}
+              onClose={closeActivePanel}
+            >
             {activePanel === 'comments' && (
               <CommentsPanel
                 comments={comments}
@@ -648,8 +758,17 @@ export function WhiteboardEditor() {
               />
             )}
           </AuxiliaryPanelHost>
+          )}
         </Box>
       </Box>
+
+      {presentationMode && board && (
+        <PresentationMode
+          board={board}
+          stageRef={stageRef}
+          onExit={() => setPresentationMode(false)}
+        />
+      )}
 
       {canEdit && (
         <SnapshotDialog
