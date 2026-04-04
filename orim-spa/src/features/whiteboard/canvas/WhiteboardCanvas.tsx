@@ -48,6 +48,7 @@ import {
   type FrameElement,
   type ArrowElement,
   type ImageElement,
+  type DrawingElement,
 } from '../../../types/models';
 import { snapResizeRectToAlignmentGuides, snapToAlignmentGuides, type AlignmentGuide, getBoundingRect } from '../../../utils/geometry';
 import {
@@ -85,6 +86,7 @@ interface WhiteboardCanvasProps {
   onSelectComment?: (commentId: string) => void;
   onCreateCommentAnchor?: (position: { x: number; y: number }) => void;
   liveAnnouncement?: { id: number; text: string } | null;
+  onOpenSearch?: () => void;
 }
 
 export function WhiteboardCanvas({
@@ -99,6 +101,7 @@ export function WhiteboardCanvas({
   onSelectComment,
   onCreateCommentAnchor,
   liveAnnouncement = null,
+  onOpenSearch,
 }: WhiteboardCanvasProps) {
   const { t } = useTranslation();
   const accessibilityHelpId = useId();
@@ -126,6 +129,7 @@ export function WhiteboardCanvas({
   const applyLocalCommand = useBoardStore((s) => s.applyLocalCommand);
   const pendingIconName = useBoardStore((s) => s.pendingIconName);
   const pendingStickyNotePresetId = useBoardStore((s) => s.pendingStickyNotePresetId);
+  const setFollowingClientId = useBoardStore((s) => s.setFollowingClientId);
   const userThemeKey = useThemeStore((s) => s.themeKey);
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const dockSnapRadius = isCoarsePointer ? DOCK_SNAP_RADIUS * 1.6 : DOCK_SNAP_RADIUS;
@@ -177,6 +181,7 @@ export function WhiteboardCanvas({
   // Drawing state
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [draftRect, setDraftRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  const [drawingElementId, setDrawingElementId] = useState<string | null>(null);
 
   // Arrow drawing state
   const [draftArrowStart, setDraftArrowStart] = useState<{ x: number; y: number; elementId?: string; dock?: DockPoint } | null>(null);
@@ -222,6 +227,7 @@ export function WhiteboardCanvas({
     canInlineEditSelection,
     canSelectAll,
     canPaste,
+    isSelectionLocked,
     zOrderAvailability,
     expandSelectionWithGroups,
     emitUpdatedOperations,
@@ -234,6 +240,7 @@ export function WhiteboardCanvas({
     groupSelectedElements,
     ungroupSelectedElements,
     reorderSelectedElements,
+    setSelectedElementsLocked,
     moveSelectedElementsBy,
     beginInlineEditingSelection,
     selectAllElements,
@@ -314,6 +321,7 @@ export function WhiteboardCanvas({
     setArrowEndpointDrag,
     setIsDragging,
     setDragStart,
+    setDrawingElementId,
   });
 
   const handleContainerFocus = useCallback(() => {
@@ -359,6 +367,11 @@ export function WhiteboardCanvas({
     applyCommandExecution(peekRedo(), 'redo', commitRedo);
   }, [applyCommandExecution, peekRedo, commitRedo]);
 
+  const toggleLockSelectedElements = useCallback(() => {
+    if (selectedIds.length === 0) return;
+    setSelectedElementsLocked(!isSelectionLocked);
+  }, [isSelectionLocked, selectedIds.length, setSelectedElementsLocked]);
+
   useCanvasShortcuts({
     editable,
     editingElement,
@@ -378,6 +391,8 @@ export function WhiteboardCanvas({
     beginInlineEditingSelection,
     deleteSelectedElements,
     moveSelectedElementsBy,
+    toggleLockSelectedElements,
+    onOpenSearch,
   });
 
   useEffect(() => {
@@ -412,6 +427,29 @@ export function WhiteboardCanvas({
           panStart.cx + (screenPos.x - panStart.x),
           panStart.cy + (screenPos.y - panStart.y),
         );
+        return;
+      }
+
+      // Freehand drawing
+      if (drawingElementId) {
+        const el = elements.find((e) => e.id === drawingElementId) as DrawingElement | undefined;
+        if (el) {
+          const newPoints = [...el.points, worldPos.x, worldPos.y];
+          let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+          for (let i = 0; i < newPoints.length; i += 2) {
+            minX = Math.min(minX, newPoints[i]);
+            minY = Math.min(minY, newPoints[i + 1]);
+            maxX = Math.max(maxX, newPoints[i]);
+            maxY = Math.max(maxY, newPoints[i + 1]);
+          }
+          updateElement(drawingElementId, {
+            points: newPoints,
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY,
+          });
+        }
         return;
       }
 
@@ -621,7 +659,7 @@ export function WhiteboardCanvas({
         setDragStart(worldPos);
       }
     },
-    [isPanning, panStart, drawStart, draftRect, draftArrowStart, arrowEndpointDrag, resizeState, marquee, isDragging, dragStart, elements, selectedIds, zoom, editable, activeTool, getWorldPos, getScreenPos, getResizeHandleFromTarget, setCamera, updateElement, applyDraggedArrowEndpoint, onBoardLiveChanged, onPointerPresenceChanged, dockSnapRadius],
+    [isPanning, panStart, drawingElementId, drawStart, draftRect, draftArrowStart, arrowEndpointDrag, resizeState, marquee, isDragging, dragStart, elements, selectedIds, zoom, editable, activeTool, getWorldPos, getScreenPos, getResizeHandleFromTarget, setCamera, updateElement, applyDraggedArrowEndpoint, onBoardLiveChanged, onPointerPresenceChanged, dockSnapRadius],
   );
 
   const handleMouseLeave = useCallback(() => {
@@ -641,6 +679,19 @@ export function WhiteboardCanvas({
       if (isPanning) {
         setIsPanning(false);
         setPanStart(null);
+        return;
+      }
+
+      // Commit freehand drawing
+      if (drawingElementId) {
+        const el = elements.find((e) => e.id === drawingElementId);
+        if (el) {
+          pushCommand(createAddElementsCommand([el]));
+          setSelectedElementIds([drawingElementId]);
+          setActiveTool('select');
+          onBoardChanged('add', createElementAddedOperation(el));
+        }
+        setDrawingElementId(null);
         return;
       }
 
@@ -841,7 +892,7 @@ export function WhiteboardCanvas({
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, emitUpdatedOperations, selectedIds, onBoardChanged],
+    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, emitUpdatedOperations, selectedIds, onBoardChanged],
   );
 
   const handleTouchStart = useCallback(
@@ -1244,6 +1295,7 @@ export function WhiteboardCanvas({
         hasSelection={selectedIds.length > 0}
         canPaste={canPaste}
         canInlineEditSelection={canInlineEditSelection}
+        isLocked={isSelectionLocked}
         canGroup={canGroup}
         canUngroup={canUngroup}
         canSelectAll={canSelectAll}

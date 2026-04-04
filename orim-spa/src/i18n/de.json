@@ -179,6 +179,7 @@
     "iconBrowseHint": "Top-Auswahl, weitere Icons per Suche",
     "iconResults": "{{count}} Treffer",
     "arrow": "Pfeil",
+    "drawing": "Zeichnen",
     "image": "Bild",
     "undo": "Rückgängig",
     "redo": "Wiederholen",
@@ -194,6 +195,7 @@
     "zoomIn": "Vergrößern",
     "zoomOut": "Verkleinern",
     "fitToScreen": "Einpassen",
+    "minimap": "Minimap",
     "expandToolbar": "Werkzeugleiste öffnen",
     "collapseToolbar": "Werkzeugleiste einklappen"
   },
@@ -347,7 +349,9 @@
     "paste": "Einfügen",
     "duplicate": "Duplizieren",
     "editText": "Text bearbeiten",
-    "selectAll": "Alles auswählen"
+    "selectAll": "Alles auswählen",
+    "lock": "Sperren",
+    "unlock": "Entsperren"
   },
   "admin": {
     "userManagement": "Benutzerverwaltung",

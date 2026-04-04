@@ -22,6 +22,8 @@ export interface UseCanvasShortcutsParams {
   beginInlineEditingSelection: () => void;
   deleteSelectedElements: () => void;
   moveSelectedElementsBy: (dx: number, dy: number) => void;
+  toggleLockSelectedElements: () => void;
+  onOpenSearch?: () => void;
 }
 
 export function useCanvasShortcuts({
@@ -43,6 +45,8 @@ export function useCanvasShortcuts({
   beginInlineEditingSelection,
   deleteSelectedElements,
   moveSelectedElementsBy,
+  toggleLockSelectedElements,
+  onOpenSearch,
 }: UseCanvasShortcutsParams): void {
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
@@ -123,6 +127,10 @@ export function useCanvasShortcuts({
             e.preventDefault();
             duplicateSelectedElements();
             return;
+          case 'f':
+            e.preventDefault();
+            onOpenSearch?.();
+            return;
           case 'g':
             if (!editable) {
               return;
@@ -133,6 +141,13 @@ export function useCanvasShortcuts({
             } else {
               groupSelectedElements();
             }
+            return;
+          case 'l':
+            if (!editable) {
+              return;
+            }
+            e.preventDefault();
+            toggleLockSelectedElements();
             return;
           default:
             break;
@@ -162,6 +177,9 @@ export function useCanvasShortcuts({
           return;
         case 'h':
           setActiveTool('hand');
+          return;
+        case 'd':
+          setActiveTool('drawing');
           return;
         default:
           break;
@@ -248,6 +266,8 @@ export function useCanvasShortcuts({
     setActiveTool,
     setSelectedElementIds,
     setSpacePanActive,
+    toggleLockSelectedElements,
     ungroupSelectedElements,
+    onOpenSearch,
   ]);
 }

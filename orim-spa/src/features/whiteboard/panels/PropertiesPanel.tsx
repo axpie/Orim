@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import {
   Box,
   Divider,
+  IconButton,
   TextField,
   MenuItem,
   FormControlLabel,
@@ -10,6 +11,7 @@ import {
   Switch,
   ToggleButton,
   ToggleButtonGroup,
+  Tooltip,
   Typography,
 } from '@mui/material';
 import FormatBoldIcon from '@mui/icons-material/FormatBold';
@@ -19,9 +21,18 @@ import FormatAlignRightIcon from '@mui/icons-material/FormatAlignRight';
 import FormatItalicIcon from '@mui/icons-material/FormatItalic';
 import FormatUnderlinedIcon from '@mui/icons-material/FormatUnderlined';
 import StrikethroughSIcon from '@mui/icons-material/StrikethroughS';
+import LockIcon from '@mui/icons-material/Lock';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 import VerticalAlignTopIcon from '@mui/icons-material/VerticalAlignTop';
 import VerticalAlignCenterIcon from '@mui/icons-material/VerticalAlignCenter';
 import VerticalAlignBottomIcon from '@mui/icons-material/VerticalAlignBottom';
+import AlignHorizontalLeftIcon from '@mui/icons-material/AlignHorizontalLeft';
+import AlignHorizontalCenterIcon from '@mui/icons-material/AlignHorizontalCenter';
+import AlignHorizontalRightIcon from '@mui/icons-material/AlignHorizontalRight';
+import AlignVerticalTopIcon from '@mui/icons-material/AlignVerticalTop';
+import AlignVerticalBottomIcon from '@mui/icons-material/AlignVerticalBottom';
+import ViewColumnIcon from '@mui/icons-material/ViewColumn';
+import ViewStreamIcon from '@mui/icons-material/ViewStream';
 import { useBoardStore } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
 import { ColorInputField } from '../controls/ColorInputField';
@@ -56,6 +67,7 @@ import {
 import { contrastingTextColor } from '../../../utils/colorUtils';
 import { getLineDashArray } from '../../../utils/lineStyles';
 import { getDefaultLabelFontSize, resolveLabelFontSize, resolveTextFontSize } from '../../../utils/textLayout';
+import { computeAlignment, computeDistribution, type AlignAction, type DistributeAction } from '../../../utils/alignment';
 import { AuxiliaryPanelShell } from './AuxiliaryPanelShell';
 const FONT_FAMILY_DEFAULT = '__default__';
 
@@ -397,6 +409,68 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
     update(id, { imageFit: newFit });
   };
 
+  const applyAlignment = (action: AlignAction) => {
+    const positions = computeAlignment(selected, action);
+    if (positions.size === 0) return;
+
+    const beforeElements: BoardElement[] = [];
+    const afterElements: BoardElement[] = [];
+    for (const [id, pos] of positions) {
+      const current = elements.find((e) => e.id === id);
+      if (!current) continue;
+      beforeElements.push(current);
+      afterElements.push({ ...current, x: pos.x, y: pos.y } as BoardElement);
+    }
+
+    const changedIds = beforeElements.map((e) => e.id);
+    const command = createElementUpdateCommand(
+      beforeElements,
+      afterElements,
+      createChangedKeysByElementId(changedIds, ['x', 'y']),
+    );
+
+    for (const after of afterElements) {
+      updateElement(after.id, { x: after.x, y: after.y });
+    }
+    pushCommand(command);
+    setDirty(true);
+    for (const after of afterElements) {
+      onBoardChanged?.('edit', createElementUpdatedOperation(after));
+    }
+  };
+
+  const applyDistribution = (action: DistributeAction) => {
+    const positions = computeDistribution(selected, action);
+    if (positions.size === 0) return;
+
+    const beforeElements: BoardElement[] = [];
+    const afterElements: BoardElement[] = [];
+    for (const [id, pos] of positions) {
+      const current = elements.find((e) => e.id === id);
+      if (!current) continue;
+      beforeElements.push(current);
+      afterElements.push({ ...current, x: pos.x, y: pos.y } as BoardElement);
+    }
+
+    const changedIds = beforeElements.map((e) => e.id);
+    const command = createElementUpdateCommand(
+      beforeElements,
+      afterElements,
+      createChangedKeysByElementId(changedIds, ['x', 'y']),
+    );
+
+    for (const after of afterElements) {
+      updateElement(after.id, { x: after.x, y: after.y });
+    }
+    pushCommand(command);
+    setDirty(true);
+    for (const after of afterElements) {
+      onBoardChanged?.('edit', createElementUpdatedOperation(after));
+    }
+  };
+
+  const alignableCount = selected.filter((e) => e.$type !== 'arrow').length;
+
   return (
     <AuxiliaryPanelShell title={t('properties.title', 'Eigenschaften')} onClose={onClose} mobile={mobile}>
       <Box sx={{ flex: 1, overflow: 'auto' }}>
@@ -407,9 +481,86 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
                 ? t('properties.noElementSelected', 'Kein Element ausgewählt.')
                 : t('properties.elementsSelected', { count: selected.length, defaultValue: '{{count}} Elemente ausgewählt.' })}
             </Typography>
+            {alignableCount >= 2 && (
+              <>
+                <Divider sx={{ my: 2 }} />
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+                  {t('properties.align', 'Ausrichten')}
+                </Typography>
+                <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                  <Tooltip title={t('properties.alignLeft', 'Links ausrichten')}>
+                    <IconButton size="small" onClick={() => applyAlignment('left')}>
+                      <AlignHorizontalLeftIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={t('properties.alignCenter', 'Horizontal zentrieren')}>
+                    <IconButton size="small" onClick={() => applyAlignment('center')}>
+                      <AlignHorizontalCenterIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={t('properties.alignRight', 'Rechts ausrichten')}>
+                    <IconButton size="small" onClick={() => applyAlignment('right')}>
+                      <AlignHorizontalRightIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={t('properties.alignTop', 'Oben ausrichten')}>
+                    <IconButton size="small" onClick={() => applyAlignment('top')}>
+                      <AlignVerticalTopIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={t('properties.alignMiddle', 'Vertikal zentrieren')}>
+                    <IconButton size="small" onClick={() => applyAlignment('middle')}>
+                      <VerticalAlignCenterIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                  <Tooltip title={t('properties.alignBottom', 'Unten ausrichten')}>
+                    <IconButton size="small" onClick={() => applyAlignment('bottom')}>
+                      <AlignVerticalBottomIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+                {alignableCount >= 3 && (
+                  <>
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1.5, mb: 0.5 }}>
+                      {t('properties.distribute', 'Verteilen')}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 0.5 }}>
+                      <Tooltip title={t('properties.distributeHorizontal', 'Horizontal verteilen')}>
+                        <IconButton size="small" onClick={() => applyDistribution('horizontal')}>
+                          <ViewColumnIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                      <Tooltip title={t('properties.distributeVertical', 'Vertikal verteilen')}>
+                        <IconButton size="small" onClick={() => applyDistribution('vertical')}>
+                          <ViewStreamIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  </>
+                )}
+              </>
+            )}
           </Box>
         ) : (
           <Box sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 2 }}>
+            {/* Lock toggle */}
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={el.isLocked === true}
+                  onChange={(e) => update(el.id, { isLocked: e.target.checked })}
+                  size="small"
+                />
+              }
+              label={
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                  {el.isLocked === true ? <LockIcon fontSize="small" /> : <LockOpenIcon fontSize="small" />}
+                  <Typography variant="body2">
+                    {t('contextMenu.lock', 'Lock')}
+                  </Typography>
+                </Box>
+              }
+            />
             {/* Position */}
             <Box sx={{ display: 'flex', gap: 1 }}>
               <NumberInputField

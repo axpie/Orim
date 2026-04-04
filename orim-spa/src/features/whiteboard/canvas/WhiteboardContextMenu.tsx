@@ -13,6 +13,8 @@ import ContentPasteIcon from '@mui/icons-material/ContentPaste';
 import FileCopyIcon from '@mui/icons-material/FileCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
+import LockIcon from '@mui/icons-material/Lock';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 import GroupWorkIcon from '@mui/icons-material/GroupWork';
 import CallSplitIcon from '@mui/icons-material/CallSplit';
 import SelectAllIcon from '@mui/icons-material/SelectAll';
@@ -35,6 +37,8 @@ export type WhiteboardContextMenuAction =
   | 'group'
   | 'ungroup'
   | 'select-all'
+  | 'lock'
+  | 'unlock'
   | ZOrderAction;
 
 interface WhiteboardContextMenuProps {
@@ -44,6 +48,7 @@ interface WhiteboardContextMenuProps {
   canInlineEditSelection: boolean;
   canGroup: boolean;
   canUngroup: boolean;
+  isLocked: boolean;
   canSelectAll: boolean;
   zOrderAvailability: ZOrderAvailability;
   onClose: () => void;
@@ -87,6 +92,7 @@ export function WhiteboardContextMenu({
   hasSelection,
   canPaste,
   canInlineEditSelection,
+  isLocked,
   canGroup,
   canUngroup,
   canSelectAll,
@@ -204,6 +210,13 @@ export function WhiteboardContextMenu({
               </Typography>
               <KeyboardArrowRightIcon fontSize="small" color="action" />
             </MenuItem>
+            <ActionMenuItem
+              icon={isLocked ? <LockOpenIcon fontSize="small" /> : <LockIcon fontSize="small" />}
+              label={isLocked ? t('contextMenu.unlock') : t('contextMenu.lock')}
+              shortcut="Ctrl + L"
+              onClick={() => handleAction(isLocked ? 'unlock' : 'lock')}
+              onMouseEnter={closeArrangeMenu}
+            />
             <Divider />
             <ActionMenuItem
               icon={<DeleteIcon fontSize="small" />}

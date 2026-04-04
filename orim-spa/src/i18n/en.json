@@ -179,6 +179,7 @@
     "iconBrowseHint": "Top picks shown, search for the full icon set",
     "iconResults": "{{count}} results",
     "arrow": "Arrow",
+    "drawing": "Draw",
     "image": "Image",
     "undo": "Undo",
     "redo": "Redo",
@@ -194,6 +195,7 @@
     "zoomIn": "Zoom In",
     "zoomOut": "Zoom Out",
     "fitToScreen": "Fit to Screen",
+    "minimap": "Minimap",
     "expandToolbar": "Expand toolbar",
     "collapseToolbar": "Collapse toolbar"
   },
@@ -347,7 +349,9 @@
     "paste": "Paste",
     "duplicate": "Duplicate",
     "editText": "Edit text",
-    "selectAll": "Select all"
+    "selectAll": "Select all",
+    "lock": "Lock",
+    "unlock": "Unlock"
   },
   "admin": {
     "userManagement": "User Management",

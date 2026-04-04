@@ -4,6 +4,7 @@ import type { BoardElement } from '../../../types/models';
 import { computeArrowPolyline, flattenPoints } from '../../../utils/arrowRouting';
 
 export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+export type InteractionHandle = ResizeHandle | 'rotate';
 
 interface SelectionOverlayProps {
   elements: BoardElement[];
@@ -72,7 +73,7 @@ function SelectionOverlayInner({
       );
     }
 
-    const handles: Array<{ key: ResizeHandle; x: number; y: number }> = [
+    const handles: Array<{ key: ResizeHandle; x: number; y: number }> = el.isLocked === true ? [] : [
       { key: 'nw', x: el.x, y: el.y },
       { key: 'n', x: el.x + el.width / 2, y: el.y },
       { key: 'ne', x: el.x + el.width, y: el.y },
@@ -110,6 +111,26 @@ function SelectionOverlayInner({
             data-resize-handle={handle.key}
           />
         ))}
+        {/* Rotation handle */}
+        <Line
+          points={[
+            el.x + el.width / 2, el.y,
+            el.x + el.width / 2, el.y - 25 / zoom,
+          ]}
+          stroke={selectionColor}
+          strokeWidth={borderWidth}
+          listening={false}
+        />
+        <Circle
+          x={el.x + el.width / 2}
+          y={el.y - 25 / zoom}
+          radius={5 / zoom}
+          fill={handleSurfaceColor}
+          stroke={selectionColor}
+          strokeWidth={borderWidth}
+          data-element-id={el.id}
+          data-rotation-handle="true"
+        />
       </Group>
     );
   }
@@ -126,8 +147,10 @@ function SelectionOverlayInner({
 
   if (!isFinite(minX)) return null;
 
+  const midX = (minX + maxX) / 2;
+
   return (
-    <Group listening={false}>
+    <Group>
       <Rect
         x={minX}
         y={minY}
@@ -137,6 +160,23 @@ function SelectionOverlayInner({
         strokeWidth={borderWidth}
         dash={[4 / zoom, 4 / zoom]}
         fill="transparent"
+        listening={false}
+      />
+      {/* Rotation handle */}
+      <Line
+        points={[midX, minY, midX, minY - 25 / zoom]}
+        stroke={selectionColor}
+        strokeWidth={borderWidth}
+        listening={false}
+      />
+      <Circle
+        x={midX}
+        y={minY - 25 / zoom}
+        radius={5 / zoom}
+        fill={handleSurfaceColor}
+        stroke={selectionColor}
+        strokeWidth={borderWidth}
+        data-rotation-handle="true"
       />
     </Group>
   );

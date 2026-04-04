@@ -92,6 +92,7 @@ export function useCanvasActions({
     && selectedElements.length === 1
     && isInlineEditableElement(selectedElements[0]);
   const canSelectAll = editable && elements.length > 0 && selectedIds.length !== elements.length;
+  const isSelectionLocked = selectedElements.length > 0 && selectedElements.every((element) => element.isLocked === true);
   const canPaste = useMemo(
     () => {
       void clipboardVersion;
@@ -349,6 +350,36 @@ export function useCanvasActions({
     ));
   }, [editable, elements, getSelectedElements, onBoardChanged, pushCommand, selectedIds, setElements, setSelectedElementIds]);
 
+  const setSelectedElementsLocked = useCallback((locked: boolean) => {
+    if (!editable) {
+      return;
+    }
+
+    const selection = getSelectedElements();
+    if (selection.length === 0) {
+      return;
+    }
+
+    const selectedIdSet = new Set(selection.map((element) => element.id));
+    const before = elements.filter((element) => selectedIdSet.has(element.id));
+    const after = elements.map((element) => (
+      selectedIdSet.has(element.id)
+        ? { ...element, isLocked: locked }
+        : element
+    ));
+    const updatedAfter = after.filter((element) => selectedIdSet.has(element.id));
+
+    setElements(after);
+    pushCommand(createElementUpdateCommand(
+      before,
+      updatedAfter,
+      createChangedKeysByElementId(selection.map((element) => element.id), ['isLocked']),
+    ));
+    onBoardChanged('lock', asOperationPayload(
+      updatedAfter.map((element) => createElementUpdatedOperation(element)),
+    ));
+  }, [editable, elements, getSelectedElements, onBoardChanged, pushCommand, setElements]);
+
   const reorderSelectedElements = useCallback((action: ZOrderAction) => {
     if (!editable) {
       return;
@@ -454,6 +485,12 @@ export function useCanvasActions({
       case 'select-all':
         selectAllElements();
         return;
+      case 'lock':
+        setSelectedElementsLocked(true);
+        return;
+      case 'unlock':
+        setSelectedElementsLocked(false);
+        return;
       case 'bring-to-front':
       case 'bring-forward':
       case 'send-backward':
@@ -473,6 +510,7 @@ export function useCanvasActions({
     pasteClipboardElements,
     reorderSelectedElements,
     selectAllElements,
+    setSelectedElementsLocked,
     ungroupSelectedElements,
   ]);
 
@@ -496,6 +534,7 @@ export function useCanvasActions({
     canInlineEditSelection,
     canSelectAll,
     canPaste,
+    isSelectionLocked,
     zOrderAvailability,
     expandSelectionWithGroups,
     emitUpdatedOperations,
@@ -507,6 +546,7 @@ export function useCanvasActions({
     duplicateSelectedElements,
     groupSelectedElements,
     ungroupSelectedElements,
+    setSelectedElementsLocked,
     reorderSelectedElements,
     moveSelectedElementsBy,
     beginInlineEditingSelection,

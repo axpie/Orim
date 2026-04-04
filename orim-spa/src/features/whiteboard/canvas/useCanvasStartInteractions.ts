@@ -28,6 +28,7 @@ import type {
   Board,
   BoardElement,
   DockPoint,
+  DrawingElement,
   FrameElement,
   IconElement,
   ShapeElement,
@@ -58,6 +59,14 @@ type ResizeState = {
   initialY: number;
   initialWidth: number;
   initialHeight: number;
+} | null;
+
+export type RotationState = {
+  elementIds: string[];
+  centerX: number;
+  centerY: number;
+  startAngle: number;
+  initialRotations: Map<string, number>;
 } | null;
 
 interface UseCanvasStartInteractionsOptions {
@@ -107,6 +116,10 @@ interface UseCanvasStartInteractionsOptions {
   setArrowEndpointDrag: Dispatch<SetStateAction<ArrowEndpointDragState>>;
   setIsDragging: Dispatch<SetStateAction<boolean>>;
   setDragStart: Dispatch<SetStateAction<Point | null>>;
+  setDrawingElementId: Dispatch<SetStateAction<string | null>>;
+  rotationSnapshotRef: MutableRefObject<BoardElement[] | null>;
+  setRotationState: Dispatch<SetStateAction<RotationState>>;
+  setHoveredRotationHandle: Dispatch<SetStateAction<boolean>>;
 }
 
 function isInlineEditableElement(element: BoardElement | undefined | null): element is TextElement | StickyNoteElement | ShapeElement | FrameElement {
@@ -164,6 +177,10 @@ export function useCanvasStartInteractions({
   setArrowEndpointDrag,
   setIsDragging,
   setDragStart,
+  setDrawingElementId,
+  rotationSnapshotRef,
+  setRotationState,
+  setHoveredRotationHandle,
 }: UseCanvasStartInteractionsOptions) {
   const getTouchGestureInfo = useCallback((touches: TouchList) => {
     if (touches.length < 2 || !containerRef.current) {
@@ -217,6 +234,18 @@ export function useCanvasStartInteractions({
       current = current.getParent();
     }
     return null;
+  }, []);
+
+  const getRotationHandleFromTarget = useCallback((target: Konva.Node | null): boolean => {
+    let current: Konva.Node | null = target;
+    while (current) {
+      const candidate = current.getAttr?.('data-rotation-handle');
+      if (candidate === 'true' || candidate === true) {
+        return true;
+      }
+      current = current.getParent();
+    }
+    return false;
   }, []);
 
   const resolveArrowEndpoint = useCallback((arrow: ArrowElement, isSource: boolean) => {
@@ -315,6 +344,28 @@ export function useCanvasStartInteractions({
     if (e.evt.button === 1 || activeTool === 'hand' || spacePanActive) {
       setIsPanning(true);
       setPanStart({ x: screenPos.x, y: screenPos.y, cx: cameraX, cy: cameraY });
+      return;
+    }
+
+    if (editable && activeTool === 'drawing') {
+      const newDrawing: DrawingElement = {
+        $type: 'drawing',
+        id: uuidv4(),
+        x: worldPos.x,
+        y: worldPos.y,
+        width: 0,
+        height: 0,
+        zIndex: elements.length,
+        rotation: 0,
+        label: '',
+        labelHorizontalAlignment: HorizontalLabelAlignment.Center,
+        labelVerticalAlignment: VerticalLabelAlignment.Middle,
+        points: [worldPos.x, worldPos.y],
+        strokeColor: boardDefaults.strokeColor,
+        strokeWidth: 2,
+      };
+      addElement(newDrawing);
+      setDrawingElementId(newDrawing.id);
       return;
     }
 
@@ -444,6 +495,46 @@ export function useCanvasStartInteractions({
 
     if (activeTool === 'select') {
       const target = e.target;
+
+      if (editable && getRotationHandleFromTarget(target)) {
+        setHoveredResizeHandle(null);
+        const rotatableSelected = elements.filter(
+          (el) => selectedIds.includes(el.id) && el.$type !== 'arrow',
+        );
+        if (rotatableSelected.length > 0) {
+          rotationSnapshotRef.current = [...elements];
+          let cx: number, cy: number;
+          if (rotatableSelected.length === 1) {
+            const el = rotatableSelected[0];
+            cx = el.x + el.width / 2;
+            cy = el.y + el.height / 2;
+          } else {
+            let rMinX = Infinity, rMinY = Infinity, rMaxX = -Infinity, rMaxY = -Infinity;
+            for (const el of rotatableSelected) {
+              rMinX = Math.min(rMinX, el.x);
+              rMinY = Math.min(rMinY, el.y);
+              rMaxX = Math.max(rMaxX, el.x + el.width);
+              rMaxY = Math.max(rMaxY, el.y + el.height);
+            }
+            cx = (rMinX + rMaxX) / 2;
+            cy = (rMinY + rMaxY) / 2;
+          }
+          const startAngle = Math.atan2(worldPos.y - cy, worldPos.x - cx) * (180 / Math.PI);
+          const initialRotations = new Map<string, number>();
+          for (const el of rotatableSelected) {
+            initialRotations.set(el.id, el.rotation);
+          }
+          setRotationState({
+            elementIds: rotatableSelected.map((el) => el.id),
+            centerX: cx,
+            centerY: cy,
+            startAngle,
+            initialRotations,
+          });
+          return;
+        }
+      }
+
       const resizeHandle = getResizeHandleFromTarget(target);
       setHoveredResizeHandle(resizeHandle);
       if (editable && resizeHandle) {
@@ -453,6 +544,10 @@ export function useCanvasStartInteractions({
           : null;
 
         if (element && element.$type !== 'arrow') {
+          if (element.isLocked === true) {
+            setSelectedElementIds([element.id]);
+            return;
+          }
           resizeSnapshotRef.current = [...elements];
           setSelectedElementIds([element.id]);
           setResizeState({
@@ -513,7 +608,7 @@ export function useCanvasStartInteractions({
           setSelectedElementIds(groupedSelectionIds);
         }
 
-        if (editable) {
+        if (editable && frameAtPoint.isLocked !== true) {
           dragSnapshotRef.current = [...elements];
           setIsDragging(true);
           setDragStart(worldPos);
@@ -532,6 +627,7 @@ export function useCanvasStartInteractions({
 
       const elementId = getElementIdFromTarget(target);
       if (elementId) {
+        const clickedElement = elements.find((candidate) => candidate.id === elementId);
         const groupedSelectionIds = expandSelectionWithGroups([elementId]);
 
         if (e.evt.shiftKey) {
@@ -545,7 +641,7 @@ export function useCanvasStartInteractions({
           setSelectedElementIds(groupedSelectionIds);
         }
 
-        if (editable) {
+        if (editable && clickedElement?.isLocked !== true) {
           dragSnapshotRef.current = [...elements];
           setIsDragging(true);
           setDragStart(worldPos);
@@ -590,6 +686,7 @@ export function useCanvasStartInteractions({
     setDraftArrowStart,
     setDraftRect,
     setDrawStart,
+    setDrawingElementId,
     setDragStart,
     setEditingElement,
     setHoveredResizeHandle,
