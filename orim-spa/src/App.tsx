@@ -146,6 +146,31 @@ function ThemedApplication() {
     },
     shape: { borderRadius: 10 },
     components: {
+      MuiCssBaseline: {
+        styleOverrides: {
+          '*': {
+            scrollbarWidth: 'thin',
+            scrollbarColor: `${activeTheme.palette.primary}66 transparent`,
+          },
+          '*::-webkit-scrollbar': {
+            width: '6px',
+            height: '6px',
+          },
+          '*::-webkit-scrollbar-track': {
+            background: 'transparent',
+          },
+          '*::-webkit-scrollbar-thumb': {
+            backgroundColor: `${activeTheme.palette.primary}66`,
+            borderRadius: '3px',
+          },
+          '*::-webkit-scrollbar-thumb:hover': {
+            backgroundColor: `${activeTheme.palette.primary}aa`,
+          },
+          '*::-webkit-scrollbar-corner': {
+            background: 'transparent',
+          },
+        },
+      },
       MuiAppBar: {
         styleOverrides: {
           root: {
