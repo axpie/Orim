@@ -180,7 +180,6 @@ export function useCanvasStartInteractions({
   setDrawingElementId,
   rotationSnapshotRef,
   setRotationState,
-  setHoveredRotationHandle,
 }: UseCanvasStartInteractionsOptions) {
   const getTouchGestureInfo = useCallback((touches: TouchList) => {
     if (touches.length < 2 || !containerRef.current) {
@@ -695,9 +694,12 @@ export function useCanvasStartInteractions({
     setMarquee,
     setPanStart,
     setResizeState,
+    setRotationState,
     setSelectedElementIds,
     spacePanActive,
     stageRef,
+    getRotationHandleFromTarget,
+    rotationSnapshotRef,
   ]);
 
   const handleContextMenu = useCallback((e: Konva.KonvaEventObject<PointerEvent>) => {

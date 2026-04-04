@@ -35,6 +35,7 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import MoreVertIcon from '@mui/icons-material/MoreVert';
 import KeyboardIcon from '@mui/icons-material/Keyboard';
 import VisibilityIcon from '@mui/icons-material/Visibility';
+import SlideshowIcon from '@mui/icons-material/Slideshow';
 import { useBoardStore } from '../store/boardStore';
 import { AppSettingsDialog } from '../../../components/dialogs/AppSettingsDialog';
 import { exportBoardJson, exportBoardPdf } from '../../../api/boards';
@@ -71,6 +72,8 @@ interface BoardTopBarProps {
   onRenameTitle?: (title: string, previousTitle: string) => void;
   onOpenSnapshots?: () => void;
   onExportPng?: () => Promise<void> | void;
+  onStartPresentation?: () => void;
+  hasFrames?: boolean;
   collaborators?: CursorPresence[];
   localConnectionId?: string | null;
 }
@@ -96,6 +99,8 @@ export function BoardTopBar({
   onRenameTitle,
   onOpenSnapshots,
   onExportPng,
+  onStartPresentation,
+  hasFrames = false,
   collaborators = [],
   localConnectionId = null,
 }: BoardTopBarProps) {
@@ -514,6 +519,12 @@ export function BoardTopBar({
           <ListItemIcon><SettingsIcon fontSize="small" /></ListItemIcon>
           <ListItemText>{t('app.settings')}</ListItemText>
         </MenuItem>
+        {onStartPresentation && (
+          <MenuItem onClick={() => { closeSettingsMenu(); onStartPresentation(); }} disabled={!hasFrames}>
+            <ListItemIcon><SlideshowIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('board.present', 'Present')}</ListItemText>
+          </MenuItem>
+        )}
       </Menu>
 
       <Menu

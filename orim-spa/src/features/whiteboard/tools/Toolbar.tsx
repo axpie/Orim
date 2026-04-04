@@ -39,6 +39,7 @@ import CropFreeIcon from '@mui/icons-material/CropFree';
 import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import FitScreenIcon from '@mui/icons-material/FitScreen';
+import MapIcon from '@mui/icons-material/Map';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import { filterIconDefinitions, getIconDefinition } from '../icons/iconCatalog';
@@ -74,6 +75,8 @@ interface ToolbarProps {
   onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
   /** Ref to the canvas container element, used for accurate fit-to-screen viewport measurement. */
   canvasContainerRef?: React.RefObject<HTMLElement | null>;
+  minimapVisible?: boolean;
+  onToggleMinimap?: () => void;
 }
 
 const FRAME_WRAP_HORIZONTAL_PADDING = 24;
@@ -143,7 +146,7 @@ function createFrameRect(bounds: Rect): Rect {
   };
 }
 
-export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasContainerRef }: ToolbarProps) {
+export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasContainerRef, minimapVisible, onToggleMinimap }: ToolbarProps) {
   const { t } = useTranslation();
   const theme = useTheme();
   const isTouchDevice = useMediaQuery('(pointer: coarse)');
@@ -740,6 +743,18 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
           <FitScreenIcon />
         </IconButton>
       </Tooltip>
+      {onToggleMinimap && (
+        <Tooltip title="Minimap" placement={isCompactLayout ? 'top' : 'right'}>
+          <IconButton
+            size={isCompactLayout ? 'medium' : 'small'}
+            onClick={onToggleMinimap}
+            color={minimapVisible ? 'primary' : 'default'}
+            sx={{ flexShrink: 0 }}
+          >
+            <MapIcon />
+          </IconButton>
+        </Tooltip>
+      )}
     </>
   );
 

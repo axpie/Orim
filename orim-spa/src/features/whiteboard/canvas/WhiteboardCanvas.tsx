@@ -19,7 +19,7 @@ import { WhiteboardContextMenu } from './WhiteboardContextMenu';
 import { useCanvasViewport } from './useCanvasViewport';
 import { useCanvasShortcuts } from './useCanvasShortcuts';
 import { useCanvasActions } from './useCanvasActions';
-import { useCanvasStartInteractions } from './useCanvasStartInteractions';
+import { useCanvasStartInteractions, type RotationState } from './useCanvasStartInteractions';
 import {
   FALLBACK_BOARD_DEFAULTS,
   EMPTY_ELEMENTS,
@@ -207,6 +207,11 @@ export function WhiteboardCanvas({
   } | null>(null);
   const [hoveredResizeHandle, setHoveredResizeHandle] = useState<ResizeHandle | null>(null);
 
+  // Rotation state
+  const [rotationState, setRotationState] = useState<RotationState>(null);
+  const rotationSnapshotRef = useRef<BoardElement[] | null>(null);
+  const [hoveredRotationHandle, setHoveredRotationHandle] = useState(false);
+
   // Marquee select state
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
@@ -336,6 +341,9 @@ export function WhiteboardCanvas({
     setIsDragging,
     setDragStart,
     setDrawingElementId,
+    rotationSnapshotRef,
+    setRotationState,
+    setHoveredRotationHandle,
   });
 
   const handleMouseDown = useCallback(
@@ -932,7 +940,7 @@ export function WhiteboardCanvas({
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, rotationState, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, emitUpdatedOperations, selectedIds, onBoardChanged],
+    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, emitUpdatedOperations, selectedIds, onBoardChanged, rotationState],
   );
 
   const handleTouchStart = useCallback(

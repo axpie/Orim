@@ -72,7 +72,6 @@ export function WhiteboardEditor() {
   const zoom = useBoardStore((s) => s.zoom);
   const viewportWidth = useBoardStore((s) => s.viewportWidth);
   const viewportHeight = useBoardStore((s) => s.viewportHeight);
-  const setCamera = useBoardStore((s) => s.setCamera);
   const outboxCount = useOperationOutboxStore((s) => (id ? s.countForBoard(id) : 0));
   const clearCommandStack = useCommandStack((s) => s.clear);
 
@@ -765,7 +764,6 @@ export function WhiteboardEditor() {
       {presentationMode && board && (
         <PresentationMode
           board={board}
-          stageRef={stageRef}
           onExit={() => setPresentationMode(false)}
         />
       )}

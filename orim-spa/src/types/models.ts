@@ -88,6 +88,7 @@ export interface BoardElementBase {
   height: number;
   zIndex: number;
   rotation: number;
+  isLocked?: boolean;
   label: string;
   labelFontSize?: number | null;
   labelColor?: string | null;
@@ -171,7 +172,14 @@ export interface ImageElement extends BoardElementBase {
   imageFit?: ImageFit | null;
 }
 
-export type BoardElement = ShapeElement | TextElement | StickyNoteElement | FrameElement | ArrowElement | IconElement | ImageElement;
+export interface DrawingElement extends BoardElementBase {
+  $type: 'drawing';
+  points: number[];
+  strokeColor: string;
+  strokeWidth: number;
+}
+
+export type BoardElement = ShapeElement | TextElement | StickyNoteElement | FrameElement | ArrowElement | IconElement | ImageElement | DrawingElement;
 
 // --- Board ---
 
