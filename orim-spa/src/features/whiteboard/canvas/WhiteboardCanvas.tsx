@@ -218,8 +218,22 @@ export function WhiteboardCanvas({
   const [panStart, setPanStart] = useState<{ x: number; y: number; cx: number; cy: number } | null>(null);
   const [spacePanActive, setSpacePanActive] = useState(false);
   const [contextMenuPosition, setContextMenuPosition] = useState<{ left: number; top: number } | null>(null);
-  const { getWorldPos, getScreenPos, handleWheel } = useCanvasViewport(
+  const { getWorldPos, getScreenPos, handleWheel: handleWheelBase } = useCanvasViewport(
     stageRef, containerRef, zoom, cameraX, cameraY, setZoom, setCamera,
+  );
+
+  const clearFollowOnInteraction = useCallback(() => {
+    if (useBoardStore.getState().followingClientId) {
+      setFollowingClientId(null);
+    }
+  }, [setFollowingClientId]);
+
+  const handleWheel = useCallback(
+    (e: Parameters<typeof handleWheelBase>[0]) => {
+      clearFollowOnInteraction();
+      handleWheelBase(e);
+    },
+    [clearFollowOnInteraction, handleWheelBase],
   );
   const {
     canGroup,
@@ -838,6 +852,24 @@ export function WhiteboardCanvas({
         return;
       }
 
+      if (rotationState) {
+        const before = rotationSnapshotRef.current;
+        const after = [...useBoardStore.getState().board?.elements ?? []];
+        setRotationState(null);
+        rotationSnapshotRef.current = null;
+
+        if (before && haveTrackedElementChanges(before, after, rotationState.elementIds, ['rotation'])) {
+          pushCommand(createElementUpdateCommand(
+            before.filter((element) => rotationState.elementIds.includes(element.id)),
+            after.filter((element) => rotationState.elementIds.includes(element.id)),
+            createChangedKeysByElementId(rotationState.elementIds, ['rotation']),
+          ));
+          emitUpdatedOperations('rotate', rotationState.elementIds);
+        }
+
+        return;
+      }
+
       if (resizeState) {
         const before = resizeSnapshotRef.current;
         const after = [...useBoardStore.getState().board?.elements ?? []];
@@ -892,7 +924,7 @@ export function WhiteboardCanvas({
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, emitUpdatedOperations, selectedIds, onBoardChanged],
+    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, rotationState, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, emitUpdatedOperations, selectedIds, onBoardChanged],
   );
 
   const handleTouchStart = useCallback(
@@ -1098,19 +1130,23 @@ export function WhiteboardCanvas({
         WebkitUserSelect: 'none',
         WebkitTouchCallout: 'none',
         cursor:
-          resizeCursor
-            ? resizeCursor
-            : isPanning
-              ? 'grabbing'
-              : commentPlacementMode
-                ? 'crosshair'
-              : activeTool === 'hand' || spacePanActive
+          rotationState
+            ? 'grabbing'
+            : resizeCursor
+              ? resizeCursor
+              : hoveredRotationHandle
                 ? 'grab'
-                : activeTool === 'arrow'
-                  ? 'crosshair'
-                  : activeTool !== 'select'
+                : isPanning
+                  ? 'grabbing'
+                  : commentPlacementMode
                     ? 'crosshair'
-                    : 'default',
+                  : activeTool === 'hand' || spacePanActive
+                    ? 'grab'
+                    : activeTool === 'arrow'
+                      ? 'crosshair'
+                      : activeTool !== 'select'
+                        ? 'crosshair'
+                        : 'default',
       }}
     >
       <Stage
