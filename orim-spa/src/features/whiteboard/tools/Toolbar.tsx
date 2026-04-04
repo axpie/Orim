@@ -1,4 +1,4 @@
-import React, { useMemo, useState, type MouseEvent, type ReactNode } from 'react';
+import React, { useEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   Box,
@@ -186,6 +186,29 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const [stickyPresetAnchorEl, setStickyPresetAnchorEl] = useState<HTMLElement | null>(null);
   const [iconSearch, setIconSearch] = useState('');
   const [compactCollapsed, setCompactCollapsed] = useState(isCompactLayout);
+
+  // Refs for ResizeObserver-based two-column detection
+  const paperRef = useRef<HTMLDivElement | null>(null);
+  const singleColMeasureRef = useRef<HTMLDivElement | null>(null);
+  const [twoColumnsDetected, setTwoColumnsDetected] = useState(false);
+  // Derived: always false when compact (no setState needed for the compact reset)
+  const twoColumns = !isCompactLayout && twoColumnsDetected;
+
+  // Compare the natural single-column height (from the hidden measure element) to the
+  // Paper's visible height. When the content would overflow, switch to two columns.
+  // This is pure JS so it works in all browsers (the CSS flex-wrap approach is
+  // unreliable in Firefox/Safari for column-direction containers).
+  useEffect(() => {
+    if (isCompactLayout || !paperRef.current) return;
+    const paper = paperRef.current;
+    const observer = new ResizeObserver(() => {
+      const measure = singleColMeasureRef.current;
+      if (!measure) return;
+      setTwoColumnsDetected(measure.offsetHeight > paper.clientHeight + 4);
+    });
+    observer.observe(paper);
+    return () => observer.disconnect();
+  }, [isCompactLayout]);
 
   const selectedElements = useMemo(
     () => board?.elements.filter((element) => selectedIds.includes(element.id)) ?? [],
@@ -584,30 +607,29 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     onBoardChanged?.('add', createElementAddedOperation(newElement));
   };
 
-  const actionButtons = (
-    <>
-      {tools.map(({ tool, icon, label }) => (
-        <Tooltip key={tool} title={label} placement={isCompactLayout ? 'top' : 'right'}>
-          <IconButton
-            size={isCompactLayout ? 'medium' : 'small'}
-            color={activeTool === tool ? 'primary' : 'default'}
-            onClick={(event) => handleToolClick(event, tool)}
-            sx={{
-              bgcolor: activeTool === tool ? 'action.selected' : undefined,
-              flexShrink: 0,
-            }}
-          >
-            {icon}
-          </IconButton>
-        </Tooltip>
-      ))}
+  const toolButtons = tools.map(({ tool, icon, label }) => (
+    <Tooltip key={tool} title={label} placement={isCompactLayout ? 'top' : 'right'}>
+      <IconButton
+        size={isCompactLayout ? 'medium' : 'small'}
+        color={activeTool === tool ? 'primary' : 'default'}
+        onClick={(event) => handleToolClick(event, tool)}
+        sx={{
+          bgcolor: activeTool === tool ? 'action.selected' : undefined,
+          flexShrink: 0,
+        }}
+      >
+        {icon}
+      </IconButton>
+    </Tooltip>
+  ));
 
+  const extraButtons = (
+    <>
       <Divider
         flexItem
-        orientation={isCompactLayout ? 'horizontal' : 'horizontal'}
+        orientation="horizontal"
         sx={{
           my: isCompactLayout ? 0.25 : 0.5,
-          mx: isCompactLayout ? 0 : 0,
           flexBasis: isCompactLayout ? '100%' : 'auto',
           width: isCompactLayout ? '100%' : 'auto',
         }}
@@ -695,10 +717,9 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
 
       <Divider
         flexItem
-        orientation={isCompactLayout ? 'horizontal' : 'horizontal'}
+        orientation="horizontal"
         sx={{
           my: isCompactLayout ? 0.25 : 0.5,
-          mx: isCompactLayout ? 0 : 0,
           flexBasis: isCompactLayout ? '100%' : 'auto',
           width: isCompactLayout ? '100%' : 'auto',
         }}
@@ -722,8 +743,16 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     </>
   );
 
+  const actionButtons = (
+    <>
+      {toolButtons}
+      {extraButtons}
+    </>
+  );
+
   return (
     <Paper
+      ref={paperRef}
       elevation={2}
       sx={{
         display: 'flex',
@@ -734,23 +763,42 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
         gap: 0.5,
         borderRadius: isCompactLayout ? 3 : 0,
         flexShrink: 0,
-        // Non-compact: start at 48px, allow wrapping into a 2nd column (≤96px)
-        // when content exceeds the available height. Using flexWrap on a column
-        // flex causes overflow items to spill into a new column to the right.
         width: isCompactLayout ? 'auto' : 'fit-content',
         minWidth: isCompactLayout ? undefined : 48,
-        maxWidth: isCompactLayout ? 'calc(100% - 24px)' : 96,
-        maxHeight: isCompactLayout ? undefined : '100%',
-        flexWrap: isCompactLayout ? undefined : 'wrap',
-        alignContent: isCompactLayout ? undefined : 'flex-start',
+        maxWidth: isCompactLayout ? 'calc(100% - 24px)' : undefined,
         position: isCompactLayout ? 'absolute' : 'relative',
         left: isCompactLayout ? 12 : 'auto',
         right: isCompactLayout ? 12 : 'auto',
         bottom: isCompactLayout ? 'calc(12px + env(safe-area-inset-bottom))' : 'auto',
         zIndex: isCompactLayout ? 6 : 'auto',
-        overflow: 'visible',
+        overflow: 'hidden',
       }}
     >
+      {/* Hidden single-column measurement element used by ResizeObserver to detect
+          when the content would overflow in a single column. position:fixed takes it
+          out of flow and out of the Paper's overflow clip. */}
+      {!isCompactLayout && (
+        <Box
+          ref={singleColMeasureRef}
+          aria-hidden="true"
+          sx={{
+            position: 'fixed',
+            top: 0,
+            left: '-99999px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.5,
+            py: 1,
+            alignItems: 'center',
+            visibility: 'hidden',
+            pointerEvents: 'none',
+          }}
+        >
+          {toolButtons}
+          {extraButtons}
+        </Box>
+      )}
+
       {isCompactLayout ? (
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 1 }}>
@@ -780,6 +828,17 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
             </Box>
           )}
         </>
+      ) : twoColumns ? (
+        // Two-column layout: tool selection on the left, actions+zoom on the right.
+        // Rendered explicitly when single-column content would overflow the toolbar.
+        <Box sx={{ display: 'flex', flexDirection: 'row', gap: 0 }}>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+            {toolButtons}
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 0.5 }}>
+            {extraButtons}
+          </Box>
+        </Box>
       ) : (
         actionButtons
       )}
