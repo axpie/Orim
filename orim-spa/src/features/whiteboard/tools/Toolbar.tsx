@@ -42,6 +42,7 @@ import FitScreenIcon from '@mui/icons-material/FitScreen';
 import MapIcon from '@mui/icons-material/Map';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import ConstructionIcon from '@mui/icons-material/Construction';
 import { filterIconDefinitions, getIconDefinition } from '../icons/iconCatalog';
 import { ImageLibraryDialog } from '../ImageLibraryDialog';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
@@ -998,13 +999,16 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
         <>
           <Box sx={{ display: 'flex', alignItems: 'center', width: collapsed ? 'auto' : '100%', gap: 1 }}>
             <Tooltip title={collapsed ? t('tools.expandToolbar', 'Werkzeugleiste öffnen') : t('tools.collapseToolbar', 'Werkzeugleiste einklappen')} placement="top">
-              <IconButton onClick={() => setCompactCollapsed((current) => !current)} size="medium" sx={{ flexShrink: 0 }}>
-                {collapsed ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
+              <IconButton onClick={() => setCompactCollapsed((current) => !current)} size="medium" sx={{ flexShrink: 0 }} aria-label={collapsed ? t('tools.expandToolbar', 'Werkzeugleiste öffnen') : t('tools.collapseToolbar', 'Werkzeugleiste einklappen')}>
+                {collapsed ? (activeTool === 'select' ? <ConstructionIcon /> : <KeyboardArrowUpIcon />) : <KeyboardArrowDownIcon />}
               </IconButton>
             </Tooltip>
-            <Typography variant="caption" noWrap sx={{ flex: collapsed ? '0 1 auto' : 1, minWidth: 0 }}>
-              {activeToolLabel}
-            </Typography>
+            {/* On mobile collapsed, hide the label for the select tool to show only the round button */}
+            {!(collapsed && activeTool === 'select') && (
+              <Typography variant="caption" noWrap sx={{ flex: collapsed ? '0 1 auto' : 1, minWidth: 0 }}>
+                {activeToolLabel}
+              </Typography>
+            )}
           </Box>
           {!collapsed && (
             <Box
