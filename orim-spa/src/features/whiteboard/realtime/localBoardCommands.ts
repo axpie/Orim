@@ -43,6 +43,11 @@ export const ARROW_ENDPOINT_CHANGED_KEYS = [
   'orthogonalMiddleCoordinate',
 ] as const;
 
+export const ARROW_ROUTE_HANDLE_CHANGED_KEYS = [
+  'arcMidX',
+  'arcMidY',
+] as const;
+
 function areValuesEqual(left: unknown, right: unknown): boolean {
   if (Array.isArray(left) || Array.isArray(right)) {
     if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {

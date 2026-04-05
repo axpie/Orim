@@ -1,7 +1,7 @@
 import { memo } from 'react';
 import { Rect, Group, Circle, Line } from 'react-konva';
-import type { BoardElement } from '../../../types/models';
-import { computeArrowPolyline, flattenPoints } from '../../../utils/arrowRouting';
+import { ArrowRouteStyle, type BoardElement } from '../../../types/models';
+import { computeArrowPolyline, flattenPoints, getArrowArcMidpoint } from '../../../utils/arrowRouting';
 
 export type ResizeHandle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 export type InteractionHandle = ResizeHandle | 'rotate';
@@ -35,6 +35,9 @@ function SelectionOverlayInner({
       const points = computeArrowPolyline(el, elements);
       const flat = flattenPoints(points);
       const handleRadius = (touchMode ? 11 : 7) / zoom;
+      const routeHandlePoint = el.routeStyle === ArrowRouteStyle.Arc
+        ? getArrowArcMidpoint(el, elements)
+        : null;
 
       if (points.length < 2) {
         return null;
@@ -69,6 +72,18 @@ function SelectionOverlayInner({
             data-element-id={el.id}
             data-arrow-endpoint-handle="target"
           />
+          {routeHandlePoint && (
+            <Circle
+              x={routeHandlePoint.x}
+              y={routeHandlePoint.y}
+              radius={handleRadius * 0.9}
+              fill={selectionColor}
+              stroke={handleSurfaceColor}
+              strokeWidth={borderWidth * 1.25}
+              data-element-id={el.id}
+              data-arrow-route-handle="arc"
+            />
+          )}
         </Group>
       );
     }

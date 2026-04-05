@@ -76,6 +76,11 @@ const fallbackTheme: ThemeDefinition = {
   isDarkMode: false,
   isEnabled: true,
   fontFamily: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+  cssVariables: {
+    '--orim-board-toolbar-bg': 'rgba(255, 255, 255, 0.94)',
+    '--orim-board-toolbar-border': 'rgba(15, 23, 42, 0.12)',
+    '--orim-board-toolbar-text': '#24292F',
+  },
   palette: {
     primary: '#6E40C9',
     secondary: '#1F8A5B',
@@ -104,6 +109,7 @@ const fallbackTheme: ThemeDefinition = {
     selectionTintRgb: '37, 99, 235',
     handleSurfaceColor: '#FFFFFF',
     dockTargetColor: '#0F766E',
+    themeColors: ['#6E40C9', '#1F8A5B', '#EA580C', '#0F172A', '#2563EB', '#FFFFFF', '#F59E0B', '#0EA5E9'],
   },
 };
 
@@ -123,6 +129,21 @@ function ThemedApplication() {
   }, [setTheme, themeKey, themes]);
 
   const activeTheme = themes.find((theme) => theme.key === themeKey) ?? themes[0] ?? fallbackTheme;
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const cssVariables = activeTheme.cssVariables ?? {};
+
+    for (const [key, value] of Object.entries(cssVariables)) {
+      root.style.setProperty(key, value);
+    }
+
+    return () => {
+      for (const key of Object.keys(cssVariables)) {
+        root.style.removeProperty(key);
+      }
+    };
+  }, [activeTheme]);
 
   const theme = createTheme({
     typography: {

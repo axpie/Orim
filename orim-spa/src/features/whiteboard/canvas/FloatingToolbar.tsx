@@ -27,13 +27,10 @@ import { createElementUpdatedOperation, createElementsDeletedOperation } from '.
 import type { BoardOperationPayload } from '../realtime/boardOperations';
 import type { BoardElement } from '../../../types/models';
 import { projectWorldToViewport } from '../cameraUtils';
+import { useWhiteboardColorPalette } from '../controls/useWhiteboardColorPalette';
 
 const TOOLBAR_GAP = 8;
 const ROTATION_HANDLE_CLEARANCE = 36;
-const PRESET_COLORS = [
-  '#000000', '#FFFFFF', '#EF4444', '#F59E0B', '#22C55E',
-  '#3B82F6', '#8B5CF6', '#EC4899', '#6B7280', '#0EA5E9',
-];
 const STROKE_WIDTH_OPTIONS = [1, 2, 4];
 
 interface FloatingToolbarProps {
@@ -101,12 +98,48 @@ interface ColorPickerPopoverProps {
 function ColorPickerPopover({ anchorEl, open, color, disabled = false, onClose, onColorChange }: ColorPickerPopoverProps) {
   const { t } = useTranslation();
   const [customHex, setCustomHex] = useState(color);
+  const { themeColors, regularColors } = useWhiteboardColorPalette();
 
   const handleCustomCommit = () => {
     const trimmed = customHex.trim();
     if (/^#[0-9A-Fa-f]{3,8}$/.test(trimmed)) {
       onColorChange(trimmed);
     }
+  };
+
+  const renderSwatchGroup = (groupLabel: string, colors: string[]) => {
+    if (colors.length === 0) {
+      return null;
+    }
+
+    return (
+      <Box sx={{ mb: 1 }}>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.5 }}>
+          {groupLabel}
+        </Typography>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+          {colors.map((swatch) => (
+            <IconButton
+              key={`${groupLabel}-${swatch}`}
+              size="small"
+              onClick={() => { onColorChange(swatch); onClose(); }}
+              disabled={disabled}
+              sx={{
+                width: 28,
+                height: 28,
+                p: 0,
+                border: swatch === color ? '2px solid' : '1px solid',
+                borderColor: swatch === color ? 'primary.main' : 'divider',
+                borderRadius: '4px',
+                backgroundColor: swatch,
+                '&:hover': { backgroundColor: swatch, opacity: 0.85 },
+              }}
+              aria-label={t('floatingToolbar.colorSwatch', { color: swatch, defaultValue: 'Farbe {{color}}' })}
+            />
+          ))}
+        </Box>
+      </Box>
+    );
   };
 
   return (
@@ -116,29 +149,10 @@ function ColorPickerPopover({ anchorEl, open, color, disabled = false, onClose, 
       onClose={onClose}
       anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
       transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      slotProps={{ paper: { sx: { p: 1.5, width: 200 } } }}
+      slotProps={{ paper: { sx: { p: 1.5, width: 220 } } }}
     >
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mb: 1 }}>
-        {PRESET_COLORS.map((c) => (
-          <IconButton
-            key={c}
-            size="small"
-            onClick={() => { onColorChange(c); onClose(); }}
-            disabled={disabled}
-            sx={{
-              width: 28,
-              height: 28,
-              p: 0,
-              border: c === color ? '2px solid' : '1px solid',
-              borderColor: c === color ? 'primary.main' : 'divider',
-              borderRadius: '4px',
-              backgroundColor: c,
-              '&:hover': { backgroundColor: c, opacity: 0.85 },
-            }}
-            aria-label={t('floatingToolbar.colorSwatch', { color: c, defaultValue: 'Farbe {{color}}' })}
-          />
-        ))}
-      </Box>
+      {renderSwatchGroup(t('colors.themeColors', 'Theme-Farben'), themeColors)}
+      {renderSwatchGroup(t('colors.regularColors', 'Weitere Farben'), regularColors)}
       <TextField
         size="small"
         fullWidth
@@ -403,7 +417,17 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
         height: 40,
         borderRadius: 2,
         backdropFilter: 'blur(8px)',
-        backgroundColor: 'rgba(var(--mui-palette-background-paperChannel, 255 255 255) / 0.88)',
+        background: 'var(--orim-board-toolbar-bg, rgba(var(--mui-palette-background-paperChannel, 255 255 255) / 0.94))',
+        color: 'var(--orim-board-toolbar-text, currentColor)',
+        border: '1px solid transparent',
+        borderColor: 'var(--orim-board-toolbar-border, rgba(var(--mui-palette-dividerChannel, 0 0 0) / 0.18))',
+        boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)',
+        '& .MuiIconButton-root': {
+          color: 'inherit',
+        },
+        '& .MuiSvgIcon-root': {
+          color: 'inherit',
+        },
         pointerEvents: 'auto',
       }}
     >

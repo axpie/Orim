@@ -1,10 +1,11 @@
 import { create } from 'zustand';
-import type {
-  Board,
-  BoardComment,
-  BoardElement,
-  BoardOperation,
-  CursorPresence,
+import {
+  ArrowRouteStyle,
+  type Board,
+  type BoardComment,
+  type BoardElement,
+  type BoardOperation,
+  type CursorPresence,
 } from '../../../types/models';
 import type {
   BoardCommandConflict,
@@ -47,6 +48,7 @@ interface BoardState {
   remoteCursors: CursorPresence[];
   isDirty: boolean;
   pendingIconName: string | null;
+  pendingArrowRouteStyle: ArrowRouteStyle;
   pendingStickyNotePresetId: string | null;
   commandConflict: BoardCommandConflict | null;
   followingClientId: string | null;
@@ -74,6 +76,7 @@ interface BoardState {
   setRemoteCursors: (cursors: CursorPresence[]) => void;
   setDirty: (dirty: boolean) => void;
   setPendingIconName: (iconName: string | null) => void;
+  setPendingArrowRouteStyle: (routeStyle: ArrowRouteStyle) => void;
   setPendingStickyNotePresetId: (presetId: string | null) => void;
   setFollowingClientId: (clientId: string | null) => void;
 }
@@ -262,6 +265,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   remoteCursors: [],
   isDirty: false,
   pendingIconName: 'mdi-star',
+  pendingArrowRouteStyle: ArrowRouteStyle.Orthogonal,
   pendingStickyNotePresetId: null,
   commandConflict: null,
   followingClientId: null,
@@ -536,6 +540,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   setRemoteCursors: (cursors) => set({ remoteCursors: cursors }),
   setDirty: (dirty) => set({ isDirty: dirty }),
   setPendingIconName: (iconName) => set({ pendingIconName: iconName }),
+  setPendingArrowRouteStyle: (pendingArrowRouteStyle) => set({ pendingArrowRouteStyle }),
   setPendingStickyNotePresetId: (presetId) => set({ pendingStickyNotePresetId: presetId }),
   setFollowingClientId: (clientId) => set({ followingClientId: clientId }),
 }));

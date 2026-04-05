@@ -128,6 +128,8 @@ public class ArrowElement : BoardElement
     public ArrowHeadStyle TargetHeadStyle { get; set; } = ArrowHeadStyle.FilledTriangle;
     public ArrowRouteStyle RouteStyle { get; set; } = ArrowRouteStyle.Orthogonal;
     public double? OrthogonalMiddleCoordinate { get; set; }
+    public double? ArcMidX { get; set; }
+    public double? ArcMidY { get; set; }
 }
 
 public enum ArrowLineStyle
@@ -151,7 +153,8 @@ public enum ArrowHeadStyle
 public enum ArrowRouteStyle
 {
     Straight,
-    Orthogonal
+    Orthogonal,
+    Arc
 }
 
 public enum DockPoint

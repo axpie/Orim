@@ -69,6 +69,7 @@ import {
 } from '../realtime/boardOperations';
 import {
   ARROW_ENDPOINT_CHANGED_KEYS,
+  ARROW_ROUTE_HANDLE_CHANGED_KEYS,
   createAddElementsCommand,
   createChangedKeysByElementId,
   createElementUpdateCommand,
@@ -130,6 +131,7 @@ export function WhiteboardCanvas({
   const setElements = useBoardStore((s) => s.setElements);
   const applyLocalCommand = useBoardStore((s) => s.applyLocalCommand);
   const pendingIconName = useBoardStore((s) => s.pendingIconName);
+  const pendingArrowRouteStyle = useBoardStore((s) => s.pendingArrowRouteStyle);
   const pendingStickyNotePresetId = useBoardStore((s) => s.pendingStickyNotePresetId);
   const setFollowingClientId = useBoardStore((s) => s.setFollowingClientId);
   const userThemeKey = useThemeStore((s) => s.themeKey);
@@ -199,6 +201,8 @@ export function WhiteboardCanvas({
     hoverDock: DockPoint | null;
     pointer: { x: number; y: number };
   } | null>(null);
+  const arrowRouteHandleSnapshotRef = useRef<BoardElement[] | null>(null);
+  const [arrowRouteHandleDrag, setArrowRouteHandleDrag] = useState<{ arrowId: string } | null>(null);
   const [resizeState, setResizeState] = useState<{
     elementId: string;
     handle: ResizeHandle;
@@ -315,10 +319,11 @@ export function WhiteboardCanvas({
     dockSnapRadius,
     stageRef,
     containerRef,
-    dragSnapshotRef,
-    resizeSnapshotRef,
-    arrowEndpointSnapshotRef,
-    marqueeOriginRef,
+     dragSnapshotRef,
+     resizeSnapshotRef,
+     arrowEndpointSnapshotRef,
+     arrowRouteHandleSnapshotRef,
+     marqueeOriginRef,
     getWorldPos,
     getScreenPos,
     addElement,
@@ -339,10 +344,11 @@ export function WhiteboardCanvas({
     setSelectedElementIds,
     setActiveTool,
     setEditingElement,
-    setHoveredResizeHandle,
-    setResizeState,
-    setArrowEndpointDrag,
-    setIsDragging,
+     setHoveredResizeHandle,
+     setResizeState,
+     setArrowEndpointDrag,
+     setArrowRouteHandleDrag,
+     setIsDragging,
     setDragStart,
     setDrawingElementId,
     rotationSnapshotRef,
@@ -508,7 +514,7 @@ export function WhiteboardCanvas({
         const nextPointer = hoverTarget?.point ?? getMagneticArrowPoint(
           { x: draftArrowStart.x, y: draftArrowStart.y },
           worldPos,
-          ArrowRouteStyle.Orthogonal,
+          pendingArrowRouteStyle,
         );
 
         setDraftArrowHover(hoverTarget);
@@ -537,6 +543,24 @@ export function WhiteboardCanvas({
         setArrowEndpointDrag(nextDrag);
         const nextArrow = applyDraggedArrowEndpoint(arrow, arrowEndpointDrag.isSource, nextDrag);
         updateElement(arrowEndpointDrag.arrowId, nextArrow);
+        onBoardLiveChanged?.('edit', createElementUpdatedOperation(nextArrow));
+        return;
+      }
+
+      if (arrowRouteHandleDrag) {
+        const arrow = elements.find(
+          (candidate): candidate is ArrowElement => candidate.id === arrowRouteHandleDrag.arrowId && candidate.$type === 'arrow',
+        );
+        if (!arrow || arrow.routeStyle !== ArrowRouteStyle.Arc) {
+          return;
+        }
+
+        const nextArrow: ArrowElement = {
+          ...arrow,
+          arcMidX: worldPos.x,
+          arcMidY: worldPos.y,
+        };
+        updateElement(arrowRouteHandleDrag.arrowId, nextArrow);
         onBoardLiveChanged?.('edit', createElementUpdatedOperation(nextArrow));
         return;
       }
@@ -747,7 +771,7 @@ export function WhiteboardCanvas({
         setDragStart(worldPos);
       }
     },
-    [isPanning, panStart, drawingElementId, drawStart, draftRect, draftArrowStart, arrowEndpointDrag, rotationState, resizeState, marquee, isDragging, dragStart, elements, selectedIds, zoom, editable, activeTool, getWorldPos, getScreenPos, getResizeHandleFromTarget, getRotationHandleFromTarget, setCamera, updateElement, applyDraggedArrowEndpoint, onBoardLiveChanged, onPointerPresenceChanged, dockSnapRadius],
+    [isPanning, panStart, drawingElementId, drawStart, draftRect, draftArrowStart, arrowEndpointDrag, arrowRouteHandleDrag, rotationState, resizeState, marquee, isDragging, dragStart, elements, selectedIds, zoom, editable, activeTool, getWorldPos, getScreenPos, getResizeHandleFromTarget, getRotationHandleFromTarget, setCamera, updateElement, applyDraggedArrowEndpoint, onBoardLiveChanged, onPointerPresenceChanged, dockSnapRadius, pendingArrowRouteStyle],
   );
 
   const handleMouseLeave = useCallback(() => {
@@ -899,7 +923,7 @@ export function WhiteboardCanvas({
             lineStyle: ArrowLineStyle.Solid,
             sourceHeadStyle: ArrowHeadStyle.None,
             targetHeadStyle: ArrowHeadStyle.FilledTriangle,
-            routeStyle: ArrowRouteStyle.Orthogonal,
+            routeStyle: pendingArrowRouteStyle,
           };
           addElement(newArrow);
           pushCommand(createAddElementsCommand([newArrow]));
@@ -927,6 +951,26 @@ export function WhiteboardCanvas({
             createChangedKeysByElementId([arrowEndpointDrag.arrowId], ARROW_ENDPOINT_CHANGED_KEYS),
           ));
           emitUpdatedOperations('edit', [arrowEndpointDrag.arrowId]);
+        }
+
+        return;
+      }
+
+      if (arrowRouteHandleDrag) {
+        const before = arrowRouteHandleSnapshotRef.current;
+        const after = [...useBoardStore.getState().board?.elements ?? []];
+        setArrowRouteHandleDrag(null);
+        arrowRouteHandleSnapshotRef.current = null;
+
+        if (before && haveTrackedElementChanges(before, after, [arrowRouteHandleDrag.arrowId], ARROW_ROUTE_HANDLE_CHANGED_KEYS)) {
+          const beforeArrow = before.filter((element) => element.id === arrowRouteHandleDrag.arrowId);
+          const afterArrow = after.filter((element) => element.id === arrowRouteHandleDrag.arrowId);
+          pushCommand(createElementUpdateCommand(
+            beforeArrow,
+            afterArrow,
+            createChangedKeysByElementId([arrowRouteHandleDrag.arrowId], ARROW_ROUTE_HANDLE_CHANGED_KEYS),
+          ));
+          emitUpdatedOperations('edit', [arrowRouteHandleDrag.arrowId]);
         }
 
         return;
@@ -1004,7 +1048,7 @@ export function WhiteboardCanvas({
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, emitUpdatedOperations, selectedIds, onBoardChanged, rotationState],
+    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, arrowRouteHandleDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, emitUpdatedOperations, selectedIds, onBoardChanged, rotationState, pendingArrowRouteStyle],
   );
 
   const handleTouchStart = useCallback(
@@ -1174,7 +1218,7 @@ export function WhiteboardCanvas({
             lineStyle: ArrowLineStyle.Solid,
             sourceHeadStyle: ArrowHeadStyle.None,
             targetHeadStyle: ArrowHeadStyle.FilledTriangle,
-            routeStyle: ArrowRouteStyle.Orthogonal,
+            routeStyle: pendingArrowRouteStyle,
           },
           elements,
         ),

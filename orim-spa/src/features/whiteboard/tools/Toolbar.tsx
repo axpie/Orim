@@ -27,7 +27,6 @@ import ChangeHistoryIcon from '@mui/icons-material/ChangeHistory';
 import TextFieldsIcon from '@mui/icons-material/TextFields';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import CropLandscapeIcon from '@mui/icons-material/CropLandscape';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AddReactionIcon from '@mui/icons-material/AddReaction';
 import ImageIcon from '@mui/icons-material/Image';
 import DrawIcon from '@mui/icons-material/Draw';
@@ -62,7 +61,7 @@ import { useBoardStore, type ToolType } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
 import { getBoundingRect, type Rect } from '../../../utils/geometry';
 import { computeArrowPolyline } from '../../../utils/arrowRouting';
-import { HorizontalLabelAlignment, VerticalLabelAlignment, ImageFit, type BoardElement, type FrameElement, type ImageElement } from '../../../types/models';
+import { ArrowRouteStyle, HorizontalLabelAlignment, VerticalLabelAlignment, ImageFit, type BoardElement, type FrameElement, type ImageElement } from '../../../types/models';
 import { getEffectiveStickyNotePresets } from '../stickyNotePresets';
 import { ZOrderMenuItems } from '../ZOrderMenuItems';
 import {
@@ -83,6 +82,27 @@ interface ToolbarProps {
 const FRAME_WRAP_HORIZONTAL_PADDING = 24;
 const FRAME_WRAP_TOP_PADDING = 56;
 const FRAME_WRAP_BOTTOM_PADDING = 24;
+
+function ArrowRouteIcon({ routeStyle }: { routeStyle: ArrowRouteStyle }) {
+  const path = routeStyle === ArrowRouteStyle.Straight
+    ? 'M5 12H18M14 8l4 4-4 4'
+    : routeStyle === ArrowRouteStyle.Orthogonal
+      ? 'M5 17V8H18M14 4l4 4-4 4'
+      : 'M5 17Q11 5 19 12M15 8l4 4-4 4';
+
+  return (
+    <SvgIcon fontSize="small" viewBox="0 0 24 24">
+      <path
+        d={path}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </SvgIcon>
+  );
+}
 
 function getElementBounds(element: BoardElement, elements: BoardElement[]): Rect | null {
   if (element.$type !== 'arrow') {
@@ -168,6 +188,8 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const updateElement = useBoardStore((s) => s.updateElement);
   const pendingIconName = useBoardStore((s) => s.pendingIconName);
   const setPendingIconName = useBoardStore((s) => s.setPendingIconName);
+  const pendingArrowRouteStyle = useBoardStore((s) => s.pendingArrowRouteStyle);
+  const setPendingArrowRouteStyle = useBoardStore((s) => s.setPendingArrowRouteStyle);
   const board = useBoardStore((s) => s.board);
   const setElements = useBoardStore((s) => s.setElements);
   const applyLocalCommand = useBoardStore((s) => s.applyLocalCommand);
@@ -188,6 +210,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const [imageLibraryOpen, setImageLibraryOpen] = useState(false);
   const [arrangeAnchorEl, setArrangeAnchorEl] = useState<HTMLElement | null>(null);
   const [shapeAnchorEl, setShapeAnchorEl] = useState<HTMLElement | null>(null);
+  const [arrowAnchorEl, setArrowAnchorEl] = useState<HTMLElement | null>(null);
   const [stickyPresetAnchorEl, setStickyPresetAnchorEl] = useState<HTMLElement | null>(null);
   const [iconSearch, setIconSearch] = useState('');
   const [compactCollapsed, setCompactCollapsed] = useState(isCompactLayout);
@@ -274,6 +297,24 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const activeStickyPresetId = stickyNotePresets.some((preset) => preset.id === pendingStickyNotePresetId)
     ? pendingStickyNotePresetId
     : (stickyNotePresets[0]?.id ?? null);
+  const arrowRouteOptions = useMemo(() => ([
+    {
+      routeStyle: ArrowRouteStyle.Straight,
+      icon: <ArrowRouteIcon routeStyle={ArrowRouteStyle.Straight} />,
+      label: t('tools.straightArrow', 'Gerader Pfeil'),
+    },
+    {
+      routeStyle: ArrowRouteStyle.Orthogonal,
+      icon: <ArrowRouteIcon routeStyle={ArrowRouteStyle.Orthogonal} />,
+      label: t('tools.orthogonalArrow', 'Winkeliger Pfeil'),
+    },
+    {
+      routeStyle: ArrowRouteStyle.Arc,
+      icon: <ArrowRouteIcon routeStyle={ArrowRouteStyle.Arc} />,
+      label: t('tools.curvedArrow', 'Gebogener Pfeil'),
+    },
+  ]), [t]);
+  const activeArrowDescriptor = arrowRouteOptions.find((option) => option.routeStyle === pendingArrowRouteStyle) ?? arrowRouteOptions[1];
 
   const tools: Array<{ tool: ToolType; icon: ReactNode; label: string; shortcut?: string }> = [
     { tool: 'select', icon: <NearMeIcon />, label: t('tools.select'), shortcut: 'V' },
@@ -297,7 +338,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
       ),
       label: t('tools.icon'),
     },
-    { tool: 'arrow', icon: <ArrowForwardIcon />, label: t('tools.arrow'), shortcut: 'A' },
+    { tool: 'arrow', icon: activeArrowDescriptor.icon, label: t('tools.arrow'), shortcut: 'A' },
     { tool: 'image', icon: <ImageIcon />, label: t('tools.image') },
   ];
   const toolById = new Map(tools.map((tool) => [tool.tool, tool]));
@@ -306,7 +347,9 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     ? activeTool
     : 'rectangle';
   const activeShapeDescriptor = toolById.get(activeShapeTool) ?? shapeTools[0];
-  const activeToolLabel = toolById.get(activeTool)?.label ?? t('tools.select');
+  const activeToolLabel = activeTool === 'arrow'
+    ? activeArrowDescriptor.label
+    : toolById.get(activeTool)?.label ?? t('tools.select');
 
   const openIconPicker = () => {
     setIconPickerOpen(true);
@@ -347,6 +390,12 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const handleShapeSelected = (tool: ToolType) => {
     setActiveTool(tool);
     setShapeAnchorEl(null);
+  };
+
+  const handleArrowRouteSelected = (routeStyle: ArrowRouteStyle) => {
+    setPendingArrowRouteStyle(routeStyle);
+    setActiveTool('arrow');
+    setArrowAnchorEl(null);
   };
 
   const handleDelete = () => {
@@ -701,6 +750,36 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     </Tooltip>
   );
 
+  const arrowMenuButton = (
+    <Tooltip title={t('tools.arrowStyles', 'Pfeile')} placement={isCompactLayout ? 'top' : 'right'}>
+      <IconButton
+        size={isCompactLayout ? 'medium' : 'small'}
+        color={activeTool === 'arrow' ? 'primary' : 'default'}
+        onClick={(event) => setArrowAnchorEl(event.currentTarget)}
+        sx={{
+          bgcolor: activeTool === 'arrow' ? 'action.selected' : undefined,
+          flexShrink: 0,
+          position: 'relative',
+        }}
+        aria-label={t('tools.arrowStyles', 'Pfeile')}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(arrowAnchorEl)}
+      >
+        {activeArrowDescriptor.icon}
+        <KeyboardArrowDownIcon
+          sx={{
+            position: 'absolute',
+            right: -4,
+            bottom: -3,
+            fontSize: 14,
+            bgcolor: 'background.paper',
+            borderRadius: '999px',
+          }}
+        />
+      </IconButton>
+    </Tooltip>
+  );
+
   const toolButtons = (
     <>
       {renderToolButton(toolById.get('select')!)}
@@ -709,7 +788,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
       {renderToolButton(toolById.get('drawing')!)}
       {renderGroupDivider('toolbar-drawing-divider')}
       {shapeMenuButton}
-      {renderToolButton(toolById.get('arrow')!)}
+      {arrowMenuButton}
       {renderToolButton(toolById.get('frame')!)}
       {renderGroupDivider('toolbar-structure-divider')}
       {renderToolButton(toolById.get('text')!)}
@@ -946,6 +1025,25 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {tool.icon}
               <Typography variant="body2">{tool.label}</Typography>
+            </Box>
+          </MenuItem>
+        ))}
+      </Menu>
+
+      <Menu
+        anchorEl={arrowAnchorEl}
+        open={Boolean(arrowAnchorEl)}
+        onClose={() => setArrowAnchorEl(null)}
+      >
+        {arrowRouteOptions.map((option) => (
+          <MenuItem
+            key={option.routeStyle}
+            selected={activeTool === 'arrow' && pendingArrowRouteStyle === option.routeStyle}
+            onClick={() => handleArrowRouteSelected(option.routeStyle)}
+          >
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {option.icon}
+              <Typography variant="body2">{option.label}</Typography>
             </Box>
           </MenuItem>
         ))}

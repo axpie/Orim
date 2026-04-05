@@ -43,8 +43,10 @@ public sealed class ThemeCatalogApiServiceTests
         var reloaded = await _sut.GetThemeAsync("custom-blue");
 
         Assert.Equal("custom-blue", imported.Key);
+        Assert.Contains("#112233", imported.BoardDefaults.ThemeColors);
         Assert.NotNull(reloaded);
         Assert.Equal("Custom Blue", reloaded!.Name);
+        Assert.Contains("#112233", reloaded.BoardDefaults.ThemeColors);
     }
 
     [Fact]

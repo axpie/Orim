@@ -300,7 +300,18 @@ public sealed class ThemeCatalogApiService
             SelectionColor = "#2563EB",
             SelectionTintRgb = "37, 99, 235",
             HandleSurfaceColor = "#FFFFFF",
-            DockTargetColor = "#0F766E"
+            DockTargetColor = "#0F766E",
+            ThemeColors =
+            [
+                "#6E40C9",
+                "#1F8A5B",
+                "#EA580C",
+                "#0F172A",
+                "#2563EB",
+                "#FFFFFF",
+                "#F59E0B",
+                "#0EA5E9"
+            ]
         }
     };
 
@@ -377,7 +388,17 @@ public sealed class ThemeCatalogApiService
             SelectionColor = "#8B5CF6",
             SelectionTintRgb = "139, 92, 246",
             HandleSurfaceColor = "#10192A",
-            DockTargetColor = "#22C55E"
+            DockTargetColor = "#22C55E",
+            ThemeColors =
+            [
+                "#8B5CF6",
+                "#22C55E",
+                "#38BDF8",
+                "#E5EEF9",
+                "#18253B",
+                "#10192A",
+                "#F59E0B"
+            ]
         }
     };
 
@@ -454,7 +475,17 @@ public sealed class ThemeCatalogApiService
             SelectionColor = "#FF4FD8",
             SelectionTintRgb = "255, 79, 216",
             HandleSurfaceColor = "#160A29",
-            DockTargetColor = "#35F2FF"
+            DockTargetColor = "#35F2FF",
+            ThemeColors =
+            [
+                "#FF4FD8",
+                "#35F2FF",
+                "#FFC857",
+                "#FFF0FF",
+                "#261145",
+                "#160A29",
+                "#41FFD9"
+            ]
         }
     };
 
@@ -501,6 +532,11 @@ public sealed class ThemeCatalogApiService
         {
             source.FontFamily = ["Inter", "system-ui", "-apple-system", "sans-serif"];
         }
+
+        source.BoardDefaults.ThemeColors ??= [];
+        source.BoardDefaults.ThemeColors = source.BoardDefaults.ThemeColors.Count == 0
+            ? GetDefaultThemeColors(source)
+            : NormalizeThemeColors(source.BoardDefaults.ThemeColors);
 
         ValidatePalette(source.Palette);
         ValidateBoardDefaults(source.BoardDefaults);
@@ -570,6 +606,46 @@ public sealed class ThemeCatalogApiService
                 throw new InvalidOperationException($"Board default '{entry.Key}' is required.");
             }
         }
+
+        if (defaults.ThemeColors.Count == 0)
+        {
+            throw new InvalidOperationException("Board default 'ThemeColors' must contain at least one color.");
+        }
+    }
+
+    private static List<string> GetDefaultThemeColors(ApiThemeDefinition theme) => NormalizeThemeColors(
+    [
+        theme.Palette.Primary,
+        theme.Palette.Secondary,
+        theme.Palette.Tertiary,
+        theme.BoardDefaults.StrokeColor,
+        theme.BoardDefaults.ShapeFillColor,
+        theme.BoardDefaults.SelectionColor,
+        theme.Palette.Success ?? theme.Palette.Secondary,
+        theme.Palette.Warning ?? theme.Palette.Tertiary,
+        theme.Palette.Info ?? theme.Palette.Primary,
+    ]);
+
+    private static List<string> NormalizeThemeColors(IEnumerable<string?> colors)
+    {
+        var normalized = new List<string>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var color in colors)
+        {
+            if (string.IsNullOrWhiteSpace(color))
+            {
+                continue;
+            }
+
+            var trimmed = color.Trim();
+            if (seen.Add(trimmed))
+            {
+                normalized.Add(trimmed);
+            }
+        }
+
+        return normalized;
     }
 
     private static string NormalizeKey(string? key)
@@ -685,6 +761,7 @@ public sealed class ApiThemeBoardDefaultsDefinition
     public string SelectionTintRgb { get; set; } = "37, 99, 235";
     public string HandleSurfaceColor { get; set; } = "#FFFFFF";
     public string DockTargetColor { get; set; } = "#0F766E";
+    public List<string> ThemeColors { get; set; } = [];
 
     public ApiThemeBoardDefaultsDefinition Clone() => new()
     {
@@ -697,5 +774,6 @@ public sealed class ApiThemeBoardDefaultsDefinition
         SelectionTintRgb = SelectionTintRgb,
         HandleSurfaceColor = HandleSurfaceColor,
         DockTargetColor = DockTargetColor,
+        ThemeColors = [.. ThemeColors],
     };
 }

@@ -187,6 +187,10 @@
     "iconBrowseHint": "Top picks shown, search for the full icon set",
     "iconResults": "{{count}} results",
     "arrow": "Arrow",
+    "arrowStyles": "Arrows",
+    "straightArrow": "Straight Arrow",
+    "orthogonalArrow": "Orthogonal Arrow",
+    "curvedArrow": "Curved Arrow",
     "drawing": "Draw",
     "image": "Image",
     "undo": "Undo",
@@ -239,6 +243,7 @@
     "routeStyle": "Route Style",
     "straight": "Straight",
     "orthogonal": "Orthogonal",
+    "arc": "Curved",
     "noElementSelected": "No element selected.",
     "elementsSelected": "{{count}} elements selected.",
     "opacity": "Opacity (%)",
@@ -247,6 +252,10 @@
     "imageFit_UniformToFill": "Uniform to fill",
     "imageFit_Fill": "Fill",
     "rotation": "Rotation"
+  },
+  "colors": {
+    "themeColors": "Theme Colors",
+    "regularColors": "More Colors"
   },
   "floatingToolbar": {
     "hex": "Hex",

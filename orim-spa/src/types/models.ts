@@ -56,6 +56,7 @@ export enum ArrowHeadStyle {
 export enum ArrowRouteStyle {
   Straight = 'Straight',
   Orthogonal = 'Orthogonal',
+  Arc = 'Arc',
 }
 
 export enum DockPoint {
@@ -152,6 +153,8 @@ export interface ArrowElement extends BoardElementBase {
   targetHeadStyle: ArrowHeadStyle;
   routeStyle: ArrowRouteStyle;
   orthogonalMiddleCoordinate?: number | null;
+  arcMidX?: number | null;
+  arcMidY?: number | null;
 }
 
 export interface IconElement extends BoardElementBase {
@@ -370,6 +373,7 @@ export interface ThemeBoardDefaultsDefinition {
   selectionTintRgb: string;
   handleSurfaceColor: string;
   dockTargetColor: string;
+  themeColors: string[];
 }
 
 export interface ThemeDefinition {
@@ -379,6 +383,7 @@ export interface ThemeDefinition {
   isEnabled: boolean;
   isProtected?: boolean;
   fontFamily: string[];
+  cssVariables?: Record<string, string>;
   palette: ThemePaletteDefinition;
   boardDefaults: ThemeBoardDefaultsDefinition;
 }

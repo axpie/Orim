@@ -83,7 +83,9 @@ public class BoardElementSerializationTests
             StrokeColor = "#000000",
             LineStyle = ArrowLineStyle.Dashed,
             TargetHeadStyle = ArrowHeadStyle.OpenTriangle,
-            RouteStyle = ArrowRouteStyle.Straight
+            RouteStyle = ArrowRouteStyle.Arc,
+            ArcMidX = 144.5,
+            ArcMidY = 88.25
         };
 
         var json = JsonSerializer.Serialize(element, OrimJsonOptions.Default);
@@ -94,7 +96,9 @@ public class BoardElementSerializationTests
         Assert.Equal(targetId, arrow.TargetElementId);
         Assert.Equal(DockPoint.Bottom, arrow.SourceDock);
         Assert.Equal(ArrowLineStyle.Dashed, arrow.LineStyle);
-        Assert.Equal(ArrowRouteStyle.Straight, arrow.RouteStyle);
+        Assert.Equal(ArrowRouteStyle.Arc, arrow.RouteStyle);
+        Assert.Equal(144.5, arrow.ArcMidX);
+        Assert.Equal(88.25, arrow.ArcMidY);
     }
 
     [Fact]

@@ -16,11 +16,13 @@ import {
   DEFAULT_TEXT_WIDTH,
   isPointInsideElementBounds,
   type ArrowEndpointHandleKind,
+  type ArrowRouteHandleKind,
   type DockTargetState,
 } from './canvasUtils';
 import type { ResizeHandle } from '../shapes/SelectionOverlay';
 import {
   HorizontalLabelAlignment,
+  ArrowRouteStyle,
   VerticalLabelAlignment,
 } from '../../../types/models';
 import type {
@@ -51,6 +53,9 @@ type ArrowEndpointDragState = {
   hoverElementId: string | null;
   hoverDock: DockPoint | null;
   pointer: Point;
+} | null;
+type ArrowRouteHandleDragState = {
+  arrowId: string;
 } | null;
 type ResizeState = {
   elementId: string;
@@ -91,6 +96,7 @@ interface UseCanvasStartInteractionsOptions {
   dragSnapshotRef: MutableRefObject<BoardElement[] | null>;
   resizeSnapshotRef: MutableRefObject<BoardElement[] | null>;
   arrowEndpointSnapshotRef: MutableRefObject<BoardElement[] | null>;
+  arrowRouteHandleSnapshotRef: MutableRefObject<BoardElement[] | null>;
   marqueeOriginRef: MutableRefObject<Point | null>;
   getWorldPos: () => Point;
   getScreenPos: () => Point | null;
@@ -115,6 +121,7 @@ interface UseCanvasStartInteractionsOptions {
   setHoveredResizeHandle: Dispatch<SetStateAction<ResizeHandle | null>>;
   setResizeState: Dispatch<SetStateAction<ResizeState>>;
   setArrowEndpointDrag: Dispatch<SetStateAction<ArrowEndpointDragState>>;
+  setArrowRouteHandleDrag: Dispatch<SetStateAction<ArrowRouteHandleDragState>>;
   setIsDragging: Dispatch<SetStateAction<boolean>>;
   setDragStart: Dispatch<SetStateAction<Point | null>>;
   setDrawingElementId: Dispatch<SetStateAction<string | null>>;
@@ -152,6 +159,7 @@ export function useCanvasStartInteractions({
   dragSnapshotRef,
   resizeSnapshotRef,
   arrowEndpointSnapshotRef,
+  arrowRouteHandleSnapshotRef,
   marqueeOriginRef,
   getWorldPos,
   getScreenPos,
@@ -176,6 +184,7 @@ export function useCanvasStartInteractions({
   setHoveredResizeHandle,
   setResizeState,
   setArrowEndpointDrag,
+  setArrowRouteHandleDrag,
   setIsDragging,
   setDragStart,
   setDrawingElementId,
@@ -229,6 +238,18 @@ export function useCanvasStartInteractions({
     while (current) {
       const candidate = current.getAttr?.('data-arrow-endpoint-handle');
       if (candidate === 'source' || candidate === 'target') {
+        return candidate;
+      }
+      current = current.getParent();
+    }
+    return null;
+  }, []);
+
+  const getArrowRouteHandleFromTarget = useCallback((target: Konva.Node | null): ArrowRouteHandleKind | null => {
+    let current: Konva.Node | null = target;
+    while (current) {
+      const candidate = current.getAttr?.('data-arrow-route-handle');
+      if (candidate === 'arc') {
         return candidate;
       }
       current = current.getParent();
@@ -592,6 +613,21 @@ export function useCanvasStartInteractions({
         }
       }
 
+      const arrowRouteHandle = editable ? getArrowRouteHandleFromTarget(target) : null;
+      if (arrowRouteHandle) {
+        const arrowId = getElementIdFromTarget(target);
+        const arrow = arrowId
+          ? elements.find((candidate): candidate is ArrowElement => candidate.id === arrowId && candidate.$type === 'arrow')
+          : null;
+
+        if (arrow?.routeStyle === ArrowRouteStyle.Arc) {
+          arrowRouteHandleSnapshotRef.current = [...elements];
+          setSelectedElementIds([arrow.id]);
+          setArrowRouteHandleDrag({ arrowId: arrow.id });
+          return;
+        }
+      }
+
       const frameAtPoint = target === stageRef.current
         ? findTopmostFrameAtPoint(worldPos)
         : null;
@@ -653,6 +689,7 @@ export function useCanvasStartInteractions({
     activeTool,
     addElement,
     arrowEndpointSnapshotRef,
+    arrowRouteHandleSnapshotRef,
     board,
     boardDefaults,
     cameraX,
@@ -666,6 +703,7 @@ export function useCanvasStartInteractions({
     expandSelectionWithGroups,
     findTopmostFrameAtPoint,
     getArrowEndpointHandleFromTarget,
+    getArrowRouteHandleFromTarget,
     getElementIdFromTarget,
     getResizeHandleFromTarget,
     getScreenPos,
@@ -681,6 +719,7 @@ export function useCanvasStartInteractions({
     selectedIds,
     setActiveTool,
     setArrowEndpointDrag,
+    setArrowRouteHandleDrag,
     setContextMenuPosition,
     setDraftArrowEnd,
     setDraftArrowHover,

@@ -187,6 +187,10 @@
     "iconBrowseHint": "Top-Auswahl, weitere Icons per Suche",
     "iconResults": "{{count}} Treffer",
     "arrow": "Pfeil",
+    "arrowStyles": "Pfeile",
+    "straightArrow": "Gerader Pfeil",
+    "orthogonalArrow": "Winkeliger Pfeil",
+    "curvedArrow": "Gebogener Pfeil",
     "drawing": "Zeichnen",
     "image": "Bild",
     "undo": "Rückgängig",
@@ -239,6 +243,7 @@
     "routeStyle": "Routenstil",
     "straight": "Gerade",
     "orthogonal": "Rechtwinklig",
+    "arc": "Gebogen",
     "noElementSelected": "Kein Element ausgewählt.",
     "elementsSelected": "{{count}} Elemente ausgewählt.",
     "opacity": "Deckkraft (%)",
@@ -247,6 +252,10 @@
     "imageFit_UniformToFill": "Einheitlich füllen",
     "imageFit_Fill": "Strecken",
     "rotation": "Drehung"
+  },
+  "colors": {
+    "themeColors": "Theme-Farben",
+    "regularColors": "Weitere Farben"
   },
   "floatingToolbar": {
     "hex": "Hex",

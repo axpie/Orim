@@ -27,6 +27,9 @@ public sealed class BoardPdfExportService
     private const double OrthogonalBendPenalty = 40;
     private const int OrthogonalMaxBends = 12;
     private const double OrthogonalSolverTimeBudgetMs = 8;
+    private const int ArcSegmentCount = 24;
+    private const double ArcMinMidpointOffset = 48;
+    private const double ArcMaxMidpointOffset = 160;
     private const double StickyPadding = 12;
     private const double FrameTitlePadding = 14;
     private const string StickyBorderColor = "rgba(15, 23, 42, 0.14)";
@@ -474,12 +477,24 @@ public sealed class BoardPdfExportService
             return [start, end];
         }
 
+        if (arrow.RouteStyle == ArrowRouteStyle.Arc)
+        {
+            return ComputeArcRoute(start, end, arrow.ArcMidX, arrow.ArcMidY);
+        }
+
         var obstacles = elements
             .Where(element => element is not ArrowElement)
             .Select(element => new PdfBounds(element.X, element.Y, element.Width, element.Height))
             .ToList();
 
         return ComputeOrthogonalRoute(start, end, arrow.SourceDock, arrow.TargetDock, arrow.OrthogonalMiddleCoordinate, obstacles);
+    }
+
+    private static List<PdfPoint> ComputeArcRoute(PdfPoint start, PdfPoint end, double? arcMidX, double? arcMidY)
+    {
+        var midpoint = ResolveArcMidpoint(start, end, arcMidX, arcMidY);
+        var controlPoint = ComputeQuadraticControlPointThroughMidpoint(start, end, midpoint);
+        return SampleQuadraticBezier(start, controlPoint, end, ArcSegmentCount);
     }
 
     private static List<PdfPoint> ComputeOrthogonalRoute(PdfPoint start, PdfPoint end, DockPoint sourceDock, DockPoint targetDock, double? orthogonalMiddleCoordinate, IReadOnlyList<PdfBounds> obstacles)
@@ -520,6 +535,57 @@ public sealed class BoardPdfExportService
 
         points.Add(endStub);
         points.Add(end);
+        return SimplifyPoints(points);
+    }
+
+    private static PdfPoint ResolveArcMidpoint(PdfPoint start, PdfPoint end, double? arcMidX, double? arcMidY)
+    {
+        if (arcMidX.HasValue && arcMidY.HasValue)
+        {
+            return new PdfPoint(arcMidX.Value, arcMidY.Value);
+        }
+
+        return GetDefaultArcMidpoint(start, end);
+    }
+
+    private static PdfPoint GetDefaultArcMidpoint(PdfPoint start, PdfPoint end)
+    {
+        var midX = (start.X + end.X) / 2;
+        var midY = (start.Y + end.Y) / 2;
+        var dx = end.X - start.X;
+        var dy = end.Y - start.Y;
+        var length = Math.Sqrt(dx * dx + dy * dy);
+
+        if (length < 0.001)
+        {
+            return new PdfPoint(midX, midY);
+        }
+
+        var offset = Math.Max(ArcMinMidpointOffset, Math.Min(length * 0.35, ArcMaxMidpointOffset));
+        return new PdfPoint(
+            midX + (-dy / length) * offset,
+            midY + (dx / length) * offset);
+    }
+
+    private static PdfPoint ComputeQuadraticControlPointThroughMidpoint(PdfPoint start, PdfPoint end, PdfPoint midpoint) =>
+        new(
+            2 * midpoint.X - (start.X + end.X) / 2,
+            2 * midpoint.Y - (start.Y + end.Y) / 2);
+
+    private static List<PdfPoint> SampleQuadraticBezier(PdfPoint start, PdfPoint controlPoint, PdfPoint end, int segmentCount)
+    {
+        var count = Math.Max(2, segmentCount);
+        var points = new List<PdfPoint>(count + 1);
+
+        for (var index = 0; index <= count; index++)
+        {
+            var t = (double)index / count;
+            var oneMinusT = 1 - t;
+            points.Add(new PdfPoint(
+                oneMinusT * oneMinusT * start.X + 2 * oneMinusT * t * controlPoint.X + t * t * end.X,
+                oneMinusT * oneMinusT * start.Y + 2 * oneMinusT * t * controlPoint.Y + t * t * end.Y));
+        }
+
         return SimplifyPoints(points);
     }
 

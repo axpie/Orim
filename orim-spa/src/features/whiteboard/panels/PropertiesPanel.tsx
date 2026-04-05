@@ -49,6 +49,7 @@ import {
 import {
   ArrowLineStyle,
   ArrowHeadStyle,
+  ArrowRouteStyle,
   BorderLineStyle,
   DockPoint,
   HorizontalLabelAlignment,
@@ -1130,11 +1131,12 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
                 select
                 label={t('properties.routeStyle')}
                 size="small"
-                value={arrow.routeStyle ?? 'Orthogonal'}
+                value={arrow.routeStyle ?? ArrowRouteStyle.Orthogonal}
                 onChange={(e) => update(el.id, { routeStyle: e.target.value as ArrowElement['routeStyle'] })}
               >
-                <MenuItem value="Straight">{t('properties.straight')}</MenuItem>
-                <MenuItem value="Orthogonal">{t('properties.orthogonal')}</MenuItem>
+                <MenuItem value={ArrowRouteStyle.Straight}>{t('properties.straight')}</MenuItem>
+                <MenuItem value={ArrowRouteStyle.Orthogonal}>{t('properties.orthogonal')}</MenuItem>
+                <MenuItem value={ArrowRouteStyle.Arc}>{t('properties.arc', 'Gebogen')}</MenuItem>
               </TextField>
             </>
             );

@@ -6,6 +6,9 @@ const ORTHOGONAL_DOCK_STUB_LENGTH = 40;
 const ORTHOGONAL_BEND_PENALTY = 40;
 const ORTHOGONAL_MAX_BENDS = 12;
 const ORTHOGONAL_SOLVER_TIME_BUDGET_MS = 8;
+const ARC_SEGMENT_COUNT = 24;
+const ARC_MIN_MIDPOINT_OFFSET = 48;
+const ARC_MAX_MIDPOINT_OFFSET = 160;
 
 const EDGE_DOCKS = [DockPoint.Top, DockPoint.Right, DockPoint.Bottom, DockPoint.Left] as const;
 
@@ -33,23 +36,14 @@ export function computeArrowPolyline(
   arrow: ArrowElement,
   elements: BoardElement[],
 ): Point[] {
-  const sourceEl = arrow.sourceElementId
-    ? elements.find((e) => e.id === arrow.sourceElementId)
-    : null;
-  const targetEl = arrow.targetElementId
-    ? elements.find((e) => e.id === arrow.targetElementId)
-    : null;
-
-  const start: Point = sourceEl && arrow.sourceDock != null
-    ? getDockPosition(sourceEl, arrow.sourceDock)
-    : { x: arrow.sourceX ?? 0, y: arrow.sourceY ?? 0 };
-
-  const end: Point = targetEl && arrow.targetDock != null
-    ? getDockPosition(targetEl, arrow.targetDock)
-    : { x: arrow.targetX ?? 0, y: arrow.targetY ?? 0 };
+  const { start, end } = resolveArrowEndpoints(arrow, elements);
 
   if (arrow.routeStyle === ArrowRouteStyle.Straight) {
     return [start, end];
+  }
+
+  if (arrow.routeStyle === ArrowRouteStyle.Arc) {
+    return computeArcRoute(start, end, arrow.arcMidX ?? null, arrow.arcMidY ?? null);
   }
 
   const obstacles = elements
@@ -64,6 +58,18 @@ export function computeArrowPolyline(
     arrow.orthogonalMiddleCoordinate ?? null,
     obstacles,
   );
+}
+
+export function getArrowArcMidpoint(
+  arrow: ArrowElement,
+  elements: BoardElement[],
+): Point | null {
+  if (arrow.routeStyle !== ArrowRouteStyle.Arc) {
+    return null;
+  }
+
+  const { start, end } = resolveArrowEndpoints(arrow, elements);
+  return resolveArcMidpoint(start, end, arrow.arcMidX ?? null, arrow.arcMidY ?? null);
 }
 
 function computeOrthogonalRoute(
@@ -107,6 +113,99 @@ function computeOrthogonalRoute(
   }
 
   points.push(endStub, end);
+  return simplifyPoints(points);
+}
+
+function computeArcRoute(
+  start: Point,
+  end: Point,
+  arcMidX: number | null,
+  arcMidY: number | null,
+): Point[] {
+  const midpoint = resolveArcMidpoint(start, end, arcMidX, arcMidY);
+  const controlPoint = computeQuadraticControlPointThroughMidpoint(start, end, midpoint);
+  return sampleQuadraticBezier(start, controlPoint, end, ARC_SEGMENT_COUNT);
+}
+
+function resolveArrowEndpoints(
+  arrow: ArrowElement,
+  elements: BoardElement[],
+): { start: Point; end: Point } {
+  const sourceEl = arrow.sourceElementId
+    ? elements.find((e) => e.id === arrow.sourceElementId)
+    : null;
+  const targetEl = arrow.targetElementId
+    ? elements.find((e) => e.id === arrow.targetElementId)
+    : null;
+
+  const start: Point = sourceEl && arrow.sourceDock != null
+    ? getDockPosition(sourceEl, arrow.sourceDock)
+    : { x: arrow.sourceX ?? 0, y: arrow.sourceY ?? 0 };
+
+  const end: Point = targetEl && arrow.targetDock != null
+    ? getDockPosition(targetEl, arrow.targetDock)
+    : { x: arrow.targetX ?? 0, y: arrow.targetY ?? 0 };
+
+  return { start, end };
+}
+
+function resolveArcMidpoint(
+  start: Point,
+  end: Point,
+  arcMidX: number | null,
+  arcMidY: number | null,
+): Point {
+  if (typeof arcMidX === 'number' && Number.isFinite(arcMidX)
+    && typeof arcMidY === 'number' && Number.isFinite(arcMidY)) {
+    return { x: arcMidX, y: arcMidY };
+  }
+
+  return getDefaultArcMidpoint(start, end);
+}
+
+function getDefaultArcMidpoint(start: Point, end: Point): Point {
+  const midX = (start.x + end.x) / 2;
+  const midY = (start.y + end.y) / 2;
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  const length = Math.hypot(dx, dy);
+
+  if (length < 0.001) {
+    return { x: midX, y: midY };
+  }
+
+  const offset = Math.max(ARC_MIN_MIDPOINT_OFFSET, Math.min(length * 0.35, ARC_MAX_MIDPOINT_OFFSET));
+  return {
+    x: midX + (-dy / length) * offset,
+    y: midY + (dx / length) * offset,
+  };
+}
+
+function computeQuadraticControlPointThroughMidpoint(start: Point, end: Point, midpoint: Point): Point {
+  return {
+    x: midpoint.x * 2 - (start.x + end.x) / 2,
+    y: midpoint.y * 2 - (start.y + end.y) / 2,
+  };
+}
+
+function sampleQuadraticBezier(
+  start: Point,
+  controlPoint: Point,
+  end: Point,
+  segmentCount: number,
+): Point[] {
+  const count = Math.max(2, segmentCount);
+  const points: Point[] = [];
+
+  for (let index = 0; index <= count; index++) {
+    const t = index / count;
+    const oneMinusT = 1 - t;
+    points.push({
+      x: oneMinusT * oneMinusT * start.x + 2 * oneMinusT * t * controlPoint.x + t * t * end.x,
+      y: oneMinusT * oneMinusT * start.y + 2 * oneMinusT * t * controlPoint.y + t * t * end.y,
+    });
+  }
+
   return simplifyPoints(points);
 }
 

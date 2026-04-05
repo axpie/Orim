@@ -25,6 +25,7 @@ export const FALLBACK_BOARD_DEFAULTS = {
   selectionTintRgb: '37, 99, 235',
   handleSurfaceColor: '#FFFFFF',
   dockTargetColor: '#0F766E',
+  themeColors: ['#6E40C9', '#1F8A5B', '#EA580C', '#0F172A', '#2563EB', '#FFFFFF', '#F59E0B', '#0EA5E9'],
 };
 
 export const EMPTY_ELEMENTS: BoardElement[] = [];
@@ -39,6 +40,7 @@ export type DockTargetState = {
 };
 
 export type ArrowEndpointHandleKind = 'source' | 'target';
+export type ArrowRouteHandleKind = 'arc';
 
 export type TouchGestureState = {
   initialDistance: number;
