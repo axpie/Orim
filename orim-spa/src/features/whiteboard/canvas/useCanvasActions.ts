@@ -40,6 +40,7 @@ import type {
 import type { WhiteboardContextMenuAction } from './WhiteboardContextMenu';
 import { KEYBOARD_DUPLICATE_OFFSET, cloneElementsForInsertion } from './canvasUtils';
 import { translateDrawingElement } from './drawingGeometry';
+import { areAllSelectedElementsLocked, canDeleteSelection } from '../selectionLocking';
 
 interface UseCanvasActionsOptions {
   editable: boolean;
@@ -93,7 +94,8 @@ export function useCanvasActions({
     && selectedElements.length === 1
     && isInlineEditableElement(selectedElements[0]);
   const canSelectAll = editable && elements.length > 0 && selectedIds.length !== elements.length;
-  const isSelectionLocked = selectedElements.length > 0 && selectedElements.every((element) => element.isLocked === true);
+  const isSelectionLocked = areAllSelectedElementsLocked(selectedElements);
+  const canDeleteCurrentSelection = editable && canDeleteSelection(selectedElements);
   const canPaste = useMemo(
     () => {
       void clipboardVersion;
@@ -187,7 +189,7 @@ export function useCanvasActions({
   }, [applyLocalCommand, onBoardChanged]);
 
   const deleteSelectedElements = useCallback(() => {
-    if (!editable || selectedIds.length === 0) {
+    if (!canDeleteCurrentSelection || selectedIds.length === 0) {
       return;
     }
 
@@ -201,7 +203,7 @@ export function useCanvasActions({
     pushCommand(createDeleteElementsCommand(deletedElements));
     setSelectedElementIds([]);
     onBoardChanged('delete', createElementsDeletedOperation([...selectedIdSet]));
-  }, [editable, elements, onBoardChanged, pushCommand, selectedIds, setElements, setSelectedElementIds]);
+  }, [canDeleteCurrentSelection, elements, onBoardChanged, pushCommand, selectedIds, setElements, setSelectedElementIds]);
 
   const copySelectedElementsToClipboard = useCallback(() => {
     const selection = getSelectedElements();
@@ -216,14 +218,14 @@ export function useCanvasActions({
   }, [getSelectedElements, refreshClipboardAvailability]);
 
   const cutSelectedElements = useCallback(() => {
-    if (!editable) {
+    if (!editable || !canDeleteCurrentSelection) {
       return;
     }
 
     if (copySelectedElementsToClipboard()) {
       deleteSelectedElements();
     }
-  }, [copySelectedElementsToClipboard, deleteSelectedElements, editable]);
+  }, [canDeleteCurrentSelection, copySelectedElementsToClipboard, deleteSelectedElements, editable]);
 
   const pasteClipboardElements = useCallback(async () => {
     if (!editable) {
@@ -538,6 +540,7 @@ export function useCanvasActions({
     canSelectAll,
     canPaste,
     isSelectionLocked,
+    canDeleteCurrentSelection,
     zOrderAvailability,
     expandSelectionWithGroups,
     emitUpdatedOperations,

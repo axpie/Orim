@@ -28,6 +28,7 @@ import type { BoardOperationPayload } from '../realtime/boardOperations';
 import type { BoardElement } from '../../../types/models';
 import { projectWorldToViewport } from '../cameraUtils';
 import { useWhiteboardColorPalette } from '../controls/useWhiteboardColorPalette';
+import { areAllSelectedElementsLocked, canDeleteSelection } from '../selectionLocking';
 
 const TOOLBAR_GAP = 8;
 const ROTATION_HANDLE_CLEARANCE = 36;
@@ -189,7 +190,16 @@ function FontSizeStepper({ value, disabled = false, onChange }: FontSizeStepperP
       >
         <RemoveIcon sx={{ fontSize: 14 }} />
       </IconButton>
-      <Typography variant="caption" sx={{ minWidth: 24, textAlign: 'center', fontSize: '0.75rem', userSelect: 'none' }}>
+      <Typography
+        variant="caption"
+        sx={{
+          minWidth: 24,
+          textAlign: 'center',
+          fontSize: '0.75rem',
+          userSelect: 'none',
+          color: disabled ? 'text.disabled' : 'inherit',
+        }}
+      >
         {value}
       </Typography>
       <IconButton
@@ -345,7 +355,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   }, [selected, update]);
 
   const handleDelete = useCallback(() => {
-    if (selectedIds.length === 0) return;
+    if (!canDeleteSelection(selected)) return;
     const idSet = new Set(selectedIds);
     const deletedElements = elements.filter((el) => idSet.has(el.id));
     if (deletedElements.length === 0) return;
@@ -355,7 +365,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
     setSelectedElementIds([]);
     setDirty(true);
     onBoardChanged('delete', createElementsDeletedOperation([...idSet]));
-  }, [elements, selectedIds, setElements, pushCommand, setSelectedElementIds, setDirty, onBoardChanged]);
+  }, [elements, onBoardChanged, pushCommand, selected, selectedIds, setDirty, setElements, setSelectedElementIds]);
 
   // --- determine which controls to show ---
   const showFill = hasProperty(selected, 'fillColor');
@@ -378,7 +388,8 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   const isBold = getCommonValue<boolean>(selected, 'isBold') ?? false;
   const isItalic = getCommonValue<boolean>(selected, 'isItalic') ?? false;
   const strokeWidth = showStrokeWidth ? getCommonValue<number>(selected, 'strokeWidth') ?? 2 : 2;
-  const areAllLocked = selected.length > 0 && selected.every((element) => element.isLocked === true);
+  const areAllLocked = areAllSelectedElementsLocked(selected);
+  const canDeleteCurrentSelection = canDeleteSelection(selected);
 
   if (!bbox || selected.length === 0) return null;
 
@@ -424,6 +435,14 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
         boxShadow: '0 12px 32px rgba(15, 23, 42, 0.18)',
         '& .MuiIconButton-root': {
           color: 'inherit',
+        },
+        '& .MuiIconButton-root.Mui-disabled': {
+          opacity: 1,
+          color: 'rgba(var(--mui-palette-text-secondaryChannel, 107 114 128) / 0.72)',
+          backgroundColor: 'rgba(var(--mui-palette-text-secondaryChannel, 107 114 128) / 0.14)',
+        },
+        '& .MuiIconButton-root.Mui-disabled .MuiSvgIcon-root': {
+          opacity: 1,
         },
         '& .MuiSvgIcon-root': {
           color: 'inherit',
@@ -600,6 +619,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
         <IconButton
           size="small"
           onClick={handleDelete}
+          disabled={!canDeleteCurrentSelection}
           sx={{ width: 32, height: 32 }}
           aria-label={t('toolbar.delete', 'Loeschen')}
         >

@@ -63,6 +63,7 @@ import { getBoundingRect, type Rect } from '../../../utils/geometry';
 import { computeArrowPolyline } from '../../../utils/arrowRouting';
 import { ArrowRouteStyle, HorizontalLabelAlignment, VerticalLabelAlignment, ImageFit, type BoardElement, type FrameElement, type ImageElement } from '../../../types/models';
 import { getEffectiveStickyNotePresets } from '../stickyNotePresets';
+import { canDeleteSelection } from '../selectionLocking';
 import { ZOrderMenuItems } from '../ZOrderMenuItems';
 import {
   applyZOrderAction,
@@ -279,6 +280,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const canGroup = selectedElements.length >= 2;
   const canUngroup = selectedGroupIds.size > 0;
   const canFitFrameSelection = selectedFrames.length <= 1 && fitFrameBounds != null;
+  const canDeleteCurrentSelection = canDeleteSelection(selectedElements);
   const zOrderAvailability = useMemo(
     () => board ? getZOrderAvailability(board.elements, selectedIds) : {
       'bring-to-front': false,
@@ -351,6 +353,12 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     ? activeArrowDescriptor.label
     : toolById.get(activeTool)?.label ?? t('tools.select');
 
+  const collapseCompactToolbarAfterAction = () => {
+    if (isCompactLayout) {
+      setCompactCollapsed(true);
+    }
+  };
+
   const openIconPicker = () => {
     setIconPickerOpen(true);
   };
@@ -372,6 +380,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     }
 
     setActiveTool(tool);
+    collapseCompactToolbarAfterAction();
   };
 
   const handleIconSelected = (iconName: string) => {
@@ -379,27 +388,31 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     setActiveTool('icon');
     setIconPickerOpen(false);
     setIconSearch('');
+    collapseCompactToolbarAfterAction();
   };
 
   const handleStickyPresetSelected = (presetId: string) => {
     setPendingStickyNotePresetId(presetId);
     setActiveTool('sticky');
     setStickyPresetAnchorEl(null);
+    collapseCompactToolbarAfterAction();
   };
 
   const handleShapeSelected = (tool: ToolType) => {
     setActiveTool(tool);
     setShapeAnchorEl(null);
+    collapseCompactToolbarAfterAction();
   };
 
   const handleArrowRouteSelected = (routeStyle: ArrowRouteStyle) => {
     setPendingArrowRouteStyle(routeStyle);
     setActiveTool('arrow');
     setArrowAnchorEl(null);
+    collapseCompactToolbarAfterAction();
   };
 
   const handleDelete = () => {
-    if (selectedIds.length === 0 || !board) return;
+    if (!canDeleteCurrentSelection || !board) return;
     const deletedElements = board.elements.filter((element) => selectedIds.includes(element.id));
     if (deletedElements.length === 0) {
       return;
@@ -410,6 +423,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     setSelectedElementIds([]);
     setDirty(true);
     onBoardChanged?.('delete', createElementsDeletedOperation(selectedIds));
+    collapseCompactToolbarAfterAction();
   };
 
   const handleGroup = () => {
@@ -439,6 +453,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
         .filter((element) => selectedIdSet.has(element.id))
         .map((element) => createElementUpdatedOperation(element)),
     ));
+    collapseCompactToolbarAfterAction();
   };
 
   const handleUngroup = () => {
@@ -464,6 +479,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     onBoardChanged?.('ungroup', asOperationPayload(
       affectedAfter.map((element) => createElementUpdatedOperation(element)),
     ));
+    collapseCompactToolbarAfterAction();
   };
 
   const handleZOrderAction = (action: ZOrderAction) => {
@@ -493,6 +509,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
       after.map((element) => createElementUpdatedOperation(element)),
     ));
     setArrangeAnchorEl(null);
+    collapseCompactToolbarAfterAction();
   };
 
   const handleUndo = () => {
@@ -586,6 +603,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
       setActiveTool('select');
       setDirty(true);
       onBoardChanged?.('resize', createElementUpdatedOperation(nextFrame));
+      collapseCompactToolbarAfterAction();
       return;
     }
 
@@ -619,6 +637,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     setActiveTool('select');
     setDirty(true);
     onBoardChanged?.('add', createElementAddedOperation(nextFrame));
+    collapseCompactToolbarAfterAction();
   };
 
   const handleInsertImage = async (imageUrl: string, fileName: string) => {
@@ -673,6 +692,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     setActiveTool('select');
     setDirty(true);
     onBoardChanged?.('add', createElementAddedOperation(newElement));
+    collapseCompactToolbarAfterAction();
   };
 
   const renderToolButton = ({
@@ -822,7 +842,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
           <IconButton
             size={isCompactLayout ? 'medium' : 'small'}
             onClick={handleDelete}
-            disabled={selectedIds.length === 0}
+            disabled={!canDeleteCurrentSelection}
             sx={{ flexShrink: 0 }}
           >
             <DeleteIcon />
@@ -904,7 +924,10 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
         <Tooltip title={t('tools.minimap')} placement={isCompactLayout ? 'top' : 'right'}>
           <IconButton
             size={isCompactLayout ? 'medium' : 'small'}
-            onClick={onToggleMinimap}
+            onClick={() => {
+              onToggleMinimap();
+              collapseCompactToolbarAfterAction();
+            }}
             color={minimapVisible ? 'primary' : 'default'}
             sx={{ flexShrink: 0 }}
           >
@@ -937,10 +960,10 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
         flexShrink: 0,
         width: isCompactLayout ? 'auto' : 'fit-content',
         minWidth: isCompactLayout ? undefined : 48,
-        maxWidth: isCompactLayout ? 'calc(100% - 24px)' : undefined,
+        maxWidth: isCompactLayout ? (collapsed ? undefined : 'calc(100% - 24px)') : undefined,
         position: isCompactLayout ? 'absolute' : 'relative',
         left: isCompactLayout ? 12 : 'auto',
-        right: isCompactLayout ? 12 : 'auto',
+        right: isCompactLayout ? (collapsed ? 'auto' : 12) : 'auto',
         bottom: isCompactLayout ? 'calc(12px + env(safe-area-inset-bottom))' : 'auto',
         zIndex: isCompactLayout ? 6 : 'auto',
         overflow: 'hidden',
@@ -973,13 +996,13 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
 
       {isCompactLayout ? (
         <>
-          <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', width: collapsed ? 'auto' : '100%', gap: 1 }}>
             <Tooltip title={collapsed ? t('tools.expandToolbar', 'Werkzeugleiste öffnen') : t('tools.collapseToolbar', 'Werkzeugleiste einklappen')} placement="top">
               <IconButton onClick={() => setCompactCollapsed((current) => !current)} size="medium" sx={{ flexShrink: 0 }}>
                 {collapsed ? <KeyboardArrowUpIcon /> : <KeyboardArrowDownIcon />}
               </IconButton>
             </Tooltip>
-            <Typography variant="caption" noWrap sx={{ flex: 1, minWidth: 0 }}>
+            <Typography variant="caption" noWrap sx={{ flex: collapsed ? '0 1 auto' : 1, minWidth: 0 }}>
               {activeToolLabel}
             </Typography>
           </Box>

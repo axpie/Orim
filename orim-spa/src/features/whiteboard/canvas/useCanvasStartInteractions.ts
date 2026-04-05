@@ -592,6 +592,11 @@ export function useCanvasStartInteractions({
           : null;
 
         if (arrow) {
+          if (arrow.isLocked === true) {
+            setSelectedElementIds([arrow.id]);
+            return;
+          }
+
           const movingIsSource = arrowEndpointHandle === 'source';
           const movingEndpoint = resolveArrowEndpoint(arrow, movingIsSource);
           const fixedEndpoint = resolveArrowEndpoint(arrow, !movingIsSource);
@@ -621,6 +626,11 @@ export function useCanvasStartInteractions({
           : null;
 
         if (arrow?.routeStyle === ArrowRouteStyle.Arc) {
+          if (arrow.isLocked === true) {
+            setSelectedElementIds([arrow.id]);
+            return;
+          }
+
           arrowRouteHandleSnapshotRef.current = [...elements];
           setSelectedElementIds([arrow.id]);
           setArrowRouteHandleDrag({ arrowId: arrow.id });

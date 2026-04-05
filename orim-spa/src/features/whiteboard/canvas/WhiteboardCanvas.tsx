@@ -254,6 +254,7 @@ export function WhiteboardCanvas({
     canSelectAll,
     canPaste,
     isSelectionLocked,
+    canDeleteCurrentSelection,
     zOrderAvailability,
     expandSelectionWithGroups,
     emitUpdatedOperations,
@@ -1500,6 +1501,7 @@ export function WhiteboardCanvas({
         canPaste={canPaste}
         canInlineEditSelection={canInlineEditSelection}
         isLocked={isSelectionLocked}
+        canDeleteSelection={canDeleteCurrentSelection}
         canGroup={canGroup}
         canUngroup={canUngroup}
         canSelectAll={canSelectAll}

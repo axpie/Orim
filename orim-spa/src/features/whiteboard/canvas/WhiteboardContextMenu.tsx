@@ -49,6 +49,7 @@ interface WhiteboardContextMenuProps {
   canGroup: boolean;
   canUngroup: boolean;
   isLocked: boolean;
+  canDeleteSelection: boolean;
   canSelectAll: boolean;
   zOrderAvailability: ZOrderAvailability;
   onClose: () => void;
@@ -93,6 +94,7 @@ export function WhiteboardContextMenu({
   canPaste,
   canInlineEditSelection,
   isLocked,
+  canDeleteSelection,
   canGroup,
   canUngroup,
   canSelectAll,
@@ -137,6 +139,7 @@ export function WhiteboardContextMenu({
               icon={<ContentCutIcon fontSize="small" />}
               label={t('contextMenu.cut')}
               shortcut="Cmd/Ctrl + X"
+              disabled={!canDeleteSelection}
               onClick={() => handleAction('cut')}
               onMouseEnter={closeArrangeMenu}
             />
@@ -222,6 +225,7 @@ export function WhiteboardContextMenu({
               icon={<DeleteIcon fontSize="small" />}
               label={t('tools.delete')}
               shortcut="Delete"
+              disabled={!canDeleteSelection}
               onClick={() => handleAction('delete')}
               onMouseEnter={closeArrangeMenu}
             />

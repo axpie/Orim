@@ -35,6 +35,7 @@ function SelectionOverlayInner({
       const points = computeArrowPolyline(el, elements);
       const flat = flattenPoints(points);
       const handleRadius = (touchMode ? 11 : 7) / zoom;
+      const showArrowHandles = el.isLocked !== true;
       const routeHandlePoint = el.routeStyle === ArrowRouteStyle.Arc
         ? getArrowArcMidpoint(el, elements)
         : null;
@@ -52,27 +53,31 @@ function SelectionOverlayInner({
             opacity={0.22}
             listening={false}
           />
-          <Circle
-            x={points[0].x}
-            y={points[0].y}
-            radius={handleRadius}
-            fill={handleSurfaceColor}
-            stroke={selectionColor}
-            strokeWidth={borderWidth}
-            data-element-id={el.id}
-            data-arrow-endpoint-handle="source"
-          />
-          <Circle
-            x={points[points.length - 1].x}
-            y={points[points.length - 1].y}
-            radius={handleRadius}
-            fill={handleSurfaceColor}
-            stroke={selectionColor}
-            strokeWidth={borderWidth}
-            data-element-id={el.id}
-            data-arrow-endpoint-handle="target"
-          />
-          {routeHandlePoint && (
+          {showArrowHandles && (
+            <>
+              <Circle
+                x={points[0].x}
+                y={points[0].y}
+                radius={handleRadius}
+                fill={handleSurfaceColor}
+                stroke={selectionColor}
+                strokeWidth={borderWidth}
+                data-element-id={el.id}
+                data-arrow-endpoint-handle="source"
+              />
+              <Circle
+                x={points[points.length - 1].x}
+                y={points[points.length - 1].y}
+                radius={handleRadius}
+                fill={handleSurfaceColor}
+                stroke={selectionColor}
+                strokeWidth={borderWidth}
+                data-element-id={el.id}
+                data-arrow-endpoint-handle="target"
+              />
+            </>
+          )}
+          {showArrowHandles && routeHandlePoint && (
             <Circle
               x={routeHandlePoint.x}
               y={routeHandlePoint.y}

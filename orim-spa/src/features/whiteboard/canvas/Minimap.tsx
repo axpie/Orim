@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { Box, IconButton } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import type { BoardElement } from '../../../types/models';
+import {
+  type BoundingBox,
+  type MinimapLayout,
+  computeMinimapLayout,
+  getViewportCenterFromMinimapPosition,
+  MINIMAP_HEIGHT,
+  MINIMAP_WIDTH,
+} from './minimapLayout';
 
-const MINIMAP_WIDTH = 200;
-const MINIMAP_HEIGHT = 150;
 const PADDING = 50;
 
 interface MinimapProps {
@@ -18,13 +24,9 @@ interface MinimapProps {
   onClose: () => void;
 }
 
-interface BoundingBox {
-  minX: number;
-  minY: number;
-  maxX: number;
-  maxY: number;
-  width: number;
-  height: number;
+interface CanvasPoint {
+  x: number;
+  y: number;
 }
 
 function computeBoundingBox(elements: BoardElement[], vpMinX: number, vpMinY: number, vpMaxX: number, vpMaxY: number): BoundingBox {
@@ -57,6 +59,21 @@ function computeBoundingBox(elements: BoardElement[], vpMinX: number, vpMinY: nu
   maxY += PADDING;
 
   return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
+}
+
+function isPointInsideViewport(point: CanvasPoint, layout: MinimapLayout): boolean {
+  return point.x >= layout.viewportLeft
+    && point.x <= layout.viewportLeft + layout.viewportWidth
+    && point.y >= layout.viewportTop
+    && point.y <= layout.viewportTop + layout.viewportHeight;
+}
+
+function getCanvasPoint(canvas: HTMLCanvasElement, event: ReactPointerEvent<HTMLCanvasElement>): CanvasPoint {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: event.clientX - rect.left,
+    y: event.clientY - rect.top,
+  };
 }
 
 function drawElement(ctx: CanvasRenderingContext2D, el: BoardElement, scale: number, offsetX: number, offsetY: number) {
@@ -131,8 +148,10 @@ function drawElement(ctx: CanvasRenderingContext2D, el: BoardElement, scale: num
 
 export function Minimap({ elements, cameraX, cameraY, zoom, viewportWidth, viewportHeight, onNavigate, onClose }: MinimapProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const dragStateRef = useRef<{ pointerId: number; offsetX: number; offsetY: number } | null>(null);
+  const [isDraggingViewport, setIsDraggingViewport] = useState(false);
+  const [isHoveringViewport, setIsHoveringViewport] = useState(false);
 
-  // Viewport in world coordinates
   const vpWorldMinX = -cameraX / zoom;
   const vpWorldMinY = -cameraY / zoom;
   const vpWorldW = viewportWidth / zoom;
@@ -141,6 +160,11 @@ export function Minimap({ elements, cameraX, cameraY, zoom, viewportWidth, viewp
   const bounds = useMemo(
     () => computeBoundingBox(elements, vpWorldMinX, vpWorldMinY, vpWorldMinX + vpWorldW, vpWorldMinY + vpWorldH),
     [elements, vpWorldMinX, vpWorldMinY, vpWorldW, vpWorldH],
+  );
+
+  const layout = useMemo(
+    () => computeMinimapLayout(bounds, vpWorldMinX, vpWorldMinY, vpWorldW, vpWorldH),
+    [bounds, vpWorldMinX, vpWorldMinY, vpWorldW, vpWorldH],
   );
 
   useEffect(() => {
@@ -153,64 +177,107 @@ export function Minimap({ elements, cameraX, cameraY, zoom, viewportWidth, viewp
     canvas.width = MINIMAP_WIDTH * dpr;
     canvas.height = MINIMAP_HEIGHT * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-
-    // Clear
     ctx.clearRect(0, 0, MINIMAP_WIDTH, MINIMAP_HEIGHT);
 
-    // Scale to fit bounding box in minimap
-    const scaleX = MINIMAP_WIDTH / bounds.width;
-    const scaleY = MINIMAP_HEIGHT / bounds.height;
-    const scale = Math.min(scaleX, scaleY);
-
-    const drawW = bounds.width * scale;
-    const drawH = bounds.height * scale;
-    const padX = (MINIMAP_WIDTH - drawW) / 2;
-    const padY = (MINIMAP_HEIGHT - drawH) / 2;
-
     ctx.save();
-    ctx.translate(padX, padY);
+    ctx.translate(layout.padX, layout.padY);
 
-    // Draw elements
     for (const el of elements) {
-      drawElement(ctx, el, scale, bounds.minX, bounds.minY);
+      drawElement(ctx, el, layout.scale, bounds.minX, bounds.minY);
     }
 
-    // Draw viewport indicator
-    const vx = (vpWorldMinX - bounds.minX) * scale;
-    const vy = (vpWorldMinY - bounds.minY) * scale;
-    const vw = vpWorldW * scale;
-    const vh = vpWorldH * scale;
-
     ctx.fillStyle = 'rgba(33, 150, 243, 0.12)';
-    ctx.fillRect(vx, vy, vw, vh);
+    ctx.fillRect(
+      layout.viewportLeft - layout.padX,
+      layout.viewportTop - layout.padY,
+      layout.viewportWidth,
+      layout.viewportHeight,
+    );
     ctx.strokeStyle = 'rgba(33, 150, 243, 0.7)';
     ctx.lineWidth = 1.5;
-    ctx.strokeRect(vx, vy, vw, vh);
+    ctx.strokeRect(
+      layout.viewportLeft - layout.padX,
+      layout.viewportTop - layout.padY,
+      layout.viewportWidth,
+      layout.viewportHeight,
+    );
 
     ctx.restore();
-  }, [elements, cameraX, cameraY, zoom, viewportWidth, viewportHeight, bounds, vpWorldMinX, vpWorldMinY, vpWorldW, vpWorldH]);
+  }, [bounds.minX, bounds.minY, elements, layout]);
 
-  const handleClick = useCallback((e: React.MouseEvent<HTMLCanvasElement>) => {
+  const navigateToCanvasPoint = useCallback((point: CanvasPoint) => {
+    const worldX = (point.x - layout.padX) / layout.scale + bounds.minX;
+    const worldY = (point.y - layout.padY) / layout.scale + bounds.minY;
+    onNavigate(worldX, worldY);
+  }, [bounds.minX, bounds.minY, layout.padX, layout.padY, layout.scale, onNavigate]);
+
+  const navigateToViewportPosition = useCallback((left: number, top: number) => {
+    const nextCenter = getViewportCenterFromMinimapPosition(left, top, bounds, layout);
+    onNavigate(nextCenter.worldX, nextCenter.worldY);
+  }, [bounds, layout, onNavigate]);
+
+  const handlePointerDown = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const rect = canvas.getBoundingClientRect();
-    const clickX = e.clientX - rect.left;
-    const clickY = e.clientY - rect.top;
+    const point = getCanvasPoint(canvas, event);
+    if (isPointInsideViewport(point, layout)) {
+      event.preventDefault();
+      canvas.setPointerCapture(event.pointerId);
+      dragStateRef.current = {
+        pointerId: event.pointerId,
+        offsetX: point.x - layout.viewportLeft,
+        offsetY: point.y - layout.viewportTop,
+      };
+      setIsDraggingViewport(true);
+      setIsHoveringViewport(true);
+      return;
+    }
 
-    const scaleX = MINIMAP_WIDTH / bounds.width;
-    const scaleY = MINIMAP_HEIGHT / bounds.height;
-    const scale = Math.min(scaleX, scaleY);
-    const drawW = bounds.width * scale;
-    const drawH = bounds.height * scale;
-    const padX = (MINIMAP_WIDTH - drawW) / 2;
-    const padY = (MINIMAP_HEIGHT - drawH) / 2;
+    navigateToCanvasPoint(point);
+  }, [layout, navigateToCanvasPoint]);
 
-    const worldX = (clickX - padX) / scale + bounds.minX;
-    const worldY = (clickY - padY) / scale + bounds.minY;
+  const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
 
-    onNavigate(worldX, worldY);
-  }, [bounds, onNavigate]);
+    const point = getCanvasPoint(canvas, event);
+    const dragState = dragStateRef.current;
+    if (dragState?.pointerId === event.pointerId) {
+      event.preventDefault();
+      navigateToViewportPosition(point.x - dragState.offsetX, point.y - dragState.offsetY);
+      return;
+    }
+
+    setIsHoveringViewport(isPointInsideViewport(point, layout));
+  }, [layout, navigateToViewportPosition]);
+
+  const stopDragging = useCallback((pointerId?: number) => {
+    const canvas = canvasRef.current;
+    if (pointerId != null && canvas?.hasPointerCapture(pointerId)) {
+      canvas.releasePointerCapture(pointerId);
+    }
+
+    dragStateRef.current = null;
+    setIsDraggingViewport(false);
+  }, []);
+
+  const handlePointerUp = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
+    stopDragging(event.pointerId);
+  }, [stopDragging]);
+
+  const handlePointerCancel = useCallback((event: ReactPointerEvent<HTMLCanvasElement>) => {
+    stopDragging(event.pointerId);
+    setIsHoveringViewport(false);
+  }, [stopDragging]);
+
+  const handlePointerLeave = useCallback(() => {
+    if (!dragStateRef.current) {
+      setIsHoveringViewport(false);
+    }
+  }, []);
+
+  const cursor = isDraggingViewport ? 'grabbing' : isHoveringViewport ? 'grab' : 'pointer';
 
   return (
     <Box
@@ -233,8 +300,18 @@ export function Minimap({ elements, cameraX, cameraY, zoom, viewportWidth, viewp
         ref={canvasRef}
         width={MINIMAP_WIDTH}
         height={MINIMAP_HEIGHT}
-        style={{ width: MINIMAP_WIDTH, height: MINIMAP_HEIGHT, display: 'block', cursor: 'pointer' }}
-        onClick={handleClick}
+        style={{
+          width: MINIMAP_WIDTH,
+          height: MINIMAP_HEIGHT,
+          display: 'block',
+          cursor,
+          touchAction: 'none',
+        }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        onPointerLeave={handlePointerLeave}
       />
       <IconButton
         size="small"
