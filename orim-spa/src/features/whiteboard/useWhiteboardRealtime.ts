@@ -11,22 +11,10 @@ import type {
 } from '../../types/models';
 import { getBoardSyncAnnouncement } from './a11yAnnouncements';
 import { deriveBoardSyncStatus } from './boardSyncStatus';
+import { mergeCursorPresence } from './realtime/mergeCursorPresence';
 import { primeBoardHistorySequence, recoverBoardAfterReconnect } from './realtime/reconnectRecovery';
 import { useOperationOutboxStore } from './store/outboxStore';
 import { useBoardStore } from './store/boardStore';
-
-function mergeCursorPresence(previous: CursorPresence[], next: CursorPresence[]): CursorPresence[] {
-  const previousByClientId = new Map(previous.map((cursor) => [cursor.clientId, cursor]));
-  return next.map((cursor) => {
-    const existing = previousByClientId.get(cursor.clientId);
-    return {
-      ...existing,
-      ...cursor,
-      worldX: cursor.worldX ?? existing?.worldX ?? null,
-      worldY: cursor.worldY ?? existing?.worldY ?? null,
-    };
-  });
-}
 
 interface UseWhiteboardRealtimeOptions {
   boardId: string | null;

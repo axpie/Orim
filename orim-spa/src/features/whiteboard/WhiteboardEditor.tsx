@@ -45,6 +45,16 @@ function createBoardFileName(title: string | undefined, extension: string) {
   return `${baseName}.${extension}`;
 }
 
+function normalizeSelectionScope(selection: string[]): string[] {
+  return [...selection].sort();
+}
+
+function areSelectionsEqual(left: string[] | null, right: string[]): boolean {
+  return left != null
+    && left.length === right.length
+    && left.every((value, index) => value === right[index]);
+}
+
 export function WhiteboardEditor() {
   const { id } = useParams<{ id: string }>();
   const { t } = useTranslation();
@@ -86,6 +96,7 @@ export function WhiteboardEditor() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [presentationMode, setPresentationMode] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState<{ id: number; text: string } | null>(null);
+  const [propertiesPanelSelectionScope, setPropertiesPanelSelectionScope] = useState<string[] | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
   const connectionIdRef = useRef<string | null>(null);
@@ -141,7 +152,13 @@ export function WhiteboardEditor() {
   const canUseAssistant = canEdit && Boolean(assistantAvailability?.isConfigured);
 
   const openPropertiesPanel = useCallback(() => {
+    setPropertiesPanelSelectionScope(null);
     setActivePanel((current) => toggleAuxiliaryPanel(current, 'properties'));
+  }, []);
+
+  const openSelectionScopedPropertiesPanel = useCallback(() => {
+    setPropertiesPanelSelectionScope(normalizeSelectionScope(useBoardStore.getState().selectedElementIds));
+    setActivePanel('properties');
   }, []);
 
   const openChatPanel = useCallback(() => {
@@ -321,6 +338,23 @@ export function WhiteboardEditor() {
       setActiveCommentId(null);
     }
   }, [activeCommentId, comments]);
+
+  useEffect(() => {
+    if (activePanel !== 'properties') {
+      setPropertiesPanelSelectionScope(null);
+      return;
+    }
+
+    if (propertiesPanelSelectionScope == null) {
+      return;
+    }
+
+    const nextSelectionScope = normalizeSelectionScope(selectedElementIds);
+    if (!areSelectionsEqual(propertiesPanelSelectionScope, nextSelectionScope)) {
+      setPropertiesPanelSelectionScope(null);
+      setActivePanel(null);
+    }
+  }, [activePanel, propertiesPanelSelectionScope, selectedElementIds]);
 
   const {
     sendBoardState,
@@ -730,7 +764,7 @@ export function WhiteboardEditor() {
               viewportWidth={viewportWidth}
               viewportHeight={viewportHeight}
               onBoardChanged={onBoardChanged}
-              onOpenPropertiesPanel={() => setActivePanel('properties')}
+              onOpenPropertiesPanel={openSelectionScopedPropertiesPanel}
             />
           )}
 

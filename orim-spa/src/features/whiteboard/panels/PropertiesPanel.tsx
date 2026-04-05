@@ -61,6 +61,7 @@ import {
   type StickyNoteElement,
   type FrameElement,
   type ArrowElement,
+  type DrawingElement,
   type IconElement,
   type ImageElement,
 } from '../../../types/models';
@@ -70,6 +71,7 @@ import { getDefaultLabelFontSize, resolveLabelFontSize, resolveTextFontSize } fr
 import { computeAlignment, computeDistribution, type AlignAction, type DistributeAction } from '../../../utils/alignment';
 import { normalizeRotationDegrees } from '../../../utils/rotation';
 import { AuxiliaryPanelShell } from './AuxiliaryPanelShell';
+import { resizeDrawingElement, translateDrawingElement } from '../canvas/drawingGeometry';
 const FONT_FAMILY_DEFAULT = '__default__';
 
 const FONT_FAMILY_OPTIONS = [
@@ -283,6 +285,53 @@ function NumericSliderField({
   );
 }
 
+function createUpdatedElement(currentElement: BoardElement, changes: Partial<BoardElement>): BoardElement {
+  if (currentElement.$type !== 'drawing') {
+    return { ...currentElement, ...changes } as BoardElement;
+  }
+
+  const hasBoundsChange = 'x' in changes || 'y' in changes || 'width' in changes || 'height' in changes;
+  if (!hasBoundsChange) {
+    return { ...currentElement, ...changes } as BoardElement;
+  }
+
+  const nextBounds = {
+    x: changes.x ?? currentElement.x,
+    y: changes.y ?? currentElement.y,
+    width: changes.width ?? currentElement.width,
+    height: changes.height ?? currentElement.height,
+  };
+  const resizedDrawing = resizeDrawingElement(
+    currentElement,
+    {
+      x: currentElement.x,
+      y: currentElement.y,
+      width: currentElement.width,
+      height: currentElement.height,
+    },
+    nextBounds,
+    currentElement.points,
+  );
+  const nonBoundsChanges = Object.fromEntries(
+    Object.entries(changes).filter(([key]) => key !== 'x' && key !== 'y' && key !== 'width' && key !== 'height'),
+  ) as Partial<BoardElement>;
+  return { ...resizedDrawing, ...nonBoundsChanges } as BoardElement;
+}
+
+function createElementPatch(updatedElement: BoardElement, changedKeys: string[]): Partial<BoardElement> {
+  return Object.fromEntries(
+    changedKeys.map((key) => [key, (updatedElement as unknown as Record<string, unknown>)[key]]),
+  ) as Partial<BoardElement>;
+}
+
+function moveElementToPosition(currentElement: BoardElement, nextX: number, nextY: number): BoardElement {
+  if (currentElement.$type === 'drawing') {
+    return translateDrawingElement(currentElement, nextX - currentElement.x, nextY - currentElement.y);
+  }
+
+  return { ...currentElement, x: nextX, y: nextY } as BoardElement;
+}
+
 interface PropertiesPanelProps {
   onClose: () => void;
   onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
@@ -300,6 +349,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
   const elements = board?.elements ?? [];
   const selected = elements.filter((el: BoardElement) => selectedIds.includes(el.id));
   const el = selected.length === 1 ? selected[0] : null;
+  const movableSelection = selected.filter((candidate) => candidate.$type !== 'arrow' && candidate.isLocked !== true);
   const dockOptions = Object.values(DockPoint);
   const borderStyleOptions: PreviewSelectOption[] = [
     BorderLineStyle.Solid,
@@ -352,8 +402,14 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
       return;
     }
 
-    const updatedElement = { ...currentElement, ...changes } as BoardElement;
-    const changedKeys = Object.keys(changes).filter((key) => {
+    const updatedElement = createUpdatedElement(currentElement, changes);
+    const trackedKeys = [...new Set([
+      ...Object.keys(changes),
+      ...((currentElement.$type === 'drawing' && ('x' in changes || 'y' in changes || 'width' in changes || 'height' in changes))
+        ? ['points']
+        : []),
+    ])];
+    const changedKeys = trackedKeys.filter((key) => {
       const currentValue = (currentElement as unknown as Record<string, unknown>)[key];
       const nextValue = (updatedElement as unknown as Record<string, unknown>)[key];
 
@@ -372,7 +428,12 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
       return;
     }
 
-    updateElement(id, changes);
+    const isLockToggleOnly = changedKeys.every((key) => key === 'isLocked');
+    if (currentElement.isLocked === true && !isLockToggleOnly) {
+      return;
+    }
+
+    updateElement(id, createElementPatch(updatedElement, changedKeys));
     pushCommand(createElementUpdateCommand(
       [currentElement],
       [updatedElement],
@@ -411,7 +472,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
   };
 
   const applyAlignment = (action: AlignAction) => {
-    const positions = computeAlignment(selected, action);
+    const positions = computeAlignment(movableSelection, action);
     if (positions.size === 0) return;
 
     const beforeElements: BoardElement[] = [];
@@ -420,18 +481,20 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
       const current = elements.find((e) => e.id === id);
       if (!current) continue;
       beforeElements.push(current);
-      afterElements.push({ ...current, x: pos.x, y: pos.y } as BoardElement);
+      afterElements.push(moveElementToPosition(current, pos.x, pos.y));
     }
 
     const changedIds = beforeElements.map((e) => e.id);
     const command = createElementUpdateCommand(
       beforeElements,
       afterElements,
-      createChangedKeysByElementId(changedIds, ['x', 'y']),
+      createChangedKeysByElementId(changedIds, ['x', 'y', 'points']),
     );
 
     for (const after of afterElements) {
-      updateElement(after.id, { x: after.x, y: after.y });
+      updateElement(after.id, after.$type === 'drawing'
+        ? { x: after.x, y: after.y, points: after.points }
+        : { x: after.x, y: after.y });
     }
     pushCommand(command);
     setDirty(true);
@@ -441,7 +504,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
   };
 
   const applyDistribution = (action: DistributeAction) => {
-    const positions = computeDistribution(selected, action);
+    const positions = computeDistribution(movableSelection, action);
     if (positions.size === 0) return;
 
     const beforeElements: BoardElement[] = [];
@@ -450,18 +513,20 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
       const current = elements.find((e) => e.id === id);
       if (!current) continue;
       beforeElements.push(current);
-      afterElements.push({ ...current, x: pos.x, y: pos.y } as BoardElement);
+      afterElements.push(moveElementToPosition(current, pos.x, pos.y));
     }
 
     const changedIds = beforeElements.map((e) => e.id);
     const command = createElementUpdateCommand(
       beforeElements,
       afterElements,
-      createChangedKeysByElementId(changedIds, ['x', 'y']),
+      createChangedKeysByElementId(changedIds, ['x', 'y', 'points']),
     );
 
     for (const after of afterElements) {
-      updateElement(after.id, { x: after.x, y: after.y });
+      updateElement(after.id, after.$type === 'drawing'
+        ? { x: after.x, y: after.y, points: after.points }
+        : { x: after.x, y: after.y });
     }
     pushCommand(command);
     setDirty(true);
@@ -470,7 +535,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
     }
   };
 
-  const alignableCount = selected.filter((e) => e.$type !== 'arrow').length;
+  const alignableCount = movableSelection.length;
 
   return (
     <AuxiliaryPanelShell title={t('properties.title', 'Eigenschaften')} onClose={onClose} mobile={mobile}>
@@ -562,6 +627,11 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
                 </Box>
               }
             />
+            <Box
+              sx={el.isLocked === true
+                ? { display: 'flex', flexDirection: 'column', gap: 2, opacity: 0.56, pointerEvents: 'none' }
+                : { display: 'flex', flexDirection: 'column', gap: 2 }}
+            >
             {/* Position */}
             <Box sx={{ display: 'flex', gap: 1 }}>
               <NumberInputField
@@ -978,6 +1048,27 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
             );
           })()}
 
+          {/* Drawing-specific */}
+          {el.$type === 'drawing' && (() => {
+            const drawing = el as DrawingElement;
+            return (
+            <>
+              <ColorInputField
+                label={t('properties.strokeColor')}
+                value={drawing.strokeColor ?? '#333333'}
+                onChange={(value) => update(el.id, { strokeColor: value })}
+              />
+              <NumericSliderField
+                label={t('properties.strokeWidth')}
+                value={drawing.strokeWidth ?? 2}
+                min={1}
+                max={20}
+                onChange={(value) => update(el.id, { strokeWidth: value })}
+              />
+            </>
+            );
+          })()}
+
           {/* Arrow-specific */}
           {el.$type === 'arrow' && (() => {
             const arrow = el as ArrowElement;
@@ -1048,6 +1139,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
             </>
             );
           })()}
+            </Box>
           </Box>
         )}
       </Box>

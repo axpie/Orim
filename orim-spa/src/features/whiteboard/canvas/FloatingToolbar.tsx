@@ -17,6 +17,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import LineWeightIcon from '@mui/icons-material/LineWeight';
+import LockIcon from '@mui/icons-material/Lock';
+import LockOpenIcon from '@mui/icons-material/LockOpen';
 import { useTranslation } from 'react-i18next';
 import { useBoardStore } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
@@ -299,6 +301,11 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
 
     if (changedKeys.length === 0) return;
 
+    const isLockToggleOnly = changedKeys.every((key) => key === 'isLocked');
+    if (currentElement.isLocked === true && !isLockToggleOnly) {
+      return;
+    }
+
     updateElement(id, changes);
     pushCommand(createElementUpdateCommand(
       [currentElement],
@@ -349,6 +356,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   const isBold = getCommonValue<boolean>(selected, 'isBold') ?? false;
   const isItalic = getCommonValue<boolean>(selected, 'isItalic') ?? false;
   const strokeWidth = showStrokeWidth ? getCommonValue<number>(selected, 'strokeWidth') ?? 2 : 2;
+  const areAllLocked = selected.length > 0 && selected.every((element) => element.isLocked === true);
 
   if (!bbox || selected.length === 0) return null;
 
@@ -534,6 +542,17 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
 
       {/* Separator before actions */}
       <Box sx={{ width: '1px', height: 24, bgcolor: 'divider', mx: 0.25 }} />
+
+      <Tooltip title={areAllLocked ? t('contextMenu.unlock', 'Entsperren') : t('contextMenu.lock', 'Sperren')} arrow>
+        <IconButton
+          size="small"
+          onClick={() => updateAll({ isLocked: !areAllLocked })}
+          sx={{ width: 32, height: 32 }}
+          aria-label={areAllLocked ? t('contextMenu.unlock', 'Entsperren') : t('contextMenu.lock', 'Sperren')}
+        >
+          {areAllLocked ? <LockOpenIcon sx={{ fontSize: 18 }} /> : <LockIcon sx={{ fontSize: 18 }} />}
+        </IconButton>
+      </Tooltip>
 
       {/* Delete */}
       <Tooltip title={t('toolbar.delete', 'Loeschen')} arrow>

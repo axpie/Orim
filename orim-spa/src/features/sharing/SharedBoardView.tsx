@@ -7,6 +7,7 @@ import {
   Box,
   Card,
   CardContent,
+  IconButton,
   Snackbar,
   TextField,
   Button,
@@ -16,11 +17,13 @@ import {
   useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import CloseIcon from '@mui/icons-material/Close';
 import { getSharedBoard, getSharedBoardHistory, replaceSharedBoardContent, validateSharePassword } from '../../api/boards';
 import { useBoardComments } from '../whiteboard/comments/useBoardComments';
 import { useBoardStore } from '../whiteboard/store/boardStore';
 import { useCommandStack } from '../whiteboard/store/commandStack';
 import { WhiteboardCanvas } from '../whiteboard/canvas/WhiteboardCanvas';
+import { RemoteCursorEdgeIndicators } from '../whiteboard/canvas/RemoteCursorEdgeIndicators';
 import { Toolbar } from '../whiteboard/tools/Toolbar';
 import { BoardTopBar } from '../whiteboard/tools/BoardTopBar';
 import { PropertiesPanel } from '../whiteboard/panels/PropertiesPanel';
@@ -30,13 +33,15 @@ import { getAuxiliaryPanelWidth, toggleAuxiliaryPanel, type AuxiliaryPanelKind }
 import { deriveBoardSyncStatus } from '../whiteboard/boardSyncStatus';
 import { getBoardSyncAnnouncement } from '../whiteboard/a11yAnnouncements';
 import { formatBoardCommandConflict } from '../whiteboard/realtime/localBoardCommands';
+import { mergeCursorPresence } from '../whiteboard/realtime/mergeCursorPresence';
 import { useOperationOutboxStore } from '../whiteboard/store/outboxStore';
 import { useSignalR } from '../../hooks/useSignalR';
 import { useAuthStore } from '../../stores/authStore';
-import type { Board } from '../../types/models';
+import type { Board, CursorPresence } from '../../types/models';
 import { BoardRole } from '../../types/models';
 import { resolveInitialGuestDisplayName } from './guestDisplayNames';
 import type { BoardOperationPayload } from '../whiteboard/realtime/boardOperations';
+import { getCenteredCameraPosition } from '../whiteboard/cameraUtils';
 import { primeBoardHistorySequence, recoverBoardAfterReconnect } from '../whiteboard/realtime/reconnectRecovery';
 
 const guestNameStorageKey = 'orim_guest_name';
@@ -63,6 +68,14 @@ export function SharedBoardView() {
   const setDirty = useBoardStore((s) => s.setDirty);
   const commandConflict = useBoardStore((s) => s.commandConflict);
   const clearCommandConflict = useBoardStore((s) => s.clearCommandConflict);
+  const followingClientId = useBoardStore((s) => s.followingClientId);
+  const setFollowingClientId = useBoardStore((s) => s.setFollowingClientId);
+  const setCamera = useBoardStore((s) => s.setCamera);
+  const cameraX = useBoardStore((s) => s.cameraX);
+  const cameraY = useBoardStore((s) => s.cameraY);
+  const zoom = useBoardStore((s) => s.zoom);
+  const viewportWidth = useBoardStore((s) => s.viewportWidth);
+  const viewportHeight = useBoardStore((s) => s.viewportHeight);
   const outboxCount = useOperationOutboxStore((s) => (board?.id ? s.countForBoard(board.id) : 0));
   const clearCommandStack = useCommandStack((s) => s.clear);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -223,10 +236,13 @@ export function SharedBoardView() {
     },
     onCommentUpserted: handleCommentUpserted,
     onCommentDeleted: handleCommentDeleted,
-    onPresenceUpdated: (cursors) => setRemoteCursors(cursors),
+    onPresenceUpdated: (cursors) => {
+      setRemoteCursors(mergeCursorPresence(useBoardStore.getState().remoteCursors, cursors));
+    },
     onCursorUpdated: (cursor) => {
-      const current = useBoardStore.getState().remoteCursors.filter((entry) => entry.clientId !== cursor.clientId);
-      setRemoteCursors([...current, cursor]);
+      const current = useBoardStore.getState().remoteCursors;
+      const others = current.filter((entry) => entry.clientId !== cursor.clientId);
+      setRemoteCursors(mergeCursorPresence(current, [...others, cursor]));
     },
   });
 
@@ -375,6 +391,31 @@ export function SharedBoardView() {
   }, [board?.sharedAllowAnonymousEditing, connectionState, isDirty, scheduleSave]);
 
   useEffect(() => {
+    if (!followingClientId) {
+      return;
+    }
+
+    const followed = remoteCursors.find((cursor) => cursor.clientId === followingClientId);
+    if (!followed) {
+      setFollowingClientId(null);
+      return;
+    }
+
+    if (followed.worldX == null || followed.worldY == null) {
+      return;
+    }
+
+    const { cameraX: nextCameraX, cameraY: nextCameraY } = getCenteredCameraPosition(
+      followed.worldX,
+      followed.worldY,
+      zoom,
+      viewportWidth,
+      viewportHeight,
+    );
+    setCamera(nextCameraX, nextCameraY);
+  }, [followingClientId, remoteCursors, setCamera, setFollowingClientId, viewportHeight, viewportWidth, zoom]);
+
+  useEffect(() => {
     return () => {
       clearScheduledSave();
     };
@@ -395,6 +436,21 @@ export function SharedBoardView() {
     },
     [sendCursorUpdate],
   );
+
+  const handleJumpToCursor = useCallback((cursor: CursorPresence) => {
+    if (cursor.worldX == null || cursor.worldY == null) {
+      return;
+    }
+
+    const { cameraX: nextCameraX, cameraY: nextCameraY } = getCenteredCameraPosition(
+      cursor.worldX,
+      cursor.worldY,
+      zoom,
+      viewportWidth,
+      viewportHeight,
+    );
+    setCamera(nextCameraX, nextCameraY);
+  }, [setCamera, viewportHeight, viewportWidth, zoom]);
 
   const handlePasswordSubmit = async () => {
     try {
@@ -631,6 +687,51 @@ export function SharedBoardView() {
             onSelectComment={handleSelectComment}
             onCreateCommentAnchor={handleCommentAnchorSelected}
             liveAnnouncement={liveAnnouncement}
+          />
+
+          {followingClientId && (() => {
+            const followed = remoteCursors.find((cursor) => cursor.clientId === followingClientId);
+            if (!followed) {
+              return null;
+            }
+
+            return (
+              <Box
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  height: 32,
+                  bgcolor: followed.colorHex,
+                  color: 'white',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  zIndex: 10,
+                  gap: 1,
+                }}
+              >
+                <Typography variant="caption" fontWeight={600}>
+                  {t('board.followingUser', { name: followed.displayName, defaultValue: 'Following {{name}}' })}
+                </Typography>
+                <IconButton size="small" onClick={() => setFollowingClientId(null)} sx={{ color: 'white', p: 0.25 }}>
+                  <CloseIcon fontSize="small" />
+                </IconButton>
+              </Box>
+            );
+          })()}
+
+          <RemoteCursorEdgeIndicators
+            cursors={remoteCursors}
+            localConnectionId={connectionId}
+            zoom={zoom}
+            cameraX={cameraX}
+            cameraY={cameraY}
+            viewportWidth={viewportWidth}
+            viewportHeight={viewportHeight}
+            followingClientId={followingClientId}
+            onJumpToCursor={handleJumpToCursor}
           />
 
           <AuxiliaryPanelHost
