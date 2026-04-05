@@ -25,6 +25,7 @@ export enum ShapeType {
   Rectangle = 'Rectangle',
   Ellipse = 'Ellipse',
   Triangle = 'Triangle',
+  Rhombus = 'Rhombus',
 }
 
 export enum BorderLineStyle {

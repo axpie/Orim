@@ -168,6 +168,18 @@ public sealed class BoardPdfExportService
                 gfx.DrawPolygon(strokePen, fillBrush, points, XFillMode.Winding);
                 break;
             }
+            case ShapeType.Rhombus:
+            {
+                var points = new[]
+                {
+                    new XPoint(x + width / 2, y),
+                    new XPoint(x + width, y + height / 2),
+                    new XPoint(x + width / 2, y + height),
+                    new XPoint(x, y + height / 2),
+                };
+                gfx.DrawPolygon(strokePen, fillBrush, points, XFillMode.Winding);
+                break;
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(shape.Label))

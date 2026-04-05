@@ -1,6 +1,7 @@
 import type { BoardComment, BoardElement, DockPoint } from '../../../types/models';
 import type { ResizeHandle } from '../shapes/SelectionOverlay';
 import { v4 as uuidv4 } from 'uuid';
+import { translateDrawingPoints } from './drawingGeometry';
 
 // ── Constants ──
 
@@ -169,6 +170,10 @@ export function cloneElementsForInsertion(
       if (clone.targetY != null) {
         clone.targetY += offsetY;
       }
+    }
+
+    if (clone.$type === 'drawing') {
+      clone.points = translateDrawingPoints(clone.points, offsetX, offsetY);
     }
 
     return clone;

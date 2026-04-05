@@ -17,6 +17,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import RemoveIcon from '@mui/icons-material/Remove';
 import LineWeightIcon from '@mui/icons-material/LineWeight';
+import { useTranslation } from 'react-i18next';
 import { useBoardStore } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
 import { createElementUpdateCommand, createChangedKeysByElementId, createDeleteElementsCommand } from '../realtime/localBoardCommands';
@@ -26,6 +27,7 @@ import type { BoardElement } from '../../../types/models';
 import { projectWorldToViewport } from '../cameraUtils';
 
 const TOOLBAR_GAP = 8;
+const ROTATION_HANDLE_CLEARANCE = 36;
 const PRESET_COLORS = [
   '#000000', '#FFFFFF', '#EF4444', '#F59E0B', '#22C55E',
   '#3B82F6', '#8B5CF6', '#EC4899', '#6B7280', '#0EA5E9',
@@ -94,6 +96,7 @@ interface ColorPickerPopoverProps {
 }
 
 function ColorPickerPopover({ anchorEl, open, color, onClose, onColorChange }: ColorPickerPopoverProps) {
+  const { t } = useTranslation();
   const [customHex, setCustomHex] = useState(color);
 
   const handleCustomCommit = () => {
@@ -128,14 +131,14 @@ function ColorPickerPopover({ anchorEl, open, color, onClose, onColorChange }: C
               backgroundColor: c,
               '&:hover': { backgroundColor: c, opacity: 0.85 },
             }}
-            aria-label={c}
+            aria-label={t('floatingToolbar.colorSwatch', { color: c, defaultValue: 'Farbe {{color}}' })}
           />
         ))}
       </Box>
       <TextField
         size="small"
         fullWidth
-        label="Hex"
+        label={t('floatingToolbar.hex', 'Hex')}
         value={customHex}
         onChange={(e) => setCustomHex(e.target.value)}
         onBlur={handleCustomCommit}
@@ -154,13 +157,14 @@ interface FontSizeStepperProps {
 }
 
 function FontSizeStepper({ value, onChange }: FontSizeStepperProps) {
+  const { t } = useTranslation();
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0, mx: 0.25 }}>
       <IconButton
         size="small"
         onClick={() => onChange(Math.max(8, value - 2))}
         sx={{ width: 24, height: 24 }}
-        aria-label="Decrease font size"
+        aria-label={t('floatingToolbar.decreaseFontSize', 'Schrift verkleinern')}
       >
         <RemoveIcon sx={{ fontSize: 14 }} />
       </IconButton>
@@ -171,7 +175,7 @@ function FontSizeStepper({ value, onChange }: FontSizeStepperProps) {
         size="small"
         onClick={() => onChange(Math.min(200, value + 2))}
         sx={{ width: 24, height: 24 }}
-        aria-label="Increase font size"
+        aria-label={t('floatingToolbar.increaseFontSize', 'Schrift vergroessern')}
       >
         <AddIcon sx={{ fontSize: 14 }} />
       </IconButton>
@@ -190,6 +194,7 @@ interface StrokeWidthSelectorProps {
 }
 
 function StrokeWidthSelector({ anchorEl, open, value, onClose, onChange }: StrokeWidthSelectorProps) {
+  const { t } = useTranslation();
   return (
     <Popover
       open={open}
@@ -211,7 +216,7 @@ function StrokeWidthSelector({ anchorEl, open, value, onClose, onChange }: Strok
             borderColor: w === value ? 'primary.main' : 'divider',
             borderRadius: '4px',
           }}
-          aria-label={`Stroke width ${w}`}
+          aria-label={t('floatingToolbar.strokeWidthOption', { width: w, defaultValue: 'Rahmenbreite {{width}}' })}
         >
           <Box sx={{ width: 18, height: w + 1, bgcolor: 'text.primary', borderRadius: 0.5 }} />
         </IconButton>
@@ -233,6 +238,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   onBoardChanged,
   onOpenPropertiesPanel,
 }: FloatingToolbarProps) {
+  const { t } = useTranslation();
   const updateElement = useBoardStore((s) => s.updateElement);
   const setElements = useBoardStore((s) => s.setElements);
   const setSelectedElementIds = useBoardStore((s) => s.setSelectedElementIds);
@@ -354,7 +360,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   const { width: toolbarWidth, height: toolbarHeight } = toolbarSize;
 
   let left = screenCenterX - toolbarWidth / 2;
-  let top = screenTopY - toolbarHeight - TOOLBAR_GAP;
+  let top = screenTopY - toolbarHeight - ROTATION_HANDLE_CLEARANCE;
   const positionedBelow = top < TOOLBAR_GAP;
   if (positionedBelow) {
     top = screenBottomY + TOOLBAR_GAP;
@@ -388,12 +394,12 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
       {/* Fill Color */}
       {showFill && (
         <>
-          <Tooltip title="Fill Color" arrow>
+          <Tooltip title={t('properties.fillColor', 'Fuellfarbe')} arrow>
             <IconButton
               size="small"
               onClick={(e) => setFillAnchorEl(e.currentTarget)}
               sx={{ width: 32, height: 32, p: 0 }}
-              aria-label="Fill color"
+              aria-label={t('properties.fillColor', 'Fuellfarbe')}
             >
               <FormatColorFillIcon sx={{ fontSize: 18 }} />
               <Box
@@ -424,12 +430,12 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
       {/* Stroke / Text Color */}
       {showStroke && (
         <>
-          <Tooltip title="Stroke Color" arrow>
+          <Tooltip title={t('properties.strokeColor', 'Rahmenfarbe')} arrow>
             <IconButton
               size="small"
               onClick={(e) => setStrokeAnchorEl(e.currentTarget)}
               sx={{ width: 32, height: 32, p: 0 }}
-              aria-label="Stroke color"
+              aria-label={t('properties.strokeColor', 'Rahmenfarbe')}
             >
               <BorderColorIcon sx={{ fontSize: 18 }} />
               <Box
@@ -472,7 +478,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
             value={fontSize}
             onChange={(v) => updateAll({ fontSize: v } as Partial<BoardElement>)}
           />
-          <Tooltip title="Bold" arrow>
+          <Tooltip title={t('properties.bold', 'Fett')} arrow>
             <IconButton
               size="small"
               onClick={() => updateAll({ isBold: !isBold })}
@@ -481,12 +487,12 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
                 height: 32,
                 bgcolor: isBold ? 'action.selected' : 'transparent',
               }}
-              aria-label="Bold"
+              aria-label={t('properties.bold', 'Fett')}
             >
               <FormatBoldIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Italic" arrow>
+          <Tooltip title={t('properties.italic', 'Kursiv')} arrow>
             <IconButton
               size="small"
               onClick={() => updateAll({ isItalic: !isItalic })}
@@ -495,7 +501,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
                 height: 32,
                 bgcolor: isItalic ? 'action.selected' : 'transparent',
               }}
-              aria-label="Italic"
+              aria-label={t('properties.italic', 'Kursiv')}
             >
               <FormatItalicIcon sx={{ fontSize: 18 }} />
             </IconButton>
@@ -506,12 +512,12 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
       {/* Stroke width for shapes */}
       {showStrokeWidth && (
         <>
-          <Tooltip title="Stroke Width" arrow>
+          <Tooltip title={t('properties.strokeWidth', 'Rahmenbreite')} arrow>
             <IconButton
               size="small"
               onClick={(e) => setStrokeWidthAnchorEl(e.currentTarget)}
               sx={{ width: 32, height: 32 }}
-              aria-label="Stroke width"
+              aria-label={t('properties.strokeWidth', 'Rahmenbreite')}
             >
               <LineWeightIcon sx={{ fontSize: 18 }} />
             </IconButton>
@@ -530,24 +536,24 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
       <Box sx={{ width: '1px', height: 24, bgcolor: 'divider', mx: 0.25 }} />
 
       {/* Delete */}
-      <Tooltip title="Delete" arrow>
+      <Tooltip title={t('toolbar.delete', 'Loeschen')} arrow>
         <IconButton
           size="small"
           onClick={handleDelete}
           sx={{ width: 32, height: 32 }}
-          aria-label="Delete"
+          aria-label={t('toolbar.delete', 'Loeschen')}
         >
           <DeleteIcon sx={{ fontSize: 18 }} />
         </IconButton>
       </Tooltip>
 
       {/* More... (open properties panel) */}
-      <Tooltip title="More properties" arrow>
+      <Tooltip title={t('floatingToolbar.moreProperties', 'Weitere Eigenschaften')} arrow>
         <IconButton
           size="small"
           onClick={onOpenPropertiesPanel}
           sx={{ width: 32, height: 32 }}
-          aria-label="More properties"
+          aria-label={t('floatingToolbar.moreProperties', 'Weitere Eigenschaften')}
         >
           <MoreHorizIcon sx={{ fontSize: 18 }} />
         </IconButton>

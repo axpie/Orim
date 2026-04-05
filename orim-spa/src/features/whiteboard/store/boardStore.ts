@@ -12,7 +12,7 @@ import type {
 } from '../realtime/localBoardCommands';
 import { applyBoardOperation, createElementUpdatedOperation } from '../realtime/boardOperations';
 
-export type ToolType = 'select' | 'hand' | 'rectangle' | 'ellipse' | 'triangle' | 'text' | 'sticky' | 'frame' | 'icon' | 'arrow' | 'image' | 'drawing';
+export type ToolType = 'select' | 'hand' | 'rectangle' | 'ellipse' | 'triangle' | 'rhombus' | 'text' | 'sticky' | 'frame' | 'icon' | 'arrow' | 'image' | 'drawing';
 
 interface ViewportInsets {
   top: number;

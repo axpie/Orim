@@ -178,6 +178,7 @@
     "rectangle": "Rectangle",
     "ellipse": "Ellipse",
     "triangle": "Triangle",
+    "rhombus": "Diamond",
     "text": "Text",
     "stickyNote": "Sticky Note",
     "frame": "Frame",
@@ -246,6 +247,14 @@
     "imageFit_UniformToFill": "Uniform to fill",
     "imageFit_Fill": "Fill",
     "rotation": "Rotation"
+  },
+  "floatingToolbar": {
+    "hex": "Hex",
+    "colorSwatch": "Color {{color}}",
+    "decreaseFontSize": "Decrease font size",
+    "increaseFontSize": "Increase font size",
+    "strokeWidthOption": "Stroke width {{width}}",
+    "moreProperties": "More properties"
   },
   "sharing": {
     "visibility": "Visibility",

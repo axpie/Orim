@@ -18,6 +18,8 @@ function getShapeToolKey(shapeType: ShapeType) {
       return 'tools.ellipse';
     case ShapeType.Triangle:
       return 'tools.triangle';
+    case ShapeType.Rhombus:
+      return 'tools.rhombus';
     case ShapeType.Rectangle:
     default:
       return 'tools.rectangle';
@@ -34,6 +36,8 @@ export function getToolLabel(tool: ToolType, t: Translate) {
       return t('tools.ellipse');
     case 'triangle':
       return t('tools.triangle');
+    case 'rhombus':
+      return t('tools.rhombus');
     case 'text':
       return t('tools.text');
     case 'sticky':

@@ -59,6 +59,7 @@ type ResizeState = {
   initialY: number;
   initialWidth: number;
   initialHeight: number;
+  initialDrawingPoints?: number[];
 } | null;
 
 export type RotationState = {
@@ -368,7 +369,7 @@ export function useCanvasStartInteractions({
       return;
     }
 
-    if (editable && (activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle' || activeTool === 'frame')) {
+    if (editable && (activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle' || activeTool === 'rhombus' || activeTool === 'frame')) {
       setDrawStart(worldPos);
       setDraftRect({ x: worldPos.x, y: worldPos.y, w: 0, h: 0 });
       return;
@@ -556,6 +557,7 @@ export function useCanvasStartInteractions({
             initialY: element.y,
             initialWidth: element.width,
             initialHeight: element.height,
+            initialDrawingPoints: element.$type === 'drawing' ? [...element.points] : undefined,
           });
           return;
         }

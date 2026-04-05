@@ -39,6 +39,7 @@ import type {
 } from '../../../types/models';
 import type { WhiteboardContextMenuAction } from './WhiteboardContextMenu';
 import { KEYBOARD_DUPLICATE_OFFSET, cloneElementsForInsertion } from './canvasUtils';
+import { translateDrawingElement } from './drawingGeometry';
 
 interface UseCanvasActionsOptions {
   editable: boolean;
@@ -420,7 +421,9 @@ export function useCanvasActions({
     const before = [...elements];
     const after = elements.map((element) => (
       selectedIdSet.has(element.id) && element.$type !== 'arrow'
-        ? { ...element, x: element.x + deltaX, y: element.y + deltaY }
+        ? element.$type === 'drawing'
+          ? translateDrawingElement(element, deltaX, deltaY)
+          : { ...element, x: element.x + deltaX, y: element.y + deltaY }
         : element
     ));
     const movedBefore = before.filter((element) => selectedIdSet.has(element.id) && element.$type !== 'arrow');
@@ -430,7 +433,7 @@ export function useCanvasActions({
     pushCommand(createElementUpdateCommand(
       movedBefore,
       movedAfter,
-      createChangedKeysByElementId(movedBefore.map((element) => element.id), ['x', 'y']),
+      createChangedKeysByElementId(movedBefore.map((element) => element.id), ['x', 'y', 'points']),
     ));
     onBoardChanged('move', asOperationPayload(
       movedAfter.map((element) => createElementUpdatedOperation(element)),

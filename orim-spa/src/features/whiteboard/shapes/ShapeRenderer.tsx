@@ -47,6 +47,21 @@ function ShapeRendererInner({ element: el }: ShapeRendererProps) {
           dash={dash}
           data-element-id={el.id}
         />
+      ) : el.shapeType === ShapeType.Rhombus ? (
+        <Line
+          points={[
+            el.x + el.width / 2, el.y,
+            el.x + el.width, el.y + el.height / 2,
+            el.x + el.width / 2, el.y + el.height,
+            el.x, el.y + el.height / 2,
+          ]}
+          closed
+          fill={el.fillColor ?? '#ffffff'}
+          stroke={el.strokeColor ?? '#333333'}
+          strokeWidth={el.strokeWidth ?? 2}
+          dash={dash}
+          data-element-id={el.id}
+        />
       ) : (
         <Rect
           x={el.x}

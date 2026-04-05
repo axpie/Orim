@@ -71,7 +71,8 @@ public enum ShapeType
 {
     Rectangle,
     Ellipse,
-    Triangle
+    Triangle,
+    Rhombus
 }
 
 public class TextElement : BoardElement

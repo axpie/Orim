@@ -74,6 +74,7 @@ import {
   createElementUpdateCommand,
 } from '../realtime/localBoardCommands';
 import { normalizeRotationDegrees } from '../../../utils/rotation';
+import { resizeDrawingElement, translateDrawingElement } from './drawingGeometry';
 
 interface WhiteboardCanvasProps {
   editable?: boolean;
@@ -205,6 +206,7 @@ export function WhiteboardCanvas({
     initialY: number;
     initialWidth: number;
     initialHeight: number;
+    initialDrawingPoints?: number[];
   } | null>(null);
   const [hoveredResizeHandle, setHoveredResizeHandle] = useState<ResizeHandle | null>(null);
 
@@ -666,13 +668,28 @@ export function WhiteboardCanvas({
           }
         }
 
-        const nextElement = {
-          ...currentElement,
+        const nextBounds = {
           x: nextLeft,
           y: nextTop,
           width: nextRight - nextLeft,
           height: nextBottom - nextTop,
-        } as BoardElement;
+        };
+        const nextElement = currentElement.$type === 'drawing' && resizeState.initialDrawingPoints
+          ? resizeDrawingElement(
+            currentElement,
+            {
+              x: resizeState.initialX,
+              y: resizeState.initialY,
+              width: resizeState.initialWidth,
+              height: resizeState.initialHeight,
+            },
+            nextBounds,
+            resizeState.initialDrawingPoints,
+          )
+          : {
+            ...currentElement,
+            ...nextBounds,
+          } as BoardElement;
         updateElement(resizeState.elementId, nextElement);
         onBoardLiveChanged?.('resize', createElementUpdatedOperation(nextElement));
         return;
@@ -713,11 +730,13 @@ export function WhiteboardCanvas({
           }
 
           const payload = asOperationPayload(selectedEls.map((el) => {
-            const nextElement = {
-              ...el,
-              x: el.x + dx + snapDx,
-              y: el.y + dy + snapDy,
-            } as BoardElement;
+            const nextElement = el.$type === 'drawing'
+              ? translateDrawingElement(el, dx + snapDx, dy + snapDy)
+              : {
+                ...el,
+                x: el.x + dx + snapDx,
+                y: el.y + dy + snapDy,
+              } as BoardElement;
             updateElement(el.id, nextElement);
             return createElementUpdatedOperation(nextElement);
           }));
@@ -805,6 +824,7 @@ export function WhiteboardCanvas({
           const shapeType =
             activeTool === 'ellipse' ? ShapeType.Ellipse :
             activeTool === 'triangle' ? ShapeType.Triangle :
+            activeTool === 'rhombus' ? ShapeType.Rhombus :
             ShapeType.Rectangle;
 
           const newShape: ShapeElement = {
@@ -937,11 +957,11 @@ export function WhiteboardCanvas({
         setGuides([]);
         resizeSnapshotRef.current = null;
 
-        if (before && haveTrackedElementChanges(before, after, [resizeState.elementId], ['x', 'y', 'width', 'height'])) {
+        if (before && haveTrackedElementChanges(before, after, [resizeState.elementId], ['x', 'y', 'width', 'height', 'points'])) {
           pushCommand(createElementUpdateCommand(
             before.filter((element) => element.id === resizeState.elementId),
             after.filter((element) => element.id === resizeState.elementId),
-            createChangedKeysByElementId([resizeState.elementId], ['x', 'y', 'width', 'height']),
+            createChangedKeysByElementId([resizeState.elementId], ['x', 'y', 'width', 'height', 'points']),
           ));
           emitUpdatedOperations('resize', [resizeState.elementId]);
         }
@@ -972,11 +992,11 @@ export function WhiteboardCanvas({
         setDragStart(null);
         setGuides([]);
 
-        if (before && haveTrackedElementChanges(before, after, selectedIds, ['x', 'y'])) {
+        if (before && haveTrackedElementChanges(before, after, selectedIds, ['x', 'y', 'points'])) {
           pushCommand(createElementUpdateCommand(
             before.filter((element) => selectedIds.includes(element.id)),
             after.filter((element) => selectedIds.includes(element.id)),
-            createChangedKeysByElementId(selectedIds, ['x', 'y']),
+            createChangedKeysByElementId(selectedIds, ['x', 'y', 'points']),
           ));
           emitUpdatedOperations('move', selectedIds);
         }

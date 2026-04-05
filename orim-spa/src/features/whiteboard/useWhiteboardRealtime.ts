@@ -15,6 +15,19 @@ import { primeBoardHistorySequence, recoverBoardAfterReconnect } from './realtim
 import { useOperationOutboxStore } from './store/outboxStore';
 import { useBoardStore } from './store/boardStore';
 
+function mergeCursorPresence(previous: CursorPresence[], next: CursorPresence[]): CursorPresence[] {
+  const previousByClientId = new Map(previous.map((cursor) => [cursor.clientId, cursor]));
+  return next.map((cursor) => {
+    const existing = previousByClientId.get(cursor.clientId);
+    return {
+      ...existing,
+      ...cursor,
+      worldX: cursor.worldX ?? existing?.worldX ?? null,
+      worldY: cursor.worldY ?? existing?.worldY ?? null,
+    };
+  });
+}
+
 interface UseWhiteboardRealtimeOptions {
   boardId: string | null;
   displayName: string | null;
@@ -131,10 +144,13 @@ export function useWhiteboardRealtime({
     },
     onCommentUpserted,
     onCommentDeleted,
-    onPresenceUpdated: (cursors) => setRemoteCursors(cursors),
+    onPresenceUpdated: (cursors) => {
+      setRemoteCursors(mergeCursorPresence(useBoardStore.getState().remoteCursors, cursors));
+    },
     onCursorUpdated: (cursor) => {
-      const current = useBoardStore.getState().remoteCursors.filter((entry) => entry.clientId !== cursor.clientId);
-      setRemoteCursors([...current, cursor]);
+      const current = useBoardStore.getState().remoteCursors;
+      const others = current.filter((entry) => entry.clientId !== cursor.clientId);
+      setRemoteCursors(mergeCursorPresence(current, [...others, cursor]));
     },
   });
 

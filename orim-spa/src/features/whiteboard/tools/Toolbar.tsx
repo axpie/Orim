@@ -282,6 +282,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     { tool: 'rectangle', icon: <RectangleOutlinedIcon />, label: t('tools.rectangle'), shortcut: 'R' },
     { tool: 'ellipse', icon: <CircleOutlinedIcon />, label: t('tools.ellipse') },
     { tool: 'triangle', icon: <ChangeHistoryIcon />, label: t('tools.triangle') },
+    { tool: 'rhombus', icon: <RectangleOutlinedIcon sx={{ transform: 'rotate(45deg)' }} />, label: t('tools.rhombus') },
     { tool: 'text', icon: <TextFieldsIcon />, label: t('tools.text'), shortcut: 'T' },
     { tool: 'sticky', icon: <StickyNote2OutlinedIcon />, label: t('tools.stickyNote') },
     { tool: 'frame', icon: <CropLandscapeIcon />, label: t('tools.frame') },
@@ -300,8 +301,8 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     { tool: 'image', icon: <ImageIcon />, label: t('tools.image') },
   ];
   const toolById = new Map(tools.map((tool) => [tool.tool, tool]));
-  const shapeTools = tools.filter((tool) => tool.tool === 'rectangle' || tool.tool === 'ellipse' || tool.tool === 'triangle');
-  const activeShapeTool = activeTool === 'ellipse' || activeTool === 'triangle' || activeTool === 'rectangle'
+  const shapeTools = tools.filter((tool) => tool.tool === 'rectangle' || tool.tool === 'ellipse' || tool.tool === 'triangle' || tool.tool === 'rhombus');
+  const activeShapeTool = activeTool === 'ellipse' || activeTool === 'triangle' || activeTool === 'rhombus' || activeTool === 'rectangle'
     ? activeTool
     : 'rectangle';
   const activeShapeDescriptor = toolById.get(activeShapeTool) ?? shapeTools[0];
@@ -672,10 +673,10 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     <Tooltip title={t('tools.shapes', 'Formen')} placement={isCompactLayout ? 'top' : 'right'}>
       <IconButton
         size={isCompactLayout ? 'medium' : 'small'}
-        color={activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle' ? 'primary' : 'default'}
+        color={activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle' || activeTool === 'rhombus' ? 'primary' : 'default'}
         onClick={(event) => setShapeAnchorEl(event.currentTarget)}
         sx={{
-          bgcolor: activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle'
+          bgcolor: activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle' || activeTool === 'rhombus'
             ? 'action.selected'
             : undefined,
           flexShrink: 0,

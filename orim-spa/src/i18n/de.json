@@ -178,6 +178,7 @@
     "rectangle": "Rechteck",
     "ellipse": "Ellipse",
     "triangle": "Dreieck",
+    "rhombus": "Raute",
     "text": "Text",
     "stickyNote": "Haftnotiz",
     "frame": "Rahmen",
@@ -246,6 +247,14 @@
     "imageFit_UniformToFill": "Einheitlich füllen",
     "imageFit_Fill": "Strecken",
     "rotation": "Drehung"
+  },
+  "floatingToolbar": {
+    "hex": "Hex",
+    "colorSwatch": "Farbe {{color}}",
+    "decreaseFontSize": "Schrift verkleinern",
+    "increaseFontSize": "Schrift vergroessern",
+    "strokeWidthOption": "Rahmenbreite {{width}}",
+    "moreProperties": "Weitere Eigenschaften"
   },
   "sharing": {
     "visibility": "Sichtbarkeit",
