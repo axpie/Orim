@@ -27,6 +27,7 @@ import { getAuxiliaryPanelWidth, toggleAuxiliaryPanel, type AuxiliaryPanelKind }
 import { BoardTopBar } from './tools/BoardTopBar';
 import { PresentationMode } from './PresentationMode';
 import { useWhiteboardRealtime } from './useWhiteboardRealtime';
+import { useFollowCamera } from './useFollowCamera';
 import { useOperationOutboxStore } from './store/outboxStore';
 import type { Board, BoardSnapshot, CursorPresence } from '../../types/models';
 import { BoardRole } from '../../types/models';
@@ -408,25 +409,7 @@ export function WhiteboardEditor() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedElementIds, connectionState]);
 
-  // Auto-follow: pan to the followed user's cursor position on cursor updates
-  useEffect(() => {
-    if (!followingClientId) return;
-    const followed = remoteCursors.find((c) => c.clientId === followingClientId);
-    if (!followed) {
-      setFollowingClientId(null);
-      return;
-    }
-    if (followed.worldX == null || followed.worldY == null) return;
-    const { zoom, viewportWidth, viewportHeight } = useBoardStore.getState();
-    const { cameraX, cameraY } = getCenteredCameraPosition(
-      followed.worldX,
-      followed.worldY,
-      zoom,
-      viewportWidth,
-      viewportHeight,
-    );
-    setCamera(cameraX, cameraY);
-  }, [followingClientId, remoteCursors, setCamera, setFollowingClientId]);
+  useFollowCamera(followingClientId, remoteCursors, setFollowingClientId);
 
   const handlePointerPresenceChanged = useCallback(
     (worldX: number | null, worldY: number | null) => {

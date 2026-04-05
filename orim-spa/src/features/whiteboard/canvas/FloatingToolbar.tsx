@@ -93,11 +93,12 @@ interface ColorPickerPopoverProps {
   anchorEl: HTMLElement | null;
   open: boolean;
   color: string;
+  disabled?: boolean;
   onClose: () => void;
   onColorChange: (color: string) => void;
 }
 
-function ColorPickerPopover({ anchorEl, open, color, onClose, onColorChange }: ColorPickerPopoverProps) {
+function ColorPickerPopover({ anchorEl, open, color, disabled = false, onClose, onColorChange }: ColorPickerPopoverProps) {
   const { t } = useTranslation();
   const [customHex, setCustomHex] = useState(color);
 
@@ -123,6 +124,7 @@ function ColorPickerPopover({ anchorEl, open, color, onClose, onColorChange }: C
             key={c}
             size="small"
             onClick={() => { onColorChange(c); onClose(); }}
+            disabled={disabled}
             sx={{
               width: 28,
               height: 28,
@@ -142,6 +144,7 @@ function ColorPickerPopover({ anchorEl, open, color, onClose, onColorChange }: C
         fullWidth
         label={t('floatingToolbar.hex', 'Hex')}
         value={customHex}
+        disabled={disabled}
         onChange={(e) => setCustomHex(e.target.value)}
         onBlur={handleCustomCommit}
         onKeyDown={(e) => { if (e.key === 'Enter') handleCustomCommit(); }}
@@ -155,15 +158,17 @@ function ColorPickerPopover({ anchorEl, open, color, onClose, onColorChange }: C
 
 interface FontSizeStepperProps {
   value: number;
+  disabled?: boolean;
   onChange: (value: number) => void;
 }
 
-function FontSizeStepper({ value, onChange }: FontSizeStepperProps) {
+function FontSizeStepper({ value, disabled = false, onChange }: FontSizeStepperProps) {
   const { t } = useTranslation();
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 0, mx: 0.25 }}>
       <IconButton
         size="small"
+        disabled={disabled}
         onClick={() => onChange(Math.max(8, value - 2))}
         sx={{ width: 24, height: 24 }}
         aria-label={t('floatingToolbar.decreaseFontSize', 'Schrift verkleinern')}
@@ -175,6 +180,7 @@ function FontSizeStepper({ value, onChange }: FontSizeStepperProps) {
       </Typography>
       <IconButton
         size="small"
+        disabled={disabled}
         onClick={() => onChange(Math.min(200, value + 2))}
         sx={{ width: 24, height: 24 }}
         aria-label={t('floatingToolbar.increaseFontSize', 'Schrift vergroessern')}
@@ -191,11 +197,12 @@ interface StrokeWidthSelectorProps {
   anchorEl: HTMLElement | null;
   open: boolean;
   value: number;
+  disabled?: boolean;
   onClose: () => void;
   onChange: (value: number) => void;
 }
 
-function StrokeWidthSelector({ anchorEl, open, value, onClose, onChange }: StrokeWidthSelectorProps) {
+function StrokeWidthSelector({ anchorEl, open, value, disabled = false, onClose, onChange }: StrokeWidthSelectorProps) {
   const { t } = useTranslation();
   return (
     <Popover
@@ -211,6 +218,7 @@ function StrokeWidthSelector({ anchorEl, open, value, onClose, onChange }: Strok
           key={w}
           size="small"
           onClick={() => { onChange(w); onClose(); }}
+          disabled={disabled}
           sx={{
             width: 32,
             height: 32,
@@ -406,6 +414,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
             <IconButton
               size="small"
               onClick={(e) => setFillAnchorEl(e.currentTarget)}
+              disabled={areAllLocked}
               sx={{ width: 32, height: 32, p: 0 }}
               aria-label={t('properties.fillColor', 'Fuellfarbe')}
             >
@@ -429,6 +438,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
             anchorEl={fillAnchorEl}
             open={Boolean(fillAnchorEl)}
             color={fillColor}
+            disabled={areAllLocked}
             onClose={() => setFillAnchorEl(null)}
             onColorChange={(c) => updateAll({ fillColor: c } as Partial<BoardElement>)}
           />
@@ -442,6 +452,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
             <IconButton
               size="small"
               onClick={(e) => setStrokeAnchorEl(e.currentTarget)}
+              disabled={areAllLocked}
               sx={{ width: 32, height: 32, p: 0 }}
               aria-label={t('properties.strokeColor', 'Rahmenfarbe')}
             >
@@ -465,6 +476,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
             anchorEl={strokeAnchorEl}
             open={Boolean(strokeAnchorEl)}
             color={strokeColor}
+            disabled={areAllLocked}
             onClose={() => setStrokeAnchorEl(null)}
             onColorChange={(c) => {
               const key = selected.every((el) => 'strokeColor' in el) ? 'strokeColor' : 'color';
@@ -484,12 +496,14 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
         <>
           <FontSizeStepper
             value={fontSize}
+            disabled={areAllLocked}
             onChange={(v) => updateAll({ fontSize: v } as Partial<BoardElement>)}
           />
           <Tooltip title={t('properties.bold', 'Fett')} arrow>
             <IconButton
               size="small"
               onClick={() => updateAll({ isBold: !isBold })}
+              disabled={areAllLocked}
               sx={{
                 width: 32,
                 height: 32,
@@ -504,6 +518,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
             <IconButton
               size="small"
               onClick={() => updateAll({ isItalic: !isItalic })}
+              disabled={areAllLocked}
               sx={{
                 width: 32,
                 height: 32,
@@ -524,6 +539,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
             <IconButton
               size="small"
               onClick={(e) => setStrokeWidthAnchorEl(e.currentTarget)}
+              disabled={areAllLocked}
               sx={{ width: 32, height: 32 }}
               aria-label={t('properties.strokeWidth', 'Rahmenbreite')}
             >
@@ -534,6 +550,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
             anchorEl={strokeWidthAnchorEl}
             open={Boolean(strokeWidthAnchorEl)}
             value={strokeWidth}
+            disabled={areAllLocked}
             onClose={() => setStrokeWidthAnchorEl(null)}
             onChange={(w) => updateAll({ strokeWidth: w } as Partial<BoardElement>)}
           />

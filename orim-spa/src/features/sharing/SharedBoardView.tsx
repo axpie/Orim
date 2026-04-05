@@ -35,6 +35,7 @@ import { getBoardSyncAnnouncement } from '../whiteboard/a11yAnnouncements';
 import { formatBoardCommandConflict } from '../whiteboard/realtime/localBoardCommands';
 import { mergeCursorPresence } from '../whiteboard/realtime/mergeCursorPresence';
 import { useOperationOutboxStore } from '../whiteboard/store/outboxStore';
+import { useFollowCamera } from '../whiteboard/useFollowCamera';
 import { useSignalR } from '../../hooks/useSignalR';
 import { useAuthStore } from '../../stores/authStore';
 import type { Board, CursorPresence } from '../../types/models';
@@ -174,6 +175,13 @@ export function SharedBoardView() {
     shareToken: token ?? null,
     sharePassword: validatedPassword,
     displayName: guestDisplayName,
+    onBoardChanged: () => {
+      if (!token || useBoardStore.getState().isDirty) {
+        return;
+      }
+
+      void queryClient.invalidateQueries({ queryKey: ['shared-board', token] });
+    },
     beforeOutboxFlush: async ({ boardId, isReconnect, lastKnownSequenceNumber, updateLastKnownSequenceNumber }) => {
       if (!token) {
         return;
@@ -390,30 +398,7 @@ export function SharedBoardView() {
     }
   }, [board?.sharedAllowAnonymousEditing, connectionState, isDirty, scheduleSave]);
 
-  useEffect(() => {
-    if (!followingClientId) {
-      return;
-    }
-
-    const followed = remoteCursors.find((cursor) => cursor.clientId === followingClientId);
-    if (!followed) {
-      setFollowingClientId(null);
-      return;
-    }
-
-    if (followed.worldX == null || followed.worldY == null) {
-      return;
-    }
-
-    const { cameraX: nextCameraX, cameraY: nextCameraY } = getCenteredCameraPosition(
-      followed.worldX,
-      followed.worldY,
-      zoom,
-      viewportWidth,
-      viewportHeight,
-    );
-    setCamera(nextCameraX, nextCameraY);
-  }, [followingClientId, remoteCursors, setCamera, setFollowingClientId, viewportHeight, viewportWidth, zoom]);
+  useFollowCamera(followingClientId, remoteCursors, setFollowingClientId);
 
   useEffect(() => {
     return () => {

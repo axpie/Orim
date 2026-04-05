@@ -2,7 +2,7 @@ import { useRef, useCallback, useState, useEffect, useId, useMemo, type FocusEve
 import { useQuery } from '@tanstack/react-query';
 import { useMediaQuery } from '@mui/material';
 import { useTranslation } from 'react-i18next';
-import { Stage, Layer, Rect, Line, Circle } from 'react-konva';
+import { Stage, Layer, Rect, Line, Circle, Ellipse } from 'react-konva';
 import type Konva from 'konva';
 import { getThemes } from '../../../api/themes';
 import { useThemeStore } from '../../../stores/themeStore';
@@ -1267,17 +1267,60 @@ export function WhiteboardCanvas({
         <Layer name="whiteboard-export-hidden">
           {/* Draft shape */}
           {draftRect && (
-            <Rect
-              x={draftRect.x}
-              y={draftRect.y}
-              width={draftRect.w}
-              height={draftRect.h}
-              stroke={boardDefaults.selectionColor}
-              strokeWidth={2 / zoom}
-              dash={[6 / zoom, 4 / zoom]}
-              fill={`rgba(${boardDefaults.selectionTintRgb},0.1)`}
-              listening={false}
-            />
+            activeTool === 'ellipse' ? (
+              <Ellipse
+                x={draftRect.x + draftRect.w / 2}
+                y={draftRect.y + draftRect.h / 2}
+                radiusX={draftRect.w / 2}
+                radiusY={draftRect.h / 2}
+                stroke={boardDefaults.selectionColor}
+                strokeWidth={2 / zoom}
+                dash={[6 / zoom, 4 / zoom]}
+                fill={`rgba(${boardDefaults.selectionTintRgb},0.1)`}
+                listening={false}
+              />
+            ) : activeTool === 'triangle' ? (
+              <Line
+                points={[
+                  draftRect.x + draftRect.w / 2, draftRect.y,
+                  draftRect.x + draftRect.w, draftRect.y + draftRect.h,
+                  draftRect.x, draftRect.y + draftRect.h,
+                ]}
+                closed
+                stroke={boardDefaults.selectionColor}
+                strokeWidth={2 / zoom}
+                dash={[6 / zoom, 4 / zoom]}
+                fill={`rgba(${boardDefaults.selectionTintRgb},0.1)`}
+                listening={false}
+              />
+            ) : activeTool === 'rhombus' ? (
+              <Line
+                points={[
+                  draftRect.x + draftRect.w / 2, draftRect.y,
+                  draftRect.x + draftRect.w, draftRect.y + draftRect.h / 2,
+                  draftRect.x + draftRect.w / 2, draftRect.y + draftRect.h,
+                  draftRect.x, draftRect.y + draftRect.h / 2,
+                ]}
+                closed
+                stroke={boardDefaults.selectionColor}
+                strokeWidth={2 / zoom}
+                dash={[6 / zoom, 4 / zoom]}
+                fill={`rgba(${boardDefaults.selectionTintRgb},0.1)`}
+                listening={false}
+              />
+            ) : (
+              <Rect
+                x={draftRect.x}
+                y={draftRect.y}
+                width={draftRect.w}
+                height={draftRect.h}
+                stroke={boardDefaults.selectionColor}
+                strokeWidth={2 / zoom}
+                dash={[6 / zoom, 4 / zoom]}
+                fill={`rgba(${boardDefaults.selectionTintRgb},0.1)`}
+                listening={false}
+              />
+            )
           )}
 
           {/* Draft arrow */}
