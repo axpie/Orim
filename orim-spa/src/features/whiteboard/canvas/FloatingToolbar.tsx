@@ -23,6 +23,7 @@ import { createElementUpdateCommand, createChangedKeysByElementId, createDeleteE
 import { createElementUpdatedOperation, createElementsDeletedOperation } from '../realtime/boardOperations';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
 import type { BoardElement } from '../../../types/models';
+import { projectWorldToViewport } from '../cameraUtils';
 
 const TOOLBAR_GAP = 8;
 const PRESET_COLORS = [
@@ -37,6 +38,8 @@ interface FloatingToolbarProps {
   zoom: number;
   cameraX: number;
   cameraY: number;
+  viewportWidth: number;
+  viewportHeight: number;
   onBoardChanged: (changeKind: string, operation?: BoardOperationPayload) => void;
   onOpenPropertiesPanel: () => void;
 }
@@ -225,6 +228,8 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   zoom,
   cameraX,
   cameraY,
+  viewportWidth,
+  viewportHeight,
   onBoardChanged,
   onOpenPropertiesPanel,
 }: FloatingToolbarProps) {
@@ -342,22 +347,21 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   if (!bbox || selected.length === 0) return null;
 
   // --- screen positioning ---
-  const screenCenterX = (((bbox.minX + bbox.maxX) / 2) - cameraX) * zoom;
-  const screenTopY = (bbox.minY - cameraY) * zoom;
-  const screenBottomY = (bbox.maxY - cameraY) * zoom;
+  const screenCenterX = projectWorldToViewport((bbox.minX + bbox.maxX) / 2, bbox.minY, zoom, cameraX, cameraY).x;
+  const screenTopY = projectWorldToViewport(bbox.minX, bbox.minY, zoom, cameraX, cameraY).y;
+  const screenBottomY = projectWorldToViewport(bbox.maxX, bbox.maxY, zoom, cameraX, cameraY).y;
 
   const { width: toolbarWidth, height: toolbarHeight } = toolbarSize;
 
   let left = screenCenterX - toolbarWidth / 2;
   let top = screenTopY - toolbarHeight - TOOLBAR_GAP;
-  const positionedBelow = top < 4;
+  const positionedBelow = top < TOOLBAR_GAP;
   if (positionedBelow) {
     top = screenBottomY + TOOLBAR_GAP;
   }
 
-  // Clamp to viewport
-  left = Math.max(4, Math.min(left, window.innerWidth - toolbarWidth - 4));
-  top = Math.max(4, Math.min(top, window.innerHeight - toolbarHeight - 4));
+  left = Math.max(TOOLBAR_GAP, Math.min(left, viewportWidth - toolbarWidth - TOOLBAR_GAP));
+  top = Math.max(TOOLBAR_GAP, Math.min(top, viewportHeight - toolbarHeight - TOOLBAR_GAP));
 
   return (
     <Paper

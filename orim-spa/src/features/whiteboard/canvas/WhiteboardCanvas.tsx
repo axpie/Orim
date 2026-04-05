@@ -73,6 +73,7 @@ import {
   createChangedKeysByElementId,
   createElementUpdateCommand,
 } from '../realtime/localBoardCommands';
+import { normalizeRotationDegrees } from '../../../utils/rotation';
 
 interface WhiteboardCanvasProps {
   editable?: boolean;
@@ -289,6 +290,7 @@ export function WhiteboardCanvas({
   const {
     getTouchGestureInfo,
     getResizeHandleFromTarget,
+    getRotationHandleFromTarget,
     applyDraggedArrowEndpoint,
     handleMouseDown: handleMouseDownBase,
     handleContextMenu,
@@ -446,8 +448,12 @@ export function WhiteboardCanvas({
       const screenPos = getScreenPos();
       if (!screenPos) return;
       const snapTemporarilyDisabled = e.evt.ctrlKey;
+      const nextHoveredRotationHandle = editable && activeTool === 'select'
+        ? (rotationState != null || getRotationHandleFromTarget(e.target))
+        : false;
       const nextHoveredResizeHandle = resizeState?.handle
         ?? (editable && activeTool === 'select' ? getResizeHandleFromTarget(e.target) : null);
+      setHoveredRotationHandle((current) => (current === nextHoveredRotationHandle ? current : nextHoveredRotationHandle));
       setHoveredResizeHandle((current) => (current === nextHoveredResizeHandle ? current : nextHoveredResizeHandle));
       onPointerPresenceChanged?.(worldPos.x, worldPos.y);
 
@@ -530,6 +536,39 @@ export function WhiteboardCanvas({
         const nextArrow = applyDraggedArrowEndpoint(arrow, arrowEndpointDrag.isSource, nextDrag);
         updateElement(arrowEndpointDrag.arrowId, nextArrow);
         onBoardLiveChanged?.('edit', createElementUpdatedOperation(nextArrow));
+        return;
+      }
+
+      if (rotationState) {
+        const currentAngle = Math.atan2(
+          worldPos.y - rotationState.centerY,
+          worldPos.x - rotationState.centerX,
+        ) * (180 / Math.PI);
+        const rawDelta = normalizeRotationDegrees(currentAngle - rotationState.startAngle);
+        const delta = e.evt.shiftKey ? Math.round(rawDelta / 15) * 15 : rawDelta;
+        const operations = rotationState.elementIds.flatMap((elementId) => {
+          const currentElement = elements.find((element) => element.id === elementId && element.$type !== 'arrow');
+          if (!currentElement) {
+            return [];
+          }
+
+          const nextRotation = normalizeRotationDegrees(
+            (rotationState.initialRotations.get(elementId) ?? currentElement.rotation ?? 0) + delta,
+          );
+
+          if (Object.is(currentElement.rotation, nextRotation)) {
+            return [];
+          }
+
+          const nextElement = { ...currentElement, rotation: nextRotation } as BoardElement;
+          updateElement(elementId, nextElement);
+          return [createElementUpdatedOperation(nextElement)];
+        });
+
+        const payload = asOperationPayload(operations);
+        if (payload) {
+          onBoardLiveChanged?.('rotate', payload);
+        }
         return;
       }
 
@@ -689,10 +728,11 @@ export function WhiteboardCanvas({
         setDragStart(worldPos);
       }
     },
-    [isPanning, panStart, drawingElementId, drawStart, draftRect, draftArrowStart, arrowEndpointDrag, resizeState, marquee, isDragging, dragStart, elements, selectedIds, zoom, editable, activeTool, getWorldPos, getScreenPos, getResizeHandleFromTarget, setCamera, updateElement, applyDraggedArrowEndpoint, onBoardLiveChanged, onPointerPresenceChanged, dockSnapRadius],
+    [isPanning, panStart, drawingElementId, drawStart, draftRect, draftArrowStart, arrowEndpointDrag, rotationState, resizeState, marquee, isDragging, dragStart, elements, selectedIds, zoom, editable, activeTool, getWorldPos, getScreenPos, getResizeHandleFromTarget, getRotationHandleFromTarget, setCamera, updateElement, applyDraggedArrowEndpoint, onBoardLiveChanged, onPointerPresenceChanged, dockSnapRadius],
   );
 
   const handleMouseLeave = useCallback(() => {
+    setHoveredRotationHandle(false);
     setHoveredResizeHandle(null);
     onPointerPresenceChanged?.(null, null);
   }, [onPointerPresenceChanged]);
@@ -700,9 +740,13 @@ export function WhiteboardCanvas({
   // ── Mouse Up ──
   const handleMouseUp = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
+      const nextHoveredRotationHandle = editable && activeTool === 'select'
+        ? getRotationHandleFromTarget(e.target)
+        : false;
       const nextHoveredResizeHandle = editable && activeTool === 'select'
         ? getResizeHandleFromTarget(e.target)
         : null;
+      setHoveredRotationHandle(nextHoveredRotationHandle);
       setHoveredResizeHandle(nextHoveredResizeHandle);
 
       // End panning
@@ -940,7 +984,7 @@ export function WhiteboardCanvas({
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, emitUpdatedOperations, selectedIds, onBoardChanged, rotationState],
+    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, emitUpdatedOperations, selectedIds, onBoardChanged, rotationState],
   );
 
   const handleTouchStart = useCallback(

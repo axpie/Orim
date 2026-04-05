@@ -498,7 +498,7 @@ export function useCanvasStartInteractions({
       if (editable && getRotationHandleFromTarget(target)) {
         setHoveredResizeHandle(null);
         const rotatableSelected = elements.filter(
-          (el) => selectedIds.includes(el.id) && el.$type !== 'arrow',
+          (el) => selectedIds.includes(el.id) && el.$type !== 'arrow' && el.isLocked !== true,
         );
         if (rotatableSelected.length > 0) {
           rotationSnapshotRef.current = [...elements];
@@ -771,6 +771,7 @@ export function useCanvasStartInteractions({
   return {
     getTouchGestureInfo,
     getResizeHandleFromTarget,
+    getRotationHandleFromTarget,
     applyDraggedArrowEndpoint,
     handleMouseDown,
     handleContextMenu,

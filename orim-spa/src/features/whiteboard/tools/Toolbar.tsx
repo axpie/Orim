@@ -30,6 +30,7 @@ import CropLandscapeIcon from '@mui/icons-material/CropLandscape';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import AddReactionIcon from '@mui/icons-material/AddReaction';
 import ImageIcon from '@mui/icons-material/Image';
+import DrawIcon from '@mui/icons-material/Draw';
 import UndoIcon from '@mui/icons-material/Undo';
 import RedoIcon from '@mui/icons-material/Redo';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -186,6 +187,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const [imageLibraryOpen, setImageLibraryOpen] = useState(false);
   const [arrangeAnchorEl, setArrangeAnchorEl] = useState<HTMLElement | null>(null);
+  const [shapeAnchorEl, setShapeAnchorEl] = useState<HTMLElement | null>(null);
   const [stickyPresetAnchorEl, setStickyPresetAnchorEl] = useState<HTMLElement | null>(null);
   const [iconSearch, setIconSearch] = useState('');
   const [compactCollapsed, setCompactCollapsed] = useState(isCompactLayout);
@@ -273,13 +275,14 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     ? pendingStickyNotePresetId
     : (stickyNotePresets[0]?.id ?? null);
 
-  const tools: { tool: ToolType; icon: ReactNode; label: string }[] = [
-    { tool: 'select', icon: <NearMeIcon />, label: t('tools.select') },
-    { tool: 'hand', icon: <PanToolIcon />, label: t('tools.hand') },
-    { tool: 'rectangle', icon: <RectangleOutlinedIcon />, label: t('tools.rectangle') },
+  const tools: Array<{ tool: ToolType; icon: ReactNode; label: string; shortcut?: string }> = [
+    { tool: 'select', icon: <NearMeIcon />, label: t('tools.select'), shortcut: 'V' },
+    { tool: 'hand', icon: <PanToolIcon />, label: t('tools.hand'), shortcut: 'H' },
+    { tool: 'drawing', icon: <DrawIcon />, label: t('tools.drawing'), shortcut: 'D' },
+    { tool: 'rectangle', icon: <RectangleOutlinedIcon />, label: t('tools.rectangle'), shortcut: 'R' },
     { tool: 'ellipse', icon: <CircleOutlinedIcon />, label: t('tools.ellipse') },
     { tool: 'triangle', icon: <ChangeHistoryIcon />, label: t('tools.triangle') },
-    { tool: 'text', icon: <TextFieldsIcon />, label: t('tools.text') },
+    { tool: 'text', icon: <TextFieldsIcon />, label: t('tools.text'), shortcut: 'T' },
     { tool: 'sticky', icon: <StickyNote2OutlinedIcon />, label: t('tools.stickyNote') },
     { tool: 'frame', icon: <CropLandscapeIcon />, label: t('tools.frame') },
     {
@@ -293,9 +296,16 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
       ),
       label: t('tools.icon'),
     },
-    { tool: 'arrow', icon: <ArrowForwardIcon />, label: t('tools.arrow') },
+    { tool: 'arrow', icon: <ArrowForwardIcon />, label: t('tools.arrow'), shortcut: 'A' },
     { tool: 'image', icon: <ImageIcon />, label: t('tools.image') },
   ];
+  const toolById = new Map(tools.map((tool) => [tool.tool, tool]));
+  const shapeTools = tools.filter((tool) => tool.tool === 'rectangle' || tool.tool === 'ellipse' || tool.tool === 'triangle');
+  const activeShapeTool = activeTool === 'ellipse' || activeTool === 'triangle' || activeTool === 'rectangle'
+    ? activeTool
+    : 'rectangle';
+  const activeShapeDescriptor = toolById.get(activeShapeTool) ?? shapeTools[0];
+  const activeToolLabel = toolById.get(activeTool)?.label ?? t('tools.select');
 
   const openIconPicker = () => {
     setIconPickerOpen(true);
@@ -331,6 +341,11 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     setPendingStickyNotePresetId(presetId);
     setActiveTool('sticky');
     setStickyPresetAnchorEl(null);
+  };
+
+  const handleShapeSelected = (tool: ToolType) => {
+    setActiveTool(tool);
+    setShapeAnchorEl(null);
   };
 
   const handleDelete = () => {
@@ -610,8 +625,22 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     onBoardChanged?.('add', createElementAddedOperation(newElement));
   };
 
-  const toolButtons = tools.map(({ tool, icon, label }) => (
-    <Tooltip key={tool} title={label} placement={isCompactLayout ? 'top' : 'right'}>
+  const renderToolButton = ({
+    tool,
+    icon,
+    label,
+    shortcut,
+  }: {
+    tool: ToolType;
+    icon: ReactNode;
+    label: string;
+    shortcut?: string;
+  }) => (
+    <Tooltip
+      key={tool}
+      title={shortcut ? `${label} (${shortcut})` : label}
+      placement={isCompactLayout ? 'top' : 'right'}
+    >
       <IconButton
         size={isCompactLayout ? 'medium' : 'small'}
         color={activeTool === tool ? 'primary' : 'default'}
@@ -624,19 +653,75 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
         {icon}
       </IconButton>
     </Tooltip>
-  ));
+  );
+
+  const renderGroupDivider = (key: string) => (
+    <Divider
+      key={key}
+      flexItem
+      orientation="horizontal"
+      sx={{
+        my: isCompactLayout ? 0.25 : 0.5,
+        flexBasis: isCompactLayout ? '100%' : 'auto',
+        width: isCompactLayout ? '100%' : 'auto',
+      }}
+    />
+  );
+
+  const shapeMenuButton = (
+    <Tooltip title={t('tools.shapes', 'Formen')} placement={isCompactLayout ? 'top' : 'right'}>
+      <IconButton
+        size={isCompactLayout ? 'medium' : 'small'}
+        color={activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle' ? 'primary' : 'default'}
+        onClick={(event) => setShapeAnchorEl(event.currentTarget)}
+        sx={{
+          bgcolor: activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle'
+            ? 'action.selected'
+            : undefined,
+          flexShrink: 0,
+          position: 'relative',
+        }}
+        aria-label={t('tools.shapes', 'Formen')}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(shapeAnchorEl)}
+      >
+        {activeShapeDescriptor.icon}
+        <KeyboardArrowDownIcon
+          sx={{
+            position: 'absolute',
+            right: -4,
+            bottom: -3,
+            fontSize: 14,
+            bgcolor: 'background.paper',
+            borderRadius: '999px',
+          }}
+        />
+      </IconButton>
+    </Tooltip>
+  );
+
+  const toolButtons = (
+    <>
+      {renderToolButton(toolById.get('select')!)}
+      {renderToolButton(toolById.get('hand')!)}
+      {renderGroupDivider('toolbar-nav-divider')}
+      {renderToolButton(toolById.get('drawing')!)}
+      {renderGroupDivider('toolbar-drawing-divider')}
+      {shapeMenuButton}
+      {renderToolButton(toolById.get('arrow')!)}
+      {renderToolButton(toolById.get('frame')!)}
+      {renderGroupDivider('toolbar-structure-divider')}
+      {renderToolButton(toolById.get('text')!)}
+      {renderToolButton(toolById.get('sticky')!)}
+      {renderGroupDivider('toolbar-content-divider')}
+      {renderToolButton(toolById.get('icon')!)}
+      {renderToolButton(toolById.get('image')!)}
+    </>
+  );
 
   const extraButtons = (
     <>
-      <Divider
-        flexItem
-        orientation="horizontal"
-        sx={{
-          my: isCompactLayout ? 0.25 : 0.5,
-          flexBasis: isCompactLayout ? '100%' : 'auto',
-          width: isCompactLayout ? '100%' : 'auto',
-        }}
-      />
+      {renderGroupDivider('toolbar-actions-divider')}
 
       <Tooltip title={t('tools.undo')} placement={isCompactLayout ? 'top' : 'right'}>
         <span>
@@ -718,15 +803,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
         </span>
       </Tooltip>
 
-      <Divider
-        flexItem
-        orientation="horizontal"
-        sx={{
-          my: isCompactLayout ? 0.25 : 0.5,
-          flexBasis: isCompactLayout ? '100%' : 'auto',
-          width: isCompactLayout ? '100%' : 'auto',
-        }}
-      />
+      {renderGroupDivider('toolbar-zoom-divider')}
 
       <Tooltip title={t('tools.zoomIn')} placement={isCompactLayout ? 'top' : 'right'}>
         <IconButton size={isCompactLayout ? 'medium' : 'small'} onClick={handleZoomIn} sx={{ flexShrink: 0 }}>
@@ -744,7 +821,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
         </IconButton>
       </Tooltip>
       {onToggleMinimap && (
-        <Tooltip title="Minimap" placement={isCompactLayout ? 'top' : 'right'}>
+        <Tooltip title={t('tools.minimap')} placement={isCompactLayout ? 'top' : 'right'}>
           <IconButton
             size={isCompactLayout ? 'medium' : 'small'}
             onClick={onToggleMinimap}
@@ -823,7 +900,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
               </IconButton>
             </Tooltip>
             <Typography variant="caption" noWrap sx={{ flex: 1, minWidth: 0 }}>
-              {tools.find((tool) => tool.tool === activeTool)?.label}
+              {activeToolLabel}
             </Typography>
           </Box>
           {!collapsed && (
@@ -857,6 +934,21 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
       ) : (
         actionButtons
       )}
+
+      <Menu
+        anchorEl={shapeAnchorEl}
+        open={Boolean(shapeAnchorEl)}
+        onClose={() => setShapeAnchorEl(null)}
+      >
+        {shapeTools.map((tool) => (
+          <MenuItem key={tool.tool} selected={activeTool === tool.tool} onClick={() => handleShapeSelected(tool.tool)}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {tool.icon}
+              <Typography variant="body2">{tool.label}</Typography>
+            </Box>
+          </MenuItem>
+        ))}
+      </Menu>
 
       <Dialog
         open={iconPickerOpen}

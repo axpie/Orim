@@ -173,6 +173,27 @@ public class BoardElementSerializationTests
     }
 
     [Fact]
+    public void DrawingElement_RoundTrips_ViaPolymorphicSerialization()
+    {
+        BoardElement element = new DrawingElement
+        {
+            IsLocked = true,
+            StrokeColor = "#2563EB",
+            StrokeWidth = 4,
+            Points = [10, 20, 25, 35, 42, 58]
+        };
+
+        var json = JsonSerializer.Serialize(element, OrimJsonOptions.Default);
+        var deserialized = JsonSerializer.Deserialize<BoardElement>(json, OrimJsonOptions.Default);
+
+        var drawing = Assert.IsType<DrawingElement>(deserialized);
+        Assert.True(drawing.IsLocked);
+        Assert.Equal("#2563EB", drawing.StrokeColor);
+        Assert.Equal(4, drawing.StrokeWidth);
+        Assert.Equal([10, 20, 25, 35, 42, 58], drawing.Points);
+    }
+
+    [Fact]
     public void MixedElementList_RoundTrips_Correctly()
     {
         var elements = new List<BoardElement>
@@ -182,19 +203,21 @@ public class BoardElementSerializationTests
             new StickyNoteElement { Text = "Sticky" },
             new FrameElement { Label = "Frame" },
             new ArrowElement { StrokeColor = "#111" },
-            new IconElement { IconName = "mdi-star" }
+            new IconElement { IconName = "mdi-star" },
+            new DrawingElement { Points = [0, 0, 12, 18] }
         };
 
         var json = JsonSerializer.Serialize(elements, OrimJsonOptions.Default);
         var deserialized = JsonSerializer.Deserialize<List<BoardElement>>(json, OrimJsonOptions.Default)!;
 
-        Assert.Equal(6, deserialized.Count);
+        Assert.Equal(7, deserialized.Count);
         Assert.IsType<ShapeElement>(deserialized[0]);
         Assert.IsType<TextElement>(deserialized[1]);
         Assert.IsType<StickyNoteElement>(deserialized[2]);
         Assert.IsType<FrameElement>(deserialized[3]);
         Assert.IsType<ArrowElement>(deserialized[4]);
         Assert.IsType<IconElement>(deserialized[5]);
+        Assert.IsType<DrawingElement>(deserialized[6]);
     }
 
     [Fact]

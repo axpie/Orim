@@ -68,6 +68,7 @@ import { contrastingTextColor } from '../../../utils/colorUtils';
 import { getLineDashArray } from '../../../utils/lineStyles';
 import { getDefaultLabelFontSize, resolveLabelFontSize, resolveTextFontSize } from '../../../utils/textLayout';
 import { computeAlignment, computeDistribution, type AlignAction, type DistributeAction } from '../../../utils/alignment';
+import { normalizeRotationDegrees } from '../../../utils/rotation';
 import { AuxiliaryPanelShell } from './AuxiliaryPanelShell';
 const FONT_FAMILY_DEFAULT = '__default__';
 
@@ -591,6 +592,16 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({ onClose, on
                   onChange={(v) => update(el.id, { height: v })}
                 />
               </Box>
+            )}
+            {el.$type !== 'arrow' && (
+              <NumberInputField
+                label={t('properties.rotation', 'Rotation')}
+                value={Math.round(el.rotation ?? 0)}
+                min={-180}
+                max={180}
+                step={1}
+                onChange={(value) => update(el.id, { rotation: normalizeRotationDegrees(value) })}
+              />
             )}
 
             <Divider />

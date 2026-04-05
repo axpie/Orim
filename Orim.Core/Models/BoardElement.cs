@@ -10,6 +10,7 @@ namespace Orim.Core.Models;
 [JsonDerivedType(typeof(ArrowElement), "arrow")]
 [JsonDerivedType(typeof(IconElement), "icon")]
 [JsonDerivedType(typeof(ImageElement), "image")]
+[JsonDerivedType(typeof(DrawingElement), "drawing")]
 public abstract class BoardElement
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -28,6 +29,7 @@ public abstract class BoardElement
     public bool IsItalic { get; set; }
     public bool IsUnderline { get; set; }
     public bool IsStrikethrough { get; set; }
+    public bool IsLocked { get; set; }
     public HorizontalLabelAlignment LabelHorizontalAlignment { get; set; } = HorizontalLabelAlignment.Center;
     public VerticalLabelAlignment LabelVerticalAlignment { get; set; } = VerticalLabelAlignment.Middle;
 }
@@ -178,4 +180,11 @@ public class ImageElement : BoardElement
     public string ImageUrl { get; set; } = string.Empty;
     public double Opacity { get; set; } = 1.0;
     public ImageFit ImageFit { get; set; } = ImageFit.Uniform;
+}
+
+public class DrawingElement : BoardElement
+{
+    public List<double> Points { get; set; } = [];
+    public string StrokeColor { get; set; } = "#000000";
+    public double StrokeWidth { get; set; } = 2;
 }

@@ -146,7 +146,14 @@
     "snapshotCreateFailed": "The snapshot could not be created.",
     "snapshotRestoreFailed": "The snapshot could not be restored.",
     "snapshotRestoreDescription": "Restore \"{{name}}\"? This replaces the current board content.",
-    "lastError": "Last error: {{message}}"
+    "lastError": "Last error: {{message}}",
+    "present": "Present",
+    "peopleMenu": "Collaborators",
+    "noActiveCollaborators": "No active collaborators",
+    "jumpToUser": "Jump to {{name}}",
+    "followUser": "Follow {{name}}",
+    "followingUser": "Following {{name}}",
+    "stopFollowing": "Stop following"
   },
   "boardSettings": {
     "title": "Board settings",
@@ -197,7 +204,9 @@
     "fitToScreen": "Fit to Screen",
     "minimap": "Minimap",
     "expandToolbar": "Expand toolbar",
-    "collapseToolbar": "Collapse toolbar"
+    "collapseToolbar": "Collapse toolbar",
+    "shapes": "Shapes",
+    "searchCanvas": "Canvas search"
   },
   "properties": {
     "title": "Properties",
@@ -235,7 +244,8 @@
     "imageFit": "Image fit",
     "imageFit_Uniform": "Uniform",
     "imageFit_UniformToFill": "Uniform to fill",
-    "imageFit_Fill": "Fill"
+    "imageFit_Fill": "Fill",
+    "rotation": "Rotation"
   },
   "sharing": {
     "visibility": "Visibility",

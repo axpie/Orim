@@ -15,6 +15,7 @@ import { WhiteboardCanvas } from './canvas/WhiteboardCanvas';
 import { FloatingToolbar } from './canvas/FloatingToolbar';
 import { CanvasSearch } from './canvas/CanvasSearch';
 import { Minimap } from './canvas/Minimap';
+import { RemoteCursorEdgeIndicators } from './canvas/RemoteCursorEdgeIndicators';
 import { ErrorBoundary } from '../../components/ErrorBoundary';
 import { Toolbar } from './tools/Toolbar';
 import { PropertiesPanel } from './panels/PropertiesPanel';
@@ -27,10 +28,11 @@ import { BoardTopBar } from './tools/BoardTopBar';
 import { PresentationMode } from './PresentationMode';
 import { useWhiteboardRealtime } from './useWhiteboardRealtime';
 import { useOperationOutboxStore } from './store/outboxStore';
-import type { Board, BoardSnapshot } from '../../types/models';
+import type { Board, BoardSnapshot, CursorPresence } from '../../types/models';
 import { BoardRole } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
 import type { BoardOperationPayload } from './realtime/boardOperations';
+import { getCenteredCameraPosition } from './cameraUtils';
 
 const EMPTY_COMMENTS: Board['comments'] = [];
 
@@ -382,10 +384,14 @@ export function WhiteboardEditor() {
     }
     if (followed.worldX == null || followed.worldY == null) return;
     const { zoom, viewportWidth, viewportHeight } = useBoardStore.getState();
-    setCamera(
-      followed.worldX - viewportWidth / (2 * zoom),
-      followed.worldY - viewportHeight / (2 * zoom),
+    const { cameraX, cameraY } = getCenteredCameraPosition(
+      followed.worldX,
+      followed.worldY,
+      zoom,
+      viewportWidth,
+      viewportHeight,
     );
+    setCamera(cameraX, cameraY);
   }, [followingClientId, remoteCursors, setCamera, setFollowingClientId]);
 
   const handlePointerPresenceChanged = useCallback(
@@ -594,10 +600,29 @@ export function WhiteboardEditor() {
   const toggleMinimap = useCallback(() => setMinimapVisible((v) => !v), []);
 
   const handleMinimapNavigate = useCallback((worldX: number, worldY: number) => {
-    setCamera(
-      -(worldX * zoom) + viewportWidth / 2,
-      -(worldY * zoom) + viewportHeight / 2,
+    const { cameraX: nextCameraX, cameraY: nextCameraY } = getCenteredCameraPosition(
+      worldX,
+      worldY,
+      zoom,
+      viewportWidth,
+      viewportHeight,
     );
+    setCamera(nextCameraX, nextCameraY);
+  }, [setCamera, zoom, viewportWidth, viewportHeight]);
+
+  const handleJumpToCursor = useCallback((cursor: CursorPresence) => {
+    if (cursor.worldX == null || cursor.worldY == null) {
+      return;
+    }
+
+    const { cameraX: nextCameraX, cameraY: nextCameraY } = getCenteredCameraPosition(
+      cursor.worldX,
+      cursor.worldY,
+      zoom,
+      viewportWidth,
+      viewportHeight,
+    );
+    setCamera(nextCameraX, nextCameraY);
   }, [setCamera, zoom, viewportWidth, viewportHeight]);
 
   if (!board) return null;
@@ -681,6 +706,20 @@ export function WhiteboardEditor() {
             );
           })()}
 
+          {!presentationMode && (
+            <RemoteCursorEdgeIndicators
+              cursors={remoteCursors}
+              localConnectionId={connectionId}
+              zoom={zoom}
+              cameraX={cameraX}
+              cameraY={cameraY}
+              viewportWidth={viewportWidth}
+              viewportHeight={viewportHeight}
+              followingClientId={followingClientId}
+              onJumpToCursor={handleJumpToCursor}
+            />
+          )}
+
           {canEdit && !presentationMode && selectedElementIds.length > 0 && activeTool === 'select' && (
             <FloatingToolbar
               elements={board.elements}
@@ -688,6 +727,8 @@ export function WhiteboardEditor() {
               zoom={zoom}
               cameraX={cameraX}
               cameraY={cameraY}
+              viewportWidth={viewportWidth}
+              viewportHeight={viewportHeight}
               onBoardChanged={onBoardChanged}
               onOpenPropertiesPanel={() => setActivePanel('properties')}
             />

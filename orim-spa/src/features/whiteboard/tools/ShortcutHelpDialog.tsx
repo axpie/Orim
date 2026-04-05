@@ -24,6 +24,8 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
         { keys: 'Cmd/Ctrl + D', label: t('shortcuts.duplicateSelection') },
         { keys: 'Cmd/Ctrl + G', label: t('tools.group') },
         { keys: 'Cmd/Ctrl + Shift + G', label: t('tools.ungroup') },
+        { keys: 'Cmd/Ctrl + L', label: t('contextMenu.lock', 'Lock') },
+        { keys: 'Cmd/Ctrl + F', label: t('tools.searchCanvas', 'Canvas search') },
         { keys: getZOrderShortcutLabel('bring-forward'), label: t('tools.bringForward') },
         { keys: getZOrderShortcutLabel('send-backward'), label: t('tools.sendBackward') },
         { keys: getZOrderShortcutLabel('bring-to-front'), label: t('tools.bringToFront') },
@@ -35,6 +37,7 @@ export function ShortcutHelpDialog({ open, onClose }: ShortcutHelpDialogProps) {
       title: t('shortcuts.sections.tools'),
       items: [
         { keys: 'V', label: t('tools.select') },
+        { keys: 'D', label: t('tools.drawing') },
         { keys: 'R', label: t('tools.rectangle') },
         { keys: 'A', label: t('tools.arrow') },
         { keys: 'T', label: t('tools.text') },

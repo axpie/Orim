@@ -83,9 +83,17 @@ function SelectionOverlayInner({
       { key: 'sw', x: el.x, y: el.y + el.height },
       { key: 'w', x: el.x, y: el.y + el.height / 2 },
     ];
+    const rotationCenterX = el.x + el.width / 2;
+    const rotationCenterY = el.y + el.height / 2;
 
     return (
-      <Group>
+      <Group
+        x={rotationCenterX}
+        y={rotationCenterY}
+        offsetX={rotationCenterX}
+        offsetY={rotationCenterY}
+        rotation={el.rotation ?? 0}
+      >
         <Rect
           x={el.x}
           y={el.y}
@@ -111,26 +119,29 @@ function SelectionOverlayInner({
             data-resize-handle={handle.key}
           />
         ))}
-        {/* Rotation handle */}
-        <Line
-          points={[
-            el.x + el.width / 2, el.y,
-            el.x + el.width / 2, el.y - 25 / zoom,
-          ]}
-          stroke={selectionColor}
-          strokeWidth={borderWidth}
-          listening={false}
-        />
-        <Circle
-          x={el.x + el.width / 2}
-          y={el.y - 25 / zoom}
-          radius={5 / zoom}
-          fill={handleSurfaceColor}
-          stroke={selectionColor}
-          strokeWidth={borderWidth}
-          data-element-id={el.id}
-          data-rotation-handle="true"
-        />
+        {el.isLocked !== true && (
+          <>
+            <Line
+              points={[
+                el.x + el.width / 2, el.y,
+                el.x + el.width / 2, el.y - 25 / zoom,
+              ]}
+              stroke={selectionColor}
+              strokeWidth={borderWidth}
+              listening={false}
+            />
+            <Circle
+              x={el.x + el.width / 2}
+              y={el.y - 25 / zoom}
+              radius={5 / zoom}
+              fill={handleSurfaceColor}
+              stroke={selectionColor}
+              strokeWidth={borderWidth}
+              data-element-id={el.id}
+              data-rotation-handle="true"
+            />
+          </>
+        )}
       </Group>
     );
   }
@@ -148,6 +159,7 @@ function SelectionOverlayInner({
   if (!isFinite(minX)) return null;
 
   const midX = (minX + maxX) / 2;
+  const canRotateSelection = selected.some((element) => element.$type !== 'arrow' && element.isLocked !== true);
 
   return (
     <Group>
@@ -162,22 +174,25 @@ function SelectionOverlayInner({
         fill="transparent"
         listening={false}
       />
-      {/* Rotation handle */}
-      <Line
-        points={[midX, minY, midX, minY - 25 / zoom]}
-        stroke={selectionColor}
-        strokeWidth={borderWidth}
-        listening={false}
-      />
-      <Circle
-        x={midX}
-        y={minY - 25 / zoom}
-        radius={5 / zoom}
-        fill={handleSurfaceColor}
-        stroke={selectionColor}
-        strokeWidth={borderWidth}
-        data-rotation-handle="true"
-      />
+      {canRotateSelection && (
+        <>
+          <Line
+            points={[midX, minY, midX, minY - 25 / zoom]}
+            stroke={selectionColor}
+            strokeWidth={borderWidth}
+            listening={false}
+          />
+          <Circle
+            x={midX}
+            y={minY - 25 / zoom}
+            radius={5 / zoom}
+            fill={handleSurfaceColor}
+            stroke={selectionColor}
+            strokeWidth={borderWidth}
+            data-rotation-handle="true"
+          />
+        </>
+      )}
     </Group>
   );
 }

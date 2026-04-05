@@ -8,6 +8,7 @@ import {
   Badge,
   Box,
   Chip,
+  Divider,
   IconButton,
   ListItemIcon,
   ListItemText,
@@ -36,6 +37,8 @@ import MoreVertIcon from '@mui/icons-material/MoreVert';
 import KeyboardIcon from '@mui/icons-material/Keyboard';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
+import NearMeIcon from '@mui/icons-material/NearMe';
+import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { useBoardStore } from '../store/boardStore';
 import { AppSettingsDialog } from '../../../components/dialogs/AppSettingsDialog';
 import { exportBoardJson, exportBoardPdf } from '../../../api/boards';
@@ -45,6 +48,7 @@ import { BoardSettingsDialog } from '../panels/BoardSettingsDialog';
 import type { BoardSyncStatus, CursorPresence } from '../../../types/models';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
 import { createBoardMetadataUpdatedOperation } from '../realtime/boardOperations';
+import { getCenteredCameraPosition } from '../cameraUtils';
 
 function createBoardFileName(title: string | undefined, extension: string) {
   const baseName = (title?.trim() || 'board').replace(/[\\/:*?"<>|]+/g, '-');
@@ -126,15 +130,25 @@ export function BoardTopBar({
   const [mobileActionsAnchor, setMobileActionsAnchor] = useState<null | HTMLElement>(null);
   const [followMenuAnchor, setFollowMenuAnchor] = useState<null | HTMLElement>(null);
   const [followMenuTarget, setFollowMenuTarget] = useState<CursorPresence | null>(null);
+  const [peopleMenuAnchor, setPeopleMenuAnchor] = useState<null | HTMLElement>(null);
 
   const remoteCollaborators = collaborators.filter((c) => c.clientId !== localConnectionId);
 
-  const handleAvatarClick = (collaborator: CursorPresence) => {
+  const centerOnCollaborator = (collaborator: CursorPresence) => {
     if (collaborator.worldX == null || collaborator.worldY == null) return;
     const { zoom, viewportWidth, viewportHeight } = useBoardStore.getState();
-    const newCameraX = collaborator.worldX - viewportWidth / (2 * zoom);
-    const newCameraY = collaborator.worldY - viewportHeight / (2 * zoom);
-    setCamera(newCameraX, newCameraY);
+    const { cameraX, cameraY } = getCenteredCameraPosition(
+      collaborator.worldX,
+      collaborator.worldY,
+      zoom,
+      viewportWidth,
+      viewportHeight,
+    );
+    setCamera(cameraX, cameraY);
+  };
+
+  const handleAvatarClick = (collaborator: CursorPresence) => {
+    centerOnCollaborator(collaborator);
   };
 
   const handleAvatarContextMenu = (event: MouseEvent<HTMLElement>, collaborator: CursorPresence) => {
@@ -146,7 +160,7 @@ export function BoardTopBar({
   const handleFollowUser = () => {
     if (followMenuTarget) {
       setFollowingClientId(followMenuTarget.clientId);
-      handleAvatarClick(followMenuTarget);
+      centerOnCollaborator(followMenuTarget);
     }
     setFollowMenuAnchor(null);
     setFollowMenuTarget(null);
@@ -155,6 +169,25 @@ export function BoardTopBar({
   const closeFollowMenu = () => {
     setFollowMenuAnchor(null);
     setFollowMenuTarget(null);
+  };
+
+  const closePeopleMenu = () => {
+    setPeopleMenuAnchor(null);
+  };
+
+  const handleJumpToUser = (collaborator: CursorPresence) => {
+    centerOnCollaborator(collaborator);
+    closePeopleMenu();
+  };
+
+  const handleFollowUserFromList = (collaborator: CursorPresence) => {
+    if (followingClientId === collaborator.clientId) {
+      setFollowingClientId(null);
+    } else {
+      setFollowingClientId(collaborator.clientId);
+      centerOnCollaborator(collaborator);
+    }
+    closePeopleMenu();
   };
 
   const handleTitleFocus = () => {
@@ -369,6 +402,16 @@ export function BoardTopBar({
 
           <Box sx={{ flexGrow: 1 }} />
 
+          {remoteCollaborators.length > 0 && (
+            <Tooltip title={t('board.peopleMenu', 'Teilnehmer')}>
+              <IconButton onClick={(event) => setPeopleMenuAnchor(event.currentTarget)} sx={{ color: 'inherit', mr: 0.5 }}>
+                <Badge badgeContent={remoteCollaborators.length} color="secondary" max={99}>
+                  <PeopleAltIcon />
+                </Badge>
+              </IconButton>
+            </Tooltip>
+          )}
+
           {!isCompact && remoteCollaborators.length > 0 && (
             <AvatarGroup
               max={6}
@@ -402,10 +445,6 @@ export function BoardTopBar({
             </AvatarGroup>
           )}
 
-          {isCompact && remoteCollaborators.length > 0 && (
-            <Chip size="small" label={`+${remoteCollaborators.length}`} sx={{ mr: 0.5 }} />
-          )}
-
           {isCompact ? (
             <Tooltip title={t('board.moreActions', 'Aktionen')}>
               <IconButton onClick={(event) => setMobileActionsAnchor(event.currentTarget)} sx={{ color: 'inherit' }}>
@@ -435,6 +474,16 @@ export function BoardTopBar({
                   <IconButton onClick={onOpenSnapshots} sx={{ color: 'inherit' }}>
                     <HistoryIcon />
                   </IconButton>
+                </Tooltip>
+              )}
+
+              {onStartPresentation && (
+                <Tooltip title={t('board.present', 'Präsentieren')}>
+                  <span>
+                    <IconButton onClick={onStartPresentation} disabled={!hasFrames} sx={{ color: 'inherit' }}>
+                      <SlideshowIcon />
+                    </IconButton>
+                  </span>
                 </Tooltip>
               )}
 
@@ -564,6 +613,12 @@ export function BoardTopBar({
             <ListItemText>{t('board.snapshots')}</ListItemText>
           </MenuItem>
         )}
+        {onStartPresentation && (
+          <MenuItem onClick={() => { closeMobileActions(); onStartPresentation(); }} disabled={!hasFrames}>
+            <ListItemIcon><SlideshowIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('board.present', 'Präsentieren')}</ListItemText>
+          </MenuItem>
+        )}
         <MenuItem onClick={() => { closeMobileActions(); setShortcutsOpen(true); }}>
           <ListItemIcon><KeyboardIcon fontSize="small" /></ListItemIcon>
           <ListItemText>{t('shortcuts.open')}</ListItemText>
@@ -627,6 +682,47 @@ export function BoardTopBar({
             <ListItemText>{t('board.followUser', { name: followMenuTarget.displayName, defaultValue: 'Follow {{name}}' })}</ListItemText>
           </MenuItem>
         )}
+      </Menu>
+
+      <Menu
+        anchorEl={peopleMenuAnchor}
+        open={Boolean(peopleMenuAnchor)}
+        onClose={closePeopleMenu}
+      >
+        {remoteCollaborators.length === 0 ? (
+          <MenuItem disabled>{t('board.noActiveCollaborators', 'Keine aktiven Teilnehmer')}</MenuItem>
+        ) : remoteCollaborators.map((collaborator, index) => (
+          <Box key={collaborator.clientId} sx={{ minWidth: 280 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, px: 2, pt: 1.5, pb: 0.5 }}>
+              <Avatar sx={{ width: 28, height: 28, fontSize: 13, bgcolor: collaborator.colorHex }}>
+                {collaborator.displayName.charAt(0).toUpperCase()}
+              </Avatar>
+              <Box sx={{ minWidth: 0, flex: 1 }}>
+                <Typography variant="body2" fontWeight={600} noWrap>
+                  {collaborator.displayName}
+                </Typography>
+                {followingClientId === collaborator.clientId && (
+                  <Typography variant="caption" color="text.secondary" noWrap>
+                    {t('board.followingUser', { name: collaborator.displayName, defaultValue: 'Following {{name}}' })}
+                  </Typography>
+                )}
+              </Box>
+            </Box>
+            <MenuItem onClick={() => handleJumpToUser(collaborator)}>
+              <ListItemIcon><NearMeIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>{t('board.jumpToUser', { name: collaborator.displayName, defaultValue: 'Jump to {{name}}' })}</ListItemText>
+            </MenuItem>
+            <MenuItem onClick={() => handleFollowUserFromList(collaborator)}>
+              <ListItemIcon><VisibilityIcon fontSize="small" /></ListItemIcon>
+              <ListItemText>
+                {followingClientId === collaborator.clientId
+                  ? t('board.stopFollowing', 'Stop following')
+                  : t('board.followUser', { name: collaborator.displayName, defaultValue: 'Follow {{name}}' })}
+              </ListItemText>
+            </MenuItem>
+            {index < remoteCollaborators.length - 1 && <Divider />}
+          </Box>
+        ))}
       </Menu>
     </>
   );

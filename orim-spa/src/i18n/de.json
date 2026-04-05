@@ -146,7 +146,14 @@
     "snapshotCreateFailed": "Der Snapshot konnte nicht erstellt werden.",
     "snapshotRestoreFailed": "Der Snapshot konnte nicht wiederhergestellt werden.",
     "snapshotRestoreDescription": "Snapshot \"{{name}}\" wiederherstellen? Dadurch wird der aktuelle Board-Inhalt ersetzt.",
-    "lastError": "Letzter Fehler: {{message}}"
+    "lastError": "Letzter Fehler: {{message}}",
+    "present": "Präsentieren",
+    "peopleMenu": "Teilnehmer",
+    "noActiveCollaborators": "Keine aktiven Teilnehmer",
+    "jumpToUser": "Zu {{name}} springen",
+    "followUser": "{{name}} folgen",
+    "followingUser": "Folge {{name}}",
+    "stopFollowing": "Folgen beenden"
   },
   "boardSettings": {
     "title": "Board-Einstellungen",
@@ -197,7 +204,9 @@
     "fitToScreen": "Einpassen",
     "minimap": "Minimap",
     "expandToolbar": "Werkzeugleiste öffnen",
-    "collapseToolbar": "Werkzeugleiste einklappen"
+    "collapseToolbar": "Werkzeugleiste einklappen",
+    "shapes": "Formen",
+    "searchCanvas": "Canvas-Suche"
   },
   "properties": {
     "title": "Eigenschaften",
@@ -235,7 +244,8 @@
     "imageFit": "Bildanpassung",
     "imageFit_Uniform": "Einheitlich",
     "imageFit_UniformToFill": "Einheitlich füllen",
-    "imageFit_Fill": "Strecken"
+    "imageFit_Fill": "Strecken",
+    "rotation": "Drehung"
   },
   "sharing": {
     "visibility": "Sichtbarkeit",
