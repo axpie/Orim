@@ -1,0 +1,15 @@
+services:
+  orim-postgres:
+    image: postgres:17
+    container_name: orim-postgres
+    environment:
+      POSTGRES_USER: orim
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-orim_dev_password}
+      POSTGRES_DB: orim
+    ports:
+      - "5432:5432"
+    volumes:
+      - orim-pgdata:/var/lib/postgresql/data
+
+volumes:
+  orim-pgdata:

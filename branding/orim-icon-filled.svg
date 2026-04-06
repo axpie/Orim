@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" role="img" aria-labelledby="orimIconFilledTitle">
+  <title id="orimIconFilledTitle">Orim icon filled</title>
+  <defs>
+    <linearGradient id="orim-filled-gradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF6B2C"/>
+      <stop offset="50%" stop-color="#FF3D7F"/>
+      <stop offset="100%" stop-color="#7B2FFF"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="72" height="72" rx="16" fill="url(#orim-filled-gradient)"/>
+  <rect x="12" y="12" width="20" height="20" rx="5" fill="#FFF" opacity="0.95"/>
+  <rect x="40" y="12" width="20" height="20" rx="5" fill="#FFF" opacity="0.8"/>
+  <rect x="12" y="40" width="20" height="20" rx="5" fill="#FFF" opacity="0.65"/>
+  <g transform="translate(42 40)">
+    <path d="M0 0V20L5 15L8.5 22L11.5 20.5L8 14H14Z" fill="#FFF" stroke="#1A1A2E" stroke-opacity="0.2" stroke-width="1" stroke-linejoin="round"/>
+  </g>
+</svg>

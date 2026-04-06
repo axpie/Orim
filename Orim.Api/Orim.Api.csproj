@@ -1,0 +1,84 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <SpaRoot>..\orim-spa\</SpaRoot>
+    <SpaDistRoot>$(SpaRoot)dist\</SpaDistRoot>
+    <SpaWwwRoot>$(MSBuildProjectDirectory)\wwwroot\</SpaWwwRoot>
+    <NpmExecutable Condition="$([MSBuild]::IsOSPlatform('Windows'))">npm.cmd</NpmExecutable>
+    <NpmExecutable Condition="'$(NpmExecutable)' == ''">npm</NpmExecutable>
+    <!-- SPA proxy: automatically start the Vite dev server when debugging -->
+    <SpaProxyServerUrl>http://localhost:5173</SpaProxyServerUrl>
+    <SpaProxyLaunchCommand>npm run dev</SpaProxyLaunchCommand>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Remove="data\**" />
+    <Content Remove="data\**" />
+    <EmbeddedResource Remove="data\**" />
+    <None Remove="data\**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Orim.Core\Orim.Core.csproj" />
+    <ProjectReference Include="..\Orim.Infrastructure\Orim.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- SpaProxy: starts npm run dev in the SPA directory during Debug; not published with the app -->
+    <PackageReference Include="Microsoft.AspNetCore.SpaProxy" Version="9.0.*" PrivateAssets="all" />
+    <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
+    <PackageReference Include="Azure.Core" Version="1.51.1" />
+    <PackageReference Include="Google.Apis.Auth" Version="1.73.0" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="*" />
+    <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.15.1" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.15.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="1.15.1" />
+    <PackageReference Include="OpenTelemetry.Instrumentation.Http" Version="1.15.0" />
+    <PackageReference Include="PDFsharp" Version="6.2.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="wwwroot\assets\" />
+  </ItemGroup>
+
+  <!-- Debug-only: create appsettings.Development.json from the example template if it doesn't exist -->
+  <Target Name="CreateDevelopmentConfig" BeforeTargets="Build" Condition="'$(Configuration)' == 'Debug' and !Exists('$(MSBuildProjectDirectory)\appsettings.Development.json')">
+    <Message Text="Creating appsettings.Development.json from template..." Importance="high" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\appsettings.Development.json.example" DestinationFiles="$(MSBuildProjectDirectory)\appsettings.Development.json" />
+    <Message Text="⚠️  IMPORTANT: Edit Orim.Api/appsettings.Development.json and set Jwt:Key to a random 32-character secret before running." Importance="high" />
+  </Target>
+
+  <!-- Debug-only: start the PostgreSQL container and ensure npm packages are installed -->
+  <Target Name="StartDockerCompose" BeforeTargets="Build" Condition="'$(Configuration)' == 'Debug'">
+    <Message Text="Starting Docker Compose services..." Importance="high" />
+    <Exec Command="docker compose up -d" WorkingDirectory="$(MSBuildProjectDirectory)\.." ContinueOnError="true" />
+  </Target>
+
+  <Target Name="EnsureNpmPackages" BeforeTargets="Build" Condition="'$(Configuration)' == 'Debug' and !Exists('$(SpaRoot)node_modules')">
+    <Message Text="Installing npm packages for orim-spa..." Importance="high" />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="$(NpmExecutable) install" />
+  </Target>
+
+  <Target Name="BuildSpaAssets" BeforeTargets="BeforeBuild" Condition="'$(Configuration)' == 'Release' and Exists('$(SpaRoot)package.json')">
+    <Message Text="Building SPA assets into wwwroot for Release configuration." Importance="high" />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="$(NpmExecutable) ci" Condition="!Exists('$(SpaRoot)node_modules')" />
+    <Exec WorkingDirectory="$(SpaRoot)" Command="$(NpmExecutable) run build" />
+    <RemoveDir Directories="$(SpaWwwRoot)" Condition="Exists('$(SpaWwwRoot)')" />
+    <MakeDir Directories="$(SpaWwwRoot)" />
+    <ItemGroup>
+      <SpaDistFiles Include="$(SpaDistRoot)**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(SpaDistFiles)" DestinationFiles="@(SpaDistFiles->'$(SpaWwwRoot)%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="true" />
+  </Target>
+
+  <Target Name="EnsureSpaAssetsIncludedInPublish" BeforeTargets="ComputeFilesToPublish" Condition="'$(Configuration)' == 'Release' and Exists('$(SpaWwwRoot)index.html')">
+    <ItemGroup>
+      <Content Include="wwwroot\**\*" CopyToPublishDirectory="PreserveNewest" />
+    </ItemGroup>
+  </Target>
+
+</Project>

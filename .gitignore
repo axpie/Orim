@@ -1,0 +1,25 @@
+## .NET
+bin/
+obj/
+*.user
+*.suo
+*.cache
+*.vs/
+.vscode/
+
+## Data directory (runtime)
+data/
+!Orim.Web/wwwroot/data/
+
+## OS
+.DS_Store
+Thumbs.db
+
+## Secrets / local developer configuration
+/Orim.Api/appsettings.Development.json
+/artifacts
+/.artifacts
+/Orim.Api/wwwroot/index.html
+/Orim.Api/wwwroot/assets
+/.github/copilot-instructions.md
+/Orim.Api/Properties/PublishProfiles/orim - Zip Deploy.pubxml
