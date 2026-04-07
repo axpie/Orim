@@ -4,6 +4,37 @@
 
 Requires [Docker](https://docs.docker.com/get-docker/).
 
+### One-line install
+
+The installer asks for your admin password and port, generates secure random secrets, writes a `docker-compose.yml` into `~/orim/`, and starts ORIM automatically.
+
+**macOS / Linux**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/axpie/orim/main/install.sh | bash
+```
+
+**Windows (PowerShell)**
+
+```powershell
+irm https://raw.githubusercontent.com/axpie/orim/main/install.ps1 | iex
+```
+
+Or download and run locally after cloning:
+
+```bash
+# macOS / Linux
+bash install.sh
+
+# Windows
+.\install.ps1
+```
+
+### Manual setup
+
+<details>
+<summary>Expand for manual docker compose instructions</summary>
+
 **1. Pull the images**
 
 ```bash
@@ -23,6 +54,11 @@ services:
       POSTGRES_DB: orim
     volumes:
       - orim-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U orim"]
+      interval: 5s
+      retries: 10
+    restart: unless-stopped
 
   orim:
     image: ghcr.io/axpie/orim:latest
@@ -33,7 +69,9 @@ services:
       Jwt__Key: "replace-this-with-a-random-32-char-secret!!"
       SeedAdmin__Password: "Admin123!"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   orim-pgdata:
@@ -48,6 +86,8 @@ docker compose up -d
 Open **http://localhost:5000** — log in with `admin` / `Admin123!`.
 
 > Change `changeme`, `Jwt__Key` and `SeedAdmin__Password` before any non-local deployment.
+
+</details>
 
 ---
 
