@@ -1,5 +1,56 @@
 ﻿# ORIM
 
+## Quick Start
+
+Requires [Docker](https://docs.docker.com/get-docker/).
+
+**1. Pull the images**
+
+```bash
+docker pull ghcr.io/axpie/orim:latest
+docker pull postgres:17
+```
+
+**2. Create a `docker-compose.yml`**
+
+```yaml
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: orim
+      POSTGRES_PASSWORD: changeme
+      POSTGRES_DB: orim
+    volumes:
+      - orim-pgdata:/var/lib/postgresql/data
+
+  orim:
+    image: ghcr.io/axpie/orim:latest
+    ports:
+      - "5000:5000"
+    environment:
+      ConnectionStrings__DefaultConnection: "Host=db;Port=5432;Database=orim;Username=orim;Password=changeme"
+      Jwt__Key: "replace-this-with-a-random-32-char-secret!!"
+      SeedAdmin__Password: "Admin123!"
+    depends_on:
+      - db
+
+volumes:
+  orim-pgdata:
+```
+
+**3. Start**
+
+```bash
+docker compose up -d
+```
+
+Open **http://localhost:5000** — log in with `admin` / `Admin123!`.
+
+> Change `changeme`, `Jwt__Key` and `SeedAdmin__Password` before any non-local deployment.
+
+---
+
 ORIM is a collaborative whiteboard editor with an ASP.NET Core API and a React SPA.
 
 ## Overview
@@ -276,8 +327,7 @@ The **DejaVu** font family is used by default on Linux and is pre-installed on m
 #### Orim.Api
 | Package | Version |
 |---|---|
-| Azure.AI.OpenAI | 2.1.0 |
-| Azure.Core | 1.51.1 |
+| OpenAI | 2.2.0 |
 | Google.Apis.Auth | 1.73.0 |
 | Microsoft.AspNetCore.Authentication.JwtBearer | 10.0.5 |
 | Microsoft.AspNetCore.SignalR.StackExchangeRedis | (latest) |
