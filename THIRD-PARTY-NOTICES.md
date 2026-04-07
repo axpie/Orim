@@ -88,4 +88,4 @@ permissive licenses. Selected examples:
 | i18next, react-i18next | i18next contributors |
 | zustand | Paul Henschel |
 | uuid | Robert Kieffer |
-| PDFsharp | empira Software GmbH |
+

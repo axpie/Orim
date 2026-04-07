@@ -1,13 +1,7 @@
-using PdfSharp.Fonts;
 using Microsoft.AspNetCore.RateLimiting;
 using Orim.Api.Endpoints;
 using Orim.Api.Hubs;
 using Orim.Api.Infrastructure;
-
-if (OperatingSystem.IsWindows())
-{
-    GlobalFontSettings.UseWindowsFontsUnderWindows = true;
-}
 
 var builder = WebApplication.CreateBuilder(args);
 

@@ -189,8 +189,7 @@ internal static class ServiceCollectionExtensions
         services.AddSingleton<ThemeCatalogApiService>();
         services.AddSingleton<AuditLogger>();
         services.AddSingleton<DeploymentReadinessService>();
-        services.AddSingleton<BoardPdfExportService>();
-        services.AddSingleton<BoardChangeNotifier>();
+services.AddSingleton<BoardChangeNotifier>();
         services.AddSingleton<BoardPresenceService>();
 
         services.Configure<MicrosoftEntraOptions>(configuration.GetSection("Authentication:Microsoft"));

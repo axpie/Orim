@@ -369,21 +369,6 @@ internal static class BoardEndpoints
             return Results.Text(json, "application/json");
         });
 
-        app.MapGet("/api/boards/{id:guid}/export/pdf", [Authorize] async (Guid id, HttpContext context, BoardService boardService, BoardPdfExportService pdfExportService) =>
-        {
-            var board = await boardService.GetBoardAsync(id);
-            if (board is null) return Results.NotFound();
-
-            if (EndpointHelpers.GetUserId(context.User) is not { } userId)
-                return Results.Unauthorized();
-
-            if (!boardService.HasAccess(board, userId))
-                return Results.Forbid();
-
-            var pdfBytes = pdfExportService.Export(board);
-            return Results.File(pdfBytes, "application/pdf", $"{board.Title}.pdf");
-        });
-
         // --- Presence (anonymous fallback for page unload) ---
 
         // --- Operation History ---

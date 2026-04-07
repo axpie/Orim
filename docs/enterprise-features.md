@@ -7,7 +7,7 @@
 | Collaborative Whiteboard | ✅ | ✅ |
 | Realtime Cursors & Presence | ✅ | ✅ |
 | Comments & Snapshots | ✅ | ✅ |
-| JSON / PDF Export | ✅ | ✅ |
+| JSON / PNG Export | ✅ | ✅ |
 | Board Templates | ✅ | ✅ |
 | Board Folders & Tags | ✅ | ✅ |
 | Share Links & Passwords | ✅ | ✅ |

@@ -59,7 +59,7 @@ ORIM is a collaborative whiteboard editor with an ASP.NET Core API and a React S
 - Frontend: React 19, Vite, TypeScript, Konva, MUI
 - Persistence: PostgreSQL via Entity Framework Core
 - Authentication: JWT via httpOnly cookie session
-- Export: JSON, PNG and PDF
+- Export: JSON and PNG
 
 ## Positioning
 
@@ -310,16 +310,6 @@ The whiteboard can be exported as a PNG image directly from the browser. Open an
 
 The PNG export is entirely client-side — the canvas is rendered via [Konva](https://konvajs.org/)'s `stage.toDataURL()` and no data is sent to the server.
 
-### PDF Export
-
-Boards can also be exported as PDF. Click **Export → Export as PDF** in the toolbar. The PDF is generated on the server (`BoardPdfExportService`) using [PDFsharp 6.2.0](https://docs.pdfsharp.net/) and downloaded as a single A4 landscape page.
-
-#### PDF Export on Linux (Azure App Service)
-
-PDFsharp requires system TrueType fonts to render text. On Linux hosts (including Azure App Service for Linux), ORIM automatically uses a built-in `LinuxFontResolver` that searches the standard font directories (`/usr/share/fonts`, `/usr/local/share/fonts`, `~/.fonts`) for TTF files and maps common Windows font names (Arial, Calibri, Times New Roman, …) to their Linux equivalents.
-
-The **DejaVu** font family is used by default on Linux and is pre-installed on most Debian/Ubuntu-based images. If the Azure App Service image does not include it, install it via a startup command or `apt-get install fonts-dejavu-core`. The Liberation fonts (`fonts-liberation`) are a metric-compatible alternative and work equally well.
-
 ## Dependencies
 
 ### NuGet Packages (Backend)
@@ -335,7 +325,6 @@ The **DejaVu** font family is used by default on Linux and is pre-installed on m
 | OpenTelemetry.Extensions.Hosting | 1.15.1 |
 | OpenTelemetry.Instrumentation.AspNetCore | 1.15.1 |
 | OpenTelemetry.Instrumentation.Http | 1.15.0 |
-| PDFsharp | 6.2.0 |
 
 #### Orim.Core
 | Package | Version |
@@ -423,7 +412,7 @@ Orim ist ein kollaborativer Whiteboard-Editor mit ASP.NET Core API und React SPA
 - Frontend: React 19, Vite, TypeScript, Konva, MUI
 - Persistenz: PostgreSQL via Entity Framework Core
 - Authentifizierung: JWT via httpOnly Cookie-Session
-- Export: JSON, PNG und PDF
+- Export: JSON und PNG
 
 ## Positionierung
 
@@ -614,16 +603,6 @@ Eine vollständige Feature-Matrix, Self-Hosted Deployment-Anleitung, SSO-Konfigu
 Das Whiteboard kann direkt im Browser als PNG exportiert werden. Board öffnen, im Toolbar auf **Exportieren** klicken und **Als PNG exportieren** wählen. Das Bild wird mit mindestens 2-facher Pixeldichte (Retina-Qualität) erstellt und nach dem Board-Titel benannt.
 
 Der PNG-Export ist vollständig clientseitig – der Canvas wird via Konvas `stage.toDataURL()` gerendert, es werden keine Daten an den Server übertragen.
-
-### PDF-Export
-
-Boards können auch als PDF exportiert werden (**Exportieren → Als PDF exportieren**). Die PDF wird serverseitig vom `BoardPdfExportService` über PDFsharp 6.2.0 erzeugt und als einseitige A4-Querformat-Datei heruntergeladen.
-
-#### PDF-Export unter Linux (Azure App Service)
-
-PDFsharp benötigt TrueType-Schriftarten des Systems. Auf Linux-Hosts (inkl. Azure App Service for Linux) verwendet ORIM automatisch einen eingebauten `LinuxFontResolver`, der die Standard-Schriftartenverzeichnisse (`/usr/share/fonts`, `/usr/local/share/fonts`, `~/.fonts`) nach TTF-Dateien durchsucht und gebräuchliche Windows-Schriftarten (Arial, Calibri, Times New Roman, …) auf Linux-Äquivalente abbildet.
-
-Standardmäßig wird auf Linux die **DejaVu**-Schriftfamilie verwendet, die in den meisten Debian/Ubuntu-Images vorinstalliert ist. Falls nicht vorhanden, kann sie per `apt-get install fonts-dejavu-core` oder einem Startup-Skript nachinstalliert werden. Alternativ funktionieren die Liberation-Fonts (`apt-get install fonts-liberation`) gleichermaßen.
 
 ## Verwendete Pakete
 

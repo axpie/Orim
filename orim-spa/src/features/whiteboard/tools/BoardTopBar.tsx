@@ -40,7 +40,7 @@ import NearMeIcon from '@mui/icons-material/NearMe';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { useBoardStore } from '../store/boardStore';
 import { AppSettingsDialog } from '../../../components/dialogs/AppSettingsDialog';
-import { exportBoardJson, exportBoardPdf } from '../../../api/boards';
+import { exportBoardJson } from '../../../api/boards';
 import { ShareDialog } from '../../sharing/ShareDialog';
 import { ShortcutHelpDialog } from './ShortcutHelpDialog';
 import { BoardSettingsDialog } from '../panels/BoardSettingsDialog';
@@ -230,18 +230,6 @@ export function BoardTopBar({
     const a = document.createElement('a');
     a.href = url;
     a.download = createBoardFileName(board.title, 'json');
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportPdf = async () => {
-    if (!board) return;
-    setExportAnchor(null);
-    const blob = await exportBoardPdf(board.id);
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = createBoardFileName(board.title, 'pdf');
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -529,7 +517,6 @@ export function BoardTopBar({
         {onExportPng && (
           <MenuItem onClick={handleExportPng}>{t('board.exportPng')}</MenuItem>
         )}
-        <MenuItem onClick={handleExportPdf}>{t('board.exportPdf')}</MenuItem>
         <MenuItem onClick={handleExportJson}>{t('board.exportJson')}</MenuItem>
       </Menu>
 
@@ -579,12 +566,6 @@ export function BoardTopBar({
           <MenuItem onClick={() => { closeMobileActions(); void handleExportJson(); }}>
             <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
             <ListItemText>{t('board.exportJson')}</ListItemText>
-          </MenuItem>
-        )}
-        {showExport && (
-          <MenuItem onClick={() => { closeMobileActions(); void handleExportPdf(); }}>
-            <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>{t('board.exportPdf')}</ListItemText>
           </MenuItem>
         )}
         {showSnapshots && onOpenSnapshots && (

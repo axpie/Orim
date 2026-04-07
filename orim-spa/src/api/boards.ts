@@ -196,11 +196,6 @@ export async function exportBoardJson(id: string): Promise<string> {
   return typeof data === 'string' ? data : JSON.stringify(data);
 }
 
-export async function exportBoardPdf(id: string): Promise<Blob> {
-  const { data } = await client.get(`/api/boards/${id}/export/pdf`, { responseType: 'blob' });
-  return data;
-}
-
 // --- AI Assistant ---
 
 export async function sendAssistantMessage(
