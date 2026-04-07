@@ -8,6 +8,7 @@
 | Realtime Cursors & Presence | ✅ | ✅ |
 | Comments & Snapshots | ✅ | ✅ |
 | JSON / PNG Export | ✅ | ✅ |
+| ZIP Data Export (boards + images) | ✅ | ✅ |
 | Board Templates | ✅ | ✅ |
 | Board Folders & Tags | ✅ | ✅ |
 | Share Links & Passwords | ✅ | ✅ |

@@ -196,6 +196,11 @@ export async function exportBoardJson(id: string): Promise<string> {
   return typeof data === 'string' ? data : JSON.stringify(data);
 }
 
+export async function exportUserZip(): Promise<Blob> {
+  const { data } = await client.get('/api/user/export/zip', { responseType: 'blob' });
+  return data;
+}
+
 // --- AI Assistant ---
 
 export async function sendAssistantMessage(

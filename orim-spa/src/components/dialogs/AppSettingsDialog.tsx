@@ -14,7 +14,9 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
+import FileDownloadIcon from '@mui/icons-material/FileDownload';
 import { getThemes } from '../../api/themes';
+import { exportUserZip } from '../../api/boards';
 import { useThemeStore } from '../../stores/themeStore';
 import { useDashboardPrefsStore } from '../../stores/dashboardPrefsStore';
 
@@ -51,6 +53,22 @@ function OpenAppSettingsDialog({ onClose }: Pick<AppSettingsDialogProps, 'onClos
   const [draftShowTemplates, setDraftShowTemplates] = useState(prefs.showTemplates);
   const [draftShowRecent, setDraftShowRecent] = useState(prefs.showRecent);
   const [draftShowSharedWithMe, setDraftShowSharedWithMe] = useState(prefs.showSharedWithMe);
+  const [exportLoading, setExportLoading] = useState(false);
+
+  const handleExportZip = async () => {
+    setExportLoading(true);
+    try {
+      const blob = await exportUserZip();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `orim-export-${new Date().toISOString().slice(0, 10)}.zip`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExportLoading(false);
+    }
+  };
 
   const handleSave = async () => {
     if (draftThemeKey && draftThemeKey !== themeKey) {
@@ -122,6 +140,24 @@ function OpenAppSettingsDialog({ onClose }: Pick<AppSettingsDialogProps, 'onClos
           control={<Switch checked={draftShowSharedWithMe} onChange={(e) => setDraftShowSharedWithMe(e.target.checked)} />}
           label={t('dashboard.sharedWithMe')}
         />
+
+        <Divider sx={{ mt: 2, mb: 1.5 }} />
+        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
+          {t('app.dataExport')}
+        </Typography>
+        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+          {t('app.dataExportDescription')}
+        </Typography>
+        <Button
+          variant="outlined"
+          startIcon={<FileDownloadIcon />}
+          onClick={() => void handleExportZip()}
+          disabled={exportLoading}
+          fullWidth
+          size="small"
+        >
+          {exportLoading ? t('app.dataExportLoading') : t('app.dataExportButton')}
+        </Button>
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>{t('common.cancel')}</Button>

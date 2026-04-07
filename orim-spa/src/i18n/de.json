@@ -11,7 +11,11 @@
     "theme": "Farbschema",
     "darkMode": "Dunkelmodus",
     "lightMode": "Hellmodus",
-    "dashboardSections": "Dashboard-Bereiche"
+    "dashboardSections": "Dashboard-Bereiche",
+    "dataExport": "Meine Daten",
+    "dataExportDescription": "Alle eigenen Boards in der Ordnerstruktur sowie alle hochgeladenen Bilder als ZIP-Datei herunterladen.",
+    "dataExportButton": "Als ZIP herunterladen",
+    "dataExportLoading": "Wird vorbereitet…"
   },
   "common": {
     "cancel": "Abbrechen",

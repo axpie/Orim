@@ -59,7 +59,7 @@ ORIM is a collaborative whiteboard editor with an ASP.NET Core API and a React S
 - Frontend: React 19, Vite, TypeScript, Konva, MUI
 - Persistence: PostgreSQL via Entity Framework Core
 - Authentication: JWT via httpOnly cookie session
-- Export: JSON and PNG
+- Export: JSON, PNG and ZIP (full data export)
 
 ## Positioning
 
@@ -310,6 +310,16 @@ The whiteboard can be exported as a PNG image directly from the browser. Open an
 
 The PNG export is entirely client-side — the canvas is rendered via [Konva](https://konvajs.org/)'s `stage.toDataURL()` and no data is sent to the server.
 
+### ZIP Data Export
+
+Users can download all their boards and images as a single ZIP file via **Settings → My Data → Download as ZIP**. The server endpoint `GET /api/user/export/zip` exports:
+
+- All boards owned by the user as individual JSON files
+- The folder hierarchy is mirrored in the ZIP directory structure
+- All uploaded images under `images/`
+
+The export uses `System.IO.Compression` from the .NET BCL — no additional packages required.
+
 ## Dependencies
 
 ### NuGet Packages (Backend)
@@ -412,7 +422,7 @@ Orim ist ein kollaborativer Whiteboard-Editor mit ASP.NET Core API und React SPA
 - Frontend: React 19, Vite, TypeScript, Konva, MUI
 - Persistenz: PostgreSQL via Entity Framework Core
 - Authentifizierung: JWT via httpOnly Cookie-Session
-- Export: JSON und PNG
+- Export: JSON, PNG und ZIP (vollständiger Datenexport)
 
 ## Positionierung
 
@@ -603,6 +613,14 @@ Eine vollständige Feature-Matrix, Self-Hosted Deployment-Anleitung, SSO-Konfigu
 Das Whiteboard kann direkt im Browser als PNG exportiert werden. Board öffnen, im Toolbar auf **Exportieren** klicken und **Als PNG exportieren** wählen. Das Bild wird mit mindestens 2-facher Pixeldichte (Retina-Qualität) erstellt und nach dem Board-Titel benannt.
 
 Der PNG-Export ist vollständig clientseitig – der Canvas wird via Konvas `stage.toDataURL()` gerendert, es werden keine Daten an den Server übertragen.
+
+### ZIP-Datenexport
+
+Unter **Einstellungen → Meine Daten → Als ZIP herunterladen** können Benutzer alle eigenen Boards und Bilder als ZIP-Datei exportieren. Der Endpunkt `GET /api/user/export/zip` erzeugt:
+
+- Alle eigenen Boards als einzelne JSON-Dateien
+- Die Ordnerstruktur aus ORIM wird als Verzeichnisstruktur in der ZIP-Datei abgebildet
+- Alle hochgeladenen Bilder unter `images/`
 
 ## Verwendete Pakete
 

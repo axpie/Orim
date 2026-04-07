@@ -11,7 +11,11 @@
     "theme": "Theme",
     "darkMode": "Dark mode",
     "lightMode": "Light mode",
-    "dashboardSections": "Dashboard Sections"
+    "dashboardSections": "Dashboard Sections",
+    "dataExport": "My Data",
+    "dataExportDescription": "Download all your boards in their folder structure and all uploaded images as a ZIP file.",
+    "dataExportButton": "Download as ZIP",
+    "dataExportLoading": "Preparing…"
   },
   "common": {
     "cancel": "Cancel",

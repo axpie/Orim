@@ -23,6 +23,7 @@ app.MapBoardEndpoints();
 app.MapThemeEndpoints();
 app.MapAssistantEndpoints();
 app.MapImageEndpoints();
+app.MapUserExportEndpoints();
 app.MapHealthEndpoints();
 
 app.MapHub<BoardHub>("/hubs/board").RequireRateLimiting("signalr");
