@@ -4,45 +4,7 @@
 
 Requires [Docker](https://docs.docker.com/get-docker/).
 
-### One-line install
-
-The installer asks for your admin password and port, generates secure random secrets, writes a `docker-compose.yml` into `~/orim/`, and starts ORIM automatically.
-
-**macOS / Linux**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/axpie/orim/main/install.sh | bash
-```
-
-**Windows (PowerShell)**
-
-```powershell
-irm https://raw.githubusercontent.com/axpie/orim/main/install.ps1 | iex
-```
-
-Or download and run locally after cloning:
-
-```bash
-# macOS / Linux
-bash install.sh
-
-# Windows
-.\install.ps1
-```
-
-### Manual setup
-
-<details>
-<summary>Expand for manual docker compose instructions</summary>
-
-**1. Pull the images**
-
-```bash
-docker pull ghcr.io/axpie/orim:latest
-docker pull postgres:17
-```
-
-**2. Create a `docker-compose.yml`**
+**1. Create a `docker-compose.yml`**
 
 ```yaml
 services:
@@ -77,7 +39,7 @@ volumes:
   orim-pgdata:
 ```
 
-**3. Start**
+**2. Start**
 
 ```bash
 docker compose up -d
@@ -86,8 +48,6 @@ docker compose up -d
 Open **http://localhost:5000** — log in with `admin` / `Admin123!`.
 
 > Change `changeme`, `Jwt__Key` and `SeedAdmin__Password` before any non-local deployment.
-
-</details>
 
 ---
 
