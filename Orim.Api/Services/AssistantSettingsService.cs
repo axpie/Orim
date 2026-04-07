@@ -35,7 +35,7 @@ public sealed class AssistantSettingsService
             snapshot.DeploymentName,
             !string.IsNullOrWhiteSpace(snapshot.ApiKey),
             snapshot.IsConfigured,
-            "Azure OpenAI");
+            "OpenAI SDK");
     }
 
     public async Task<AssistantAdminSettings> UpdateAsync(AssistantSettingsUpdate update, CancellationToken cancellationToken = default)
@@ -113,12 +113,12 @@ public sealed class AssistantSettingsService
         {
             if (!Uri.TryCreate(snapshot.Endpoint, UriKind.Absolute, out var uri))
             {
-                throw new InvalidOperationException("The Azure OpenAI endpoint must be a valid absolute URL.");
+                throw new InvalidOperationException("The OpenAI SDK endpoint must be a valid absolute URL.");
             }
 
             if (!string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
             {
-                throw new InvalidOperationException("The Azure OpenAI endpoint must use HTTPS.");
+                throw new InvalidOperationException("The OpenAI SDK endpoint must use HTTPS.");
             }
         }
 
@@ -129,17 +129,17 @@ public sealed class AssistantSettingsService
 
         if (string.IsNullOrWhiteSpace(snapshot.Endpoint))
         {
-            throw new InvalidOperationException("Provide an Azure OpenAI endpoint before enabling the AI assistant.");
+            throw new InvalidOperationException("Provide an OpenAI SDK endpoint before enabling the AI assistant.");
         }
 
         if (string.IsNullOrWhiteSpace(snapshot.DeploymentName))
         {
-            throw new InvalidOperationException("Provide an Azure OpenAI deployment name before enabling the AI assistant.");
+            throw new InvalidOperationException("Provide an OpenAI SDK deployment name before enabling the AI assistant.");
         }
 
         if (string.IsNullOrWhiteSpace(snapshot.ApiKey))
         {
-            throw new InvalidOperationException("Provide an Azure OpenAI API key before enabling the AI assistant.");
+            throw new InvalidOperationException("Provide an OpenAI SDK API key before enabling the AI assistant.");
         }
     }
 

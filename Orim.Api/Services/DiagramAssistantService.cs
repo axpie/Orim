@@ -1,6 +1,6 @@
+using System.ClientModel;
 using System.Text.Json;
-using Azure;
-using Azure.AI.OpenAI;
+using OpenAI;
 using OpenAI.Chat;
 using Orim.Core;
 using Orim.Core.Models;
@@ -50,8 +50,10 @@ public sealed class DiagramAssistantService
             yield break;
         }
 
-        var azureClient = new AzureOpenAIClient(new Uri(settings.Endpoint), new AzureKeyCredential(settings.ApiKey));
-        var chatClient = azureClient.GetChatClient(settings.DeploymentName);
+        var chatClient = new ChatClient(
+            model: settings.DeploymentName,
+            credential: new ApiKeyCredential(settings.ApiKey),
+            options: new OpenAIClientOptions { Endpoint = new Uri(settings.Endpoint) });
 
         var systemPrompt = BuildSystemPrompt(board);
 
@@ -70,11 +72,7 @@ public sealed class DiagramAssistantService
         }
 
         var tools = BuildToolDefinitions();
-        var options = new ChatCompletionOptions
-        {
-            MaxOutputTokenCount = 8192,
-            Temperature = 0.4f,
-        };
+        var options = new ChatCompletionOptions();
 
         foreach (var tool in tools)
         {
@@ -92,7 +90,7 @@ public sealed class DiagramAssistantService
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Azure OpenAI call failed.");
+                _logger.LogError(ex, "OpenAI SDK call failed.");
                 errorEvent = new DiagramAssistantEvent
                 {
                     Type = EventType.Error,

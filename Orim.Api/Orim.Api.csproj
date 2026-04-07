@@ -29,8 +29,7 @@
   <ItemGroup>
     <!-- SpaProxy: starts npm run dev in the SPA directory during Debug; not published with the app -->
     <PackageReference Include="Microsoft.AspNetCore.SpaProxy" Version="9.0.*" PrivateAssets="all" />
-    <PackageReference Include="Azure.AI.OpenAI" Version="2.1.0" />
-    <PackageReference Include="Azure.Core" Version="1.51.1" />
+    <PackageReference Include="OpenAI" Version="2.2.0" />
     <PackageReference Include="Google.Apis.Auth" Version="1.73.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.5" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.StackExchangeRedis" Version="*" />
