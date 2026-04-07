@@ -140,6 +140,24 @@ internal static class UserEndpoints
             }
         });
 
+        app.MapPut("/api/users/{id:guid}/activate", [Authorize(Roles = "Admin")] async (Guid id, UserService userService, HttpContext context, ILogger<Program> logger, AuditLogger audit) =>
+        {
+            try
+            {
+                await userService.ActivateUserAsync(id);
+                if (EndpointHelpers.GetUserId(context.User) is { } adminUserId)
+                {
+                    audit.LogAdminAction(adminUserId, "user.activate", $"TargetUserId={id}");
+                }
+                return Results.NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                logger.LogWarning(ex, "Activating user {UserId} failed.", id);
+                return EndpointHelpers.BadRequest(context, "The user could not be activated.");
+            }
+        });
+
         app.MapDelete("/api/users/{id:guid}", [Authorize(Roles = "Admin")] async (Guid id, UserService userService, HttpContext context, ILogger<Program> logger, AuditLogger audit) =>
         {
             try

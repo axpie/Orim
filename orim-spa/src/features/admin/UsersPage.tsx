@@ -31,6 +31,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import {
+  activateUser,
   changePassword,
   createUser,
   deactivateUser,
@@ -156,6 +157,17 @@ export function UsersPage() {
     },
   });
 
+  const activateMutation = useMutation({
+    mutationFn: activateUser,
+    onSuccess: async () => {
+      await invalidateUsers();
+      setMessage({ severity: 'success', text: t('admin.userActivated') });
+    },
+    onError: (error) => {
+      setMessage({ severity: 'error', text: getApiErrorMessage(error, t('admin.activateFailed')) });
+    },
+  });
+
   const deleteMutation = useMutation({
     mutationFn: deleteUser,
     onSuccess: async () => {
@@ -266,12 +278,13 @@ export function UsersPage() {
 
             {users.map((user) => {
               const isCurrentUser = user.id === currentUserId;
-              const deactivateDisabled = !user.isActive || isCurrentUser || deactivateMutation.isPending;
-              const deactivateTooltip = isCurrentUser
+              const togglePending = deactivateMutation.isPending || activateMutation.isPending;
+              const toggleDisabled = isCurrentUser || togglePending;
+              const toggleTooltip = isCurrentUser
                 ? t('admin.cannotDeactivateSelf')
-                : !user.isActive
-                  ? t('admin.alreadyInactive')
-                  : t('admin.deactivate');
+                : user.isActive
+                  ? t('admin.deactivate')
+                  : t('admin.activate');
 
               return (
                 <TableRow key={user.id}>
@@ -310,12 +323,15 @@ export function UsersPage() {
                         </span>
                       </Tooltip>
 
-                      <Tooltip title={deactivateTooltip}>
+                      <Tooltip title={toggleTooltip}>
                         <span>
                           <IconButton
                             size="small"
-                            disabled={deactivateDisabled}
-                            onClick={() => deactivateMutation.mutate(user.id)}
+                            disabled={toggleDisabled}
+                            color={user.isActive ? 'default' : 'success'}
+                            onClick={() => user.isActive
+                              ? deactivateMutation.mutate(user.id)
+                              : activateMutation.mutate(user.id)}
                           >
                             <BlockIcon fontSize="small" />
                           </IconButton>

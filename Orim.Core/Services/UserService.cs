@@ -226,6 +226,15 @@ public class UserService
         await _userRepository.SaveAsync(user);
     }
 
+    public async Task ActivateUserAsync(Guid userId)
+    {
+        var user = await _userRepository.GetByIdAsync(userId)
+                   ?? throw new UserNotFoundException(userId.ToString());
+
+        user.IsActive = true;
+        await _userRepository.SaveAsync(user);
+    }
+
     public async Task DeleteUserAsync(Guid userId)
     {
         var user = await _userRepository.GetByIdAsync(userId)
