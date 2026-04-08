@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using System.Text.Json;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using Orim.Api.Contracts;
 using Orim.Api.Services;
 using Orim.Core;
@@ -19,13 +20,15 @@ public sealed class BoardHub : Hub
     private readonly BoardService _boardService;
     private readonly UserService _userService;
     private readonly IBoardOperationRepository _operationRepository;
+    private readonly ILogger<BoardHub> _logger;
 
-    public BoardHub(IBoardPresenceService presenceService, BoardService boardService, UserService userService, IBoardOperationRepository operationRepository)
+    public BoardHub(IBoardPresenceService presenceService, BoardService boardService, UserService userService, IBoardOperationRepository operationRepository, ILogger<BoardHub> logger)
     {
         _presenceService = presenceService;
         _boardService = boardService;
         _userService = userService;
         _operationRepository = operationRepository;
+        _logger = logger;
     }
 
     public static string GetUserGroupName(Guid userId) => $"user:{userId:D}";
@@ -38,34 +41,46 @@ public sealed class BoardHub : Hub
             throw new HubException("Board access denied.");
         }
 
-        var groupName = BoardGroup(boardId);
-        await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
-        var userId = ResolveUserId();
-        if (userId.HasValue)
+        try
         {
-            await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(userId.Value));
+            var groupName = BoardGroup(boardId);
+            await Groups.AddToGroupAsync(Context.ConnectionId, groupName);
+            var userId = ResolveUserId();
+            if (userId.HasValue)
+            {
+                await Groups.AddToGroupAsync(Context.ConnectionId, GetUserGroupName(userId.Value));
+            }
+
+            Context.Items[JoinedBoardIdKey] = boardId;
+            Context.Items[JoinedCanEditKey] = CanEditBoard(board, shareToken, sharePassword);
+
+            var displayName = await ResolveDisplayNameAsync(requestedDisplayName);
+            Context.Items[DisplayNameKey] = displayName;
+            var clientId = Context.ConnectionId;
+            var color = BoardPresenceIdentity.ResolveColor(clientId);
+
+            // Remove stale cursors left by a previous connection of the same authenticated user
+            // (e.g., after a network reconnect that assigned a new connection ID).
+            if (userId.HasValue)
+            {
+                await _presenceService.RemoveCursorsForUserAsync(boardId, userId.Value, clientId);
+            }
+
+            var presence = new BoardCursorPresence(clientId, userId, displayName, color, null, null, DateTime.UtcNow);
+            await _presenceService.UpsertCursorAsync(boardId, presence);
+
+            var snapshot = await GetPresenceSnapshot(boardId);
+            await Clients.Group(groupName).SendAsync("PresenceUpdated", snapshot);
         }
-
-        Context.Items[JoinedBoardIdKey] = boardId;
-        Context.Items[JoinedCanEditKey] = CanEditBoard(board, shareToken, sharePassword);
-
-        var displayName = await ResolveDisplayNameAsync(requestedDisplayName);
-        Context.Items[DisplayNameKey] = displayName;
-        var clientId = Context.ConnectionId;
-        var color = BoardPresenceIdentity.ResolveColor(clientId);
-
-        // Remove stale cursors left by a previous connection of the same authenticated user
-        // (e.g., after a network reconnect that assigned a new connection ID).
-        if (userId.HasValue)
+        catch (HubException)
         {
-            await _presenceService.RemoveCursorsForUserAsync(boardId, userId.Value, clientId);
+            throw;
         }
-
-        var presence = new BoardCursorPresence(clientId, userId, displayName, color, null, null, DateTime.UtcNow);
-        await _presenceService.UpsertCursorAsync(boardId, presence);
-
-        var snapshot = await GetPresenceSnapshot(boardId);
-        await Clients.Group(groupName).SendAsync("PresenceUpdated", snapshot);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unhandled exception in JoinBoard for board {BoardId}.", boardId);
+            throw new HubException("An error occurred while joining the board.");
+        }
     }
 
     public async Task UpdateDisplayName(Guid boardId, string? requestedDisplayName)
@@ -171,9 +186,21 @@ public sealed class BoardHub : Hub
 
         ArgumentNullException.ThrowIfNull(operation);
 
-        var sequenceNumber = await PersistOperationAsync(boardId, operation);
-        await PersistBoardStateAsync(boardId, [operation]);
-        await BroadcastBoardOperationAsync(boardId, sequenceNumber, operation);
+        try
+        {
+            var sequenceNumber = await PersistOperationAsync(boardId, operation);
+            await PersistBoardStateAsync(boardId, [operation]);
+            await BroadcastBoardOperationAsync(boardId, sequenceNumber, operation);
+        }
+        catch (HubException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unhandled exception in ApplyBoardOperation for board {BoardId}.", boardId);
+            throw new HubException("An error occurred while applying the board operation.");
+        }
     }
 
     public async Task ApplyBoardOperations(Guid boardId, IReadOnlyList<BoardOperationDto> operations)
@@ -189,20 +216,33 @@ public sealed class BoardHub : Hub
         }
 
         ArgumentNullException.ThrowIfNull(operations);
-        var sequenceNumbers = new List<long>(operations.Count);
 
-        foreach (var operation in operations)
+        try
         {
-            ArgumentNullException.ThrowIfNull(operation);
-            var sequenceNumber = await PersistOperationAsync(boardId, operation);
-            sequenceNumbers.Add(sequenceNumber);
+            var sequenceNumbers = new List<long>(operations.Count);
+
+            foreach (var operation in operations)
+            {
+                ArgumentNullException.ThrowIfNull(operation);
+                var sequenceNumber = await PersistOperationAsync(boardId, operation);
+                sequenceNumbers.Add(sequenceNumber);
+            }
+
+            await PersistBoardStateAsync(boardId, operations);
+
+            for (var index = 0; index < operations.Count; index++)
+            {
+                await BroadcastBoardOperationAsync(boardId, sequenceNumbers[index], operations[index]);
+            }
         }
-
-        await PersistBoardStateAsync(boardId, operations);
-
-        for (var index = 0; index < operations.Count; index++)
+        catch (HubException)
         {
-            await BroadcastBoardOperationAsync(boardId, sequenceNumbers[index], operations[index]);
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unhandled exception in ApplyBoardOperations for board {BoardId}.", boardId);
+            throw new HubException("An error occurred while applying board operations.");
         }
     }
 

@@ -9,6 +9,14 @@ builder.Services.AddOrimAuthentication(builder.Configuration);
 builder.Services.AddOrimCors(builder.Configuration);
 builder.Services.AddOrimTelemetry(builder.Configuration);
 
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddSignalR().AddHubOptions<BoardHub>(options =>
+    {
+        options.EnableDetailedErrors = true;
+    });
+}
+
 var app = builder.Build();
 
 await app.InitializeDatabaseAsync();
