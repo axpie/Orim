@@ -48,11 +48,7 @@ import type { BoardSyncStatus, CursorPresence } from '../../../types/models';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
 import { createBoardMetadataUpdatedOperation } from '../realtime/boardOperations';
 import { getCenteredCameraPosition } from '../cameraUtils';
-
-function createBoardFileName(title: string | undefined, extension: string) {
-  const baseName = (title?.trim() || 'board').replace(/[\\/:*?"<>|]+/g, '-');
-  return `${baseName}.${extension}`;
-}
+import { createBoardFileName, downloadTextFile } from '../exportUtils';
 
 interface BoardTopBarProps {
   onOpenProperties: () => void;
@@ -71,6 +67,7 @@ interface BoardTopBarProps {
   onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
   onRenameTitle?: (title: string, previousTitle: string) => void;
   onOpenSnapshots?: () => void;
+  onExportJson?: () => Promise<void> | void;
   onExportPng?: () => Promise<void> | void;
   onStartPresentation?: () => void;
   hasFrames?: boolean;
@@ -96,6 +93,7 @@ export function BoardTopBar({
   onBoardChanged,
   onRenameTitle,
   onOpenSnapshots,
+  onExportJson,
   onExportPng,
   onStartPresentation,
   hasFrames = false,
@@ -224,16 +222,17 @@ export function BoardTopBar({
   };
 
   const handleExportJson = async () => {
-    if (!board) return;
     setExportAnchor(null);
+
+    if (onExportJson) {
+      await onExportJson();
+      return;
+    }
+
+    if (!board) return;
+
     const json = await exportBoardJson(board.id);
-    const blob = new Blob([json], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = createBoardFileName(board.title, 'json');
-    a.click();
-    URL.revokeObjectURL(url);
+    downloadTextFile(json, 'application/json', createBoardFileName(board.title, 'json'));
   };
 
   const handleExportPng = async () => {

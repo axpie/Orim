@@ -146,6 +146,13 @@ export async function getSharedBoardHistory(
   return data;
 }
 
+export async function exportSharedBoardJson(token: string, password?: string | null): Promise<string> {
+  const { data } = await client.post<string>(`/api/boards/shared/${token}/export/json`, {
+    password: password ?? null,
+  });
+  return typeof data === 'string' ? data : JSON.stringify(data);
+}
+
 export async function setSharePassword(id: string, password: string | null): Promise<void> {
   await client.post(`/api/boards/${id}/share-password`, { password });
 }

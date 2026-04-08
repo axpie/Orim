@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type Konva from 'konva';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -18,7 +19,7 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
-import { getSharedBoard, getSharedBoardHistory, replaceSharedBoardContent, validateSharePassword } from '../../api/boards';
+import { exportSharedBoardJson, getSharedBoard, getSharedBoardHistory, replaceSharedBoardContent, validateSharePassword } from '../../api/boards';
 import { useBoardStore } from '../whiteboard/store/boardStore';
 import { useCommandStack } from '../whiteboard/store/commandStack';
 import { WhiteboardCanvas } from '../whiteboard/canvas/WhiteboardCanvas';
@@ -43,6 +44,7 @@ import type { BoardOperationPayload } from '../whiteboard/realtime/boardOperatio
 import { notifyRemoteElementMoved } from '../whiteboard/store/remoteElementSmoothingStore';
 import { getCenteredCameraPosition, getFitToScreenViewport } from '../whiteboard/cameraUtils';
 import { primeBoardHistorySequence, recoverBoardAfterReconnect } from '../whiteboard/realtime/reconnectRecovery';
+import { createBoardFileName, downloadTextFile, exportStageAsPng } from '../whiteboard/exportUtils';
 
 const guestNameStorageKey = 'orim_guest_name';
 
@@ -99,6 +101,7 @@ export function SharedBoardView() {
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
   const liveAnnouncementIdRef = useRef(0);
+  const stageRef = useRef<Konva.Stage | null>(null);
   const canvasBoxRef = useRef<HTMLDivElement | null>(null);
   const initialFitBoardIdRef = useRef<string | null>(null);
   const lastSyncAnnouncementRef = useRef<string | null>(null);
@@ -502,6 +505,34 @@ export function SharedBoardView() {
     setGuestNameSaved(true);
   }, [guestDisplayName, guestNameDraft, updateDisplayName]);
 
+  const handleStageReady = useCallback((stage: Konva.Stage | null) => {
+    stageRef.current = stage;
+  }, []);
+
+  const handleExportPng = useCallback(async () => {
+    const stage = stageRef.current;
+    const current = useBoardStore.getState().board;
+    if (!stage || !current) {
+      return;
+    }
+
+    exportStageAsPng(stage, current.title);
+  }, []);
+
+  const handleExportJson = useCallback(async () => {
+    if (!token) {
+      return;
+    }
+
+    const current = useBoardStore.getState().board;
+    if (!current) {
+      return;
+    }
+
+    const json = await exportSharedBoardJson(token, validatedPassword);
+    downloadTextFile(json, 'application/json', createBoardFileName(current.title, 'json'));
+  }, [token, validatedPassword]);
+
   if (isLoading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100dvh' }}>
@@ -558,11 +589,13 @@ export function SharedBoardView() {
         syncStatus={boardSyncStatus}
         titleEditable={false}
         showShare={false}
-        showExport={false}
+        showExport
         showChat={false}
         showProperties={board.sharedAllowAnonymousEditing}
         showBackButton={false}
         onBoardChanged={onBoardChanged}
+        onExportJson={handleExportJson}
+        onExportPng={handleExportPng}
         collaborators={remoteCursors}
         localConnectionId={connectionId}
         appSettingsScope={isAuthenticated ? 'full' : 'appearance-only'}
@@ -605,14 +638,15 @@ export function SharedBoardView() {
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
         {board.sharedAllowAnonymousEditing && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} canvasContainerRef={canvasBoxRef} />}
         <Box ref={canvasBoxRef} sx={{ flex: 1, position: 'relative', minWidth: 0, minHeight: 0 }}>
-          <WhiteboardCanvas
-            editable={board.sharedAllowAnonymousEditing}
-            localPresenceClientId={connectionId}
-            onBoardChanged={onBoardChanged}
-            onBoardLiveChanged={onBoardLiveChanged}
-            onPointerPresenceChanged={handlePointerPresenceChanged}
-            liveAnnouncement={liveAnnouncement}
-          />
+            <WhiteboardCanvas
+              editable={board.sharedAllowAnonymousEditing}
+              localPresenceClientId={connectionId}
+              onBoardChanged={onBoardChanged}
+              onBoardLiveChanged={onBoardLiveChanged}
+              onPointerPresenceChanged={handlePointerPresenceChanged}
+              onStageReady={handleStageReady}
+              liveAnnouncement={liveAnnouncement}
+            />
 
           {followingClientId && (() => {
             const followed = remoteCursors.find((cursor) => cursor.clientId === followingClientId);

@@ -32,14 +32,10 @@ import { BoardRole } from '../../types/models';
 import { useAuthStore } from '../../stores/authStore';
 import type { BoardOperationPayload } from './realtime/boardOperations';
 import { getCenteredCameraPosition, getFitToScreenViewport } from './cameraUtils';
+import { exportStageAsPng } from './exportUtils';
 
 function sortSnapshots(snapshots: BoardSnapshot[]) {
   return [...snapshots].sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
-}
-
-function createBoardFileName(title: string | undefined, extension: string) {
-  const baseName = (title?.trim() || 'board').replace(/[\\/:*?"<>|]+/g, '-');
-  return `${baseName}.${extension}`;
 }
 
 function normalizeSelectionScope(selection: string[]): string[] {
@@ -411,28 +407,7 @@ export function WhiteboardEditor() {
       return;
     }
 
-    const transientLayer = stage.findOne('.whiteboard-export-hidden') as Konva.Layer | null;
-    const previousVisibility = transientLayer?.visible() ?? true;
-
-    if (transientLayer) {
-      transientLayer.visible(false);
-      stage.batchDraw();
-    }
-
-    try {
-      const anchor = document.createElement('a');
-      anchor.href = stage.toDataURL({
-        pixelRatio: Math.max(window.devicePixelRatio || 1, 2),
-        mimeType: 'image/png',
-      });
-      anchor.download = createBoardFileName(current.title, 'png');
-      anchor.click();
-    } finally {
-      if (transientLayer) {
-        transientLayer.visible(previousVisibility);
-        stage.batchDraw();
-      }
-    }
+    exportStageAsPng(stage, current.title);
   }, []);
 
   const handleCreateSnapshot = useCallback(async (name?: string) => {

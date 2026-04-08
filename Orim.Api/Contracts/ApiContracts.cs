@@ -61,6 +61,7 @@ public sealed record BoardOperationHistoryEntryDto(long SequenceNumber, DateTime
 public sealed record BoardOperationHistoryResponse(long LatestSequenceNumber, bool HasMore, IReadOnlyList<BoardOperationHistoryEntryDto> Operations);
 public sealed record SetSharePasswordRequest(string? Password);
 public sealed record SharedBoardHistoryRequest(string? Password, long Since = 0, int Limit = 100);
+public sealed record SharedBoardExportRequest(string? Password);
 public sealed record AddMemberRequest(string Username, BoardRole Role);
 public sealed record UpdateMemberRoleRequest(BoardRole Role);
 public sealed record CreateSnapshotRequest(string? Name);

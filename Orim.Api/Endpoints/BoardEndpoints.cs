@@ -369,6 +369,17 @@ internal static class BoardEndpoints
             return Results.Text(json, "application/json");
         });
 
+        app.MapPost("/api/boards/shared/{token}/export/json", async (string token, SharedBoardExportRequest request, BoardService boardService) =>
+        {
+            var board = await boardService.GetBoardByShareTokenAsync(token);
+            if (board is null) return Results.NotFound();
+            if (!string.Equals(board.ShareLinkToken, token, StringComparison.Ordinal)) return Results.NotFound();
+            if (!boardService.HasSharedLinkAccess(board, request.Password, BoardRole.Viewer)) return Results.Forbid();
+
+            var json = JsonSerializer.Serialize(board, OrimJsonOptions.Indented);
+            return Results.Text(json, "application/json");
+        }).AllowAnonymous();
+
         // --- Presence (anonymous fallback for page unload) ---
 
         // --- Operation History ---
