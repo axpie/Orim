@@ -565,6 +565,7 @@ export function SharedBoardView() {
         onBoardChanged={onBoardChanged}
         collaborators={remoteCursors}
         localConnectionId={connectionId}
+        appSettingsScope={isAuthenticated ? 'full' : 'appearance-only'}
       />
       {!isAuthenticated && (
         <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>

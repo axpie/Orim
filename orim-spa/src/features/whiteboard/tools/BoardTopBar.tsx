@@ -39,7 +39,7 @@ import SlideshowIcon from '@mui/icons-material/Slideshow';
 import NearMeIcon from '@mui/icons-material/NearMe';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { useBoardStore } from '../store/boardStore';
-import { AppSettingsDialog } from '../../../components/dialogs/AppSettingsDialog';
+import { AppSettingsDialog, type AppSettingsDialogScope } from '../../../components/dialogs/AppSettingsDialog';
 import { exportBoardJson } from '../../../api/boards';
 import { ShareDialog } from '../../sharing/ShareDialog';
 import { ShortcutHelpDialog } from './ShortcutHelpDialog';
@@ -76,6 +76,7 @@ interface BoardTopBarProps {
   hasFrames?: boolean;
   collaborators?: CursorPresence[];
   localConnectionId?: string | null;
+  appSettingsScope?: AppSettingsDialogScope;
 }
 
 export function BoardTopBar({
@@ -100,6 +101,7 @@ export function BoardTopBar({
   hasFrames = false,
   collaborators = [],
   localConnectionId = null,
+  appSettingsScope = 'full',
 }: BoardTopBarProps) {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -620,7 +622,7 @@ export function BoardTopBar({
         onBoardChanged={onBoardChanged}
       />
 
-      <AppSettingsDialog open={appSettingsOpen} onClose={() => setAppSettingsOpen(false)} />
+      <AppSettingsDialog open={appSettingsOpen} onClose={() => setAppSettingsOpen(false)} scope={appSettingsScope} />
 
       <Menu
         anchorEl={followMenuAnchor}

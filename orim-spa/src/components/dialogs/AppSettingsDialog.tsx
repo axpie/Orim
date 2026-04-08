@@ -20,24 +20,27 @@ import { exportUserZip } from '../../api/boards';
 import { useThemeStore } from '../../stores/themeStore';
 import { useDashboardPrefsStore } from '../../stores/dashboardPrefsStore';
 
+export type AppSettingsDialogScope = 'full' | 'appearance-only';
+
 interface AppSettingsDialogProps {
   open: boolean;
   onClose: () => void;
+  scope?: AppSettingsDialogScope;
 }
 
 function normalizeLanguage(value: string): 'de' | 'en' {
   return value.toLowerCase().startsWith('en') ? 'en' : 'de';
 }
 
-export function AppSettingsDialog({ open, onClose }: AppSettingsDialogProps) {
+export function AppSettingsDialog({ open, onClose, scope = 'full' }: AppSettingsDialogProps) {
   if (!open) {
     return null;
   }
 
-  return <OpenAppSettingsDialog onClose={onClose} />;
+  return <OpenAppSettingsDialog onClose={onClose} scope={scope} />;
 }
 
-function OpenAppSettingsDialog({ onClose }: Pick<AppSettingsDialogProps, 'onClose'>) {
+function OpenAppSettingsDialog({ onClose, scope }: Required<Pick<AppSettingsDialogProps, 'onClose' | 'scope'>>) {
   const { t, i18n } = useTranslation();
   const themeKey = useThemeStore((s) => s.themeKey);
   const setTheme = useThemeStore((s) => s.setTheme);
@@ -54,6 +57,7 @@ function OpenAppSettingsDialog({ onClose }: Pick<AppSettingsDialogProps, 'onClos
   const [draftShowRecent, setDraftShowRecent] = useState(prefs.showRecent);
   const [draftShowSharedWithMe, setDraftShowSharedWithMe] = useState(prefs.showSharedWithMe);
   const [exportLoading, setExportLoading] = useState(false);
+  const showAccountSettings = scope === 'full';
 
   const handleExportZip = async () => {
     setExportLoading(true);
@@ -80,9 +84,11 @@ function OpenAppSettingsDialog({ onClose }: Pick<AppSettingsDialogProps, 'onClos
       await i18n.changeLanguage(draftLanguage);
     }
 
-    prefs.setShowTemplates(draftShowTemplates);
-    prefs.setShowRecent(draftShowRecent);
-    prefs.setShowSharedWithMe(draftShowSharedWithMe);
+    if (showAccountSettings) {
+      prefs.setShowTemplates(draftShowTemplates);
+      prefs.setShowRecent(draftShowRecent);
+      prefs.setShowSharedWithMe(draftShowSharedWithMe);
+    }
 
     onClose();
   };
@@ -121,43 +127,47 @@ function OpenAppSettingsDialog({ onClose }: Pick<AppSettingsDialogProps, 'onClos
           )}
         </TextField>
 
-        <Divider sx={{ my: 1 }} />
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
-          {t('app.dashboardSections')}
-        </Typography>
+        {showAccountSettings && (
+          <>
+            <Divider sx={{ my: 1 }} />
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+              {t('app.dashboardSections')}
+            </Typography>
 
-        <FormControlLabel
-          control={<Switch checked={draftShowTemplates} onChange={(e) => setDraftShowTemplates(e.target.checked)} />}
-          label={t('dashboard.templates')}
-        />
-        <br />
-        <FormControlLabel
-          control={<Switch checked={draftShowRecent} onChange={(e) => setDraftShowRecent(e.target.checked)} />}
-          label={t('dashboard.recentBoards')}
-        />
-        <br />
-        <FormControlLabel
-          control={<Switch checked={draftShowSharedWithMe} onChange={(e) => setDraftShowSharedWithMe(e.target.checked)} />}
-          label={t('dashboard.sharedWithMe')}
-        />
+            <FormControlLabel
+              control={<Switch checked={draftShowTemplates} onChange={(e) => setDraftShowTemplates(e.target.checked)} />}
+              label={t('dashboard.templates')}
+            />
+            <br />
+            <FormControlLabel
+              control={<Switch checked={draftShowRecent} onChange={(e) => setDraftShowRecent(e.target.checked)} />}
+              label={t('dashboard.recentBoards')}
+            />
+            <br />
+            <FormControlLabel
+              control={<Switch checked={draftShowSharedWithMe} onChange={(e) => setDraftShowSharedWithMe(e.target.checked)} />}
+              label={t('dashboard.sharedWithMe')}
+            />
 
-        <Divider sx={{ mt: 2, mb: 1.5 }} />
-        <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
-          {t('app.dataExport')}
-        </Typography>
-        <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          {t('app.dataExportDescription')}
-        </Typography>
-        <Button
-          variant="outlined"
-          startIcon={<FileDownloadIcon />}
-          onClick={() => void handleExportZip()}
-          disabled={exportLoading}
-          fullWidth
-          size="small"
-        >
-          {exportLoading ? t('app.dataExportLoading') : t('app.dataExportButton')}
-        </Button>
+            <Divider sx={{ mt: 2, mb: 1.5 }} />
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 0.5 }}>
+              {t('app.dataExport')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+              {t('app.dataExportDescription')}
+            </Typography>
+            <Button
+              variant="outlined"
+              startIcon={<FileDownloadIcon />}
+              onClick={() => void handleExportZip()}
+              disabled={exportLoading}
+              fullWidth
+              size="small"
+            >
+              {exportLoading ? t('app.dataExportLoading') : t('app.dataExportButton')}
+            </Button>
+          </>
+        )}
       </DialogContent>
       <DialogActions>
         <Button onClick={onClose}>{t('common.cancel')}</Button>
