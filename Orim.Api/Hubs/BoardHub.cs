@@ -172,7 +172,7 @@ public sealed class BoardHub : Hub
         });
     }
 
-    public async Task ApplyBoardOperation(Guid boardId, BoardOperationDto operation)
+    public async Task ApplyBoardOperation(Guid boardId, JsonElement operationPayload)
     {
         if (!IsJoinedBoard(boardId))
         {
@@ -184,13 +184,17 @@ public sealed class BoardHub : Hub
             return;
         }
 
-        ArgumentNullException.ThrowIfNull(operation);
-
         try
         {
+            var operation = BoardOperationPayloadParser.ParseSingle(operationPayload);
             var sequenceNumber = await PersistOperationAsync(boardId, operation);
             await PersistBoardStateAsync(boardId, [operation]);
             await BroadcastBoardOperationAsync(boardId, sequenceNumber, operation);
+        }
+        catch (BoardOperationPayloadParseException ex)
+        {
+            _logger.LogWarning(ex.InnerException ?? ex, "Invalid board operation payload in ApplyBoardOperation for board {BoardId}.", boardId);
+            throw new HubException(ex.ClientMessage);
         }
         catch (HubException)
         {
@@ -203,7 +207,7 @@ public sealed class BoardHub : Hub
         }
     }
 
-    public async Task ApplyBoardOperations(Guid boardId, IReadOnlyList<BoardOperationDto> operations)
+    public async Task ApplyBoardOperations(Guid boardId, JsonElement[] operationPayloads)
     {
         if (!IsJoinedBoard(boardId))
         {
@@ -215,10 +219,9 @@ public sealed class BoardHub : Hub
             return;
         }
 
-        ArgumentNullException.ThrowIfNull(operations);
-
         try
         {
+            var operations = BoardOperationPayloadParser.ParseMany(operationPayloads);
             var sequenceNumbers = new List<long>(operations.Count);
 
             foreach (var operation in operations)
@@ -234,6 +237,11 @@ public sealed class BoardHub : Hub
             {
                 await BroadcastBoardOperationAsync(boardId, sequenceNumbers[index], operations[index]);
             }
+        }
+        catch (BoardOperationPayloadParseException ex)
+        {
+            _logger.LogWarning(ex.InnerException ?? ex, "Invalid board operation payload in ApplyBoardOperations for board {BoardId}.", boardId);
+            throw new HubException(ex.ClientMessage);
         }
         catch (HubException)
         {

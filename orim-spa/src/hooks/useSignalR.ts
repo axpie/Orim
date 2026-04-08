@@ -11,6 +11,10 @@ import type {
   RealtimeConnectionState,
 } from '../types/models';
 import type { BoardOperationPayload } from '../features/whiteboard/realtime/boardOperations';
+import {
+  deliverBoardOperationBatchWithRecovery,
+  type BoardOperationInvokeResult,
+} from '../features/whiteboard/realtime/outboxDelivery';
 import { useOperationOutboxStore } from '../features/whiteboard/store/outboxStore';
 import { useAuthStore } from '../stores/authStore';
 
@@ -124,9 +128,32 @@ export function useSignalR({
   onPresenceUpdatedRef.current = onPresenceUpdated;
 
   const handleInvokeError = useCallback((error: unknown) => {
-    setLastError(getErrorMessage(error));
+    const errorMessage = getErrorMessage(error);
+    setLastError(errorMessage);
     console.error(error);
+    return errorMessage;
   }, []);
+
+  const invokeIfConnectedDetailed = useCallback(
+    async (methodName: string, ...args: unknown[]): Promise<BoardOperationInvokeResult> => {
+      const conn = connectionRef.current;
+      if (conn?.state !== signalR.HubConnectionState.Connected) {
+        return { sent: false, errorMessage: null };
+      }
+
+      try {
+        await conn.invoke(methodName, ...args);
+        setLastError(null);
+        return { sent: true, errorMessage: null };
+      } catch (error) {
+        return {
+          sent: false,
+          errorMessage: handleInvokeError(error),
+        };
+      }
+    },
+    [handleInvokeError],
+  );
 
   const updateLastKnownSequenceNumber = useCallback((sequenceNumber: number | null) => {
     if (typeof sequenceNumber !== 'number' || !Number.isFinite(sequenceNumber) || sequenceNumber < 0) {
@@ -146,21 +173,10 @@ export function useSignalR({
 
   const invokeIfConnected = useCallback(
     async (methodName: string, ...args: unknown[]) => {
-      const conn = connectionRef.current;
-      if (conn?.state !== signalR.HubConnectionState.Connected) {
-        return false;
-      }
-
-      try {
-        await conn.invoke(methodName, ...args);
-        setLastError(null);
-        return true;
-      } catch (error) {
-        handleInvokeError(error);
-        return false;
-      }
+      const result = await invokeIfConnectedDetailed(methodName, ...args);
+      return result.sent;
     },
-    [handleInvokeError],
+    [invokeIfConnectedDetailed],
   );
 
   const syncDisplayName = useCallback(
@@ -229,22 +245,23 @@ export function useSignalR({
         }
 
         const batchEntries = entries.slice(0, OUTBOX_FLUSH_BATCH_SIZE);
-        const batchOperations = batchEntries.map((entry) => entry.operation);
-        const sent = batchOperations.length === 1
-          ? await invokeIfConnected('ApplyBoardOperation', currentBoardId, batchOperations[0])
-          : await invokeIfConnected('ApplyBoardOperations', currentBoardId, batchOperations);
-        if (!sent) {
+        const delivered = await deliverBoardOperationBatchWithRecovery({
+          boardId: currentBoardId,
+          entries: batchEntries,
+          invokeBatch: (boardId, operations) => invokeIfConnectedDetailed('ApplyBoardOperations', boardId, operations),
+          invokeSingle: (boardId, operation) => invokeIfConnectedDetailed('ApplyBoardOperation', boardId, operation),
+          removeEntry: (entryId) => {
+            useOperationOutboxStore.getState().removeEntry(entryId);
+          },
+        });
+        if (!delivered) {
           break;
-        }
-
-        for (const entry of batchEntries) {
-          useOperationOutboxStore.getState().removeEntry(entry.id);
         }
       }
     } finally {
       isFlushingOutboxRef.current = false;
     }
-  }, [invokeIfConnected]);
+  }, [invokeIfConnectedDetailed]);
 
   useEffect(() => {
     if (!boardId) {
