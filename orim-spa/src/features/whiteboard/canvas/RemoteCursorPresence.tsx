@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Circle, Group, Label, Line, Rect, Tag, Text } from 'react-konva';
 import { useBoardStore } from '../store/boardStore';
+import { useRemoteElementSmoothingStore } from '../store/remoteElementSmoothingStore';
 
 const CURSOR_SMOOTHING_MS = 70;
 const POSITION_EPSILON = 0.25;
@@ -27,6 +28,7 @@ interface AnimatedRemoteCursor extends VisibleRemoteCursor {
 function RemoteCursorPresenceInner({ localPresenceClientId = null, zoom }: RemoteCursorPresenceProps) {
   const remoteCursors = useBoardStore((state) => state.remoteCursors);
   const getElementById = useBoardStore((state) => state.getElementById);
+  const smoothEntries = useRemoteElementSmoothingStore((s) => s.entries);
   const [animatedCursors, setAnimatedCursors] = useState<AnimatedRemoteCursor[]>([]);
   const animationFrameRef = useRef<number | null>(null);
   const lastFrameAtRef = useRef<number | null>(null);
@@ -203,13 +205,16 @@ function RemoteCursorPresenceInner({ localPresenceClientId = null, zoom }: Remot
         const element = getElementById(elementId);
         // Arrows don't have meaningful x/y/width/height bounds; skip them to avoid floating rectangles.
         if (!element || element.$type === 'arrow' || element.x == null || element.y == null) return null;
+        const smooth = smoothEntries[elementId];
+        const elX = smooth ? smooth.renderedX : element.x;
+        const elY = smooth ? smooth.renderedY : element.y;
         const w = element.width ?? 100;
         const h = element.height ?? 40;
         return (
           <Group key={`sel-${elementId}-${colorHex}`} listening={false}>
             <Rect
-              x={element.x - 3 / zoom}
-              y={element.y - 3 / zoom}
+              x={elX - 3 / zoom}
+              y={elY - 3 / zoom}
               width={w + 6 / zoom}
               height={h + 6 / zoom}
               stroke={colorHex}
@@ -218,7 +223,7 @@ function RemoteCursorPresenceInner({ localPresenceClientId = null, zoom }: Remot
               dash={[6 / zoom, 3 / zoom]}
               fillEnabled={false}
             />
-            <Label x={element.x} y={element.y - 18 / zoom}>
+            <Label x={elX} y={elY - 18 / zoom}>
               <Tag fill={colorHex} cornerRadius={3 / zoom} opacity={0.85} />
               <Text text={displayName} fontSize={10 / zoom} fill="#ffffff" padding={3 / zoom} />
             </Label>
