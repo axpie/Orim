@@ -100,10 +100,10 @@ internal static class WebApplicationExtensions
         });
 
         app.UseHttpLogging();
-        app.UseRateLimiter();
         app.UseCors();
         app.UseAuthentication();
         app.UseAuthorization();
+        app.UseRateLimiter();
         app.UseDefaultFiles();
         app.UseStaticFiles();
 

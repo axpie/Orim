@@ -166,20 +166,6 @@ internal static class ServiceCollectionExtensions
                     });
             });
 
-            options.AddPolicy("signalr", httpContext =>
-            {
-                var partitionKey = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
-                return RateLimitPartition.GetFixedWindowLimiter(
-                    partitionKey,
-                    _ => new FixedWindowRateLimiterOptions
-                    {
-                        PermitLimit = 30,
-                        Window = TimeSpan.FromMinutes(1),
-                        QueueLimit = 0,
-                        QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-                        AutoReplenishment = true
-                    });
-            });
         });
 
         services.AddSingleton(sp => new AssistantSettingsService(

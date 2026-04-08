@@ -1,4 +1,3 @@
-using Microsoft.AspNetCore.RateLimiting;
 using Orim.Api.Endpoints;
 using Orim.Api.Hubs;
 using Orim.Api.Infrastructure;
@@ -26,7 +25,7 @@ app.MapImageEndpoints();
 app.MapUserExportEndpoints();
 app.MapHealthEndpoints();
 
-app.MapHub<BoardHub>("/hubs/board").RequireRateLimiting("signalr");
+app.MapHub<BoardHub>("/hubs/board");
 app.MapFallbackToFile("/index.html");
 
 app.Run();
