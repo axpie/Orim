@@ -147,6 +147,12 @@ export function useWhiteboardRealtime({
       const others = current.filter((entry) => entry.clientId !== cursor.clientId);
       setRemoteCursors(mergeCursorPresence(current, [...others, cursor]));
     },
+    onOutboxDiscarded: async ({ boardId: discardedBoardId }) => {
+      const latestBoard = await getBoard(discardedBoardId);
+      setBoard(latestBoard, { preserveSelection: true });
+      clearCommandStack();
+      queryClient.setQueryData(['board', discardedBoardId], latestBoard);
+    },
   });
 
   useEffect(() => {

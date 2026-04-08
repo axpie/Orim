@@ -183,6 +183,27 @@ describe('outboxStore', () => {
     });
   });
 
+  describe('clearBoardEntries', () => {
+    it('should remove all queued entries for a single board only', () => {
+      const el1 = makeElement({ id: 'e1' });
+      const el2 = makeElement({ id: 'e2' });
+
+      useOperationOutboxStore.getState().enqueueOperations('board-a', [
+        { type: 'element.added', element: el1 },
+        { type: 'element.added', element: el2 },
+      ]);
+      useOperationOutboxStore.getState().enqueueOperations('board-b', [
+        { type: 'element.deleted', elementId: 'remote-1' },
+      ]);
+
+      useOperationOutboxStore.getState().clearBoardEntries('board-a');
+
+      expect(useOperationOutboxStore.getState().getBoardEntries('board-a')).toEqual([]);
+      expect(useOperationOutboxStore.getState().getBoardEntries('board-b')).toHaveLength(1);
+      expect(useOperationOutboxStore.getState().entries).toHaveLength(1);
+    });
+  });
+
   describe('countForBoard', () => {
     it('should return 0 for empty outbox', () => {
       expect(useOperationOutboxStore.getState().countForBoard('b1')).toBe(0);

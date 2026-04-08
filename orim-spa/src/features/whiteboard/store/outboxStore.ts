@@ -13,6 +13,7 @@ interface OperationOutboxState {
   entries: OutboxEntry[];
   enqueueOperations: (boardId: string, operations: BoardOperation[]) => void;
   removeEntry: (entryId: string) => void;
+  clearBoardEntries: (boardId: string) => void;
   getBoardEntries: (boardId: string) => OutboxEntry[];
   countForBoard: (boardId: string) => number;
 }
@@ -131,6 +132,11 @@ export const useOperationOutboxStore = create<OperationOutboxState>()(
       removeEntry: (entryId) =>
         set((state) => ({
           entries: state.entries.filter((entry) => entry.id !== entryId),
+        })),
+
+      clearBoardEntries: (boardId) =>
+        set((state) => ({
+          entries: state.entries.filter((entry) => entry.boardId !== boardId),
         })),
 
       getBoardEntries: (boardId) => get().entries.filter((entry) => entry.boardId === boardId),

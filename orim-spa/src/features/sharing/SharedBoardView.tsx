@@ -238,6 +238,23 @@ export function SharedBoardView() {
       const others = current.filter((entry) => entry.clientId !== cursor.clientId);
       setRemoteCursors(mergeCursorPresence(current, [...others, cursor]));
     },
+    onOutboxDiscarded: async () => {
+      if (!token) {
+        return;
+      }
+
+      const latestBoard = validatedPassword
+        ? await validateSharePassword(token, validatedPassword)
+        : await getSharedBoard(token);
+
+      if (isProtectedBoardResponse(latestBoard)) {
+        throw new Error('Shared board password is required.');
+      }
+
+      setBoard(latestBoard, { preserveSelection: true });
+      clearCommandStack();
+      queryClient.setQueryData(['shared-board', token], latestBoard);
+    },
   });
 
   const saveMutation = useMutation({

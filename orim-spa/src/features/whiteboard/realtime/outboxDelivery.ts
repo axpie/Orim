@@ -10,6 +10,19 @@ export interface BoardOperationInvokeResult {
   errorMessage: string | null;
 }
 
+export type BoardOperationDeliveryFailureKind = 'none' | 'server-close' | 'other';
+
+export interface BoardOperationBatchDeliveryResult {
+  delivered: boolean;
+  failureKind: BoardOperationDeliveryFailureKind;
+  errorMessage: string | null;
+}
+
+export interface RepeatedServerCloseFailureState {
+  boardId: string | null;
+  consecutiveFailures: number;
+}
+
 interface DeliverBoardOperationBatchOptions {
   boardId: string;
   entries: readonly QueuedBoardOperationEntry[];
@@ -19,10 +32,49 @@ interface DeliverBoardOperationBatchOptions {
 }
 
 const INVALID_BOARD_OPERATION_ERROR_PREFIX = 'invalid board operation payload';
+const SERVER_CLOSE_ERROR_PATTERNS = ['server returned an error on close', 'connection closed with an error'];
 
 export function isInvalidBoardOperationErrorMessage(errorMessage: string | null | undefined): boolean {
   const normalized = errorMessage?.trim().toLowerCase();
   return normalized?.startsWith(INVALID_BOARD_OPERATION_ERROR_PREFIX) ?? false;
+}
+
+export function isServerClosedConnectionErrorMessage(errorMessage: string | null | undefined): boolean {
+  const normalized = errorMessage?.trim().toLowerCase();
+  return normalized != null && SERVER_CLOSE_ERROR_PATTERNS.some((pattern) => normalized.includes(pattern));
+}
+
+export function createRepeatedServerCloseFailureState(): RepeatedServerCloseFailureState {
+  return {
+    boardId: null,
+    consecutiveFailures: 0,
+  };
+}
+
+export function registerRepeatedServerCloseFailure(
+  state: RepeatedServerCloseFailureState,
+  boardId: string,
+  failureKind: BoardOperationDeliveryFailureKind,
+  threshold: number,
+) {
+  if (failureKind !== 'server-close') {
+    return {
+      nextState: createRepeatedServerCloseFailureState(),
+      shouldDiscard: false,
+    };
+  }
+
+  const consecutiveFailures = state.boardId === boardId
+    ? state.consecutiveFailures + 1
+    : 1;
+
+  return {
+    nextState: {
+      boardId,
+      consecutiveFailures,
+    },
+    shouldDiscard: consecutiveFailures >= threshold,
+  };
 }
 
 async function deliverSingleEntry(
@@ -30,14 +82,22 @@ async function deliverSingleEntry(
   entry: QueuedBoardOperationEntry,
   invokeSingle: DeliverBoardOperationBatchOptions['invokeSingle'],
   removeEntry: DeliverBoardOperationBatchOptions['removeEntry'],
-) {
+): Promise<BoardOperationBatchDeliveryResult> {
   const result = await invokeSingle(boardId, entry.operation);
   if (result.sent || isInvalidBoardOperationErrorMessage(result.errorMessage)) {
     removeEntry(entry.id);
-    return true;
+    return {
+      delivered: true,
+      failureKind: 'none',
+      errorMessage: null,
+    };
   }
 
-  return false;
+  return {
+    delivered: false,
+    failureKind: isServerClosedConnectionErrorMessage(result.errorMessage) ? 'server-close' : 'other',
+    errorMessage: result.errorMessage,
+  };
 }
 
 export async function deliverBoardOperationBatchWithRecovery({
@@ -46,9 +106,13 @@ export async function deliverBoardOperationBatchWithRecovery({
   invokeBatch,
   invokeSingle,
   removeEntry,
-}: DeliverBoardOperationBatchOptions): Promise<boolean> {
+}: DeliverBoardOperationBatchOptions): Promise<BoardOperationBatchDeliveryResult> {
   if (entries.length === 0) {
-    return true;
+    return {
+      delivered: true,
+      failureKind: 'none',
+      errorMessage: null,
+    };
   }
 
   if (entries.length === 1) {
@@ -61,19 +125,31 @@ export async function deliverBoardOperationBatchWithRecovery({
       removeEntry(entry.id);
     }
 
-    return true;
+    return {
+      delivered: true,
+      failureKind: 'none',
+      errorMessage: null,
+    };
   }
 
   if (!isInvalidBoardOperationErrorMessage(batchResult.errorMessage)) {
-    return false;
+    return {
+      delivered: false,
+      failureKind: isServerClosedConnectionErrorMessage(batchResult.errorMessage) ? 'server-close' : 'other',
+      errorMessage: batchResult.errorMessage,
+    };
   }
 
   for (const entry of entries) {
-    const delivered = await deliverSingleEntry(boardId, entry, invokeSingle, removeEntry);
-    if (!delivered) {
-      return false;
+    const delivery = await deliverSingleEntry(boardId, entry, invokeSingle, removeEntry);
+    if (!delivery.delivered) {
+      return delivery;
     }
   }
 
-  return true;
+  return {
+    delivered: true,
+    failureKind: 'none',
+    errorMessage: null,
+  };
 }

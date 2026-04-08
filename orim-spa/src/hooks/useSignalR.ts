@@ -12,7 +12,9 @@ import type {
 } from '../types/models';
 import type { BoardOperationPayload } from '../features/whiteboard/realtime/boardOperations';
 import {
+  createRepeatedServerCloseFailureState,
   deliverBoardOperationBatchWithRecovery,
+  registerRepeatedServerCloseFailure,
   type BoardOperationInvokeResult,
 } from '../features/whiteboard/realtime/outboxDelivery';
 import { useOperationOutboxStore } from '../features/whiteboard/store/outboxStore';
@@ -35,6 +37,11 @@ interface UseSignalROptions {
   onBoardStateUpdated?: (notification: BoardStateUpdateNotification) => void;
   onCursorUpdated?: (cursor: CursorPresence) => void;
   onPresenceUpdated?: (cursors: CursorPresence[]) => void;
+  onOutboxDiscarded?: (context: {
+    boardId: string;
+    discardedEntriesCount: number;
+    errorMessage: string | null;
+  }) => Promise<void> | void;
 }
 
 function cloneOperationPayload(payload: BoardOperationPayload): BoardOperationPayload {
@@ -54,6 +61,8 @@ function getErrorMessage(error: unknown): string {
 }
 
 const NEGOTIATION_STOPPED_MESSAGE = 'stopped during negotiation';
+const MAX_SERVER_CLOSE_OUTBOX_FAILURES = 3;
+const REPEATED_OUTBOX_FAILURE_MESSAGE = 'Discarded unsent board changes after repeated sync failures and restored the latest server version.';
 
 function isNegotiationStoppedError(error: unknown): boolean {
   return getErrorMessage(error).toLowerCase().includes(NEGOTIATION_STOPPED_MESSAGE);
@@ -91,6 +100,7 @@ export function useSignalR({
   onBoardStateUpdated,
   onCursorUpdated,
   onPresenceUpdated,
+  onOutboxDiscarded,
 }: UseSignalROptions) {
   const connectionRef = useRef<signalR.HubConnection | null>(null);
   const liveSyncTimerRef = useRef<number | null>(null);
@@ -113,6 +123,8 @@ export function useSignalR({
   const onBoardStateUpdatedRef = useRef(onBoardStateUpdated);
   const onCursorUpdatedRef = useRef(onCursorUpdated);
   const onPresenceUpdatedRef = useRef(onPresenceUpdated);
+  const onOutboxDiscardedRef = useRef(onOutboxDiscarded);
+  const repeatedServerCloseFailureRef = useRef(createRepeatedServerCloseFailureState());
   const [connectionId, setConnectionId] = useState<string | null>(null);
   const [connectionState, setConnectionState] = useState<RealtimeConnectionState>('disconnected');
   const [lastError, setLastError] = useState<string | null>(null);
@@ -126,6 +138,7 @@ export function useSignalR({
   onBoardStateUpdatedRef.current = onBoardStateUpdated;
   onCursorUpdatedRef.current = onCursorUpdated;
   onPresenceUpdatedRef.current = onPresenceUpdated;
+  onOutboxDiscardedRef.current = onOutboxDiscarded;
 
   const handleInvokeError = useCallback((error: unknown) => {
     const errorMessage = getErrorMessage(error);
@@ -169,6 +182,15 @@ export function useSignalR({
 
   const invalidateSequenceTracking = useCallback(() => {
     lastKnownSequenceNumberRef.current = null;
+  }, []);
+
+  const resetRepeatedServerCloseFailures = useCallback((targetBoardId?: string | null) => {
+    const current = repeatedServerCloseFailureRef.current;
+    if (targetBoardId != null && current.boardId !== targetBoardId) {
+      return;
+    }
+
+    repeatedServerCloseFailureRef.current = createRepeatedServerCloseFailureState();
   }, []);
 
   const invokeIfConnected = useCallback(
@@ -229,6 +251,32 @@ export function useSignalR({
     [handleInvokeError, updateLastKnownSequenceNumber],
   );
 
+  const discardBoardOutbox = useCallback(async (
+    currentBoardId: string,
+    errorMessage: string | null,
+  ) => {
+    const discardedEntriesCount = useOperationOutboxStore.getState().countForBoard(currentBoardId);
+    if (discardedEntriesCount === 0) {
+      resetRepeatedServerCloseFailures(currentBoardId);
+      return;
+    }
+
+    useOperationOutboxStore.getState().clearBoardEntries(currentBoardId);
+
+    try {
+      await onOutboxDiscardedRef.current?.({
+        boardId: currentBoardId,
+        discardedEntriesCount,
+        errorMessage,
+      });
+    } catch (error) {
+      console.error(error);
+    }
+
+    setLastError(REPEATED_OUTBOX_FAILURE_MESSAGE);
+    resetRepeatedServerCloseFailures(currentBoardId);
+  }, [resetRepeatedServerCloseFailures]);
+
   const flushOutbox = useCallback(async () => {
     const currentBoardId = boardIdRef.current;
     if (!currentBoardId || isFlushingOutboxRef.current) {
@@ -241,11 +289,12 @@ export function useSignalR({
       while (true) {
         const entries = useOperationOutboxStore.getState().getBoardEntries(currentBoardId);
         if (entries.length === 0) {
+          resetRepeatedServerCloseFailures(currentBoardId);
           break;
         }
 
         const batchEntries = entries.slice(0, OUTBOX_FLUSH_BATCH_SIZE);
-        const delivered = await deliverBoardOperationBatchWithRecovery({
+        const delivery = await deliverBoardOperationBatchWithRecovery({
           boardId: currentBoardId,
           entries: batchEntries,
           invokeBatch: (boardId, operations) => invokeIfConnectedDetailed('ApplyBoardOperations', boardId, operations),
@@ -254,18 +303,41 @@ export function useSignalR({
             useOperationOutboxStore.getState().removeEntry(entryId);
           },
         });
-        if (!delivered) {
+
+        if (delivery.delivered) {
+          resetRepeatedServerCloseFailures(currentBoardId);
+          continue;
+        }
+
+        const failureRegistration = registerRepeatedServerCloseFailure(
+          repeatedServerCloseFailureRef.current,
+          currentBoardId,
+          delivery.failureKind,
+          MAX_SERVER_CLOSE_OUTBOX_FAILURES,
+        );
+        repeatedServerCloseFailureRef.current = failureRegistration.nextState;
+
+        if (failureRegistration.shouldDiscard) {
+          await discardBoardOutbox(currentBoardId, delivery.errorMessage);
+        }
+
+        if (delivery.failureKind !== 'server-close') {
+          resetRepeatedServerCloseFailures(currentBoardId);
+        }
+
+        if (!delivery.delivered) {
           break;
         }
       }
     } finally {
       isFlushingOutboxRef.current = false;
     }
-  }, [invokeIfConnectedDetailed]);
+  }, [discardBoardOutbox, invokeIfConnectedDetailed, resetRepeatedServerCloseFailures]);
 
   useEffect(() => {
     if (!boardId) {
       invalidateSequenceTracking();
+      resetRepeatedServerCloseFailures();
       setConnectionId(null);
       setConnectionState('disconnected');
       setLastError(null);
@@ -451,8 +523,9 @@ export function useSignalR({
       setConnectionState('disconnected');
       setLastError(null);
       invalidateSequenceTracking();
+      resetRepeatedServerCloseFailures();
     };
-  }, [boardId, flushOutbox, handleInvokeError, invalidateSequenceTracking, prepareOutboxFlush, syncDisplayName, syncProfileDisplayNameChanges, updateLastKnownSequenceNumber]);
+  }, [boardId, flushOutbox, handleInvokeError, invalidateSequenceTracking, prepareOutboxFlush, resetRepeatedServerCloseFailures, syncDisplayName, syncProfileDisplayNameChanges, updateLastKnownSequenceNumber]);
 
   useEffect(() => {
     const normalizedDisplayName = displayName?.trim() || null;
