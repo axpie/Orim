@@ -40,6 +40,7 @@ import { useAuthStore } from '../../stores/authStore';
 import type { Board, CursorPresence } from '../../types/models';
 import { resolveInitialGuestDisplayName } from './guestDisplayNames';
 import type { BoardOperationPayload } from '../whiteboard/realtime/boardOperations';
+import { notifyRemoteElementMoved } from '../whiteboard/store/remoteElementSmoothingStore';
 import { getCenteredCameraPosition, getFitToScreenViewport } from '../whiteboard/cameraUtils';
 import { primeBoardHistorySequence, recoverBoardAfterReconnect } from '../whiteboard/realtime/reconnectRecovery';
 
@@ -202,7 +203,21 @@ export function SharedBoardView() {
       updateLastKnownSequenceNumber(recovery.latestSequenceNumber);
     },
     onBoardOperationApplied: (notification) => {
-      applyRemoteOperation(notification.operation);
+      const { operation } = notification;
+      if (operation.type === 'element.updated' && operation.element.$type !== 'arrow') {
+        const currentEl = useBoardStore.getState()._elementsMap.get(operation.element.id);
+        if (currentEl) {
+          notifyRemoteElementMoved(
+            operation.element.id,
+            operation.element.x,
+            operation.element.y,
+            currentEl.x,
+            currentEl.y,
+          );
+        }
+      }
+
+      applyRemoteOperation(operation);
       const nextBoard = useBoardStore.getState().board;
       if (token && nextBoard) {
         queryClient.setQueryData(['shared-board', token], nextBoard);

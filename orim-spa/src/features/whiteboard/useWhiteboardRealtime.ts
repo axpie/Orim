@@ -13,6 +13,7 @@ import { mergeCursorPresence } from './realtime/mergeCursorPresence';
 import { primeBoardHistorySequence, recoverBoardAfterReconnect } from './realtime/reconnectRecovery';
 import { useOperationOutboxStore } from './store/outboxStore';
 import { useBoardStore } from './store/boardStore';
+import { notifyRemoteElementMoved } from './store/remoteElementSmoothingStore';
 
 interface UseWhiteboardRealtimeOptions {
   boardId: string | null;
@@ -111,7 +112,21 @@ export function useWhiteboardRealtime({
       updateLastKnownSequenceNumber(recovery.latestSequenceNumber);
     },
     onBoardOperationApplied: (notification) => {
-      applyRemoteOperation(notification.operation);
+      const { operation } = notification;
+      if (operation.type === 'element.updated' && operation.element.$type !== 'arrow') {
+        const currentEl = useBoardStore.getState()._elementsMap.get(operation.element.id);
+        if (currentEl) {
+          notifyRemoteElementMoved(
+            operation.element.id,
+            operation.element.x,
+            operation.element.y,
+            currentEl.x,
+            currentEl.y,
+          );
+        }
+      }
+
+      applyRemoteOperation(operation);
       const nextBoard = useBoardStore.getState().board;
       if (boardId && nextBoard) {
         queryClient.setQueryData(['board', boardId], nextBoard);

@@ -1,4 +1,4 @@
-import { memo, useMemo } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Group, Layer } from 'react-konva';
 import { ShapeRenderer } from '../shapes/ShapeRenderer';
 import { TextRenderer } from '../shapes/TextRenderer';
@@ -9,6 +9,7 @@ import { IconRenderer } from '../shapes/IconRenderer';
 import { ImageRenderer } from '../shapes/ImageRenderer';
 import { DrawingRenderer } from '../shapes/DrawingRenderer';
 import type { BoardElement, ImageElement, ThemeBoardDefaultsDefinition } from '../../../types/models';
+import { useRemoteElementSmoothingStore } from '../store/remoteElementSmoothingStore';
 
 interface CanvasElementLayerProps {
   elements: BoardElement[];
@@ -19,6 +20,45 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
   elements,
   boardDefaults,
 }: CanvasElementLayerProps) {
+  const smoothEntries = useRemoteElementSmoothingStore((s) => s.entries);
+  const step = useRemoteElementSmoothingStore((s) => s.step);
+  const hasEntries = Object.keys(smoothEntries).length > 0;
+  const animFrameRef = useRef<number | null>(null);
+  const lastFrameAtRef = useRef<number | null>(null);
+
+  const runAnimation = useCallback(function runAnimation(timestamp: number) {
+    const lastFrameAt = lastFrameAtRef.current ?? timestamp;
+    const deltaMs = Math.min(Math.max(timestamp - lastFrameAt, 1), 64);
+    lastFrameAtRef.current = timestamp;
+
+    const hasMovement = step(deltaMs);
+
+    if (hasMovement) {
+      animFrameRef.current = window.requestAnimationFrame(runAnimation);
+    } else {
+      animFrameRef.current = null;
+      lastFrameAtRef.current = null;
+    }
+  }, [step]);
+
+  useEffect(() => {
+    if (!hasEntries || animFrameRef.current != null) {
+      return;
+    }
+
+    lastFrameAtRef.current = null;
+    animFrameRef.current = window.requestAnimationFrame(runAnimation);
+  }, [hasEntries, runAnimation]);
+
+  useEffect(() => {
+    return () => {
+      if (animFrameRef.current != null) {
+        window.cancelAnimationFrame(animFrameRef.current);
+        animFrameRef.current = null;
+      }
+    };
+  }, []);
+
   const sorted = useMemo(
     () => [...elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)),
     [elements],
@@ -27,8 +67,12 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
   return (
     <Layer>
       {sorted.map((el) => {
-        const centerX = el.x + el.width / 2;
-        const centerY = el.y + el.height / 2;
+        const smooth = smoothEntries[el.id];
+        const elX = smooth ? smooth.renderedX : el.x;
+        const elY = smooth ? smooth.renderedY : el.y;
+        const effectiveEl = smooth ? { ...el, x: elX, y: elY } : el;
+        const centerX = elX + el.width / 2;
+        const centerY = elY + el.height / 2;
 
         switch (el.$type) {
           case 'shape':
@@ -42,7 +86,7 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 rotation={el.rotation ?? 0}
                 data-element-id={el.id}
               >
-                <ShapeRenderer element={el} />
+                <ShapeRenderer element={effectiveEl as typeof el} />
               </Group>
             );
           case 'text':
@@ -56,7 +100,7 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 rotation={el.rotation ?? 0}
                 data-element-id={el.id}
               >
-                <TextRenderer element={el} />
+                <TextRenderer element={effectiveEl as typeof el} />
               </Group>
             );
           case 'sticky':
@@ -70,7 +114,7 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 rotation={el.rotation ?? 0}
                 data-element-id={el.id}
               >
-                <StickyNoteRenderer element={el} />
+                <StickyNoteRenderer element={effectiveEl as typeof el} />
               </Group>
             );
           case 'frame':
@@ -84,7 +128,7 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 rotation={el.rotation ?? 0}
                 data-element-id={el.id}
               >
-                <FrameRenderer element={el} boardDefaults={boardDefaults} />
+                <FrameRenderer element={effectiveEl as typeof el} boardDefaults={boardDefaults} />
               </Group>
             );
           case 'arrow':
@@ -100,11 +144,11 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 rotation={el.rotation ?? 0}
                 data-element-id={el.id}
               >
-                <IconRenderer element={el} />
+                <IconRenderer element={effectiveEl as typeof el} />
               </Group>
             );
           case 'image':
-            return <ImageRenderer key={el.id} element={el as ImageElement} />;
+            return <ImageRenderer key={el.id} element={effectiveEl as ImageElement} />;
           case 'drawing':
             return (
               <Group
@@ -116,7 +160,7 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 rotation={el.rotation ?? 0}
                 data-element-id={el.id}
               >
-                <DrawingRenderer element={el} />
+                <DrawingRenderer element={effectiveEl as typeof el} />
               </Group>
             );
           default:
