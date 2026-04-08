@@ -22,6 +22,7 @@ import { getSharedBoard, getSharedBoardHistory, replaceSharedBoardContent, valid
 import { useBoardStore } from '../whiteboard/store/boardStore';
 import { useCommandStack } from '../whiteboard/store/commandStack';
 import { WhiteboardCanvas } from '../whiteboard/canvas/WhiteboardCanvas';
+import { FloatingToolbar } from '../whiteboard/canvas/FloatingToolbar';
 import { RemoteCursorEdgeIndicators } from '../whiteboard/canvas/RemoteCursorEdgeIndicators';
 import { Toolbar } from '../whiteboard/tools/Toolbar';
 import { BoardTopBar } from '../whiteboard/tools/BoardTopBar';
@@ -58,6 +59,7 @@ export function SharedBoardView() {
   const applyRemoteOperation = useBoardStore((s) => s.applyRemoteOperation);
   const setRemoteCursors = useBoardStore((s) => s.setRemoteCursors);
   const selectedElementIds = useBoardStore((s) => s.selectedElementIds);
+  const activeTool = useBoardStore((s) => s.activeTool);
   const setViewportInsets = useBoardStore((s) => s.setViewportInsets);
   const board = useBoardStore((s) => s.board);
   const remoteCursors = useBoardStore((s) => s.remoteCursors);
@@ -623,6 +625,20 @@ export function SharedBoardView() {
             followingClientId={followingClientId}
             onJumpToCursor={handleJumpToCursor}
           />
+
+          {board.sharedAllowAnonymousEditing && selectedElementIds.length > 0 && activeTool === 'select' && (
+            <FloatingToolbar
+              elements={board.elements}
+              selectedIds={selectedElementIds}
+              zoom={zoom}
+              cameraX={cameraX}
+              cameraY={cameraY}
+              viewportWidth={viewportWidth}
+              viewportHeight={viewportHeight}
+              onBoardChanged={onBoardChanged}
+              onOpenPropertiesPanel={handleToggleProperties}
+            />
+          )}
 
           <AuxiliaryPanelHost
             open={activePanel != null}
