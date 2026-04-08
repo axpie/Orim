@@ -9,6 +9,7 @@ RUN npm run build
 # Stage 2: Build .NET backend
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
+ARG APP_VERSION
 COPY Orim.slnx ./
 COPY Orim.Api/ Orim.Api/
 COPY Orim.Core/ Orim.Core/
@@ -16,7 +17,11 @@ COPY Orim.Infrastructure/ Orim.Infrastructure/
 COPY Orim.Tests/ Orim.Tests/
 COPY --from=spa-build /app/orim-spa/dist/ Orim.Api/wwwroot/
 RUN dotnet restore Orim.Api/Orim.Api.csproj
-RUN dotnet publish Orim.Api/Orim.Api.csproj -c Release -o /app/publish
+RUN if [ -n "$APP_VERSION" ]; then \
+      dotnet publish Orim.Api/Orim.Api.csproj -c Release -o /app/publish -p:InformationalVersion="$APP_VERSION"; \
+    else \
+      dotnet publish Orim.Api/Orim.Api.csproj -c Release -o /app/publish; \
+    fi
 
 # Stage 3: Runtime
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime

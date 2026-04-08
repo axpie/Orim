@@ -29,6 +29,7 @@ import UploadFileIcon from '@mui/icons-material/UploadFile';
 import DownloadIcon from '@mui/icons-material/Download';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SaveIcon from '@mui/icons-material/Save';
+import { getDeploymentReadiness } from '../../api/admin';
 import { getAssistantSettings, updateAssistantSettings } from '../../api/assistantSettings';
 import {
   deleteTheme,
@@ -79,6 +80,15 @@ export function SettingsPage() {
   const [themeMessage, setThemeMessage] = useState<MessageState>(null);
   const [assistantMessage, setAssistantMessage] = useState<MessageState>(null);
   const [assistantFormDraft, setAssistantFormDraft] = useState<AssistantSettingsUpdateRequest | null>(null);
+
+  const {
+    data: deploymentReadiness,
+    isError: isDeploymentReadinessError,
+    error: deploymentReadinessError,
+  } = useQuery({
+    queryKey: ['admin-deployment-readiness'],
+    queryFn: getDeploymentReadiness,
+  });
 
   const {
     data: assistantSettings,
@@ -208,6 +218,23 @@ export function SettingsPage() {
         <Typography variant="body1" color="text.secondary" sx={{ mt: 1 }}>
           {t('admin.settingsDescription')}
         </Typography>
+        <Stack direction="row" spacing={1} useFlexGap flexWrap="wrap" sx={{ mt: 2 }}>
+          <Chip
+            size="small"
+            variant="outlined"
+            label={`${t('admin.deploymentVersion')}: ${deploymentReadiness?.applicationVersion ?? '...'}`}
+          />
+          <Chip
+            size="small"
+            variant="outlined"
+            label={`${t('admin.deploymentEnvironment')}: ${deploymentReadiness?.environmentName ?? '...'}`}
+          />
+        </Stack>
+        {isDeploymentReadinessError && (
+          <Alert severity="error" sx={{ mt: 2 }}>
+            {getErrorMessage(deploymentReadinessError, t('admin.deploymentReadinessLoadFailed'))}
+          </Alert>
+        )}
       </Box>
 
       <Accordion defaultExpanded={false} sx={{ mb: 2 }}>
