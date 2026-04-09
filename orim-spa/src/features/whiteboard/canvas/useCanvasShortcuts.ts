@@ -15,7 +15,6 @@ export interface UseCanvasShortcutsParams {
   selectAllElements: () => void;
   copySelectedElementsToClipboard: () => void;
   cutSelectedElements: () => void;
-  pasteClipboardElements: () => Promise<void>;
   duplicateSelectedElements: () => void;
   groupSelectedElements: () => void;
   ungroupSelectedElements: () => void;
@@ -38,7 +37,6 @@ export function useCanvasShortcuts({
   selectAllElements,
   copySelectedElementsToClipboard,
   cutSelectedElements,
-  pasteClipboardElements,
   duplicateSelectedElements,
   groupSelectedElements,
   ungroupSelectedElements,
@@ -112,13 +110,6 @@ export function useCanvasShortcuts({
             }
             e.preventDefault();
             cutSelectedElements();
-            return;
-          case 'v':
-            if (!editable) {
-              return;
-            }
-            e.preventDefault();
-            void pasteClipboardElements();
             return;
           case 'd':
             if (!editable) {
@@ -260,7 +251,6 @@ export function useCanvasShortcuts({
     handleUndo,
     cutSelectedElements,
     moveSelectedElementsBy,
-    pasteClipboardElements,
     reorderSelectedElements,
     selectAllElements,
     setActiveTool,

@@ -19,6 +19,7 @@ import { WhiteboardContextMenu } from './WhiteboardContextMenu';
 import { useCanvasViewport } from './useCanvasViewport';
 import { useCanvasShortcuts } from './useCanvasShortcuts';
 import { useCanvasActions } from './useCanvasActions';
+import { useCanvasPasteAndDrop } from './useCanvasPasteAndDrop';
 import { useCanvasStartInteractions, type RotationState } from './useCanvasStartInteractions';
 import {
   areComparedValuesEqual,
@@ -276,6 +277,7 @@ export function WhiteboardCanvas({
     handleContextMenuAction,
     selectAccessibleElement,
     beginInlineEditingElement,
+    refreshClipboardAvailability,
   } = useCanvasActions({
     editable,
     elements,
@@ -425,7 +427,6 @@ export function WhiteboardCanvas({
     selectAllElements,
     copySelectedElementsToClipboard,
     cutSelectedElements,
-    pasteClipboardElements,
     duplicateSelectedElements,
     groupSelectedElements,
     ungroupSelectedElements,
@@ -434,6 +435,24 @@ export function WhiteboardCanvas({
     moveSelectedElementsBy,
     toggleLockSelectedElements,
     onOpenSearch,
+  });
+
+  const { onDragOver, onDrop } = useCanvasPasteAndDrop({
+    editable,
+    elements,
+    cameraX,
+    cameraY,
+    zoom,
+    viewportWidth: stageSize.width,
+    viewportHeight: stageSize.height,
+    strokeColor: boardDefaults.strokeColor,
+    containerRef,
+    addElement,
+    setElements,
+    setSelectedElementIds,
+    onBoardChanged,
+    pushCommand,
+    refreshClipboardAvailability,
   });
 
   useEffect(() => {
@@ -1332,6 +1351,8 @@ export function WhiteboardCanvas({
       aria-keyshortcuts="Tab, Shift+Tab, Enter, Escape"
       onFocus={handleContainerFocus}
       onBlur={handleContainerBlur}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
       style={{
         width: '100%',
         height: '100%',

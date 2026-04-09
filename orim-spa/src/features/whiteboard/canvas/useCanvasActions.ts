@@ -571,5 +571,6 @@ export function useCanvasActions({
     handleContextMenuAction,
     selectAccessibleElement,
     beginInlineEditingElement,
+    refreshClipboardAvailability,
   };
 }
