@@ -225,6 +225,9 @@ export function WhiteboardCanvas({
   const [rotationState, setRotationState] = useState<RotationState>(null);
   const rotationSnapshotRef = useRef<BoardElement[] | null>(null);
   const [hoveredRotationHandle, setHoveredRotationHandle] = useState(false);
+  // Mutex refs to prevent double-finalization (global window.mouseup + Konva onMouseUp can both fire)
+  const rotationFinalizingRef = useRef(false);
+  const resizeFinalizingRef = useRef(false);
 
   // Marquee select state
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
@@ -475,12 +478,84 @@ export function WhiteboardCanvas({
     return () => window.removeEventListener('mouseup', clearPanState);
   }, [activeTool, isPanning, spacePanActive]);
 
+  // Reset finalize mutexes when a new resize/rotation interaction begins
+  useEffect(() => { if (rotationState) rotationFinalizingRef.current = false; }, [rotationState]);
+  useEffect(() => { if (resizeState) resizeFinalizingRef.current = false; }, [resizeState]);
+
+  const finalizeRotation = useCallback(() => {
+    if (!rotationState || rotationFinalizingRef.current) return;
+    rotationFinalizingRef.current = true;
+    const captured = rotationState;
+    const before = rotationSnapshotRef.current;
+    const after = [...useBoardStore.getState().board?.elements ?? []];
+    const trackedKeys = captured.elementIds.length === 1 ? ['rotation'] : ROTATION_TRACKED_ELEMENT_CHANGED_KEYS;
+    setRotationState(null);
+    rotationSnapshotRef.current = null;
+    if (before && haveTrackedElementChanges(before, after, captured.elementIds, trackedKeys)) {
+      pushCommand(createElementUpdateCommand(
+        before.filter((el) => captured.elementIds.includes(el.id)),
+        after.filter((el) => captured.elementIds.includes(el.id)),
+        createChangedKeysByElementId(captured.elementIds, trackedKeys),
+      ));
+      emitUpdatedOperations('rotate', captured.elementIds);
+    }
+  }, [rotationState, pushCommand, emitUpdatedOperations]);
+
+  const finalizeResize = useCallback(() => {
+    if (!resizeState || resizeFinalizingRef.current) return;
+    resizeFinalizingRef.current = true;
+    const captured = resizeState;
+    const before = resizeSnapshotRef.current;
+    const after = [...useBoardStore.getState().board?.elements ?? []];
+    setResizeState(null);
+    setGuides([]);
+    resizeSnapshotRef.current = null;
+    if (before && haveTrackedElementChanges(before, after, [captured.elementId], ['x', 'y', 'width', 'height', 'points'])) {
+      pushCommand(createElementUpdateCommand(
+        before.filter((el) => el.id === captured.elementId),
+        after.filter((el) => el.id === captured.elementId),
+        createChangedKeysByElementId([captured.elementId], ['x', 'y', 'width', 'height', 'points']),
+      ));
+      emitUpdatedOperations('resize', [captured.elementId]);
+    }
+  }, [resizeState, pushCommand, emitUpdatedOperations]);
+
+  // Catch mouseup/blur events that happen outside the Konva stage
+  // (e.g. mouse released over floating toolbar or after leaving the browser window)
+  useEffect(() => {
+    if (!rotationState) return;
+    window.addEventListener('mouseup', finalizeRotation);
+    window.addEventListener('blur', finalizeRotation);
+    return () => {
+      window.removeEventListener('mouseup', finalizeRotation);
+      window.removeEventListener('blur', finalizeRotation);
+    };
+  }, [rotationState, finalizeRotation]);
+
+  useEffect(() => {
+    if (!resizeState) return;
+    window.addEventListener('mouseup', finalizeResize);
+    window.addEventListener('blur', finalizeResize);
+    return () => {
+      window.removeEventListener('mouseup', finalizeResize);
+      window.removeEventListener('blur', finalizeResize);
+    };
+  }, [resizeState, finalizeResize]);
+
   // ── Mouse Move ──
   const handleMouseMove = useCallback(
     (e: Konva.KonvaEventObject<MouseEvent>) => {
       const worldPos = getWorldPos();
       const screenPos = getScreenPos();
       if (!screenPos) return;
+
+      // Guard: primary button no longer held (released outside the window)
+      if (!e.evt.buttons && (rotationState || resizeState)) {
+        finalizeRotation();
+        finalizeResize();
+        return;
+      }
+
       const snapTemporarilyDisabled = e.evt.ctrlKey;
       const nextHoveredRotationHandle = editable && activeTool === 'select'
         ? (rotationState != null || getRotationHandleFromTarget(e.target))
@@ -873,7 +948,7 @@ export function WhiteboardCanvas({
         setDragStart(worldPos);
       }
     },
-    [isPanning, panStart, drawingElementId, drawStart, draftRect, draftArrowStart, arrowEndpointDrag, arrowRouteHandleDrag, rotationState, resizeState, marquee, isDragging, dragStart, elements, selectedIds, zoom, editable, activeTool, getWorldPos, getScreenPos, getResizeHandleFromTarget, getRotationHandleFromTarget, setCamera, setElements, updateElement, applyDraggedArrowEndpoint, onBoardLiveChanged, onPointerPresenceChanged, dockSnapRadius, pendingArrowRouteStyle],
+    [isPanning, panStart, drawingElementId, drawStart, draftRect, draftArrowStart, arrowEndpointDrag, arrowRouteHandleDrag, rotationState, resizeState, marquee, isDragging, dragStart, elements, selectedIds, zoom, editable, activeTool, getWorldPos, getScreenPos, getResizeHandleFromTarget, getRotationHandleFromTarget, setCamera, setElements, updateElement, applyDraggedArrowEndpoint, onBoardLiveChanged, onPointerPresenceChanged, dockSnapRadius, pendingArrowRouteStyle, finalizeRotation, finalizeResize],
   );
 
   const handleMouseLeave = useCallback(() => {
@@ -1079,42 +1154,12 @@ export function WhiteboardCanvas({
       }
 
       if (rotationState) {
-        const before = rotationSnapshotRef.current;
-        const after = [...useBoardStore.getState().board?.elements ?? []];
-        const trackedRotationKeys = rotationState.elementIds.length === 1
-          ? ['rotation']
-          : ROTATION_TRACKED_ELEMENT_CHANGED_KEYS;
-        setRotationState(null);
-        rotationSnapshotRef.current = null;
-
-        if (before && haveTrackedElementChanges(before, after, rotationState.elementIds, trackedRotationKeys)) {
-          pushCommand(createElementUpdateCommand(
-            before.filter((element) => rotationState.elementIds.includes(element.id)),
-            after.filter((element) => rotationState.elementIds.includes(element.id)),
-            createChangedKeysByElementId(rotationState.elementIds, trackedRotationKeys),
-          ));
-          emitUpdatedOperations('rotate', rotationState.elementIds);
-        }
-
+        finalizeRotation();
         return;
       }
 
       if (resizeState) {
-        const before = resizeSnapshotRef.current;
-        const after = [...useBoardStore.getState().board?.elements ?? []];
-        setResizeState(null);
-        setGuides([]);
-        resizeSnapshotRef.current = null;
-
-        if (before && haveTrackedElementChanges(before, after, [resizeState.elementId], ['x', 'y', 'width', 'height', 'points'])) {
-          pushCommand(createElementUpdateCommand(
-            before.filter((element) => element.id === resizeState.elementId),
-            after.filter((element) => element.id === resizeState.elementId),
-            createChangedKeysByElementId([resizeState.elementId], ['x', 'y', 'width', 'height', 'points']),
-          ));
-          emitUpdatedOperations('resize', [resizeState.elementId]);
-        }
-
+        finalizeResize();
         return;
       }
 
@@ -1162,7 +1207,7 @@ export function WhiteboardCanvas({
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, arrowRouteHandleDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, defaultFrameColors, emitUpdatedOperations, selectedIds, onBoardChanged, rotationState, pendingArrowRouteStyle],
+    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, arrowRouteHandleDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, defaultFrameColors, emitUpdatedOperations, selectedIds, onBoardChanged, rotationState, pendingArrowRouteStyle, finalizeRotation, finalizeResize],
   );
 
   const handleTouchStart = useCallback(

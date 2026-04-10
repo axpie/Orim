@@ -28,7 +28,7 @@ import CircleOutlinedIcon from '@mui/icons-material/CircleOutlined';
 import ChangeHistoryIcon from '@mui/icons-material/ChangeHistory';
 import TextFieldsIcon from '@mui/icons-material/TextFields';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
-import CropLandscapeIcon from '@mui/icons-material/CropLandscape';
+import WebAssetOutlinedIcon from '@mui/icons-material/WebAssetOutlined';
 import AddReactionIcon from '@mui/icons-material/AddReaction';
 import PermMediaIcon from '@mui/icons-material/PermMedia';
 import DrawIcon from '@mui/icons-material/Draw';
@@ -463,7 +463,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     { tool: 'rhombus', icon: <RectangleOutlinedIcon sx={{ transform: 'rotate(45deg)' }} />, label: t('tools.rhombus') },
     { tool: 'text', icon: <TextFieldsIcon />, label: t('tools.text'), shortcut: 'T' },
     { tool: 'sticky', icon: <StickyNote2OutlinedIcon />, label: t('tools.stickyNote') },
-    { tool: 'frame', icon: <CropLandscapeIcon />, label: t('tools.frame') },
+    { tool: 'frame', icon: <WebAssetOutlinedIcon />, label: t('tools.frame') },
     {
       tool: 'icon',
       icon: <AddReactionIcon />,
