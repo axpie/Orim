@@ -55,6 +55,7 @@ public class BoardService
             OwnerId = ownerId,
             LabelOutlineEnabled = importedBoard.LabelOutlineEnabled,
             ArrowOutlineEnabled = importedBoard.ArrowOutlineEnabled,
+            GridStyle = importedBoard.GridStyle,
             EnabledIconGroups = Board.NormalizeEnabledIconGroups(importedBoard.EnabledIconGroups),
             CustomColors = importedBoard.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             RecentColors = importedBoard.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
@@ -288,6 +289,7 @@ public class BoardService
         board.Title = content.Title;
         board.LabelOutlineEnabled = content.LabelOutlineEnabled;
         board.ArrowOutlineEnabled = content.ArrowOutlineEnabled;
+        board.GridStyle = content.GridStyle;
         board.EnabledIconGroups = Board.NormalizeEnabledIconGroups(content.EnabledIconGroups);
         board.CustomColors = content.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         board.RecentColors = content.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
@@ -304,6 +306,7 @@ public class BoardService
 
         targetBoard.LabelOutlineEnabled = importedBoard.LabelOutlineEnabled;
         targetBoard.ArrowOutlineEnabled = importedBoard.ArrowOutlineEnabled;
+        targetBoard.GridStyle = importedBoard.GridStyle;
         targetBoard.SurfaceColor = importedBoard.SurfaceColor;
         targetBoard.ThemeKey = importedBoard.ThemeKey;
         targetBoard.EnabledIconGroups = Board.NormalizeEnabledIconGroups(importedBoard.EnabledIconGroups);
@@ -350,6 +353,7 @@ public class BoardService
         Title = board.Title,
         LabelOutlineEnabled = board.LabelOutlineEnabled,
         ArrowOutlineEnabled = board.ArrowOutlineEnabled,
+        GridStyle = board.GridStyle,
         EnabledIconGroups = Board.NormalizeEnabledIconGroups(board.EnabledIconGroups),
         CustomColors = board.CustomColors.ToList(),
         RecentColors = board.RecentColors.ToList(),

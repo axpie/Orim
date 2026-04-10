@@ -51,7 +51,7 @@ export async function createBoard(request: CreateBoardRequest): Promise<Board> {
 
 export async function saveBoard(
   id: string,
-  board: Pick<Board, 'title' | 'labelOutlineEnabled' | 'arrowOutlineEnabled' | 'surfaceColor' | 'themeKey' | 'enabledIconGroups' | 'customColors' | 'recentColors' | 'stickyNotePresets' | 'stylePresetState' | 'elements'>,
+  board: Pick<Board, 'title' | 'labelOutlineEnabled' | 'arrowOutlineEnabled' | 'gridStyle' | 'surfaceColor' | 'themeKey' | 'enabledIconGroups' | 'customColors' | 'recentColors' | 'stickyNotePresets' | 'stylePresetState' | 'elements'>,
   sourceClientId?: string | null,
   changeKind: 'Content' | 'Metadata' = 'Content',
 ): Promise<Board> {
@@ -59,6 +59,7 @@ export async function saveBoard(
     title: board.title,
     labelOutlineEnabled: board.labelOutlineEnabled,
     arrowOutlineEnabled: board.arrowOutlineEnabled,
+    gridStyle: board.gridStyle ?? null,
     surfaceColor: board.surfaceColor ?? null,
     themeKey: board.themeKey ?? null,
     enabledIconGroups: board.enabledIconGroups ?? null,

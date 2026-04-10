@@ -364,11 +364,14 @@ export interface BoardFolder {
   createdAt: string;
 }
 
+export type GridStyle = 'lines' | 'dots' | 'none';
+
 export interface Board {
   id: string;
   title: string;
   labelOutlineEnabled: boolean;
   arrowOutlineEnabled: boolean;
+  gridStyle?: GridStyle | null;
   surfaceColor?: string | null;
   themeKey?: string | null;
   enabledIconGroups?: string[];
@@ -634,6 +637,7 @@ export interface BoardMetadataUpdatedOperation {
   title?: string;
   labelOutlineEnabled?: boolean;
   arrowOutlineEnabled?: boolean;
+  gridStyle?: GridStyle | null;
   surfaceColor?: string | null;
   themeKey?: string | null;
   enabledIconGroups?: string[];

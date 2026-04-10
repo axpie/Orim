@@ -58,6 +58,7 @@ public class Board
     public string Title { get; set; } = string.Empty;
     public bool LabelOutlineEnabled { get; set; } = true;
     public bool ArrowOutlineEnabled { get; set; } = true;
+    public string? GridStyle { get; set; }
     public List<string> CustomColors { get; set; } = DefaultCustomColors.ToList();
     public List<string> RecentColors { get; set; } = [];
     public List<StickyNotePreset> StickyNotePresets { get; set; } = [];

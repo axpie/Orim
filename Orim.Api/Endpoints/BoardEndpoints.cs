@@ -73,6 +73,7 @@ internal static class BoardEndpoints
             {
                 LabelOutlineEnabled = request.LabelOutlineEnabled,
                 ArrowOutlineEnabled = request.ArrowOutlineEnabled,
+                GridStyle = request.GridStyle is "lines" or "dots" or "none" ? request.GridStyle : null,
                 SurfaceColor = request.SurfaceColor,
                 ThemeKey = request.ThemeKey,
                 EnabledIconGroups = request.EnabledIconGroups?.ToList() ?? board.EnabledIconGroups.ToList(),

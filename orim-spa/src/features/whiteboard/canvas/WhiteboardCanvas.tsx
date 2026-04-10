@@ -1569,6 +1569,7 @@ export function WhiteboardCanvas({
           viewportHeight={stageSize.height}
           gridColor={boardDefaults.gridColor}
           surfaceColor={boardDefaults.surfaceColor}
+          gridStyle={board?.gridStyle}
         />
 
         {/* Elements layer */}

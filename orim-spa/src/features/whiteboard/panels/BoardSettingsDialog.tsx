@@ -19,13 +19,15 @@ import {
   Stack,
   Switch,
   TextField,
+  ToggleButton,
+  ToggleButtonGroup,
   Typography,
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import type { Board, StickyNotePreset } from '../../../types/models';
+import type { Board, GridStyle, StickyNotePreset } from '../../../types/models';
 import { useBoardStore } from '../store/boardStore';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
 import { createBoardMetadataUpdatedOperation } from '../realtime/boardOperations';
@@ -83,6 +85,7 @@ function OpenBoardSettingsDialog({ board, onClose, onBoardChanged }: OpenBoardSe
   const [usePinnedSurface, setUsePinnedSurface] = useState(() => !!board.surfaceColor);
   const [draftSurfaceColor, setDraftSurfaceColor] = useState(() => board.surfaceColor ?? '#ffffff');
   const [draftThemeKey, setDraftThemeKey] = useState<string>(() => board.themeKey ?? '');
+  const [draftGridStyle, setDraftGridStyle] = useState<GridStyle>(() => board.gridStyle ?? 'lines');
   const [draftEnabledIconGroups, setDraftEnabledIconGroups] = useState(() => resolveEnabledIconGroupKeys(board.enabledIconGroups));
 
   const { data: themes = [] } = useQuery({
@@ -131,11 +134,12 @@ function OpenBoardSettingsDialog({ board, onClose, onBoardChanged }: OpenBoardSe
     const stickyNotePresets = sanitizeStickyNotePresets(draftPresets);
     const surfaceColor = usePinnedSurface ? draftSurfaceColor : null;
     const themeKey = draftThemeKey || null;
-    updateBoard({ stickyNotePresets, surfaceColor, themeKey, enabledIconGroups: draftEnabledIconGroups });
+    updateBoard({ stickyNotePresets, surfaceColor, themeKey, gridStyle: draftGridStyle, enabledIconGroups: draftEnabledIconGroups });
     onBoardChanged?.('Metadata', createBoardMetadataUpdatedOperation({
       title: board.title,
       labelOutlineEnabled: board.labelOutlineEnabled,
       arrowOutlineEnabled: board.arrowOutlineEnabled,
+      gridStyle: draftGridStyle,
       surfaceColor,
       themeKey,
       enabledIconGroups: draftEnabledIconGroups,
@@ -206,6 +210,34 @@ function OpenBoardSettingsDialog({ board, onClose, onBoardChanged }: OpenBoardSe
                 />
               )}
             </Stack>
+          </Box>
+
+          {/* Grid style */}
+          <Box>
+            <Typography variant="subtitle2" gutterBottom>
+              {t('boardSettings.gridStyle', 'Raster')}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              {t('boardSettings.gridStyleDescription', 'Legt den Raster-Stil für dieses Board fest.')}
+            </Typography>
+            <ToggleButtonGroup
+              value={draftGridStyle}
+              exclusive
+              onChange={(_e, value: GridStyle | null) => {
+                if (value !== null) setDraftGridStyle(value);
+              }}
+              size="small"
+            >
+              <ToggleButton value="lines">
+                {t('boardSettings.gridStyleLines', 'Linien')}
+              </ToggleButton>
+              <ToggleButton value="dots">
+                {t('boardSettings.gridStyleDots', 'Punkte')}
+              </ToggleButton>
+              <ToggleButton value="none">
+                {t('boardSettings.gridStyleNone', 'Kein Raster')}
+              </ToggleButton>
+            </ToggleButtonGroup>
           </Box>
 
           <Accordion disableGutters defaultExpanded={false} sx={{ '&::before': { display: 'none' } }}>

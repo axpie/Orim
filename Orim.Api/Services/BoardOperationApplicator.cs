@@ -92,6 +92,13 @@ internal static class BoardOperationApplicator
             board.ArrowOutlineEnabled = operation.ArrowOutlineEnabled.Value;
         }
 
+        if (operation.GridStyle is not null)
+        {
+            board.GridStyle = operation.GridStyle is "lines" or "dots" or "none"
+                ? operation.GridStyle
+                : null;
+        }
+
         board.SurfaceColor = operation.SurfaceColor;
         board.ThemeKey = operation.ThemeKey;
         if (operation.EnabledIconGroups is not null)

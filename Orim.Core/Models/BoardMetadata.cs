@@ -22,6 +22,7 @@ public class BoardSnapshotContent
     public string Title { get; set; } = string.Empty;
     public bool LabelOutlineEnabled { get; set; } = true;
     public bool ArrowOutlineEnabled { get; set; } = true;
+    public string? GridStyle { get; set; }
     public List<string> EnabledIconGroups { get; set; } = Board.DefaultEnabledIconGroups.ToList();
     public List<string> CustomColors { get; set; } = [];
     public List<string> RecentColors { get; set; } = [];

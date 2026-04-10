@@ -102,13 +102,14 @@ export function createElementsDeletedOperation(elementIds: string[]): BoardOpera
 }
 
 export function createBoardMetadataUpdatedOperation(
-  board: Pick<Board, 'title' | 'labelOutlineEnabled' | 'arrowOutlineEnabled' | 'surfaceColor' | 'themeKey' | 'enabledIconGroups' | 'customColors' | 'recentColors' | 'stickyNotePresets' | 'stylePresetState'>,
+  board: Pick<Board, 'title' | 'labelOutlineEnabled' | 'arrowOutlineEnabled' | 'gridStyle' | 'surfaceColor' | 'themeKey' | 'enabledIconGroups' | 'customColors' | 'recentColors' | 'stickyNotePresets' | 'stylePresetState'>,
 ): BoardOperation {
   return {
     type: 'board.metadata.updated',
     title: board.title,
     labelOutlineEnabled: board.labelOutlineEnabled,
     arrowOutlineEnabled: board.arrowOutlineEnabled,
+    gridStyle: board.gridStyle,
     surfaceColor: board.surfaceColor,
     themeKey: board.themeKey,
     enabledIconGroups: board.enabledIconGroups ? [...board.enabledIconGroups] : undefined,
@@ -203,6 +204,7 @@ export function applyBoardOperation(board: Board, operation: BoardOperation): Bo
         title: operation.title ?? board.title,
         labelOutlineEnabled: operation.labelOutlineEnabled ?? board.labelOutlineEnabled,
         arrowOutlineEnabled: operation.arrowOutlineEnabled ?? board.arrowOutlineEnabled,
+        gridStyle: 'gridStyle' in operation ? operation.gridStyle : board.gridStyle,
         surfaceColor: 'surfaceColor' in operation ? operation.surfaceColor : board.surfaceColor,
         themeKey: 'themeKey' in operation ? operation.themeKey : board.themeKey,
         enabledIconGroups: operation.enabledIconGroups ?? board.enabledIconGroups,
