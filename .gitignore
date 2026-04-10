@@ -7,10 +7,6 @@ obj/
 *.vs/
 .vscode/
 
-## Data directory (runtime)
-data/
-!Orim.Web/wwwroot/data/
-
 ## OS
 .DS_Store
 Thumbs.db
