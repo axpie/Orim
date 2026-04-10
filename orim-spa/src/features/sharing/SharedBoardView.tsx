@@ -636,7 +636,7 @@ export function SharedBoardView() {
         </Box>
       )}
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
-        {board.sharedAllowAnonymousEditing && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} canvasContainerRef={canvasBoxRef} />}
+        {board.sharedAllowAnonymousEditing && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} canvasContainerRef={canvasBoxRef} shareToken={token} sharePassword={validatedPassword} />}
         <Box ref={canvasBoxRef} sx={{ flex: 1, position: 'relative', minWidth: 0, minHeight: 0 }}>
             <WhiteboardCanvas
               editable={board.sharedAllowAnonymousEditing}
@@ -646,6 +646,8 @@ export function SharedBoardView() {
               onPointerPresenceChanged={handlePointerPresenceChanged}
               onStageReady={handleStageReady}
               liveAnnouncement={liveAnnouncement}
+              shareToken={token}
+              sharePassword={validatedPassword}
             />
 
           {followingClientId && (() => {

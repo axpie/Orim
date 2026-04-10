@@ -96,6 +96,8 @@ interface WhiteboardCanvasProps {
   onStageReady?: (stage: Konva.Stage | null) => void;
   liveAnnouncement?: { id: number; text: string } | null;
   onOpenSearch?: () => void;
+  shareToken?: string;
+  sharePassword?: string | null;
 }
 
 export function WhiteboardCanvas({
@@ -107,6 +109,8 @@ export function WhiteboardCanvas({
   onStageReady,
   liveAnnouncement = null,
   onOpenSearch,
+  shareToken,
+  sharePassword,
 }: WhiteboardCanvasProps) {
   const { t } = useTranslation();
   const accessibilityHelpId = useId();
@@ -265,7 +269,6 @@ export function WhiteboardCanvas({
     deleteSelectedElements,
     copySelectedElementsToClipboard,
     cutSelectedElements,
-    pasteClipboardElements,
     duplicateSelectedElements,
     groupSelectedElements,
     ungroupSelectedElements,
@@ -439,6 +442,8 @@ export function WhiteboardCanvas({
 
   const { onDragOver, onDrop } = useCanvasPasteAndDrop({
     boardId: board?.id ?? '',
+    shareToken,
+    sharePassword,
     editable,
     elements,
     cameraX,
@@ -679,7 +684,7 @@ export function WhiteboardCanvas({
 
         const initialRotation = normalizeRotationDegrees(resizeState.initialRotation);
         const isRotatedResize = Math.abs(initialRotation) > 0.01;
-        const imageAspectRatio = currentElement.$type === 'image'
+        const imageAspectRatio = currentElement.$type === 'file'
           && currentElement.imageFit !== 'Fill'
           && resizeState.initialHeight > 0
           ? resizeState.initialWidth / resizeState.initialHeight

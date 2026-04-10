@@ -31,3 +31,19 @@ export async function deleteBoardFile(boardId: string, fileId: string): Promise<
   deletedFileIds.add(fileId);
   deletedListeners.forEach((l) => l());
 }
+
+export async function uploadSharedBoardFile(token: string, password: string | null, file: File): Promise<BoardFileInfo> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (password) formData.append('password', password);
+  const { data } = await client.post<BoardFileInfo>(`/api/boards/shared/${token}/files`, formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
+export async function getSharedBoardFiles(token: string, password: string | null): Promise<BoardFileInfo[]> {
+  const params = password ? { password } : {};
+  const { data } = await client.get<BoardFileInfo[]>(`/api/boards/shared/${token}/files`, { params });
+  return data;
+}

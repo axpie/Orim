@@ -20,7 +20,7 @@ import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import InsertDriveFileOutlinedIcon from '@mui/icons-material/InsertDriveFileOutlined';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import { mdiFileDocumentOutline, mdiFileTableOutline, mdiFileCodeOutline, mdiFileOutline } from '@mdi/js';
-import { getBoardFiles, uploadBoardFile, deleteBoardFile } from '../../api/files';
+import { getBoardFiles, uploadBoardFile, deleteBoardFile, getSharedBoardFiles, uploadSharedBoardFile } from '../../api/files';
 import type { BoardFileInfo } from '../../types/models';
 
 interface FileLibraryDialogProps {
@@ -28,6 +28,8 @@ interface FileLibraryDialogProps {
   boardId: string;
   onClose: () => void;
   onInsertFile: (file: BoardFileInfo) => void;
+  shareToken?: string;
+  sharePassword?: string | null;
 }
 
 function isImageType(contentType: string): boolean {
@@ -56,25 +58,32 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function FileLibraryDialog({ open, boardId, onClose, onInsertFile }: FileLibraryDialogProps) {
+export function FileLibraryDialog({ open, boardId, onClose, onInsertFile, shareToken, sharePassword }: FileLibraryDialogProps) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isShared = !!shareToken;
+  const queryKey = isShared ? ['board-files-shared', shareToken] : ['board-files', boardId];
+
   const { data: files = [], isLoading } = useQuery({
-    queryKey: ['board-files', boardId],
-    queryFn: () => getBoardFiles(boardId),
+    queryKey,
+    queryFn: () => isShared
+      ? getSharedBoardFiles(shareToken!, sharePassword ?? null)
+      : getBoardFiles(boardId),
     enabled: open,
   });
 
   const uploadMutation = useMutation({
-    mutationFn: (file: File) => uploadBoardFile(boardId, file),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['board-files', boardId] }),
+    mutationFn: (file: File) => isShared
+      ? uploadSharedBoardFile(shareToken!, sharePassword ?? null, file)
+      : uploadBoardFile(boardId, file),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (fileId: string) => deleteBoardFile(boardId, fileId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['board-files', boardId] }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey }),
   });
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -176,27 +185,29 @@ export function FileLibraryDialog({ open, boardId, onClose, onInsertFile }: File
                       </Typography>
                     </Box>
                   )}
-                  <Box
-                    className="file-actions"
-                    sx={{
-                      position: 'absolute',
-                      top: 4,
-                      right: 4,
-                      opacity: 0,
-                      transition: 'opacity 0.15s',
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <Tooltip title={t('files.delete')}>
-                      <IconButton
-                        size="small"
-                        onClick={() => deleteMutation.mutate(file.id)}
-                        sx={{ bgcolor: 'background.paper' }}
-                      >
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
+                  {!isShared && (
+                    <Box
+                      className="file-actions"
+                      sx={{
+                        position: 'absolute',
+                        top: 4,
+                        right: 4,
+                        opacity: 0,
+                        transition: 'opacity 0.15s',
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <Tooltip title={t('files.delete')}>
+                        <IconButton
+                          size="small"
+                          onClick={() => deleteMutation.mutate(file.id)}
+                          sx={{ bgcolor: 'background.paper' }}
+                        >
+                          <DeleteIcon fontSize="small" />
+                        </IconButton>
+                      </Tooltip>
+                    </Box>
+                  )}
                   <Box
                     sx={{
                       position: 'absolute',

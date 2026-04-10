@@ -125,7 +125,7 @@ function drawElement(ctx: CanvasRenderingContext2D, el: BoardElement, scale: num
       ctx.fill();
       break;
 
-    case 'image':
+    case 'file':
       ctx.fillStyle = '#bdbdbd';
       ctx.fillRect(x, y, w, h);
       break;

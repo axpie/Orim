@@ -92,6 +92,8 @@ interface ToolbarProps {
   canvasContainerRef?: React.RefObject<HTMLElement | null>;
   minimapVisible?: boolean;
   onToggleMinimap?: () => void;
+  shareToken?: string;
+  sharePassword?: string | null;
 }
 
 const FRAME_WRAP_HORIZONTAL_PADDING = 24;
@@ -280,7 +282,7 @@ function createFrameRect(bounds: Rect): Rect {
   };
 }
 
-export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasContainerRef, minimapVisible, onToggleMinimap }: ToolbarProps) {
+export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasContainerRef, minimapVisible, onToggleMinimap, shareToken, sharePassword }: ToolbarProps) {
   const { t } = useTranslation();
   const theme = useTheme();
   const isTouchDevice = useMediaQuery('(pointer: coarse)');
@@ -1339,6 +1341,8 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
         boardId={board?.id ?? ''}
         onClose={() => setImageLibraryOpen(false)}
         onInsertFile={handleInsertFile}
+        shareToken={shareToken}
+        sharePassword={sharePassword}
       />
     </Paper>
   );

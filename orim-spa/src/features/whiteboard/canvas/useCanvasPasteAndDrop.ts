@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { uploadBoardFile } from '../../../api/files';
+import { uploadBoardFile, uploadSharedBoardFile } from '../../../api/files';
 import { deserializeClipboardPayload, getClipboardElements, readStoredClipboardElements, setClipboardElements } from '../clipboard/clipboardService';
 import { cloneElementsForInsertion, isInteractiveTextTarget, KEYBOARD_DUPLICATE_OFFSET } from './canvasUtils';
 import { createAddElementsCommand } from '../realtime/localBoardCommands';
@@ -14,6 +14,8 @@ const MAX_IMAGE_SIZE = 600;
 
 interface UseCanvasPasteAndDropOptions {
   boardId: string;
+  shareToken?: string;
+  sharePassword?: string | null;
   editable: boolean;
   elements: BoardElement[];
   cameraX: number;
@@ -45,6 +47,8 @@ async function resolveImageDimensions(src: string): Promise<{ w: number; h: numb
 
 export function useCanvasPasteAndDrop({
   boardId,
+  shareToken,
+  sharePassword,
   editable,
   elements,
   cameraX,
@@ -79,7 +83,9 @@ export function useCanvasPasteAndDrop({
     let fileUrl: string;
     let contentType: string;
     try {
-      const info = await uploadBoardFile(boardId, file);
+      const info = shareToken
+        ? await uploadSharedBoardFile(shareToken, sharePassword ?? null, file)
+        : await uploadBoardFile(boardId, file);
       fileUrl = info.url;
       contentType = info.contentType;
     } catch {
@@ -128,7 +134,7 @@ export function useCanvasPasteAndDrop({
     pushCommand(createAddElementsCommand([newElement]));
     setSelectedElementIds([newElement.id]);
     onBoardChanged('add', createElementAddedOperation(newElement));
-  }, [boardId, addElement, elements.length, onBoardChanged, pushCommand, setSelectedElementIds]);
+  }, [boardId, shareToken, sharePassword, addElement, elements.length, onBoardChanged, pushCommand, setSelectedElementIds]);
 
   const insertTextElement = useCallback((text: string, cx: number, cy: number) => {
     const DEFAULT_W = 240;
