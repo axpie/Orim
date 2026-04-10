@@ -193,7 +193,11 @@ public class FileElement : BoardElement
 
 public class DrawingElement : BoardElement
 {
-    public List<double> Points { get; set; } = [];
+    /// <summary>
+    /// Flat [x1,y1,x2,y2,...] coordinate list. Null entries act as pen-lift separators
+    /// between strokes (JSON encodes NaN as null).
+    /// </summary>
+    public List<double?> Points { get; set; } = [];
     public string StrokeColor { get; set; } = "#000000";
     public double StrokeWidth { get; set; } = 2;
 }

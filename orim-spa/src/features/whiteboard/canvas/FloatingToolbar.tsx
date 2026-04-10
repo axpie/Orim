@@ -23,6 +23,7 @@ import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import DownloadIcon from '@mui/icons-material/Download';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
+import GestureIcon from '@mui/icons-material/Gesture';
 import { useTranslation } from 'react-i18next';
 import { useBoardStore } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
@@ -292,6 +293,8 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   const setElements = useBoardStore((s) => s.setElements);
   const setSelectedElementIds = useBoardStore((s) => s.setSelectedElementIds);
   const setDirty = useBoardStore((s) => s.setDirty);
+  const setActiveTool = useBoardStore((s) => s.setActiveTool);
+  const setResumeDrawingElementId = useBoardStore((s) => s.setResumeDrawingElementId);
   const pendingStickyNotePresetId = useBoardStore((s) => s.pendingStickyNotePresetId);
   const pushCommand = useCommandStack((s) => s.push);
   const { activeTheme } = useWhiteboardColorPalette();
@@ -425,6 +428,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   const areAllLocked = areAllSelectedElementsLocked(selected);
   const canDeleteCurrentSelection = canDeleteSelection(selected);
   const showDownload = selected.length === 1 && selected[0].$type === 'file';
+  const showContinueDrawing = selected.length === 1 && selected[0].$type === 'drawing' && !areAllLocked;
   const presetSelectionType = useMemo(() => {
     if (selected.length === 0) {
       return null;
@@ -737,6 +741,23 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
             aria-label={t('files.download', 'Herunterladen')}
           >
             <DownloadIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
+      )}
+
+      {/* Continue Drawing */}
+      {showContinueDrawing && (
+        <Tooltip title={t('floatingToolbar.continueDrawing', 'Zeichnen fortsetzen')} arrow>
+          <IconButton
+            size="small"
+            onClick={() => {
+              setResumeDrawingElementId(selected[0].id);
+              setActiveTool('drawing');
+            }}
+            sx={{ width: 32, height: 32 }}
+            aria-label={t('floatingToolbar.continueDrawing', 'Zeichnen fortsetzen')}
+          >
+            <GestureIcon sx={{ fontSize: 18 }} />
           </IconButton>
         </Tooltip>
       )}

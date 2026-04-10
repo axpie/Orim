@@ -145,6 +145,8 @@ export function WhiteboardCanvas({
   const pendingIconName = useBoardStore((s) => s.pendingIconName);
   const pendingArrowRouteStyle = useBoardStore((s) => s.pendingArrowRouteStyle);
   const pendingStickyNotePresetId = useBoardStore((s) => s.pendingStickyNotePresetId);
+  const resumeDrawingElementId = useBoardStore((s) => s.resumeDrawingElementId);
+  const setResumeDrawingElementId = useBoardStore((s) => s.setResumeDrawingElementId);
   const setFollowingClientId = useBoardStore((s) => s.setFollowingClientId);
   const iconPlacementStyle = useStylePresetStore((state) => state.resolvePlacementStyle('icon'));
   const userThemeKey = useThemeStore((s) => s.themeKey);
@@ -378,6 +380,7 @@ export function WhiteboardCanvas({
     getWorldPos,
     getScreenPos,
     addElement,
+    updateElement,
     pushCommand,
     onBoardChanged,
     expandSelectionWithGroups,
@@ -401,6 +404,8 @@ export function WhiteboardCanvas({
      setIsDragging,
     setDragStart,
     setDrawingElementId,
+    resumeDrawingElementId,
+    setResumeDrawingElementId,
     rotationSnapshotRef,
     setRotationState,
     setHoveredRotationHandle,
@@ -413,6 +418,43 @@ export function WhiteboardCanvas({
     },
     [clearFollowOnInteraction, handleMouseDownBase],
   );
+
+  // Commit a pending (paused) freehand drawing to the command stack and real-time channel
+  const commitDrawing = useCallback((id: string) => {
+    const el = elements.find((e) => e.id === id);
+    if (el) {
+      pushCommand(createAddElementsCommand([el]));
+      setSelectedElementIds([id]);
+      setActiveTool('select');
+      onBoardChanged('add', createElementAddedOperation(el));
+    }
+    setResumeDrawingElementId(null);
+  }, [elements, pushCommand, setSelectedElementIds, setActiveTool, onBoardChanged, setResumeDrawingElementId]);
+
+  // Commit when the user switches away from the drawing tool
+  useEffect(() => {
+    if (activeTool !== 'drawing' && resumeDrawingElementId) {
+      commitDrawing(resumeDrawingElementId);
+    }
+  // We intentionally only react to activeTool changes here
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTool]);
+
+  // Enter/Escape key shortcuts while a drawing is paused
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (!resumeDrawingElementId || drawingElementId) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        commitDrawing(resumeDrawingElementId);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        commitDrawing(resumeDrawingElementId);
+      }
+    };
+    window.addEventListener('keydown', handleKey);
+    return () => window.removeEventListener('keydown', handleKey);
+  }, [resumeDrawingElementId, drawingElementId, commitDrawing]);
 
   const handleContainerFocus = useCallback(() => {
     setIsCanvasFocused(true);
@@ -624,10 +666,13 @@ export function WhiteboardCanvas({
           const newPoints = [...el.points, worldPos.x, worldPos.y];
           let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
           for (let i = 0; i < newPoints.length; i += 2) {
-            minX = Math.min(minX, newPoints[i]);
-            minY = Math.min(minY, newPoints[i + 1]);
-            maxX = Math.max(maxX, newPoints[i]);
-            maxY = Math.max(maxY, newPoints[i + 1]);
+            const px = newPoints[i], py = newPoints[i + 1];
+            if (!isNaN(px) && !isNaN(py)) {
+              minX = Math.min(minX, px);
+              minY = Math.min(minY, py);
+              maxX = Math.max(maxX, px);
+              maxY = Math.max(maxY, py);
+            }
           }
           updateElement(drawingElementId, {
             points: newPoints,
@@ -1018,15 +1063,10 @@ export function WhiteboardCanvas({
         return;
       }
 
-      // Commit freehand drawing
+      // Pause freehand drawing – keep tool active so user can continue at another location
       if (drawingElementId) {
-        const el = elements.find((e) => e.id === drawingElementId);
-        if (el) {
-          pushCommand(createAddElementsCommand([el]));
-          setSelectedElementIds([drawingElementId]);
-          setActiveTool('select');
-          onBoardChanged('add', createElementAddedOperation(el));
-        }
+        setSelectedElementIds([drawingElementId]);
+        setResumeDrawingElementId(drawingElementId);
         setDrawingElementId(null);
         return;
       }

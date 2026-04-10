@@ -136,9 +136,21 @@ function drawElement(ctx: CanvasRenderingContext2D, el: BoardElement, scale: num
       ctx.strokeStyle = el.strokeColor || '#424242';
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo((pts[0] + el.x - offsetX) * scale, (pts[1] + el.y - offsetY) * scale);
-      for (let i = 2; i < pts.length; i += 2) {
-        ctx.lineTo((pts[i] + el.x - offsetX) * scale, (pts[i + 1] + el.y - offsetY) * scale);
+      let penDown = false;
+      for (let i = 0; i < pts.length; i += 2) {
+        const px = pts[i], py = pts[i + 1];
+        if (isNaN(px) || isNaN(py)) {
+          penDown = false;
+          continue;
+        }
+        const sx = (px - offsetX) * scale;
+        const sy = (py - offsetY) * scale;
+        if (!penDown) {
+          ctx.moveTo(sx, sy);
+          penDown = true;
+        } else {
+          ctx.lineTo(sx, sy);
+        }
       }
       ctx.stroke();
       break;

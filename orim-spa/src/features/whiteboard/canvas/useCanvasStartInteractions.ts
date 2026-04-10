@@ -102,6 +102,7 @@ interface UseCanvasStartInteractionsOptions {
   getWorldPos: () => Point;
   getScreenPos: () => Point | null;
   addElement: (element: BoardElement) => void;
+  updateElement: (id: string, changes: Partial<BoardElement>) => void;
   pushCommand: (command: LocalBoardCommand) => void;
   onBoardChanged: (changeKind: string, operation?: BoardOperationPayload) => void;
   expandSelectionWithGroups: (ids: string[]) => string[];
@@ -125,6 +126,8 @@ interface UseCanvasStartInteractionsOptions {
   setIsDragging: Dispatch<SetStateAction<boolean>>;
   setDragStart: Dispatch<SetStateAction<Point | null>>;
   setDrawingElementId: Dispatch<SetStateAction<string | null>>;
+  resumeDrawingElementId: string | null;
+  setResumeDrawingElementId: (id: string | null) => void;
   rotationSnapshotRef: MutableRefObject<BoardElement[] | null>;
   setRotationState: Dispatch<SetStateAction<RotationState>>;
   setHoveredRotationHandle: Dispatch<SetStateAction<boolean>>;
@@ -155,6 +158,7 @@ export function useCanvasStartInteractions({
   getWorldPos,
   getScreenPos,
   addElement,
+  updateElement,
   pushCommand,
   onBoardChanged,
   expandSelectionWithGroups,
@@ -178,6 +182,8 @@ export function useCanvasStartInteractions({
   setIsDragging,
   setDragStart,
   setDrawingElementId,
+  resumeDrawingElementId,
+  setResumeDrawingElementId,
   rotationSnapshotRef,
   setRotationState,
 }: UseCanvasStartInteractionsOptions) {
@@ -354,6 +360,16 @@ export function useCanvasStartInteractions({
     }
 
     if (editable && activeTool === 'drawing') {
+      if (resumeDrawingElementId) {
+        // Continue drawing on the existing element – append a NaN separator then the new start point
+        const existing = elements.find((e) => e.id === resumeDrawingElementId) as DrawingElement | undefined;
+        if (existing) {
+          updateElement(resumeDrawingElementId, { points: [...existing.points, NaN, NaN, worldPos.x, worldPos.y] });
+        }
+        setDrawingElementId(resumeDrawingElementId);
+        setResumeDrawingElementId(null);
+        return;
+      }
       const drawingStyle = useStylePresetStore.getState().resolvePlacementStyle('drawing');
       const newDrawing: DrawingElement = {
         $type: 'drawing',

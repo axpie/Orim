@@ -3,6 +3,7 @@ import {
   ArrowRouteStyle,
   type Board,
   type BoardElement,
+  type DrawingElement,
   type NamedStylePreset,
   type BoardOperation,
   type CursorPresence,
@@ -59,6 +60,7 @@ interface BoardState {
   pendingIconName: string | null;
   pendingArrowRouteStyle: ArrowRouteStyle;
   pendingStickyNotePresetId: string | null;
+  resumeDrawingElementId: string | null;
   commandConflict: BoardCommandConflict | null;
   followingClientId: string | null;
 
@@ -84,6 +86,7 @@ interface BoardState {
   setPendingIconName: (iconName: string | null) => void;
   setPendingArrowRouteStyle: (routeStyle: ArrowRouteStyle) => void;
   setPendingStickyNotePresetId: (presetId: string | null) => void;
+  setResumeDrawingElementId: (id: string | null) => void;
   setFollowingClientId: (clientId: string | null) => void;
   createPresetFromElement: (element: BoardElement, name: string) => NamedStylePreset | null;
   updatePresetFromElement: (presetId: string, element: BoardElement) => boolean;
@@ -200,8 +203,19 @@ function buildElementsMap(elements: BoardElement[]): Map<string, BoardElement> {
 }
 
 function normalizeBoard(board: Board): Board {
+  // JSON serializes NaN as null. Convert null entries in drawing points back to NaN
+  // so stroke-separator logic works correctly after a server round-trip.
+  const elements = board.elements?.map((el) => {
+    if (el.$type !== 'drawing') return el;
+    const drawing = el as DrawingElement;
+    const rawPoints = drawing.points as (number | null)[];
+    if (!rawPoints.some((v) => v === null)) return el;
+    return { ...drawing, points: rawPoints.map((v) => (v === null ? NaN : v)) };
+  }) ?? board.elements;
+
   return {
     ...board,
+    elements,
     stylePresetState: normalizeStylePresetState(board.stylePresetState),
   };
 }
@@ -321,6 +335,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   pendingIconName: 'mdi-star',
   pendingArrowRouteStyle: ArrowRouteStyle.Orthogonal,
   pendingStickyNotePresetId: null,
+  resumeDrawingElementId: null,
   commandConflict: null,
   followingClientId: null,
 
@@ -798,5 +813,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   setPendingIconName: (iconName) => set({ pendingIconName: iconName }),
   setPendingArrowRouteStyle: (pendingArrowRouteStyle) => set({ pendingArrowRouteStyle }),
   setPendingStickyNotePresetId: (presetId) => set({ pendingStickyNotePresetId: presetId }),
+  setResumeDrawingElementId: (id) => set({ resumeDrawingElementId: id }),
   setFollowingClientId: (clientId) => set({ followingClientId: clientId }),
 }));
