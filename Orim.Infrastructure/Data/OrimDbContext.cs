@@ -25,7 +25,7 @@ public class OrimDbContext : DbContext
     public DbSet<BoardComment> BoardComments => Set<BoardComment>();
     public DbSet<BoardCommentReply> BoardCommentReplies => Set<BoardCommentReply>();
     public DbSet<BoardSnapshot> BoardSnapshots => Set<BoardSnapshot>();
-    public DbSet<UserImageEntity> UserImages => Set<UserImageEntity>();
+    public DbSet<BoardFileEntity> BoardFiles => Set<BoardFileEntity>();
     public DbSet<ThemeEntity> Themes => Set<ThemeEntity>();
     public DbSet<AssistantSettingsEntity> AssistantSettings => Set<AssistantSettingsEntity>();
     public DbSet<BoardOperationEntity> BoardOperations => Set<BoardOperationEntity>();
@@ -41,7 +41,7 @@ public class OrimDbContext : DbContext
         ConfigureBoardComment(modelBuilder);
         ConfigureBoardCommentReply(modelBuilder);
         ConfigureBoardSnapshot(modelBuilder);
-        ConfigureUserImage(modelBuilder);
+        ConfigureBoardFile(modelBuilder);
         ConfigureTheme(modelBuilder);
         ConfigureAssistantSettings(modelBuilder);
         ConfigureBoardOperation(modelBuilder);
@@ -230,17 +230,22 @@ public class OrimDbContext : DbContext
         });
     }
 
-    private static void ConfigureUserImage(ModelBuilder modelBuilder)
+    private static void ConfigureBoardFile(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<UserImageEntity>(entity =>
+        modelBuilder.Entity<BoardFileEntity>(entity =>
         {
-            entity.ToTable("UserImages");
-            entity.HasKey(i => i.Id);
+            entity.ToTable("BoardFiles");
+            entity.HasKey(f => f.Id);
 
-            entity.HasIndex(i => i.UserId);
+            entity.HasIndex(f => f.BoardId);
 
-            entity.Property(i => i.FileName).IsRequired();
-            entity.Property(i => i.MimeType).IsRequired();
+            entity.Property(f => f.FileName).IsRequired();
+            entity.Property(f => f.ContentType).IsRequired();
+
+            entity.HasOne<Board>()
+                .WithMany()
+                .HasForeignKey(f => f.BoardId)
+                .OnDelete(DeleteBehavior.Cascade);
         });
     }
 

@@ -7,6 +7,10 @@ export function createBoardFileName(title: string | undefined, extension: string
 
 export function downloadTextFile(contents: string, mimeType: string, fileName: string) {
   const blob = new Blob([contents], { type: mimeType });
+  downloadBlob(blob, fileName);
+}
+
+export function downloadBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;

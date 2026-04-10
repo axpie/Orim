@@ -169,10 +169,15 @@ export enum ImageFit {
   Fill = 'Fill',
 }
 
-export interface ImageElement extends BoardElementBase {
-  $type: 'image';
-  imageUrl: string;
+export interface FileElement extends BoardElementBase {
+  $type: 'file';
+  fileUrl: string;
+  fileName: string;
+  contentType: string;
+  fileSize: number;
+  /** Only relevant for image/* content types */
   opacity?: number | null;
+  /** Only relevant for image/* content types */
   imageFit?: ImageFit | null;
 }
 
@@ -183,7 +188,7 @@ export interface DrawingElement extends BoardElementBase {
   strokeWidth: number;
 }
 
-export type BoardElement = ShapeElement | TextElement | StickyNoteElement | FrameElement | ArrowElement | IconElement | ImageElement | DrawingElement;
+export type BoardElement = ShapeElement | TextElement | StickyNoteElement | FrameElement | ArrowElement | IconElement | FileElement | DrawingElement;
 
 // --- Board ---
 
@@ -564,11 +569,12 @@ export interface BoardOperationHistoryResponse {
   operations: BoardOperationHistoryEntry[];
 }
 
-// --- User Images ---
-export interface UserImageInfo {
+// --- Board Files ---
+export interface BoardFileInfo {
   id: string;
   url: string;
   fileName: string;
+  contentType: string;
   size: number;
   uploadedAt: string;
 }

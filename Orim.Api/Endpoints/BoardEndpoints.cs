@@ -1,3 +1,4 @@
+using System.IO.Compression;
 using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
@@ -502,7 +503,180 @@ internal static class BoardEndpoints
             return Results.Ok(board);
         });
 
+        // --- ZIP Export ---
+
+        app.MapGet("/api/boards/{id:guid}/export/zip", [Authorize] async (
+            Guid id, HttpContext context, BoardService boardService, IBoardFileService boardFileService) =>
+        {
+            var board = await boardService.GetBoardAsync(id);
+            if (board is null) return Results.NotFound();
+
+            if (EndpointHelpers.GetUserId(context.User) is not { } userId)
+                return Results.Unauthorized();
+
+            if (!boardService.HasAccess(board, userId))
+                return Results.Forbid();
+
+            var zipBytes = await CreateBoardZipAsync(board, boardFileService);
+            var fileName = $"{SanitizeName(board.Title)}.zip";
+            return Results.File(zipBytes, "application/zip", fileName);
+        });
+
+        // --- ZIP Import ---
+
+        app.MapPost("/api/boards/import/zip", [Authorize] async (
+            HttpRequest request, HttpContext context, BoardService boardService, IBoardFileService boardFileService,
+            ILogger<Program> logger) =>
+        {
+            if (EndpointHelpers.GetUserId(context.User) is not { } userId)
+                return Results.Unauthorized();
+
+            if (!request.HasFormContentType) return Results.BadRequest("Expected multipart/form-data.");
+            var form = await request.ReadFormAsync();
+            var uploadedFile = form.Files.GetFile("file");
+            if (uploadedFile is null) return Results.BadRequest("No file uploaded.");
+
+            var title = form["title"].FirstOrDefault();
+
+            try
+            {
+                await using var stream = uploadedFile.OpenReadStream();
+                var username = EndpointHelpers.GetUsername(context.User);
+                var board = await ImportBoardZipAsync(stream, title, userId, username, boardService, boardFileService);
+                if (board is null) return Results.BadRequest("Invalid board ZIP.");
+                return Results.Created($"/api/boards/{board.Id}", board);
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning(ex, "Board ZIP import failed for user {UserId}.", userId);
+                return EndpointHelpers.BadRequest(context, "The board ZIP could not be imported.");
+            }
+        });
+
         return app;
+    }
+
+    // ---- ZIP helpers ----
+
+    internal record BoardFileManifestEntry(string Id, string FileName, string ContentType);
+
+    internal static async Task<byte[]> CreateBoardZipAsync(Board board, IBoardFileService boardFileService)
+    {
+        var files = await boardFileService.GetBoardFilesAsync(board.Id);
+        using var ms = new MemoryStream();
+        using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            // board.json
+            var boardJson = JsonSerializer.Serialize(board, OrimJsonOptions.Indented);
+            var boardEntry = zip.CreateEntry("board.json", CompressionLevel.Optimal);
+            await using (var writer = new StreamWriter(boardEntry.Open()))
+                await writer.WriteAsync(boardJson);
+
+            // files.json — manifest
+            var manifest = files.Select(f => new BoardFileManifestEntry(f.Id, f.FileName, f.ContentType)).ToList();
+            var manifestJson = JsonSerializer.Serialize(manifest, OrimJsonOptions.Default);
+            var manifestEntry = zip.CreateEntry("files.json", CompressionLevel.Optimal);
+            await using (var writer = new StreamWriter(manifestEntry.Open()))
+                await writer.WriteAsync(manifestJson);
+
+            // files/{id} — raw bytes
+            foreach (var fileInfo in files)
+            {
+                var fileData = await boardFileService.GetFileDataAsync(board.Id, fileInfo.Id);
+                if (fileData is null) continue;
+
+                var fileEntry = zip.CreateEntry($"files/{fileInfo.Id}", CompressionLevel.Optimal);
+                await using var entryStream = fileEntry.Open();
+                await entryStream.WriteAsync(fileData.Data);
+            }
+        }
+        return ms.ToArray();
+    }
+
+    internal static async Task<Board?> ImportBoardZipAsync(
+        Stream zipStream, string? title, Guid userId, string username,
+        BoardService boardService, IBoardFileService boardFileService)
+    {
+        using var zip = new ZipArchive(zipStream, ZipArchiveMode.Read);
+
+        // Read board.json
+        var boardEntry = zip.GetEntry("board.json");
+        if (boardEntry is null) return null;
+
+        Board? importedBoard;
+        using (var reader = new StreamReader(boardEntry.Open()))
+        {
+            var json = await reader.ReadToEndAsync();
+            importedBoard = JsonSerializer.Deserialize<Board>(json, OrimJsonOptions.Default);
+        }
+        if (importedBoard is null) return null;
+
+        // Read files.json
+        List<BoardFileManifestEntry> manifest = [];
+        var manifestEntry = zip.GetEntry("files.json");
+        if (manifestEntry is not null)
+        {
+            using var reader = new StreamReader(manifestEntry.Open());
+            var json = await reader.ReadToEndAsync();
+            manifest = JsonSerializer.Deserialize<List<BoardFileManifestEntry>>(json, OrimJsonOptions.Default) ?? [];
+        }
+
+        // Create the board first to get the new board ID
+        var board = await boardService.CreateBoardFromImportAsync(
+            importedBoard, title ?? importedBoard.Title, userId, username);
+
+        if (manifest.Count == 0)
+            return board;
+
+        // Upload files and build oldId → newUrl mapping
+        var urlMapping = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var entry in manifest)
+        {
+            var fileEntry = zip.GetEntry($"files/{entry.Id}");
+            if (fileEntry is null) continue;
+
+            await using var fileStream = fileEntry.Open();
+            using var ms = new MemoryStream();
+            await fileStream.CopyToAsync(ms);
+            ms.Position = 0;
+
+            try
+            {
+                var saved = await boardFileService.SaveFileAsync(
+                    board.Id, entry.FileName, entry.ContentType, ms.Length, ms);
+                urlMapping[entry.Id] = $"/api/boards/{board.Id:N}/files/{saved.Id}";
+            }
+            catch (InvalidOperationException) { /* skip files that fail validation */ }
+        }
+
+        if (urlMapping.Count == 0)
+            return board;
+
+        // Rewrite FileElement URLs in the board
+        var updated = false;
+        foreach (var element in board.Elements)
+        {
+            if (element is not FileElement fileEl) continue;
+
+            var oldId = fileEl.FileUrl.Split('/').LastOrDefault();
+            if (oldId is not null && urlMapping.TryGetValue(oldId, out var newUrl))
+            {
+                fileEl.FileUrl = newUrl;
+                updated = true;
+            }
+        }
+
+        if (updated)
+            await boardService.SaveEditorStateAsync(board, kind: BoardChangeKind.Content);
+
+        return board;
+    }
+
+    internal static string SanitizeName(string name)
+    {
+        var invalid = Path.GetInvalidFileNameChars().ToHashSet();
+        var sanitized = string.Concat(name.Select(c => invalid.Contains(c) ? '_' : c)).Trim();
+        return string.IsNullOrWhiteSpace(sanitized) ? "board" : sanitized;
     }
 
     private static BoardOperationHistoryResponse CreateHistoryResponse(

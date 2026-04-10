@@ -19,13 +19,14 @@ import RemoveIcon from '@mui/icons-material/Remove';
 import LineWeightIcon from '@mui/icons-material/LineWeight';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
+import DownloadIcon from '@mui/icons-material/Download';
 import { useTranslation } from 'react-i18next';
 import { useBoardStore } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
 import { createElementUpdateCommand, createChangedKeysByElementId, createDeleteElementsCommand } from '../realtime/localBoardCommands';
 import { createElementUpdatedOperation, createElementsDeletedOperation } from '../realtime/boardOperations';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
-import type { BoardElement } from '../../../types/models';
+import type { BoardElement, FileElement } from '../../../types/models';
 import { getBoundsForElements, projectWorldToViewport } from '../cameraUtils';
 import { useWhiteboardColorPalette } from '../controls/useWhiteboardColorPalette';
 import { areAllSelectedElementsLocked, canDeleteSelection } from '../selectionLocking';
@@ -365,6 +366,17 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
     onBoardChanged('delete', createElementsDeletedOperation([...idSet]));
   }, [elements, onBoardChanged, pushCommand, selected, selectedIds, setDirty, setElements, setSelectedElementIds]);
 
+  const handleDownload = useCallback(() => {
+    if (selected.length !== 1 || selected[0].$type !== 'file') return;
+    const file = selected[0] as FileElement;
+    const a = document.createElement('a');
+    a.href = file.fileUrl;
+    a.download = file.fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  }, [selected]);
+
   // --- determine which controls to show ---
   const showFill = hasProperty(selected, 'fillColor');
   const showStroke = selected.length > 0 && selected.every(
@@ -391,6 +403,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   const strokeWidth = showStrokeWidth ? getCommonValue<number>(selected, 'strokeWidth') ?? 2 : 2;
   const areAllLocked = areAllSelectedElementsLocked(selected);
   const canDeleteCurrentSelection = canDeleteSelection(selected);
+  const showDownload = selected.length === 1 && selected[0].$type === 'file';
 
   if (!bbox || selected.length === 0) return null;
 
@@ -603,6 +616,20 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
 
       {/* Separator before actions */}
       <Box sx={{ width: '1px', height: 24, bgcolor: 'divider', mx: 0.25 }} />
+
+      {/* Download — only for a single selected FileElement (images + other files) */}
+      {showDownload && (
+        <Tooltip title={t('files.download', 'Herunterladen')} arrow>
+          <IconButton
+            size="small"
+            onClick={handleDownload}
+            sx={{ width: 32, height: 32 }}
+            aria-label={t('files.download', 'Herunterladen')}
+          >
+            <DownloadIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
+      )}
 
       <Tooltip title={areAllLocked ? t('contextMenu.unlock', 'Entsperren') : t('contextMenu.lock', 'Sperren')} arrow>
         <IconButton

@@ -6,9 +6,9 @@ import { StickyNoteRenderer } from '../shapes/StickyNoteRenderer';
 import { FrameRenderer } from '../shapes/FrameRenderer';
 import { ArrowRenderer } from '../shapes/ArrowRenderer';
 import { IconRenderer } from '../shapes/IconRenderer';
-import { ImageRenderer } from '../shapes/ImageRenderer';
+import { FileRenderer } from '../shapes/FileRenderer';
 import { DrawingRenderer } from '../shapes/DrawingRenderer';
-import type { BoardElement, ImageElement, ThemeBoardDefaultsDefinition } from '../../../types/models';
+import type { BoardElement, FileElement, ThemeBoardDefaultsDefinition } from '../../../types/models';
 import { useRemoteElementSmoothingStore } from '../store/remoteElementSmoothingStore';
 
 interface CanvasElementLayerProps {
@@ -147,8 +147,8 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 <IconRenderer element={effectiveEl as typeof el} />
               </Group>
             );
-          case 'image':
-            return <ImageRenderer key={el.id} element={effectiveEl as ImageElement} />;
+          case 'file':
+            return <FileRenderer key={el.id} element={effectiveEl as FileElement} />;
           case 'drawing':
             return (
               <Group

@@ -594,7 +594,7 @@ export function SharedBoardView() {
         showProperties={board.sharedAllowAnonymousEditing}
         showBackButton={false}
         onBoardChanged={onBoardChanged}
-        onExportJson={handleExportJson}
+        onExportZip={handleExportJson}
         onExportPng={handleExportPng}
         collaborators={remoteCursors}
         localConnectionId={connectionId}

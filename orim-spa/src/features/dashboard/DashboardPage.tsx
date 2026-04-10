@@ -46,7 +46,7 @@ import {
   createBoard,
   deleteBoard,
   renameBoard,
-  importBoard,
+  importBoardZip,
   getTemplates,
   getFolders,
   createFolder,
@@ -386,7 +386,7 @@ export function DashboardPage() {
   });
 
   const importMutation = useMutation({
-    mutationFn: importBoard,
+    mutationFn: ({ file, title }: { file: File; title?: string }) => importBoardZip(file, title),
     onSuccess: (board) => {
       queryClient.invalidateQueries({ queryKey: ['boards'] });
       rememberBoardVisit(board.id);
@@ -564,13 +564,12 @@ export function DashboardPage() {
     setRenameOpen(false);
   };
 
-  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const text = await file.text();
     importMutation.mutate({
-      boardJson: text,
-      title: file.name.replace(/\.json$/i, ''),
+      file,
+      title: file.name.replace(/\.zip$/i, ''),
     });
     e.target.value = '';
   };
@@ -732,7 +731,7 @@ export function DashboardPage() {
           {t('dashboard.import')}
           <input
             type="file"
-            accept=".json"
+            accept=".zip"
             hidden
             onChange={handleImport}
           />
@@ -1006,7 +1005,7 @@ export function DashboardPage() {
             </Button>
             <Button component="label" variant="outlined" startIcon={<UploadFileIcon />}>
               {t('dashboard.import')}
-              <input type="file" accept=".json" hidden onChange={handleImport} />
+              <input type="file" accept=".zip" hidden onChange={handleImport} />
             </Button>
           </Box>
         </Box>

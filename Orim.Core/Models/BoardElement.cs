@@ -9,7 +9,7 @@ namespace Orim.Core.Models;
 [JsonDerivedType(typeof(FrameElement), "frame")]
 [JsonDerivedType(typeof(ArrowElement), "arrow")]
 [JsonDerivedType(typeof(IconElement), "icon")]
-[JsonDerivedType(typeof(ImageElement), "image")]
+[JsonDerivedType(typeof(FileElement), "file")]
 [JsonDerivedType(typeof(DrawingElement), "drawing")]
 public abstract class BoardElement
 {
@@ -179,10 +179,15 @@ public enum ImageFit
     Fill,
 }
 
-public class ImageElement : BoardElement
+public class FileElement : BoardElement
 {
-    public string ImageUrl { get; set; } = string.Empty;
+    public string FileUrl { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
+    public long FileSize { get; set; }
+    /// <summary>Only relevant when ContentType is an image type.</summary>
     public double Opacity { get; set; } = 1.0;
+    /// <summary>Only relevant when ContentType is an image type.</summary>
     public ImageFit ImageFit { get; set; } = ImageFit.Uniform;
 }
 

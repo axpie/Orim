@@ -1,11 +1,11 @@
 import { useCallback, useEffect } from 'react';
 import { v4 as uuidv4 } from 'uuid';
-import { uploadUserImage } from '../../../api/images';
+import { uploadBoardFile } from '../../../api/files';
 import { deserializeClipboardPayload, getClipboardElements, readStoredClipboardElements, setClipboardElements } from '../clipboard/clipboardService';
 import { cloneElementsForInsertion, isInteractiveTextTarget, KEYBOARD_DUPLICATE_OFFSET } from './canvasUtils';
 import { createAddElementsCommand } from '../realtime/localBoardCommands';
 import { asOperationPayload, createElementAddedOperation } from '../realtime/boardOperations';
-import type { BoardElement, ImageElement, TextElement } from '../../../types/models';
+import type { BoardElement, FileElement, TextElement } from '../../../types/models';
 import { HorizontalLabelAlignment, ImageFit, VerticalLabelAlignment } from '../../../types/models';
 import type { LocalBoardCommand } from '../realtime/localBoardCommands';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
@@ -13,6 +13,7 @@ import type { BoardOperationPayload } from '../realtime/boardOperations';
 const MAX_IMAGE_SIZE = 600;
 
 interface UseCanvasPasteAndDropOptions {
+  boardId: string;
   editable: boolean;
   elements: BoardElement[];
   cameraX: number;
@@ -43,6 +44,7 @@ async function resolveImageDimensions(src: string): Promise<{ w: number; h: numb
 }
 
 export function useCanvasPasteAndDrop({
+  boardId,
   editable,
   elements,
   cameraX,
@@ -73,18 +75,29 @@ export function useCanvasPasteAndDrop({
     };
   }, [cameraX, cameraY, containerRef, getCenterWorld, zoom]);
 
-  const insertImageElement = useCallback(async (file: File, cx: number, cy: number) => {
-    let imageUrl: string;
+  const insertFileElement = useCallback(async (file: File, cx: number, cy: number) => {
+    let fileUrl: string;
+    let contentType: string;
     try {
-      const info = await uploadUserImage(file);
-      imageUrl = info.url;
+      const info = await uploadBoardFile(boardId, file);
+      fileUrl = info.url;
+      contentType = info.contentType;
     } catch {
       return;
     }
 
-    const { w, h } = await resolveImageDimensions(imageUrl);
-    const newElement: ImageElement = {
-      $type: 'image',
+    const isImage = contentType.startsWith('image/');
+    let w = isImage ? 400 : 160;
+    let h = isImage ? 300 : 200;
+
+    if (isImage) {
+      const dims = await resolveImageDimensions(fileUrl);
+      w = dims.w;
+      h = dims.h;
+    }
+
+    const newElement: FileElement = {
+      $type: 'file',
       id: uuidv4(),
       groupId: null,
       x: cx - w / 2,
@@ -101,9 +114,13 @@ export function useCanvasPasteAndDrop({
       isItalic: false,
       isUnderline: false,
       isStrikethrough: false,
+      isLocked: false,
       labelHorizontalAlignment: HorizontalLabelAlignment.Center,
       labelVerticalAlignment: VerticalLabelAlignment.Middle,
-      imageUrl,
+      fileUrl,
+      fileName: file.name,
+      contentType,
+      fileSize: file.size,
       opacity: 1,
       imageFit: ImageFit.Uniform,
     };
@@ -111,7 +128,7 @@ export function useCanvasPasteAndDrop({
     pushCommand(createAddElementsCommand([newElement]));
     setSelectedElementIds([newElement.id]);
     onBoardChanged('add', createElementAddedOperation(newElement));
-  }, [addElement, elements.length, onBoardChanged, pushCommand, setSelectedElementIds]);
+  }, [boardId, addElement, elements.length, onBoardChanged, pushCommand, setSelectedElementIds]);
 
   const insertTextElement = useCallback((text: string, cx: number, cy: number) => {
     const DEFAULT_W = 240;
@@ -178,7 +195,7 @@ export function useCanvasPasteAndDrop({
         const file = imageItem.getAsFile();
         if (file) {
           const { x, y } = getCenterWorld();
-          void insertImageElement(file, x, y);
+          void insertFileElement(file, x, y);
         }
         return;
       }
@@ -220,7 +237,7 @@ export function useCanvasPasteAndDrop({
 
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
-  }, [editable, getCenterWorld, insertImageElement, insertTextElement, pasteOrimElements]);
+  }, [editable, getCenterWorld, insertFileElement, insertTextElement, pasteOrimElements]);
 
   const onDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
     if (!editable) return;
@@ -238,12 +255,11 @@ export function useCanvasPasteAndDrop({
 
     const { x, y } = getDropWorld(e.clientX, e.clientY);
 
-    // Files (images)
+    // Files — any type
     if (e.dataTransfer.files.length > 0) {
-      const imageFiles = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith('image/'));
       let offsetX = 0;
-      for (const file of imageFiles) {
-        void insertImageElement(file, x + offsetX, y);
+      for (const file of Array.from(e.dataTransfer.files)) {
+        void insertFileElement(file, x + offsetX, y);
         offsetX += 20;
       }
       return;
@@ -254,7 +270,7 @@ export function useCanvasPasteAndDrop({
     if (text.length > 0) {
       insertTextElement(text, x, y);
     }
-  }, [editable, getDropWorld, insertImageElement, insertTextElement]);
+  }, [editable, getDropWorld, insertFileElement, insertTextElement]);
 
   return { onDragOver, onDrop };
 }

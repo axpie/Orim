@@ -17,7 +17,7 @@ public static class DependencyInjection
 
         services.AddScoped<IBoardRepository, EfBoardRepository>();
         services.AddScoped<IUserRepository, EfUserRepository>();
-        services.AddScoped<IImageStorageService, EfImageStorageService>();
+        services.AddScoped<IBoardFileService, EfBoardFileService>();
         services.AddScoped<IThemeRepository, EfThemeRepository>();
         services.AddScoped<IAssistantSettingsRepository, EfAssistantSettingsRepository>();
         services.AddScoped<IBoardOperationRepository, EfBoardOperationRepository>();

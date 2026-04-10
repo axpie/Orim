@@ -133,7 +133,7 @@
     "share": "Share",
     "export": "Export",
     "exportPng": "As PNG",
-    "exportJson": "As JSON",
+    "exportZip": "Export as ZIP",
     "moreActions": "Actions",
     "importJson": "Import JSON",
     "snapshots": "Snapshots",
@@ -206,7 +206,7 @@
     "orthogonalArrow": "Orthogonal Arrow",
     "curvedArrow": "Curved Arrow",
     "drawing": "Draw",
-    "image": "Image",
+    "files": "Files",
     "undo": "Undo",
     "redo": "Redo",
     "delete": "Delete",
@@ -590,12 +590,13 @@
     "readinessThemesReady": "{{enabled}} of {{total}} theme(s) are enabled for end users.",
     "readinessThemesAttention": "No enabled themes are currently available to users."
   },
-  "images": {
-    "library": "Image Library",
-    "upload": "Upload image",
-    "uploadFirst": "Upload your first image",
-    "noImages": "No images uploaded yet.",
-    "delete": "Delete image",
+  "files": {
+    "library": "File Library",
+    "upload": "Upload file",
+    "uploadFirst": "Upload your first file",
+    "noFiles": "No files uploaded yet.",
+    "delete": "Delete file",
+    "download": "Download",
     "insertHint": "Click to insert"
   },
   "templates": {

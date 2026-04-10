@@ -133,7 +133,7 @@
     "share": "Teilen",
     "export": "Exportieren",
     "exportPng": "Als PNG",
-    "exportJson": "Als JSON",
+    "exportZip": "Als ZIP exportieren",
     "moreActions": "Aktionen",
     "importJson": "JSON importieren",
     "snapshots": "Snapshots",
@@ -206,7 +206,7 @@
     "orthogonalArrow": "Winkeliger Pfeil",
     "curvedArrow": "Gebogener Pfeil",
     "drawing": "Zeichnen",
-    "image": "Bild",
+    "files": "Dateien",
     "undo": "Rückgängig",
     "redo": "Wiederholen",
     "delete": "Löschen",
@@ -590,12 +590,13 @@
     "readinessThemesReady": "{{enabled}} von {{total}} Themes sind für Endnutzer aktiviert.",
     "readinessThemesAttention": "Aktuell ist kein aktiviertes Theme für Benutzer verfügbar."
   },
-  "images": {
-    "library": "Bildbibliothek",
-    "upload": "Bild hochladen",
-    "uploadFirst": "Erstes Bild hochladen",
-    "noImages": "Noch keine Bilder hochgeladen.",
-    "delete": "Bild löschen",
+  "files": {
+    "library": "Dateibibliothek",
+    "upload": "Datei hochladen",
+    "uploadFirst": "Erste Datei hochladen",
+    "noFiles": "Noch keine Dateien hochgeladen.",
+    "delete": "Datei löschen",
+    "download": "Herunterladen",
     "insertHint": "Klicken zum Einfügen"
   },
   "templates": {

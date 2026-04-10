@@ -30,7 +30,7 @@ import TextFieldsIcon from '@mui/icons-material/TextFields';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import CropLandscapeIcon from '@mui/icons-material/CropLandscape';
 import AddReactionIcon from '@mui/icons-material/AddReaction';
-import ImageIcon from '@mui/icons-material/Image';
+import PermMediaIcon from '@mui/icons-material/PermMedia';
 import DrawIcon from '@mui/icons-material/Draw';
 import UndoIcon from '@mui/icons-material/Undo';
 import RedoIcon from '@mui/icons-material/Redo';
@@ -53,7 +53,7 @@ import {
   type IconDefinition,
   type IconGroupKey,
 } from '../icons/iconCatalog';
-import { ImageLibraryDialog } from '../ImageLibraryDialog';
+import { FileLibraryDialog } from '../FileLibraryDialog';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
 import {
   asOperationPayload,
@@ -71,7 +71,8 @@ import { useBoardStore, type ToolType } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
 import { useWhiteboardColorPalette } from '../controls/useWhiteboardColorPalette';
 import { type Rect } from '../../../utils/geometry';
-import { ArrowRouteStyle, HorizontalLabelAlignment, VerticalLabelAlignment, ImageFit, type FrameElement, type ImageElement } from '../../../types/models';
+import { ArrowRouteStyle, HorizontalLabelAlignment, VerticalLabelAlignment, ImageFit, type FrameElement, type FileElement } from '../../../types/models';
+import type { BoardFileInfo } from '../../../types/models';
 import { getEffectiveStickyNotePresets } from '../stickyNotePresets';
 import { canDeleteSelection } from '../selectionLocking';
 import { ZOrderMenuItems } from '../ZOrderMenuItems';
@@ -467,7 +468,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
       label: t('tools.icon'),
     },
     { tool: 'arrow', icon: activeArrowDescriptor.icon, label: t('tools.arrow'), shortcut: 'A' },
-    { tool: 'image', icon: <ImageIcon />, label: t('tools.image') },
+    { tool: 'image', icon: <PermMediaIcon />, label: t('tools.files') },
   ];
   const toolById = new Map(tools.map((tool) => [tool.tool, tool]));
   const shapeTools = tools.filter((tool) => tool.tool === 'rectangle' || tool.tool === 'ellipse' || tool.tool === 'triangle' || tool.tool === 'rhombus');
@@ -765,30 +766,35 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     collapseCompactToolbarAfterAction();
   };
 
-  const handleInsertImage = async (imageUrl: string, fileName: string) => {
+  const handleInsertFile = async (fileInfo: BoardFileInfo) => {
     const centerX = (-cameraX + viewportWidth / 2) / zoom;
     const centerY = (-cameraY + viewportHeight / 2) / zoom;
 
-    // Load actual image dimensions and cap to max 600px on longest side
-    let w = 400;
-    let h = 300;
-    try {
-      await new Promise<void>((resolve) => {
-        const img = new window.Image();
-        img.onload = () => {
-          const maxSize = 600;
-          const scale = Math.min(1, maxSize / Math.max(img.naturalWidth, img.naturalHeight));
-          w = Math.round(img.naturalWidth * scale);
-          h = Math.round(img.naturalHeight * scale);
-          resolve();
-        };
-        img.onerror = () => resolve();
-        img.src = imageUrl;
-      });
-    } catch { /* use defaults */ }
+    const isImage = fileInfo.contentType.startsWith('image/');
 
-    const newElement: ImageElement = {
-      $type: 'image',
+    // For images: load actual dimensions and cap to max 600px on longest side
+    let w = isImage ? 400 : 160;
+    let h = isImage ? 300 : 200;
+
+    if (isImage) {
+      try {
+        await new Promise<void>((resolve) => {
+          const img = new window.Image();
+          img.onload = () => {
+            const maxSize = 600;
+            const scale = Math.min(1, maxSize / Math.max(img.naturalWidth, img.naturalHeight));
+            w = Math.round(img.naturalWidth * scale);
+            h = Math.round(img.naturalHeight * scale);
+            resolve();
+          };
+          img.onerror = () => resolve();
+          img.src = fileInfo.url;
+        });
+      } catch { /* use defaults */ }
+    }
+
+    const newElement: FileElement = {
+      $type: 'file',
       id: uuidv4(),
       groupId: null,
       x: centerX - w / 2,
@@ -797,7 +803,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
       height: h,
       zIndex: (board?.elements.length ?? 0) + 1,
       rotation: 0,
-      label: fileName,
+      label: fileInfo.fileName,
       labelFontSize: null,
       labelColor: null,
       fontFamily: null,
@@ -805,9 +811,13 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
       isItalic: false,
       isUnderline: false,
       isStrikethrough: false,
+      isLocked: false,
       labelHorizontalAlignment: HorizontalLabelAlignment.Center,
       labelVerticalAlignment: VerticalLabelAlignment.Middle,
-      imageUrl,
+      fileUrl: fileInfo.url,
+      fileName: fileInfo.fileName,
+      contentType: fileInfo.contentType,
+      fileSize: fileInfo.size,
       opacity: 1,
       imageFit: ImageFit.Uniform,
     };
@@ -1324,10 +1334,11 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
         ))}
       </Menu>
 
-      <ImageLibraryDialog
+      <FileLibraryDialog
         open={imageLibraryOpen}
+        boardId={board?.id ?? ''}
         onClose={() => setImageLibraryOpen(false)}
-        onInsertImage={handleInsertImage}
+        onInsertFile={handleInsertFile}
       />
     </Paper>
   );

@@ -29,7 +29,7 @@ app.MapAdminEndpoints();
 app.MapBoardEndpoints();
 app.MapThemeEndpoints();
 app.MapAssistantEndpoints();
-app.MapImageEndpoints();
+app.MapBoardFileEndpoints();
 app.MapUserExportEndpoints();
 app.MapHealthEndpoints();
 

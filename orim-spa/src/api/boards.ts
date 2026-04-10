@@ -203,6 +203,21 @@ export async function exportBoardJson(id: string): Promise<string> {
   return typeof data === 'string' ? data : JSON.stringify(data);
 }
 
+export async function exportBoardZip(id: string): Promise<Blob> {
+  const { data } = await client.get(`/api/boards/${id}/export/zip`, { responseType: 'blob' });
+  return data;
+}
+
+export async function importBoardZip(file: File, title?: string): Promise<Board> {
+  const formData = new FormData();
+  formData.append('file', file);
+  if (title) formData.append('title', title);
+  const { data } = await client.post<Board>('/api/boards/import/zip', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+}
+
 export async function exportUserZip(): Promise<Blob> {
   const { data } = await client.get('/api/user/export/zip', { responseType: 'blob' });
   return data;

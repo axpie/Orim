@@ -69,7 +69,7 @@ import {
   type ArrowElement,
   type DrawingElement,
   type IconElement,
-  type ImageElement,
+  type FileElement,
 } from '../../../types/models';
 import { contrastingTextColor } from '../../../utils/colorUtils';
 import { getLineDashArray } from '../../../utils/lineStyles';
@@ -512,7 +512,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
 
   // When switching to Uniform, resize the element box to match the actual rendered image size.
   const handleImageFitChange = async (id: string, newFit: ImageFit) => {
-    const imgEl = elements.find((e) => e.id === id) as ImageElement | undefined;
+    const imgEl = elements.find((e) => e.id === id) as FileElement | undefined;
     if (!imgEl) return;
 
     if (newFit === ImageFit.Uniform) {
@@ -521,7 +521,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
           const img = new window.Image();
           img.onload = () => resolve({ natW: img.naturalWidth, natH: img.naturalHeight });
           img.onerror = reject;
-          img.src = imgEl.imageUrl;
+          img.src = imgEl.fileUrl;
         });
         if (natW > 0 && natH > 0) {
           const scale = Math.min(imgEl.width / natW, imgEl.height / natH);
@@ -1114,13 +1114,14 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
                 );
               })()}
 
-              {el.$type === 'image' && (() => {
-                const image = el as ImageElement;
+              {el.$type === 'file' && (() => {
+                const file = el as FileElement;
+                if (!file.contentType.startsWith('image/')) return null;
                 return (
                   <PropertiesSection title={t('properties.appearance')}>
                     <NumericSliderField
                       label={t('properties.opacity')}
-                      value={Math.round((image.opacity ?? 1) * 100)}
+                      value={Math.round((file.opacity ?? 1) * 100)}
                       min={10}
                       max={100}
                       onChange={(value) => update(el.id, { opacity: value / 100 })}
@@ -1129,7 +1130,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
                       select
                       size="small"
                       label={t('properties.imageFit')}
-                      value={image.imageFit ?? ImageFit.Uniform}
+                      value={file.imageFit ?? ImageFit.Uniform}
                       onChange={(e) => { void handleImageFitChange(el.id, e.target.value as ImageFit); }}
                       fullWidth
                     >

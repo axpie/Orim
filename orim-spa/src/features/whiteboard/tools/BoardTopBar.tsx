@@ -40,7 +40,7 @@ import NearMeIcon from '@mui/icons-material/NearMe';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
 import { useBoardStore } from '../store/boardStore';
 import { AppSettingsDialog, type AppSettingsDialogScope } from '../../../components/dialogs/AppSettingsDialog';
-import { exportBoardJson } from '../../../api/boards';
+import { exportBoardZip } from '../../../api/boards';
 import { ShareDialog } from '../../sharing/ShareDialog';
 import { ShortcutHelpDialog } from './ShortcutHelpDialog';
 import { BoardSettingsDialog } from '../panels/BoardSettingsDialog';
@@ -48,7 +48,7 @@ import type { BoardSyncStatus, CursorPresence } from '../../../types/models';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
 import { createBoardMetadataUpdatedOperation } from '../realtime/boardOperations';
 import { getCenteredCameraPosition } from '../cameraUtils';
-import { createBoardFileName, downloadTextFile } from '../exportUtils';
+import { createBoardFileName, downloadBlob } from '../exportUtils';
 
 interface BoardTopBarProps {
   onOpenProperties: () => void;
@@ -67,7 +67,7 @@ interface BoardTopBarProps {
   onBoardChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
   onRenameTitle?: (title: string, previousTitle: string) => void;
   onOpenSnapshots?: () => void;
-  onExportJson?: () => Promise<void> | void;
+  onExportZip?: () => Promise<void> | void;
   onExportPng?: () => Promise<void> | void;
   onStartPresentation?: () => void;
   hasFrames?: boolean;
@@ -93,7 +93,7 @@ export function BoardTopBar({
   onBoardChanged,
   onRenameTitle,
   onOpenSnapshots,
-  onExportJson,
+  onExportZip,
   onExportPng,
   onStartPresentation,
   hasFrames = false,
@@ -221,18 +221,18 @@ export function BoardTopBar({
     }
   };
 
-  const handleExportJson = async () => {
+  const handleExportZip = async () => {
     setExportAnchor(null);
 
-    if (onExportJson) {
-      await onExportJson();
+    if (onExportZip) {
+      await onExportZip();
       return;
     }
 
     if (!board) return;
 
-    const json = await exportBoardJson(board.id);
-    downloadTextFile(json, 'application/json', createBoardFileName(board.title, 'json'));
+    const blob = await exportBoardZip(board.id);
+    downloadBlob(blob, createBoardFileName(board.title, 'zip'));
   };
 
   const handleExportPng = async () => {
@@ -518,7 +518,7 @@ export function BoardTopBar({
         {onExportPng && (
           <MenuItem onClick={handleExportPng}>{t('board.exportPng')}</MenuItem>
         )}
-        <MenuItem onClick={handleExportJson}>{t('board.exportJson')}</MenuItem>
+        <MenuItem onClick={handleExportZip}>{t('board.exportZip')}</MenuItem>
       </Menu>
 
       <Menu
@@ -564,9 +564,9 @@ export function BoardTopBar({
           )
         )}
         {showExport && (
-          <MenuItem onClick={() => { closeMobileActions(); void handleExportJson(); }}>
+          <MenuItem onClick={() => { closeMobileActions(); void handleExportZip(); }}>
             <ListItemIcon><FileDownloadIcon fontSize="small" /></ListItemIcon>
-            <ListItemText>{t('board.exportJson')}</ListItemText>
+            <ListItemText>{t('board.exportZip')}</ListItemText>
           </MenuItem>
         )}
         {showSnapshots && onOpenSnapshots && (

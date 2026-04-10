@@ -1,8 +1,6 @@
 using System.IO.Compression;
-using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Orim.Api.Infrastructure;
-using Orim.Core;
 using Orim.Core.Interfaces;
 using Orim.Core.Models;
 using Orim.Core.Services;
@@ -17,7 +15,7 @@ internal static class UserExportEndpoints
             HttpContext context,
             BoardService boardService,
             IBoardRepository boardRepository,
-            IImageStorageService imageService) =>
+            IBoardFileService boardFileService) =>
         {
             if (EndpointHelpers.GetUserId(context.User) is not { } userId)
                 return Results.Unauthorized();
@@ -26,7 +24,6 @@ internal static class UserExportEndpoints
             var ownedSummaries = summaries.Where(s => s.OwnerId == userId).ToList();
             var folders = await boardRepository.GetFoldersAsync(userId);
             var folderLookup = folders.ToDictionary(f => f.Id);
-            var images = await imageService.GetUserImagesAsync(userId);
 
             using var ms = new MemoryStream();
             using (var zip = new ZipArchive(ms, ZipArchiveMode.Create, leaveOpen: true))
@@ -38,23 +35,15 @@ internal static class UserExportEndpoints
                     var board = await boardService.GetBoardAsync(summary.Id);
                     if (board is null) continue;
 
+                    // Create a per-board ZIP using the same format as the single-board export
+                    var boardZipBytes = await BoardEndpoints.CreateBoardZipAsync(board, boardFileService);
+
                     var basePath = BuildBoardPath(board.Title, board.FolderId, folderLookup);
-                    var path = BuildUniquePath(basePath, usedPaths, ".json");
-                    var entry = zip.CreateEntry(path, CompressionLevel.Optimal);
-                    await using var writer = new StreamWriter(entry.Open());
-                    await writer.WriteAsync(JsonSerializer.Serialize(board, OrimJsonOptions.Indented));
-                }
+                    var path = BuildUniquePath(basePath, usedPaths, ".zip");
 
-                foreach (var imageInfo in images)
-                {
-                    var imageData = await imageService.GetImageDataAsync(userId, imageInfo.Id);
-                    if (imageData is null) continue;
-
-                    var basePath = $"images/{SanitizeFileName(imageInfo.FileName)}";
-                    var path = BuildUniquePath(basePath, usedPaths, null);
                     var entry = zip.CreateEntry(path, CompressionLevel.Optimal);
-                    await using var stream = entry.Open();
-                    await stream.WriteAsync(imageData.Data);
+                    await using var entryStream = entry.Open();
+                    await entryStream.WriteAsync(boardZipBytes);
                 }
             }
 
@@ -75,13 +64,13 @@ internal static class UserExportEndpoints
             var currentId = folderId;
             while (currentId is not null && folderLookup.TryGetValue(currentId, out var folder))
             {
-                folderParts.Insert(0, SanitizeFileName(folder.Name));
+                folderParts.Insert(0, BoardEndpoints.SanitizeName(folder.Name));
                 currentId = folder.ParentFolderId;
             }
             parts.AddRange(folderParts);
         }
 
-        parts.Add(SanitizeFileName(title));
+        parts.Add(BoardEndpoints.SanitizeName(title));
         return string.Join("/", parts);
     }
 
@@ -97,12 +86,5 @@ internal static class UserExportEndpoints
                 : $"{basePath} ({counter})";
             if (used.Add(candidate)) return candidate;
         }
-    }
-
-    private static string SanitizeFileName(string name)
-    {
-        var invalid = Path.GetInvalidFileNameChars().ToHashSet();
-        var sanitized = string.Concat(name.Select(c => invalid.Contains(c) ? '_' : c)).Trim();
-        return string.IsNullOrWhiteSpace(sanitized) ? "unnamed" : sanitized;
     }
 }

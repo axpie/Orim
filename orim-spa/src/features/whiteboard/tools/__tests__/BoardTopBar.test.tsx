@@ -70,8 +70,8 @@ describe('BoardTopBar export actions', () => {
     });
   });
 
-  it('uses a custom JSON export handler when one is provided', async () => {
-    const onExportJson = vi.fn();
+  it('uses a custom ZIP export handler when one is provided', async () => {
+    const onExportZip = vi.fn();
 
     render(
       <BoardTopBar
@@ -82,14 +82,14 @@ describe('BoardTopBar export actions', () => {
         syncStatus={savedSyncStatus}
         titleEditable={false}
         showShare={false}
-        onExportJson={onExportJson}
+        onExportZip={onExportZip}
       />,
     );
 
     fireEvent.click(screen.getByTestId('FileDownloadIcon').closest('button')!);
-    fireEvent.click(await screen.findByText('board.exportJson'));
+    fireEvent.click(await screen.findByText('board.exportZip'));
 
-    expect(onExportJson).toHaveBeenCalledOnce();
+    expect(onExportZip).toHaveBeenCalledOnce();
   });
 
   it('uses a custom PNG export handler when one is provided', async () => {

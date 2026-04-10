@@ -59,7 +59,7 @@ ORIM is a collaborative whiteboard editor with an ASP.NET Core API and a React S
 - Frontend: React 19, Vite, TypeScript, Konva, MUI
 - Persistence: PostgreSQL via Entity Framework Core
 - Authentication: JWT via httpOnly cookie session
-- Export: JSON, PNG and ZIP (full data export)
+- Export: PNG and ZIP (per-board with files; full data export)
 
 ## Positioning
 
@@ -135,7 +135,7 @@ On startup the API automatically runs `Database.MigrateAsync()` so the schema is
 
 ## Data Storage
 
-All data is stored in a PostgreSQL database (boards, users, themes, images). Persistence is handled via Entity Framework Core.
+All data is stored in a PostgreSQL database (boards, users, themes, files). Persistence is handled via Entity Framework Core.
 
 ## Configuration
 
@@ -312,11 +312,23 @@ The PNG export is entirely client-side — the canvas is rendered via [Konva](ht
 
 ### ZIP Data Export
 
-Users can download all their boards and images as a single ZIP file via **Settings → My Data → Download as ZIP**. The server endpoint `GET /api/user/export/zip` exports:
+#### Per-board export
 
-- All boards owned by the user as individual JSON files
-- The folder hierarchy is mirrored in the ZIP directory structure
-- All uploaded images under `images/`
+Each board can be exported as a self-contained ZIP via the **Export** menu in the toolbar. The endpoint `GET /api/boards/{id}/export/zip` produces a ZIP with:
+
+- `board.json` — full board data including all elements
+- `files.json` — manifest listing every uploaded file (id, name, content type, size)
+- `files/{id}` — raw file bytes for every board file (images, PDFs, etc.)
+
+The resulting file is named after the board title.
+
+#### Import
+
+A previously exported board ZIP can be re-imported via **Dashboard → Import**. The endpoint `POST /api/boards/import/zip` creates a new board, re-uploads all files, and rewrites the file URLs in the board elements so everything is self-consistent.
+
+#### Full data export
+
+Users can download all their boards as a single ZIP via **Settings → My Data → Download as ZIP**. The endpoint `GET /api/user/export/zip` packages each board as its own `.zip` (using the same per-board format above) inside the main archive, preserving the folder hierarchy as the directory structure.
 
 The export uses `System.IO.Compression` from the .NET BCL — no additional packages required.
 
@@ -422,7 +434,7 @@ Orim ist ein kollaborativer Whiteboard-Editor mit ASP.NET Core API und React SPA
 - Frontend: React 19, Vite, TypeScript, Konva, MUI
 - Persistenz: PostgreSQL via Entity Framework Core
 - Authentifizierung: JWT via httpOnly Cookie-Session
-- Export: JSON, PNG und ZIP (vollständiger Datenexport)
+- Export: PNG und ZIP (pro Board mit Dateien; vollständiger Datenexport)
 
 ## Positionierung
 
@@ -484,7 +496,7 @@ Die Verbindung wird ueber den Connection-String in `Orim.Api/appsettings.json` k
 
 ```json
 "ConnectionStrings": {
-  "OrimDb": "Host=localhost;Port=5432;Database=orim;Username=orim;Password=orim"
+  "DefaultConnection": "Host=localhost;Port=5432;Database=orim;Username=orim;Password=orim"
 }
 ```
 
@@ -492,7 +504,7 @@ Beim Start fuehrt die API automatisch `Database.MigrateAsync()` aus, sodass das 
 
 ## Datenhaltung
 
-Alle Daten werden in einer PostgreSQL-Datenbank gespeichert (Boards, Benutzer, Themes, Bilder). Die Persistenz erfolgt ueber Entity Framework Core.
+Alle Daten werden in einer PostgreSQL-Datenbank gespeichert (Boards, Benutzer, Themes, Dateien). Die Persistenz erfolgt ueber Entity Framework Core.
 
 ## Konfiguration
 
@@ -500,7 +512,7 @@ Die Basiskonfiguration liegt in `Orim.Api/appsettings.json`.
 
 Wichtige Einstellungen:
 
-- `ConnectionStrings:OrimDb`: PostgreSQL-Verbindungszeichenfolge
+- `ConnectionStrings:DefaultConnection`: PostgreSQL-Verbindungszeichenfolge
 - `Jwt:Key`: Signierschluessel fuer Tokens
 - `SeedAdmin:Username`: Benutzername des initialen Admins
 - `SeedAdmin:ResetPasswordOnStartup`: optionaler Passwort-Reset beim Start
@@ -616,11 +628,23 @@ Der PNG-Export ist vollständig clientseitig – der Canvas wird via Konvas `sta
 
 ### ZIP-Datenexport
 
-Unter **Einstellungen → Meine Daten → Als ZIP herunterladen** können Benutzer alle eigenen Boards und Bilder als ZIP-Datei exportieren. Der Endpunkt `GET /api/user/export/zip` erzeugt:
+#### Board-Export
 
-- Alle eigenen Boards als einzelne JSON-Dateien
-- Die Ordnerstruktur aus ORIM wird als Verzeichnisstruktur in der ZIP-Datei abgebildet
-- Alle hochgeladenen Bilder unter `images/`
+Jedes Board kann über das **Exportieren**-Menü in der Toolbar als eigenständige ZIP-Datei exportiert werden. Der Endpunkt `GET /api/boards/{id}/export/zip` erzeugt eine ZIP mit:
+
+- `board.json` — vollständige Board-Daten inkl. aller Elemente
+- `files.json` — Manifest aller hochgeladenen Dateien (ID, Name, Content-Type, Größe)
+- `files/{id}` — rohe Datei-Bytes für jede Board-Datei (Bilder, PDFs usw.)
+
+Die erzeugte Datei wird nach dem Board-Titel benannt.
+
+#### Import
+
+Eine exportierte Board-ZIP kann über **Dashboard → Importieren** wieder eingelesen werden. Der Endpunkt `POST /api/boards/import/zip` legt ein neues Board an, lädt alle Dateien erneut hoch und aktualisiert die Datei-URLs in den Board-Elementen.
+
+#### Vollständiger Datenexport
+
+Unter **Einstellungen → Meine Daten → Als ZIP herunterladen** können Benutzer alle eigenen Boards exportieren. Der Endpunkt `GET /api/user/export/zip` verpackt jedes Board als eigene `.zip` (im gleichen Board-Export-Format) in einer übergeordneten ZIP-Datei, wobei die Ordnerstruktur als Verzeichnisstruktur abgebildet wird.
 
 ## Verwendete Pakete
 

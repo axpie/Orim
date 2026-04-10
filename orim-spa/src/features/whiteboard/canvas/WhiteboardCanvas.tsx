@@ -438,6 +438,7 @@ export function WhiteboardCanvas({
   });
 
   const { onDragOver, onDrop } = useCanvasPasteAndDrop({
+    boardId: board?.id ?? '',
     editable,
     elements,
     cameraX,
