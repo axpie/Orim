@@ -15,6 +15,7 @@ import type {
   ImportBoardRequest,
   User,
 } from '../types/models';
+import { ensureBoardElementsTypeDiscriminators } from '../features/whiteboard/boardElementTransport';
 
 // --- Board CRUD ---
 
@@ -67,7 +68,7 @@ export async function saveBoard(
     recentColors: board.recentColors,
     stickyNotePresets: board.stickyNotePresets,
     stylePresetState: board.stylePresetState ?? null,
-    elements: board.elements,
+    elements: ensureBoardElementsTypeDiscriminators(board.elements),
     sourceClientId: sourceClientId ?? null,
     changeKind,
   });
@@ -127,7 +128,10 @@ export async function validateSharePassword(token: string, password: string): Pr
 
 export async function replaceSharedBoardContent(token: string, board: Board, password?: string | null, sourceClientId?: string | null): Promise<Board> {
   const { data } = await client.put<Board>(`/api/boards/shared/${token}/content`, {
-    board,
+    board: {
+      ...board,
+      elements: ensureBoardElementsTypeDiscriminators(board.elements),
+    },
     password: password ?? null,
     sourceClientId: sourceClientId ?? null,
   });

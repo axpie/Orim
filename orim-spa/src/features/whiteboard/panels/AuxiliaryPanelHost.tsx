@@ -167,7 +167,7 @@ export function AuxiliaryPanelHost({
         width: `min(${width}px, calc(100% - 32px))`,
         height: 'min(72vh, calc(100% - 32px))',
         maxHeight: 'calc(100% - 32px)',
-        zIndex: 5,
+        zIndex: 1400,
         pointerEvents: 'auto',
         cursor: dragging ? 'grabbing' : undefined,
       }}

@@ -1,16 +1,5 @@
-using System.Text.Json.Serialization;
-
 namespace Orim.Core.Models;
 
-[JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[JsonDerivedType(typeof(ShapeElement), "shape")]
-[JsonDerivedType(typeof(TextElement), "text")]
-[JsonDerivedType(typeof(StickyNoteElement), "sticky")]
-[JsonDerivedType(typeof(FrameElement), "frame")]
-[JsonDerivedType(typeof(ArrowElement), "arrow")]
-[JsonDerivedType(typeof(IconElement), "icon")]
-[JsonDerivedType(typeof(FileElement), "file")]
-[JsonDerivedType(typeof(DrawingElement), "drawing")]
 public abstract class BoardElement
 {
     public Guid Id { get; set; } = Guid.NewGuid();
@@ -80,12 +69,30 @@ public enum ShapeType
     Cross
 }
 
-public class TextElement : BoardElement
+public abstract class TextStyleElementBase : BoardElement
 {
-    public string Text { get; set; } = string.Empty;
     public double FontSize { get; set; } = 16;
     public bool AutoFontSize { get; set; }
     public string Color { get; set; } = "#000000";
+}
+
+public class TextElement : TextStyleElementBase
+{
+    public string Text { get; set; } = string.Empty;
+}
+
+public class RichTextElement : TextStyleElementBase
+{
+    public string Html { get; set; } = string.Empty;
+    public double ScrollLeft { get; set; }
+    public double ScrollTop { get; set; }
+}
+
+public class MarkdownElement : TextStyleElementBase
+{
+    public string Markdown { get; set; } = string.Empty;
+    public double ScrollLeft { get; set; }
+    public double ScrollTop { get; set; }
 }
 
 public class StickyNoteElement : BoardElement

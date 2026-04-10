@@ -33,6 +33,42 @@ public sealed class BoardOperationPayloadParserTests
     }
 
     [Fact]
+    public void ParseSingle_InfersFormattedTextElementType_WhenElementDiscriminatorIsMissing()
+    {
+        var payload = ParseJson("""
+            {
+              "type": "element.updated",
+              "element": {
+                "id": "11111111-1111-1111-1111-111111111111",
+                "x": 10,
+                "y": 20,
+                "width": 220,
+                "height": 120,
+                "zIndex": 0,
+                "rotation": 0,
+                "label": "",
+                "labelHorizontalAlignment": "Left",
+                "labelVerticalAlignment": "Top",
+                "fontSize": 18,
+                "autoFontSize": false,
+                "color": "#111827",
+                "html": "<p>Hello</p>",
+                "scrollLeft": 4,
+                "scrollTop": 12
+              }
+            }
+            """);
+
+        var operation = BoardOperationPayloadParser.ParseSingle(payload);
+
+        var updated = Assert.IsType<BoardElementUpdatedOperationDto>(operation);
+        var richText = Assert.IsType<RichTextElement>(updated.Element);
+        Assert.Equal("<p>Hello</p>", richText.Html);
+        Assert.Equal(4, richText.ScrollLeft);
+        Assert.Equal(12, richText.ScrollTop);
+    }
+
+    [Fact]
     public void ParseMany_ParsesValidPayloads()
     {
         var payloads = new[]

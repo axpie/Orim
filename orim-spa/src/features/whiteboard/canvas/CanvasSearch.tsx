@@ -6,11 +6,13 @@ import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import type { BoardElement } from '../../../types/models';
 import { useBoardStore } from '../store/boardStore';
+import { getSearchableTextContent, isTextContentElement } from '../textElements';
 
 function getSearchableText(el: BoardElement): string {
   const parts: string[] = [];
   if (el.label) parts.push(el.label);
-  if (el.$type === 'text' || el.$type === 'sticky') parts.push(el.text);
+  if (isTextContentElement(el)) parts.push(getSearchableTextContent(el));
+  if (el.$type === 'sticky') parts.push(el.text);
   if (el.$type === 'icon') parts.push(el.iconName);
   return parts.join(' ');
 }
@@ -126,6 +128,7 @@ export function CanvasSearch({ onClose }: CanvasSearchProps) {
 
   return (
     <Paper
+      data-whiteboard-export-hidden="true"
       elevation={4}
       onKeyDown={handleKeyDown}
       sx={{

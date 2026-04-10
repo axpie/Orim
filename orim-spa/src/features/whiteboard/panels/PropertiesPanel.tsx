@@ -62,9 +62,11 @@ import {
   ImageFit,
   type BoardElement,
   type BoardElementBase,
-  type ShapeElement,
-  type TextElement,
-  type StickyNoteElement,
+   type ShapeElement,
+   type TextElement,
+   type RichTextElement,
+   type MarkdownElement,
+   type StickyNoteElement,
   type FrameElement,
   type ArrowElement,
   type DrawingElement,
@@ -845,33 +847,51 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
                 );
               })()}
 
-              {el.$type === 'text' && (() => {
-                const text = el as TextElement;
+              {(el.$type === 'text' || el.$type === 'richtext' || el.$type === 'markdown') && (() => {
+                const text = el as TextElement | RichTextElement | MarkdownElement;
+                const contentField = text.$type === 'text'
+                  ? 'text'
+                  : text.$type === 'markdown'
+                    ? 'markdown'
+                    : null;
+                const contentValue = text.$type === 'text'
+                  ? text.text
+                  : text.$type === 'markdown'
+                    ? text.markdown
+                    : '';
                 return (
                   <PropertiesSection title={t('properties.text')}>
-                    <TextField
-                      label={t('properties.text')}
-                      size="small"
-                      multiline
-                      minRows={3}
-                      value={text.text ?? ''}
-                      onChange={(e) => update(el.id, { text: e.target.value })}
-                    />
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={text.autoFontSize ?? false}
-                          onChange={(e) => {
-                            update(el.id, e.target.checked
-                              ? { autoFontSize: true }
-                              : { autoFontSize: false, fontSize: Math.round(resolveTextFontSize(text)) });
-                          }}
-                          size="small"
-                        />
-                      }
-                      label={t('properties.automaticFontSize')}
-                    />
-                    {!text.autoFontSize && (
+                    {contentField ? (
+                      <TextField
+                        label={contentField === 'markdown' ? t('tools.markdown', 'Markdown') : t('properties.text')}
+                        size="small"
+                        multiline
+                        minRows={3}
+                        value={contentValue ?? ''}
+                        onChange={(e) => update(el.id, { [contentField]: e.target.value } as Partial<BoardElement>)}
+                      />
+                    ) : (
+                      <Typography variant="body2" color="text.secondary">
+                        {t('properties.richTextInlineEditHint', 'Rich-text content is edited directly on the board.')}
+                      </Typography>
+                    )}
+                    {text.$type === 'text' && (
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={text.autoFontSize ?? false}
+                            onChange={(e) => {
+                              update(el.id, e.target.checked
+                                ? { autoFontSize: true }
+                                : { autoFontSize: false, fontSize: Math.round(resolveTextFontSize(text)) });
+                            }}
+                            size="small"
+                          />
+                        }
+                        label={t('properties.automaticFontSize')}
+                      />
+                    )}
+                    {(text.$type !== 'text' || !text.autoFontSize) && (
                       <NumericSliderField
                         label={t('properties.fontSize')}
                         value={Math.round(text.fontSize ?? 18)}

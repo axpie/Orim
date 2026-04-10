@@ -34,6 +34,8 @@ import type {
   DockPoint,
   DrawingElement,
   FrameElement,
+  MarkdownElement,
+  RichTextElement,
   StickyNoteElement,
   TextElement,
   ThemeBoardDefaultsDefinition,
@@ -41,6 +43,7 @@ import type {
 import type { ToolType } from '../store/boardStore';
 import { useStylePresetStore } from '../presets/stylePresetStore';
 import { isShapeTool } from '../shapeTools';
+import { isTextTool } from '../textElements';
 
 type Point = { x: number; y: number };
 type PanStartState = { x: number; y: number; cx: number; cy: number } | null;
@@ -405,10 +408,9 @@ export function useCanvasStartInteractions({
       return;
     }
 
-    if (editable && activeTool === 'text') {
+    if (editable && isTextTool(activeTool)) {
       const textStyle = useStylePresetStore.getState().resolvePlacementStyle('text');
-      const newText: TextElement = {
-        $type: 'text',
+      const baseTextElement = {
         id: uuidv4(),
         x: worldPos.x - DEFAULT_TEXT_WIDTH / 2,
         y: worldPos.y - DEFAULT_TEXT_HEIGHT / 2,
@@ -430,6 +432,27 @@ export function useCanvasStartInteractions({
         isStrikethrough: false,
         ...(textStyle ?? {}),
       };
+      const newText: TextElement | RichTextElement | MarkdownElement = activeTool === 'richtext'
+          ? {
+              ...baseTextElement,
+              $type: 'richtext',
+              html: '<p></p>',
+              scrollLeft: 0,
+              scrollTop: 0,
+            }
+        : activeTool === 'markdown'
+          ? {
+              ...baseTextElement,
+              $type: 'markdown',
+              markdown: '',
+              scrollLeft: 0,
+              scrollTop: 0,
+            }
+          : {
+              ...baseTextElement,
+              $type: 'text',
+              text: '',
+            };
       addElement(newText);
       pushCommand(createAddElementsCommand([newText]));
       setSelectedElementIds([newText.id]);

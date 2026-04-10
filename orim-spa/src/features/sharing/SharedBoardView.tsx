@@ -98,6 +98,7 @@ export function SharedBoardView() {
   });
   const [guestNameDraft, setGuestNameDraft] = useState(guestDisplayName);
   const [guestNameSaved, setGuestNameSaved] = useState(false);
+  const [inlineEditingActive, setInlineEditingActive] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
   const liveAnnouncementIdRef = useRef(0);
@@ -516,7 +517,7 @@ export function SharedBoardView() {
       return;
     }
 
-    exportStageAsPng(stage, current.title);
+    await exportStageAsPng(stage, current.title, canvasBoxRef.current);
   }, []);
 
   const handleExportJson = useCallback(async () => {
@@ -646,6 +647,7 @@ export function SharedBoardView() {
               onPointerPresenceChanged={handlePointerPresenceChanged}
               onStageReady={handleStageReady}
               liveAnnouncement={liveAnnouncement}
+              onInlineEditingChange={setInlineEditingActive}
               shareToken={token}
               sharePassword={validatedPassword}
             />
@@ -658,6 +660,7 @@ export function SharedBoardView() {
 
             return (
               <Box
+                data-whiteboard-export-hidden="true"
                 sx={{
                   position: 'absolute',
                   top: 0,
@@ -695,7 +698,7 @@ export function SharedBoardView() {
             onJumpToCursor={handleJumpToCursor}
           />
 
-          {board.sharedAllowAnonymousEditing && selectedElementIds.length > 0 && activeTool === 'select' && (
+          {board.sharedAllowAnonymousEditing && !inlineEditingActive && selectedElementIds.length > 0 && activeTool === 'select' && (
             <FloatingToolbar
               elements={board.elements}
               selectedIds={selectedElementIds}
@@ -709,14 +712,15 @@ export function SharedBoardView() {
             />
           )}
 
-          <AuxiliaryPanelHost
-            open={activePanel != null}
-            mobile={isNarrowPanelMode}
-            width={getAuxiliaryPanelWidth(activePanel)}
-            onClose={closeActivePanel}
-          >
-            {(dragHandleProps) => (
-              <>
+          <Box data-whiteboard-export-hidden="true">
+            <AuxiliaryPanelHost
+              open={activePanel != null}
+              mobile={isNarrowPanelMode}
+              width={getAuxiliaryPanelWidth(activePanel)}
+              onClose={closeActivePanel}
+            >
+              {(dragHandleProps) => (
+                <>
                 {activePanel === 'properties' && board.sharedAllowAnonymousEditing && (
                   <PropertiesPanel
                     mobile={isNarrowPanelMode}
@@ -725,9 +729,10 @@ export function SharedBoardView() {
                     {...dragHandleProps}
                   />
                 )}
-              </>
-            )}
-          </AuxiliaryPanelHost>
+                </>
+              )}
+            </AuxiliaryPanelHost>
+          </Box>
         </Box>
       </Box>
 

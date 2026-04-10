@@ -697,8 +697,8 @@ internal static class BoardEndpoints
 
     private static BoardOperationHistoryEntryDto MapHistoryEntry(BoardOperationEntry entry)
     {
-        var operation = JsonSerializer.Deserialize<BoardOperationDto>(entry.OperationPayload, OrimJsonOptions.Default)
-            ?? throw new InvalidOperationException($"Board operation '{entry.Id}' could not be deserialized.");
+        using var operationDocument = JsonDocument.Parse(entry.OperationPayload);
+        var operation = BoardOperationPayloadParser.ParseSingle(operationDocument.RootElement.Clone());
 
         return new BoardOperationHistoryEntryDto(
             entry.SequenceNumber,

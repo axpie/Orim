@@ -404,10 +404,16 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   // --- determine which controls to show ---
   const showFill = hasProperty(selected, 'fillColor');
   const showStroke = selected.length > 0 && selected.every(
-    (el) => 'strokeColor' in el || ('color' in el && (el.$type === 'text' || el.$type === 'icon')),
+    (el) => 'strokeColor' in el || ('color' in el && (
+      el.$type === 'text'
+      || el.$type === 'richtext'
+      || el.$type === 'markdown'
+      || el.$type === 'sticky'
+      || el.$type === 'icon'
+    )),
   );
   const showTextControls = selected.length > 0 && selected.every(
-    (el) => el.$type === 'text' || el.$type === 'sticky',
+    (el) => el.$type === 'text' || el.$type === 'richtext' || el.$type === 'markdown' || el.$type === 'sticky',
   );
   const showStrokeWidth = selected.length > 0 && selected.every(
     (el) => el.$type === 'shape' || el.$type === 'arrow' || el.$type === 'drawing' || el.$type === 'frame',
@@ -527,6 +533,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
 
   return (
     <Paper
+      data-whiteboard-export-hidden="true"
       ref={toolbarRef}
       elevation={3}
       onPointerDown={(e) => e.stopPropagation()}

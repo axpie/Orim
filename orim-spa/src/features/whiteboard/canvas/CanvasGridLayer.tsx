@@ -1,5 +1,6 @@
-import { memo, useMemo, type ReactNode } from 'react';
+import { memo, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Layer, Rect, Line, Circle } from 'react-konva';
+import type Konva from 'konva';
 import { GRID_SIZE } from './canvasUtils';
 import type { GridStyle } from '../../../types/models';
 
@@ -24,6 +25,7 @@ export const CanvasGridLayer = memo(function CanvasGridLayer({
   surfaceColor,
   gridStyle,
 }: CanvasGridLayerProps) {
+  const layerRef = useRef<Konva.Layer>(null);
   const worldLeft = -cameraX / zoom;
   const worldTop = -cameraY / zoom;
   const worldRight = worldLeft + viewportWidth / zoom;
@@ -87,8 +89,20 @@ export const CanvasGridLayer = memo(function CanvasGridLayer({
     return nodes;
   }, [zoom, worldLeft, worldTop, worldRight, worldBottom, gridColor, resolvedGridStyle]);
 
+  useLayoutEffect(() => {
+    const layer = layerRef.current;
+    if (!layer) {
+      return;
+    }
+
+    const sceneCanvas = layer.getCanvas()._canvas;
+    const hitCanvas = layer.getHitCanvas()._canvas;
+    sceneCanvas.style.zIndex = '50';
+    hitCanvas.style.zIndex = '50';
+  }, []);
+
   return (
-    <Layer listening={false}>
+    <Layer ref={layerRef} listening={false}>
       <Rect
         x={worldLeft}
         y={worldTop}

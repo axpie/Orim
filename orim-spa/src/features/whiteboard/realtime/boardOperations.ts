@@ -1,5 +1,6 @@
 import type { Board, BoardElement, BoardOperation, BoardStylePresetState, StickyNotePreset } from '../../../types/models';
 import { cloneStylePresetState } from '../presets/stylePresetUtils';
+import { ensureBoardElementTypeDiscriminator } from '../boardElementTransport';
 
 export type BoardOperationPayload = BoardOperation | BoardOperation[];
 
@@ -72,14 +73,14 @@ function findElement(elements: BoardElement[], elementId: string): BoardElement 
 export function createElementAddedOperation(element: BoardElement): BoardOperation {
   return {
     type: 'element.added',
-    element: structuredClone(element),
+    element: structuredClone(ensureBoardElementTypeDiscriminator(element)),
   };
 }
 
 export function createElementUpdatedOperation(element: BoardElement): BoardOperation {
   return {
     type: 'element.updated',
-    element: structuredClone(element),
+    element: structuredClone(ensureBoardElementTypeDiscriminator(element)),
   };
 }
 

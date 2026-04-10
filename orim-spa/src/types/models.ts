@@ -117,12 +117,29 @@ export interface ShapeElement extends BoardElementBase {
   borderLineStyle: BorderLineStyle;
 }
 
-export interface TextElement extends BoardElementBase {
-  $type: 'text';
-  text: string;
+export interface TextStyleElementBase extends BoardElementBase {
   fontSize: number;
   autoFontSize?: boolean;
   color: string;
+}
+
+export interface TextElement extends TextStyleElementBase {
+  $type: 'text';
+  text: string;
+}
+
+export interface RichTextElement extends TextStyleElementBase {
+  $type: 'richtext';
+  html: string;
+  scrollLeft?: number;
+  scrollTop?: number;
+}
+
+export interface MarkdownElement extends TextStyleElementBase {
+  $type: 'markdown';
+  markdown: string;
+  scrollLeft?: number;
+  scrollTop?: number;
 }
 
 export interface StickyNoteElement extends BoardElementBase {
@@ -193,7 +210,9 @@ export interface DrawingElement extends BoardElementBase {
   strokeWidth: number;
 }
 
-export type BoardElement = ShapeElement | TextElement | StickyNoteElement | FrameElement | ArrowElement | IconElement | FileElement | DrawingElement;
+export type TextContentElement = TextElement | RichTextElement | MarkdownElement;
+
+export type BoardElement = ShapeElement | TextContentElement | StickyNoteElement | FrameElement | ArrowElement | IconElement | FileElement | DrawingElement;
 
 export type StylePresetType = 'shape' | 'text' | 'sticky' | 'frame' | 'icon' | 'arrow' | 'drawing';
 export type StylePresetMode = 'theme-default' | 'last-used' | 'preset';
@@ -216,7 +235,7 @@ export type ShapeStylePreset = Pick<
 >;
 
 export type TextStylePreset = Pick<
-  TextElement,
+  TextStyleElementBase,
   | 'fontSize'
   | 'autoFontSize'
   | 'fontFamily'

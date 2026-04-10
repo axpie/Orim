@@ -70,6 +70,70 @@ public class BoardElementSerializationTests
     }
 
     [Fact]
+    public void RichTextElement_RoundTrips_ViaPolymorphicSerialization()
+    {
+        BoardElement element = new RichTextElement
+        {
+            Html = "<p><strong>Hello</strong> <em>rich text</em></p>",
+            FontSize = 22,
+            AutoFontSize = false,
+            ScrollLeft = 12,
+            ScrollTop = 48,
+            FontFamily = "Inter, sans-serif",
+            LabelHorizontalAlignment = HorizontalLabelAlignment.Left,
+            LabelVerticalAlignment = VerticalLabelAlignment.Top,
+            Color = "#1F2937",
+            IsBold = true,
+            IsUnderline = true
+        };
+
+        var json = JsonSerializer.Serialize(element, OrimJsonOptions.Default);
+        var deserialized = JsonSerializer.Deserialize<BoardElement>(json, OrimJsonOptions.Default);
+
+        var richText = Assert.IsType<RichTextElement>(deserialized);
+        Assert.Equal("<p><strong>Hello</strong> <em>rich text</em></p>", richText.Html);
+        Assert.Equal(22, richText.FontSize);
+        Assert.False(richText.AutoFontSize);
+        Assert.Equal(12, richText.ScrollLeft);
+        Assert.Equal(48, richText.ScrollTop);
+        Assert.Equal("Inter, sans-serif", richText.FontFamily);
+        Assert.Equal("#1F2937", richText.Color);
+        Assert.True(richText.IsBold);
+        Assert.True(richText.IsUnderline);
+    }
+
+    [Fact]
+    public void MarkdownElement_RoundTrips_ViaPolymorphicSerialization()
+    {
+        BoardElement element = new MarkdownElement
+        {
+            Markdown = "# Heading\n\n- item 1\n- item 2",
+            FontSize = 20,
+            AutoFontSize = true,
+            ScrollLeft = 6,
+            ScrollTop = 32,
+            FontFamily = "JetBrains Mono, monospace",
+            LabelHorizontalAlignment = HorizontalLabelAlignment.Left,
+            LabelVerticalAlignment = VerticalLabelAlignment.Top,
+            Color = "#334155",
+            IsItalic = true
+        };
+
+        var json = JsonSerializer.Serialize(element, OrimJsonOptions.Default);
+        var deserialized = JsonSerializer.Deserialize<BoardElement>(json, OrimJsonOptions.Default);
+
+        var markdown = Assert.IsType<MarkdownElement>(deserialized);
+        Assert.Equal("# Heading\n\n- item 1\n- item 2", markdown.Markdown);
+        Assert.Equal(20, markdown.FontSize);
+        Assert.True(markdown.AutoFontSize);
+        Assert.Equal(6, markdown.ScrollLeft);
+        Assert.Equal(32, markdown.ScrollTop);
+        Assert.Equal("JetBrains Mono, monospace", markdown.FontFamily);
+        Assert.Equal("#334155", markdown.Color);
+        Assert.True(markdown.IsItalic);
+    }
+
+    [Fact]
     public void ArrowElement_RoundTrips_ViaPolymorphicSerialization()
     {
         var sourceId = Guid.NewGuid();
@@ -204,6 +268,8 @@ public class BoardElementSerializationTests
         {
             new ShapeElement { Label = "Shape" },
             new TextElement { Text = "Text" },
+            new RichTextElement { Html = "<p>Rich</p>" },
+            new MarkdownElement { Markdown = "## Markdown" },
             new StickyNoteElement { Text = "Sticky" },
             new FrameElement { Label = "Frame" },
             new ArrowElement { StrokeColor = "#111" },
@@ -214,14 +280,16 @@ public class BoardElementSerializationTests
         var json = JsonSerializer.Serialize(elements, OrimJsonOptions.Default);
         var deserialized = JsonSerializer.Deserialize<List<BoardElement>>(json, OrimJsonOptions.Default)!;
 
-        Assert.Equal(7, deserialized.Count);
+        Assert.Equal(9, deserialized.Count);
         Assert.IsType<ShapeElement>(deserialized[0]);
         Assert.IsType<TextElement>(deserialized[1]);
-        Assert.IsType<StickyNoteElement>(deserialized[2]);
-        Assert.IsType<FrameElement>(deserialized[3]);
-        Assert.IsType<ArrowElement>(deserialized[4]);
-        Assert.IsType<IconElement>(deserialized[5]);
-        Assert.IsType<DrawingElement>(deserialized[6]);
+        Assert.IsType<RichTextElement>(deserialized[2]);
+        Assert.IsType<MarkdownElement>(deserialized[3]);
+        Assert.IsType<StickyNoteElement>(deserialized[4]);
+        Assert.IsType<FrameElement>(deserialized[5]);
+        Assert.IsType<ArrowElement>(deserialized[6]);
+        Assert.IsType<IconElement>(deserialized[7]);
+        Assert.IsType<DrawingElement>(deserialized[8]);
     }
 
     [Fact]

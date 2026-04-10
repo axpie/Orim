@@ -14,6 +14,7 @@ import { AlignmentGuides } from '../shapes/AlignmentGuides';
 import { InlineTextEditor } from '../shapes/InlineTextEditor';
 import { IconRenderer } from '../shapes/IconRenderer';
 import { getShapeTypeForTool, isShapeTool } from '../shapeTools';
+import { getTextContentField, isTextContentElement, withTextContent } from '../textElements';
 import { CanvasAccessibilityLayer } from './CanvasAccessibilityLayer';
 import { CanvasGridLayer } from './CanvasGridLayer';
 import { CanvasElementLayer } from './CanvasElementLayer';
@@ -103,6 +104,7 @@ interface WhiteboardCanvasProps {
   onStageReady?: (stage: Konva.Stage | null) => void;
   liveAnnouncement?: { id: number; text: string } | null;
   onOpenSearch?: () => void;
+  onInlineEditingChange?: (editing: boolean) => void;
   shareToken?: string;
   sharePassword?: string | null;
 }
@@ -116,6 +118,7 @@ export function WhiteboardCanvas({
   onStageReady,
   liveAnnouncement = null,
   onOpenSearch,
+  onInlineEditingChange,
   shareToken,
   sharePassword,
 }: WhiteboardCanvasProps) {
@@ -259,6 +262,10 @@ export function WhiteboardCanvas({
   // Inline text editing
   const [editingElement, setEditingElementState] = useState<InlineEditableElement | null>(null);
   const [selectAllOnInlineEditFocus, setSelectAllOnInlineEditFocus] = useState(true);
+  const overlayLayerRef = useRef<Konva.Layer>(null);
+  const formattedTextViewportRefs = useRef(new Map<string, HTMLDivElement>());
+  const formattedTextPersistTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const formattedTextAutoHeightTimersRef = useRef(new Map<string, ReturnType<typeof setTimeout>>());
 
   // Panning
   const [isPanning, setIsPanning] = useState(false);
@@ -275,16 +282,147 @@ export function WhiteboardCanvas({
     }
   }, [setFollowingClientId]);
 
+  const registerFormattedTextViewport = useCallback((elementId: string, node: HTMLDivElement | null) => {
+    if (node) {
+      formattedTextViewportRefs.current.set(elementId, node);
+      return;
+    }
+
+    formattedTextViewportRefs.current.delete(elementId);
+  }, []);
+
+  const publishFormattedTextScroll = useCallback((element: BoardElement) => {
+    onBoardLiveChanged?.('edit', createElementUpdatedOperation(element));
+
+    const existingTimer = formattedTextPersistTimersRef.current.get(element.id);
+    if (existingTimer) {
+      clearTimeout(existingTimer);
+    }
+
+    formattedTextPersistTimersRef.current.set(element.id, setTimeout(() => {
+      formattedTextPersistTimersRef.current.delete(element.id);
+      onBoardChanged('edit', createElementUpdatedOperation(element));
+    }, 160));
+  }, [onBoardChanged, onBoardLiveChanged]);
+
+  const handleFormattedTextNativeScroll = useCallback((elementId: string, scrollLeft: number, scrollTop: number) => {
+    const element = useBoardStore.getState().getElementById(elementId);
+    if (!element || (element.$type !== 'richtext' && element.$type !== 'markdown')) {
+      return;
+    }
+
+    const nextElement = { ...element, scrollLeft, scrollTop };
+    updateElement(elementId, { scrollLeft, scrollTop } as Partial<BoardElement>);
+    publishFormattedTextScroll(nextElement);
+  }, [publishFormattedTextScroll, updateElement]);
+
+  const handleFormattedTextHeightRequired = useCallback((elementId: string, requiredHeight: number) => {
+    const element = useBoardStore.getState().getElementById(elementId);
+    if (!element || (element.$type !== 'richtext' && element.$type !== 'markdown')) return;
+    const nextHeight = Math.max(requiredHeight, Math.ceil(element.height + 1));
+    if (nextHeight <= element.height) return;
+
+    const nextElement = { ...element, height: nextHeight };
+    updateElement(elementId, { height: nextHeight } as Partial<BoardElement>);
+
+    const existingTimer = formattedTextAutoHeightTimersRef.current.get(elementId);
+    if (existingTimer) clearTimeout(existingTimer);
+
+    formattedTextAutoHeightTimersRef.current.set(elementId, setTimeout(() => {
+      formattedTextAutoHeightTimersRef.current.delete(elementId);
+      onBoardChanged('edit', createElementUpdatedOperation(nextElement));
+    }, 200));
+  }, [onBoardChanged, updateElement]);
+
+  const tryScrollFormattedTextAtPointer = useCallback((deltaX: number, deltaY: number) => {
+    const worldPos = getWorldPos();
+    const hoveredFormattedText = [...elements]
+      .filter((element): element is Extract<BoardElement, { $type: 'richtext' | 'markdown' }> => (
+        (element.$type === 'richtext' || element.$type === 'markdown')
+        && isPointInsideElementBounds(worldPos, element)
+      ))
+      .sort((left, right) => (right.zIndex ?? 0) - (left.zIndex ?? 0))[0];
+
+    if (!hoveredFormattedText) {
+      return false;
+    }
+
+    const viewport = formattedTextViewportRefs.current.get(hoveredFormattedText.id);
+    if (!viewport) {
+      return false;
+    }
+
+    const maxScrollLeft = Math.max(viewport.scrollWidth - viewport.clientWidth, 0);
+    const maxScrollTop = Math.max(viewport.scrollHeight - viewport.clientHeight, 0);
+    if (maxScrollLeft <= 0 && maxScrollTop <= 0) {
+      return false;
+    }
+
+    const nextScrollLeft = Math.min(Math.max(viewport.scrollLeft + deltaX, 0), maxScrollLeft);
+    const nextScrollTop = Math.min(Math.max(viewport.scrollTop + deltaY, 0), maxScrollTop);
+
+    viewport.scrollLeft = nextScrollLeft;
+    viewport.scrollTop = nextScrollTop;
+
+    if (nextScrollLeft === (hoveredFormattedText.scrollLeft ?? 0) && nextScrollTop === (hoveredFormattedText.scrollTop ?? 0)) {
+      return true;
+    }
+
+    const nextElement = {
+      ...hoveredFormattedText,
+      scrollLeft: nextScrollLeft,
+      scrollTop: nextScrollTop,
+    };
+
+    updateElement(hoveredFormattedText.id, {
+      scrollLeft: nextScrollLeft,
+      scrollTop: nextScrollTop,
+    } as Partial<BoardElement>);
+    publishFormattedTextScroll(nextElement);
+    return true;
+  }, [elements, getWorldPos, publishFormattedTextScroll, updateElement]);
+
   const handleWheel = useCallback(
     (e: Parameters<typeof handleWheelBase>[0]) => {
       clearFollowOnInteraction();
+      if (!e.evt.ctrlKey && !e.evt.metaKey && tryScrollFormattedTextAtPointer(e.evt.deltaX, e.evt.deltaY)) {
+        e.evt.preventDefault();
+        return;
+      }
       handleWheelBase(e);
     },
-    [clearFollowOnInteraction, handleWheelBase],
+    [clearFollowOnInteraction, handleWheelBase, tryScrollFormattedTextAtPointer],
   );
   const setEditingElement = useCallback((element: InlineEditableElement | null) => {
     setSelectAllOnInlineEditFocus(true);
     setEditingElementState(element);
+    onInlineEditingChange?.(element !== null);
+  }, [onInlineEditingChange]);
+  useEffect(() => () => {
+    onInlineEditingChange?.(false);
+  }, [onInlineEditingChange]);
+  useEffect(() => () => {
+    for (const timeout of formattedTextPersistTimersRef.current.values()) {
+      clearTimeout(timeout);
+    }
+    formattedTextPersistTimersRef.current.clear();
+  }, []);
+  useEffect(() => () => {
+    for (const timeout of formattedTextAutoHeightTimersRef.current.values()) {
+      clearTimeout(timeout);
+    }
+    formattedTextAutoHeightTimersRef.current.clear();
+  }, []);
+  useEffect(() => {
+    const layer = overlayLayerRef.current;
+    if (!layer) {
+      return;
+    }
+
+    const sceneCanvas = layer.getCanvas()._canvas;
+    const hitCanvas = layer.getHitCanvas()._canvas;
+    sceneCanvas.style.zIndex = '1000';
+    hitCanvas.style.zIndex = '1000';
   }, []);
   const {
     canGroup,
@@ -1398,20 +1536,24 @@ export function WhiteboardCanvas({
       let nextElement: BoardElement;
       let changedKeys: string[];
 
-      switch (el.$type) {
-        case 'text':
-        case 'sticky':
-          nextElement = { ...el, text: value };
-          changedKeys = ['text'];
-          break;
-        case 'shape':
-        case 'frame':
-          nextElement = { ...el, label: value };
-          changedKeys = ['label'];
-          break;
-        default:
-          setEditingElement(null);
-          return;
+      if (isTextContentElement(el)) {
+        nextElement = withTextContent(el, value);
+        changedKeys = [getTextContentField(el)];
+      } else {
+        switch (el.$type) {
+          case 'sticky':
+            nextElement = { ...el, text: value };
+            changedKeys = ['text'];
+            break;
+          case 'shape':
+          case 'frame':
+            nextElement = { ...el, label: value };
+            changedKeys = ['label'];
+            break;
+          default:
+            setEditingElement(null);
+            return;
+        }
       }
 
       const hasMeaningfulChange = changedKeys.some((key) => {
@@ -1425,7 +1567,9 @@ export function WhiteboardCanvas({
         return;
       }
 
-      if (el.$type === 'text' || el.$type === 'sticky') {
+      if (isTextContentElement(el)) {
+        updateElement(id, { [getTextContentField(el)]: value } as Partial<BoardElement>);
+      } else if (el.$type === 'sticky') {
         updateElement(id, { text: value });
       } else if (el.$type === 'shape' || el.$type === 'frame') {
         updateElement(id, { label: value });
@@ -1565,9 +1709,16 @@ export function WhiteboardCanvas({
         />
 
         {/* Elements layer */}
-        <CanvasElementLayer elements={elements} boardDefaults={boardDefaults} />
+        <CanvasElementLayer
+          elements={elements}
+          boardDefaults={boardDefaults}
+          onFormattedTextViewportMount={registerFormattedTextViewport}
+          formattedTextInteractable={!editable}
+          onFormattedTextNativeScroll={handleFormattedTextNativeScroll}
+          onFormattedTextHeightRequired={handleFormattedTextHeightRequired}
+        />
 
-        <Layer name="whiteboard-export-hidden">
+        <Layer ref={overlayLayerRef} name="whiteboard-export-hidden">
           {/* Draft shape */}
           {draftRect && (
             activeTool === 'icon' && draftIconPreview ? (

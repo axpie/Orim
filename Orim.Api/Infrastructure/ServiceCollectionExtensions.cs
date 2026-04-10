@@ -9,6 +9,7 @@ using Microsoft.IdentityModel.Tokens;
 using OpenTelemetry.Metrics;
 using OpenTelemetry.Trace;
 using Orim.Api.Services;
+using Orim.Core;
 using Orim.Core.Interfaces;
 using Orim.Core.Services;
 using Orim.Infrastructure;
@@ -186,8 +187,7 @@ services.AddSingleton<BoardChangeNotifier>();
 
         var signalRBuilder = services.AddSignalR().AddJsonProtocol(options =>
         {
-            options.PayloadSerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-            options.PayloadSerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+            OrimJsonOptions.Configure(options.PayloadSerializerOptions);
         });
 
         var redisConnection = configuration.GetConnectionString("Redis");
@@ -216,8 +216,7 @@ services.AddSingleton<BoardChangeNotifier>();
 
         services.ConfigureHttpJsonOptions(options =>
         {
-            options.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase;
-            options.SerializerOptions.Converters.Add(new System.Text.Json.Serialization.JsonStringEnumConverter());
+            OrimJsonOptions.Configure(options.SerializerOptions);
         });
 
         return services;

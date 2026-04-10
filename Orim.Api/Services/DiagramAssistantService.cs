@@ -144,8 +144,10 @@ public sealed class DiagramAssistantService
         var arrowCount = board.Elements.OfType<ArrowElement>().Count();
         var iconCount = board.Elements.OfType<IconElement>().Count();
         var textCount = board.Elements.OfType<TextElement>().Count();
+        var richTextCount = board.Elements.OfType<RichTextElement>().Count();
+        var markdownCount = board.Elements.OfType<MarkdownElement>().Count();
         var existingElementsSummary = board.Elements.Count > 0
-            ? $"The board currently has {board.Elements.Count} elements: {shapeCount} shapes, {arrowCount} arrows, {iconCount} icons, {textCount} text elements."
+            ? $"The board currently has {board.Elements.Count} elements: {shapeCount} shapes, {arrowCount} arrows, {iconCount} icons, {textCount} plain text elements, {richTextCount} rich text elements, and {markdownCount} markdown elements."
             : "The board is currently empty.";
 
         return $"""
@@ -160,7 +162,7 @@ public sealed class DiagramAssistantService
             ```
             
             ## Available Tools
-            You can create shapes (rectangles, ellipses, triangles), arrows between elements, and icon elements.
+            You can create shapes (rectangles, ellipses, triangles), arrows between elements, icon elements, and text-based elements.
             You can also update or remove existing elements.
             Use these tools to build, interpret, and modify the board that the user describes.
             
@@ -292,13 +294,27 @@ public sealed class DiagramAssistantService
             if (root.TryGetProperty("strokeColor", out var sp)) shape.StrokeColor = sp.GetString() ?? shape.StrokeColor;
             if (root.TryGetProperty("strokeWidth", out var sw)) shape.StrokeWidth = sw.GetDouble();
         }
-        else if (element is TextElement text)
+        else if (element is TextStyleElementBase text)
         {
-            if (root.TryGetProperty("text", out var tp)) text.Text = tp.GetString() ?? "";
             if (root.TryGetProperty("fontSize", out var fs)) text.FontSize = fs.GetDouble();
             if (root.TryGetProperty("color", out var cp)) text.Color = cp.GetString() ?? text.Color;
             if (root.TryGetProperty("isBold", out var bp)) text.IsBold = bp.GetBoolean();
             if (root.TryGetProperty("isItalic", out var ip)) text.IsItalic = ip.GetBoolean();
+            if (root.TryGetProperty("isUnderline", out var up)) text.IsUnderline = up.GetBoolean();
+            if (root.TryGetProperty("isStrikethrough", out var sp)) text.IsStrikethrough = sp.GetBoolean();
+
+            switch (element)
+            {
+                case TextElement plainText when root.TryGetProperty("text", out var tp):
+                    plainText.Text = tp.GetString() ?? "";
+                    break;
+                case RichTextElement richText when root.TryGetProperty("html", out var htmlProperty):
+                    richText.Html = htmlProperty.GetString() ?? "";
+                    break;
+                case MarkdownElement markdown when root.TryGetProperty("markdown", out var mp):
+                    markdown.Markdown = mp.GetString() ?? "";
+                    break;
+            }
         }
         else if (element is IconElement icon)
         {

@@ -6,13 +6,15 @@ import {
   type BoardElement,
   type FrameElement,
   type IconElement,
+  type MarkdownElement,
+  type RichTextElement,
   type ShapeElement,
   type StickyNoteElement,
-  type TextElement,
 } from '../../../types/models';
 import type { ResizeHandle } from '../shapes/SelectionOverlay';
 import { v4 as uuidv4 } from 'uuid';
 import { translateDrawingElement } from './drawingGeometry';
+import { getTextContent, isTextContentElement, withTextContent } from '../textElements';
 
 // ── Constants ──
 
@@ -56,7 +58,7 @@ export const EMPTY_ELEMENTS: BoardElement[] = [];
 
 // ── Types ──
 
-export type InlineEditableElement = TextElement | StickyNoteElement | ShapeElement | FrameElement;
+export type InlineEditableElement = RichTextElement | MarkdownElement | StickyNoteElement | ShapeElement | FrameElement | Extract<BoardElement, { $type: 'text' }>;
 
 export type DockTargetState = {
   elementId: string;
@@ -108,6 +110,8 @@ export function isInlineEditableElement(
 ): element is InlineEditableElement {
   return !!element
     && (element.$type === 'text'
+      || element.$type === 'richtext'
+      || element.$type === 'markdown'
       || element.$type === 'sticky'
       || element.$type === 'shape'
       || element.$type === 'frame');
@@ -117,8 +121,11 @@ export function appendInlineEditingText(
   element: InlineEditableElement,
   appendedText: string,
 ): InlineEditableElement {
+  if (isTextContentElement(element)) {
+    return withTextContent(element, `${getTextContent(element)}${appendedText}`);
+  }
+
   switch (element.$type) {
-    case 'text':
     case 'sticky':
       return { ...element, text: `${element.text ?? ''}${appendedText}` };
     case 'shape':

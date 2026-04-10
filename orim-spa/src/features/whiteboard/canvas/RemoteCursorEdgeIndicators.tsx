@@ -97,7 +97,7 @@ export function RemoteCursorEdgeIndicators({
   }
 
   return (
-    <Box sx={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 11 }}>
+    <Box data-whiteboard-export-hidden="true" sx={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 11 }}>
       {indicators.map(({ cursor, left, top, angle }) => {
         const isFollowing = followingClientId === cursor.clientId;
         return (

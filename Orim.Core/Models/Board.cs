@@ -306,7 +306,7 @@ public class BoardStylePresetState
             ["labelHorizontalAlignment"] = SerializeStyleValue(shape.LabelHorizontalAlignment),
             ["labelVerticalAlignment"] = SerializeStyleValue(shape.LabelVerticalAlignment)
         }),
-        TextElement text => ("text", new Dictionary<string, JsonElement>(StringComparer.Ordinal)
+        TextStyleElementBase text => ("text", new Dictionary<string, JsonElement>(StringComparer.Ordinal)
         {
             ["fontSize"] = SerializeStyleValue(text.FontSize),
             ["autoFontSize"] = SerializeStyleValue(text.AutoFontSize),

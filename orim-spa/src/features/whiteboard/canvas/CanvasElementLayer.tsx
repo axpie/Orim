@@ -1,7 +1,10 @@
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Group, Layer } from 'react-konva';
+import type Konva from 'konva';
 import { ShapeRenderer } from '../shapes/ShapeRenderer';
 import { TextRenderer } from '../shapes/TextRenderer';
+import { RichTextRenderer } from '../shapes/RichTextRenderer';
+import { MarkdownRenderer } from '../shapes/MarkdownRenderer';
 import { StickyNoteRenderer } from '../shapes/StickyNoteRenderer';
 import { FrameRenderer } from '../shapes/FrameRenderer';
 import { ArrowRenderer } from '../shapes/ArrowRenderer';
@@ -14,11 +17,38 @@ import { useRemoteElementSmoothingStore } from '../store/remoteElementSmoothingS
 interface CanvasElementLayerProps {
   elements: BoardElement[];
   boardDefaults: Pick<ThemeBoardDefaultsDefinition, 'strokeColor' | 'surfaceColor'>;
+  onFormattedTextViewportMount?: (elementId: string, node: HTMLDivElement | null) => void;
+  formattedTextInteractable?: boolean;
+  onFormattedTextNativeScroll?: (elementId: string, scrollLeft: number, scrollTop: number) => void;
+  onFormattedTextHeightRequired?: (elementId: string, requiredHeight: number) => void;
 }
+
+const ZIndexedLayer = memo(function ZIndexedLayer({ domZIndex, children }: { domZIndex: number; children: ReactNode }) {
+  const layerRef = useRef<Konva.Layer>(null);
+
+  useLayoutEffect(() => {
+    const layer = layerRef.current;
+    if (!layer) {
+      return;
+    }
+
+    const z = String(domZIndex);
+    const sceneCanvas = layer.getCanvas()._canvas;
+    const hitCanvas = layer.getHitCanvas()._canvas;
+    sceneCanvas.style.zIndex = z;
+    hitCanvas.style.zIndex = z;
+  }, [domZIndex]);
+
+  return <Layer ref={layerRef}>{children}</Layer>;
+});
 
 export const CanvasElementLayer = memo(function CanvasElementLayer({
   elements,
   boardDefaults,
+  onFormattedTextViewportMount,
+  formattedTextInteractable,
+  onFormattedTextNativeScroll,
+  onFormattedTextHeightRequired,
 }: CanvasElementLayerProps) {
   const smoothEntries = useRemoteElementSmoothingStore((s) => s.entries);
   const step = useRemoteElementSmoothingStore((s) => s.step);
@@ -63,9 +93,10 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
     () => [...elements].sort((a, b) => (a.zIndex ?? 0) - (b.zIndex ?? 0)),
     [elements],
   );
+  const minZIndex = sorted.length > 0 ? (sorted[0].zIndex ?? 0) : 0;
 
   return (
-    <Layer>
+    <>
       {sorted.map((el) => {
         const smooth = smoothEntries[el.id];
         const elX = smooth ? smooth.renderedX : el.x;
@@ -73,12 +104,15 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
         const effectiveEl = smooth ? { ...el, x: elX, y: elY } : el;
         const centerX = elX + el.width / 2;
         const centerY = elY + el.height / 2;
+        // Keep element layers above the grid and below UI overlays while preserving
+        // relative Z-order among all whiteboard elements, including Html-backed text.
+        const domZIndex = ((el.zIndex ?? 0) - minZIndex) + 100;
 
+        let content: ReactNode = null;
         switch (el.$type) {
           case 'shape':
-            return (
+            content = (
               <Group
-                key={el.id}
                 x={centerX}
                 y={centerY}
                 offsetX={centerX}
@@ -89,10 +123,10 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 <ShapeRenderer element={effectiveEl as typeof el} />
               </Group>
             );
+            break;
           case 'text':
-            return (
+            content = (
               <Group
-                key={el.id}
                 x={centerX}
                 y={centerY}
                 offsetX={centerX}
@@ -103,10 +137,52 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 <TextRenderer element={effectiveEl as typeof el} />
               </Group>
             );
-          case 'sticky':
-            return (
+            break;
+          case 'richtext':
+            content = (
               <Group
-                key={el.id}
+                x={centerX}
+                y={centerY}
+                offsetX={centerX}
+                offsetY={centerY}
+                rotation={el.rotation ?? 0}
+                data-element-id={el.id}
+              >
+                <RichTextRenderer
+                  element={effectiveEl as typeof el}
+                  domZIndex={domZIndex}
+                  onViewportMount={onFormattedTextViewportMount}
+                  interactable={formattedTextInteractable}
+                  onNativeScroll={onFormattedTextNativeScroll}
+                  onHeightRequired={onFormattedTextHeightRequired}
+                />
+              </Group>
+            );
+            break;
+          case 'markdown':
+            content = (
+              <Group
+                x={centerX}
+                y={centerY}
+                offsetX={centerX}
+                offsetY={centerY}
+                rotation={el.rotation ?? 0}
+                data-element-id={el.id}
+              >
+                <MarkdownRenderer
+                  element={effectiveEl as typeof el}
+                  domZIndex={domZIndex}
+                  onViewportMount={onFormattedTextViewportMount}
+                  interactable={formattedTextInteractable}
+                  onNativeScroll={onFormattedTextNativeScroll}
+                  onHeightRequired={onFormattedTextHeightRequired}
+                />
+              </Group>
+            );
+            break;
+          case 'sticky':
+            content = (
+              <Group
                 x={centerX}
                 y={centerY}
                 offsetX={centerX}
@@ -117,10 +193,10 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 <StickyNoteRenderer element={effectiveEl as typeof el} />
               </Group>
             );
+            break;
           case 'frame':
-            return (
+            content = (
               <Group
-                key={el.id}
                 x={centerX}
                 y={centerY}
                 offsetX={centerX}
@@ -131,12 +207,13 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 <FrameRenderer element={effectiveEl as typeof el} boardDefaults={boardDefaults} />
               </Group>
             );
+            break;
           case 'arrow':
-            return <ArrowRenderer key={el.id} element={el} elements={elements} />;
+            content = <ArrowRenderer element={el} elements={elements} />;
+            break;
           case 'icon':
-            return (
+            content = (
               <Group
-                key={el.id}
                 x={centerX}
                 y={centerY}
                 offsetX={centerX}
@@ -147,12 +224,13 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 <IconRenderer element={effectiveEl as typeof el} />
               </Group>
             );
+            break;
           case 'file':
-            return <FileRenderer key={el.id} element={effectiveEl as FileElement} />;
+            content = <FileRenderer element={effectiveEl as FileElement} />;
+            break;
           case 'drawing':
-            return (
+            content = (
               <Group
-                key={el.id}
                 x={centerX}
                 y={centerY}
                 offsetX={centerX}
@@ -163,10 +241,22 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
                 <DrawingRenderer element={effectiveEl as typeof el} />
               </Group>
             );
+            break;
           default:
-            return null;
+            content = null;
+            break;
         }
+
+        if (!content) {
+          return null;
+        }
+
+        return (
+          <ZIndexedLayer key={el.id} domZIndex={domZIndex}>
+            {content}
+          </ZIndexedLayer>
+        );
       })}
-    </Layer>
+    </>
   );
 });

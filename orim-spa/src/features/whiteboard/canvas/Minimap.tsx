@@ -89,6 +89,8 @@ function drawElement(ctx: CanvasRenderingContext2D, el: BoardElement, scale: num
       break;
 
     case 'text':
+    case 'richtext':
+    case 'markdown':
       ctx.fillStyle = '#9e9e9e';
       ctx.fillRect(x, y, w, h);
       break;

@@ -1,6 +1,7 @@
 import type { BoardElement, BoardSyncStatus } from '../../types/models';
 import type { ToolType } from './store/boardStore';
 import { getShapeToolLabelKey, getShapeTypeForTool, isShapeTool } from './shapeTools';
+import { getSearchableTextContent, getTextToolLabelKey, isTextContentElement, isTextTool } from './textElements';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -18,11 +19,13 @@ export function getToolLabel(tool: ToolType, t: Translate) {
     return t(getShapeToolLabelKey(getShapeTypeForTool(tool)));
   }
 
+  if (isTextTool(tool)) {
+    return t(getTextToolLabelKey(tool));
+  }
+
   switch (tool) {
     case 'hand':
       return t('tools.hand');
-    case 'text':
-      return t('tools.text');
     case 'sticky':
       return t('tools.stickyNote');
     case 'frame':
@@ -44,6 +47,10 @@ export function describeBoardElement(element: BoardElement, t: Translate) {
         return t(getShapeToolLabelKey(element.shapeType));
       case 'text':
         return t('tools.text');
+      case 'richtext':
+        return t('tools.richText');
+      case 'markdown':
+        return t('tools.markdown');
       case 'sticky':
         return t('tools.stickyNote');
       case 'frame':
@@ -57,8 +64,8 @@ export function describeBoardElement(element: BoardElement, t: Translate) {
   })();
 
   const detail = trimLabel(
-    element.$type === 'text'
-      ? element.text
+    isTextContentElement(element)
+      ? getSearchableTextContent(element)
       : element.$type === 'sticky'
         ? element.text
         : element.label,

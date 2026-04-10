@@ -87,6 +87,7 @@ export function WhiteboardEditor() {
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [presentationMode, setPresentationMode] = useState(false);
+  const [inlineEditingActive, setInlineEditingActive] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState<{ id: number; text: string } | null>(null);
   const [propertiesPanelSelectionScope, setPropertiesPanelSelectionScope] = useState<string[] | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -407,7 +408,7 @@ export function WhiteboardEditor() {
       return;
     }
 
-    exportStageAsPng(stage, current.title);
+    await exportStageAsPng(stage, current.title, canvasBoxRef.current);
   }, []);
 
   const handleCreateSnapshot = useCallback(async (name?: string) => {
@@ -578,6 +579,7 @@ export function WhiteboardEditor() {
               onStageReady={handleStageReady}
               liveAnnouncement={liveAnnouncement}
               onOpenSearch={() => setSearchOpen(true)}
+              onInlineEditingChange={setInlineEditingActive}
             />
           </ErrorBoundary>
 
@@ -586,6 +588,7 @@ export function WhiteboardEditor() {
             if (!followed) return null;
             return (
               <Box
+                data-whiteboard-export-hidden="true"
                 sx={{
                   position: 'absolute',
                   top: 0,
@@ -625,7 +628,7 @@ export function WhiteboardEditor() {
             />
           )}
 
-          {canEdit && !presentationMode && selectedElementIds.length > 0 && activeTool === 'select' && (
+          {canEdit && !presentationMode && !inlineEditingActive && selectedElementIds.length > 0 && activeTool === 'select' && (
             <FloatingToolbar
               elements={board.elements}
               selectedIds={selectedElementIds}
@@ -642,7 +645,7 @@ export function WhiteboardEditor() {
           {searchOpen && !presentationMode && <CanvasSearch onClose={() => setSearchOpen(false)} />}
 
           {minimapVisible && !presentationMode && (
-            <Box sx={{ position: 'absolute', bottom: 80, right: 16, zIndex: 10 }}>
+            <Box data-whiteboard-export-hidden="true" sx={{ position: 'absolute', bottom: 80, right: 16, zIndex: 10 }}>
               <Minimap
                 elements={board.elements}
                 cameraX={cameraX}
@@ -657,14 +660,15 @@ export function WhiteboardEditor() {
           )}
 
           {!presentationMode && (
-            <AuxiliaryPanelHost
-              open={activePanel != null}
-              mobile={isNarrowPanelMode}
-              width={getAuxiliaryPanelWidth(activePanel)}
-              onClose={closeActivePanel}
-            >
-              {(dragHandleProps) => (
-                <>
+            <Box data-whiteboard-export-hidden="true">
+              <AuxiliaryPanelHost
+                open={activePanel != null}
+                mobile={isNarrowPanelMode}
+                width={getAuxiliaryPanelWidth(activePanel)}
+                onClose={closeActivePanel}
+              >
+                {(dragHandleProps) => (
+                  <>
                   {activePanel === 'assistant' && canEdit && (
                     <ChatPanel
                       boardId={id!}
@@ -682,9 +686,10 @@ export function WhiteboardEditor() {
                       {...dragHandleProps}
                     />
                   )}
-                </>
-              )}
-            </AuxiliaryPanelHost>
+                  </>
+                )}
+              </AuxiliaryPanelHost>
+            </Box>
           )}
         </Box>
       </Box>

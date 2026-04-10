@@ -72,6 +72,7 @@ import FitScreenIcon from '@mui/icons-material/FitScreen';
 import MapIcon from '@mui/icons-material/Map';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
+import CodeIcon from '@mui/icons-material/Code';
 import ConstructionIcon from '@mui/icons-material/Construction';
 import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import {
@@ -110,6 +111,7 @@ import { StylePresetDialog } from '../presets/StylePresetDialog';
 import { useStylePresetStore } from '../presets/stylePresetStore';
 import { getStylePresetTypeForTool } from '../presets/stylePresetUtils';
 import { isShapeTool } from '../shapeTools';
+import { isTextTool, type TextTool } from '../textElements';
 import {
   applyZOrderAction,
   getZOrderAvailability,
@@ -369,6 +371,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const [imageLibraryOpen, setImageLibraryOpen] = useState(false);
   const [arrangeAnchorEl, setArrangeAnchorEl] = useState<HTMLElement | null>(null);
   const [shapeAnchorEl, setShapeAnchorEl] = useState<HTMLElement | null>(null);
+  const [textAnchorEl, setTextAnchorEl] = useState<HTMLElement | null>(null);
   const [arrowAnchorEl, setArrowAnchorEl] = useState<HTMLElement | null>(null);
   const [iconGroupAnchorEl, setIconGroupAnchorEl] = useState<HTMLElement | null>(null);
   const [stickyPresetAnchorEl, setStickyPresetAnchorEl] = useState<HTMLElement | null>(null);
@@ -493,7 +496,9 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   ]), [t]);
   const activeArrowDescriptor = arrowRouteOptions.find((option) => option.routeStyle === pendingArrowRouteStyle) ?? arrowRouteOptions[1];
 
-  const tools: Array<{ tool: ToolType; icon: ReactNode; label: string; shortcut?: string }> = [
+  type ToolbarToolDescriptor = { tool: ToolType; icon: ReactNode; label: string; shortcut?: string };
+
+  const tools: ToolbarToolDescriptor[] = [
     { tool: 'select', icon: <NearMeIcon />, label: t('tools.select'), shortcut: 'V' },
     { tool: 'hand', icon: <PanToolIcon />, label: t('tools.hand'), shortcut: 'H' },
     { tool: 'drawing', icon: <DrawIcon />, label: t('tools.drawing'), shortcut: 'D' },
@@ -507,6 +512,8 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     { tool: 'cylinder', icon: <CylinderIcon />, label: t('tools.cylinder') },
     { tool: 'cross', icon: <CrossIcon />, label: t('tools.cross') },
     { tool: 'text', icon: <TextFieldsIcon />, label: t('tools.text'), shortcut: 'T' },
+    { tool: 'richtext', icon: <AutoFixHighIcon />, label: t('tools.richText') },
+    { tool: 'markdown', icon: <CodeIcon />, label: t('tools.markdown') },
     { tool: 'sticky', icon: <StickyNote2OutlinedIcon />, label: t('tools.stickyNote') },
     { tool: 'frame', icon: <WebAssetOutlinedIcon />, label: t('tools.frame') },
     {
@@ -521,6 +528,9 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const shapeTools = tools.filter((tool) => isShapeTool(tool.tool));
   const activeShapeTool = isShapeTool(activeTool) ? activeTool : 'rectangle';
   const activeShapeDescriptor = toolById.get(activeShapeTool) ?? shapeTools[0];
+  const textTools = tools.filter((tool): tool is ToolbarToolDescriptor & { tool: TextTool } => isTextTool(tool.tool));
+  const activeTextTool = isTextTool(activeTool) ? activeTool : 'text';
+  const activeTextDescriptor = toolById.get(activeTextTool) ?? textTools[0];
   const activeToolLabel = activeTool === 'arrow'
     ? activeArrowDescriptor.label
     : toolById.get(activeTool)?.label ?? t('tools.select');
@@ -603,6 +613,12 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const handleShapeSelected = (tool: ToolType) => {
     setActiveTool(tool);
     setShapeAnchorEl(null);
+    collapseCompactToolbarAfterAction();
+  };
+
+  const handleTextSelected = (tool: TextTool) => {
+    setActiveTool(tool);
+    setTextAnchorEl(null);
     collapseCompactToolbarAfterAction();
   };
 
@@ -994,6 +1010,36 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     </Tooltip>
   );
 
+  const textMenuButton = (
+    <Tooltip title={t('tools.textTools', 'Texte')} placement={isCompactLayout ? 'top' : 'right'}>
+      <IconButton
+        size={isCompactLayout ? 'medium' : 'small'}
+        color={isTextTool(activeTool) ? 'primary' : 'default'}
+        onClick={(event) => setTextAnchorEl(event.currentTarget)}
+        sx={{
+          bgcolor: isTextTool(activeTool) ? 'action.selected' : undefined,
+          flexShrink: 0,
+          position: 'relative',
+        }}
+        aria-label={t('tools.textTools', 'Texte')}
+        aria-haspopup="menu"
+        aria-expanded={Boolean(textAnchorEl)}
+      >
+        {activeTextDescriptor.icon}
+        <KeyboardArrowDownIcon
+          sx={{
+            position: 'absolute',
+            right: -4,
+            bottom: -3,
+            fontSize: 14,
+            bgcolor: 'background.paper',
+            borderRadius: '999px',
+          }}
+        />
+      </IconButton>
+    </Tooltip>
+  );
+
   const arrowMenuButton = (
     <Tooltip title={t('tools.arrowStyles', 'Pfeile')} placement={isCompactLayout ? 'top' : 'right'}>
       <IconButton
@@ -1035,7 +1081,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
       {arrowMenuButton}
       {renderToolButton(toolById.get('frame')!)}
       {renderGroupDivider('toolbar-structure-divider')}
-      {renderToolButton(toolById.get('text')!)}
+      {textMenuButton}
       {renderToolButton(toolById.get('sticky')!)}
       {renderGroupDivider('toolbar-content-divider')}
       {renderToolButton(toolById.get('icon')!)}
@@ -1306,6 +1352,21 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
       >
         {shapeTools.map((tool) => (
           <MenuItem key={tool.tool} selected={activeTool === tool.tool} onClick={() => handleShapeSelected(tool.tool)}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+              {tool.icon}
+              <Typography variant="body2">{tool.label}</Typography>
+            </Box>
+          </MenuItem>
+        ))}
+      </Menu>
+
+      <Menu
+        anchorEl={textAnchorEl}
+        open={Boolean(textAnchorEl)}
+        onClose={() => setTextAnchorEl(null)}
+      >
+        {textTools.map((tool) => (
+          <MenuItem key={tool.tool} selected={activeTextTool === tool.tool} onClick={() => handleTextSelected(tool.tool)}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               {tool.icon}
               <Typography variant="body2">{tool.label}</Typography>
