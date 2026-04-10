@@ -17,6 +17,7 @@ import type {
 import { contrastingTextColor } from '../../../utils/colorUtils';
 import { getDefaultFrameColors } from '../shapes/frameStyle';
 import { DEFAULT_STICKY_NOTE_FILL_COLOR, getStickyNotePresetById } from '../stickyNotePresets';
+import { isShapeTool } from '../shapeTools';
 
 export const STYLE_PRESET_TYPES: StylePresetType[] = ['shape', 'text', 'sticky', 'frame', 'icon', 'arrow', 'drawing'];
 
@@ -212,12 +213,11 @@ export function getThemeDefaultStyleForPresetType<T extends StylePresetType>(
 }
 
 export function getStylePresetTypeForTool(tool: string | null | undefined): StylePresetType | null {
+  if (isShapeTool(tool)) {
+    return 'shape';
+  }
+
   switch (tool) {
-    case 'rectangle':
-    case 'ellipse':
-    case 'triangle':
-    case 'rhombus':
-      return 'shape';
     case 'text':
       return 'text';
     case 'sticky':

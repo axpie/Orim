@@ -40,6 +40,7 @@ import type {
 } from '../../../types/models';
 import type { ToolType } from '../store/boardStore';
 import { useStylePresetStore } from '../presets/stylePresetStore';
+import { isShapeTool } from '../shapeTools';
 
 type Point = { x: number; y: number };
 type PanStartState = { x: number; y: number; cx: number; cy: number } | null;
@@ -392,7 +393,7 @@ export function useCanvasStartInteractions({
       return;
     }
 
-    if (editable && (activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle' || activeTool === 'rhombus' || activeTool === 'frame')) {
+    if (editable && (isShapeTool(activeTool) || activeTool === 'frame')) {
       setDrawStart(worldPos);
       setDraftRect({ x: worldPos.x, y: worldPos.y, w: 0, h: 0 });
       return;
@@ -738,6 +739,9 @@ export function useCanvasStartInteractions({
     stageRef,
     getRotationHandleFromTarget,
     rotationSnapshotRef,
+    resumeDrawingElementId,
+    setResumeDrawingElementId,
+    updateElement,
   ]);
 
   const handleContextMenu = useCallback((e: Konva.KonvaEventObject<PointerEvent>) => {

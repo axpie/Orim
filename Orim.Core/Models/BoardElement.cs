@@ -72,7 +72,12 @@ public enum ShapeType
     Rectangle,
     Ellipse,
     Triangle,
-    Rhombus
+    Rhombus,
+    Terminator,
+    Parallelogram,
+    Hexagon,
+    Cylinder,
+    Cross
 }
 
 public class TextElement : BoardElement

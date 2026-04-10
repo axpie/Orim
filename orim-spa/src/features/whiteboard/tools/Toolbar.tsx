@@ -26,6 +26,34 @@ import PanToolIcon from '@mui/icons-material/PanTool';
 import RectangleOutlinedIcon from '@mui/icons-material/RectangleOutlined';
 import CircleOutlinedIcon from '@mui/icons-material/CircleOutlined';
 import ChangeHistoryIcon from '@mui/icons-material/ChangeHistory';
+
+// Custom inline SVG icons for flowchart shapes
+const TerminatorIcon = () => (
+  <SvgIcon viewBox="0 0 24 24">
+    <rect x="2" y="6" width="20" height="12" rx="6" ry="6" fill="none" stroke="currentColor" strokeWidth="2" />
+  </SvgIcon>
+);
+const ParallelogramIcon = () => (
+  <SvgIcon viewBox="0 0 24 24">
+    <polygon points="6,6 22,6 18,18 2,18" fill="none" stroke="currentColor" strokeWidth="2" />
+  </SvgIcon>
+);
+const HexagonIcon = () => (
+  <SvgIcon viewBox="0 0 24 24">
+    <polygon points="6,3 18,3 23,12 18,21 6,21 1,12" fill="none" stroke="currentColor" strokeWidth="2" />
+  </SvgIcon>
+);
+const CylinderIcon = () => (
+  <SvgIcon viewBox="0 0 24 24">
+    <rect x="3" y="6" width="18" height="14" fill="none" stroke="currentColor" strokeWidth="2" />
+    <ellipse cx="12" cy="6" rx="9" ry="3" fill="none" stroke="currentColor" strokeWidth="2" />
+  </SvgIcon>
+);
+const CrossIcon = () => (
+  <SvgIcon viewBox="0 0 24 24">
+    <polygon points="8,2 16,2 16,8 22,8 22,16 16,16 16,22 8,22 8,16 2,16 2,8 8,8" fill="none" stroke="currentColor" strokeWidth="2" />
+  </SvgIcon>
+);
 import TextFieldsIcon from '@mui/icons-material/TextFields';
 import StickyNote2OutlinedIcon from '@mui/icons-material/StickyNote2Outlined';
 import WebAssetOutlinedIcon from '@mui/icons-material/WebAssetOutlined';
@@ -81,6 +109,7 @@ import { ZOrderMenuItems } from '../ZOrderMenuItems';
 import { StylePresetDialog } from '../presets/StylePresetDialog';
 import { useStylePresetStore } from '../presets/stylePresetStore';
 import { getStylePresetTypeForTool } from '../presets/stylePresetUtils';
+import { isShapeTool } from '../shapeTools';
 import {
   applyZOrderAction,
   getZOrderAvailability,
@@ -472,6 +501,11 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     { tool: 'ellipse', icon: <CircleOutlinedIcon />, label: t('tools.ellipse') },
     { tool: 'triangle', icon: <ChangeHistoryIcon />, label: t('tools.triangle') },
     { tool: 'rhombus', icon: <RectangleOutlinedIcon sx={{ transform: 'rotate(45deg)' }} />, label: t('tools.rhombus') },
+    { tool: 'terminator', icon: <TerminatorIcon />, label: t('tools.terminator') },
+    { tool: 'parallelogram', icon: <ParallelogramIcon />, label: t('tools.parallelogram') },
+    { tool: 'hexagon', icon: <HexagonIcon />, label: t('tools.hexagon') },
+    { tool: 'cylinder', icon: <CylinderIcon />, label: t('tools.cylinder') },
+    { tool: 'cross', icon: <CrossIcon />, label: t('tools.cross') },
     { tool: 'text', icon: <TextFieldsIcon />, label: t('tools.text'), shortcut: 'T' },
     { tool: 'sticky', icon: <StickyNote2OutlinedIcon />, label: t('tools.stickyNote') },
     { tool: 'frame', icon: <WebAssetOutlinedIcon />, label: t('tools.frame') },
@@ -484,10 +518,8 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     { tool: 'image', icon: <PermMediaIcon />, label: t('tools.files') },
   ];
   const toolById = new Map(tools.map((tool) => [tool.tool, tool]));
-  const shapeTools = tools.filter((tool) => tool.tool === 'rectangle' || tool.tool === 'ellipse' || tool.tool === 'triangle' || tool.tool === 'rhombus');
-  const activeShapeTool = activeTool === 'ellipse' || activeTool === 'triangle' || activeTool === 'rhombus' || activeTool === 'rectangle'
-    ? activeTool
-    : 'rectangle';
+  const shapeTools = tools.filter((tool) => isShapeTool(tool.tool));
+  const activeShapeTool = isShapeTool(activeTool) ? activeTool : 'rectangle';
   const activeShapeDescriptor = toolById.get(activeShapeTool) ?? shapeTools[0];
   const activeToolLabel = activeTool === 'arrow'
     ? activeArrowDescriptor.label
@@ -936,12 +968,10 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     <Tooltip title={t('tools.shapes', 'Formen')} placement={isCompactLayout ? 'top' : 'right'}>
       <IconButton
         size={isCompactLayout ? 'medium' : 'small'}
-        color={activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle' || activeTool === 'rhombus' ? 'primary' : 'default'}
+        color={isShapeTool(activeTool) ? 'primary' : 'default'}
         onClick={(event) => setShapeAnchorEl(event.currentTarget)}
         sx={{
-          bgcolor: activeTool === 'rectangle' || activeTool === 'ellipse' || activeTool === 'triangle' || activeTool === 'rhombus'
-            ? 'action.selected'
-            : undefined,
+          bgcolor: isShapeTool(activeTool) ? 'action.selected' : undefined,
           flexShrink: 0,
           position: 'relative',
         }}

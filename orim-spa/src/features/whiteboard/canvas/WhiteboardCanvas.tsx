@@ -13,6 +13,7 @@ import { SelectionOverlay, type ResizeHandle } from '../shapes/SelectionOverlay'
 import { AlignmentGuides } from '../shapes/AlignmentGuides';
 import { InlineTextEditor } from '../shapes/InlineTextEditor';
 import { IconRenderer } from '../shapes/IconRenderer';
+import { getShapeTypeForTool, isShapeTool } from '../shapeTools';
 import { CanvasAccessibilityLayer } from './CanvasAccessibilityLayer';
 import { CanvasGridLayer } from './CanvasGridLayer';
 import { CanvasElementLayer } from './CanvasElementLayer';
@@ -52,7 +53,6 @@ import {
   BorderLineStyle,
   DockPoint,
   HorizontalLabelAlignment,
-  ShapeType,
   VerticalLabelAlignment,
   type BoardElement,
   type ShapeElement,
@@ -686,13 +686,9 @@ export function WhiteboardCanvas({
       }
 
       // Drawing shape
-      if (drawStart && draftRect) {
-        const lockAspectRatio = e.evt.shiftKey
-          && (activeTool === 'rectangle'
-            || activeTool === 'ellipse'
-            || activeTool === 'triangle'
-            || activeTool === 'rhombus'
-            || activeTool === 'frame');
+        if (drawStart && draftRect) {
+          const lockAspectRatio = e.evt.shiftKey
+            && (isShapeTool(activeTool) || activeTool === 'frame');
 
         setDraftRect(getDraftRectFromDrag(drawStart, worldPos, lockAspectRatio));
         return;
@@ -1126,11 +1122,7 @@ export function WhiteboardCanvas({
           onBoardChanged('add', createElementAddedOperation(newFrame));
         } else {
           const shapeStyle = useStylePresetStore.getState().resolvePlacementStyle('shape');
-          const shapeType =
-            activeTool === 'ellipse' ? ShapeType.Ellipse :
-            activeTool === 'triangle' ? ShapeType.Triangle :
-            activeTool === 'rhombus' ? ShapeType.Rhombus :
-            ShapeType.Rectangle;
+          const shapeType = getShapeTypeForTool(activeTool);
 
           const newShape: ShapeElement = {
             $type: 'shape',
@@ -1314,7 +1306,7 @@ export function WhiteboardCanvas({
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, arrowRouteHandleDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, setEditingElement, boardDefaults, defaultFrameColors, emitUpdatedOperations, selectedIds, onBoardChanged, pendingIconName, rotationState, pendingArrowRouteStyle, finalizeRotation, finalizeResize],
+    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, arrowRouteHandleDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, setEditingElement, boardDefaults, defaultFrameColors, emitUpdatedOperations, selectedIds, onBoardChanged, pendingIconName, rotationState, pendingArrowRouteStyle, finalizeRotation, finalizeResize, setResumeDrawingElementId],
   );
 
   const handleTouchStart = useCallback(
@@ -1626,6 +1618,86 @@ export function WhiteboardCanvas({
                   draftRect.x + draftRect.w, draftRect.y + draftRect.h / 2,
                   draftRect.x + draftRect.w / 2, draftRect.y + draftRect.h,
                   draftRect.x, draftRect.y + draftRect.h / 2,
+                ]}
+                closed
+                stroke={boardDefaults.selectionColor}
+                strokeWidth={2 / zoom}
+                dash={[6 / zoom, 4 / zoom]}
+                fill={`rgba(${boardDefaults.selectionTintRgb},0.1)`}
+                listening={false}
+              />
+            ) : activeTool === 'terminator' ? (
+              <Rect
+                x={draftRect.x}
+                y={draftRect.y}
+                width={draftRect.w}
+                height={draftRect.h}
+                cornerRadius={draftRect.h / 2}
+                stroke={boardDefaults.selectionColor}
+                strokeWidth={2 / zoom}
+                dash={[6 / zoom, 4 / zoom]}
+                fill={`rgba(${boardDefaults.selectionTintRgb},0.1)`}
+                listening={false}
+              />
+            ) : activeTool === 'parallelogram' ? (
+              <Line
+                points={[
+                  draftRect.x + draftRect.w * 0.2, draftRect.y,
+                  draftRect.x + draftRect.w,       draftRect.y,
+                  draftRect.x + draftRect.w * 0.8, draftRect.y + draftRect.h,
+                  draftRect.x,                     draftRect.y + draftRect.h,
+                ]}
+                closed
+                stroke={boardDefaults.selectionColor}
+                strokeWidth={2 / zoom}
+                dash={[6 / zoom, 4 / zoom]}
+                fill={`rgba(${boardDefaults.selectionTintRgb},0.1)`}
+                listening={false}
+              />
+            ) : activeTool === 'hexagon' ? (
+              <Line
+                points={[
+                  draftRect.x + draftRect.w * 0.25, draftRect.y,
+                  draftRect.x + draftRect.w * 0.75, draftRect.y,
+                  draftRect.x + draftRect.w,         draftRect.y + draftRect.h / 2,
+                  draftRect.x + draftRect.w * 0.75, draftRect.y + draftRect.h,
+                  draftRect.x + draftRect.w * 0.25, draftRect.y + draftRect.h,
+                  draftRect.x,                       draftRect.y + draftRect.h / 2,
+                ]}
+                closed
+                stroke={boardDefaults.selectionColor}
+                strokeWidth={2 / zoom}
+                dash={[6 / zoom, 4 / zoom]}
+                fill={`rgba(${boardDefaults.selectionTintRgb},0.1)`}
+                listening={false}
+              />
+            ) : activeTool === 'cylinder' ? (
+              <Rect
+                x={draftRect.x}
+                y={draftRect.y}
+                width={draftRect.w}
+                height={draftRect.h}
+                stroke={boardDefaults.selectionColor}
+                strokeWidth={2 / zoom}
+                dash={[6 / zoom, 4 / zoom]}
+                fill={`rgba(${boardDefaults.selectionTintRgb},0.1)`}
+                listening={false}
+              />
+            ) : activeTool === 'cross' ? (
+              <Line
+                points={[
+                  draftRect.x + draftRect.w / 3,     draftRect.y,
+                  draftRect.x + 2 * draftRect.w / 3, draftRect.y,
+                  draftRect.x + 2 * draftRect.w / 3, draftRect.y + draftRect.h / 3,
+                  draftRect.x + draftRect.w,          draftRect.y + draftRect.h / 3,
+                  draftRect.x + draftRect.w,          draftRect.y + 2 * draftRect.h / 3,
+                  draftRect.x + 2 * draftRect.w / 3, draftRect.y + 2 * draftRect.h / 3,
+                  draftRect.x + 2 * draftRect.w / 3, draftRect.y + draftRect.h,
+                  draftRect.x + draftRect.w / 3,     draftRect.y + draftRect.h,
+                  draftRect.x + draftRect.w / 3,     draftRect.y + 2 * draftRect.h / 3,
+                  draftRect.x,                       draftRect.y + 2 * draftRect.h / 3,
+                  draftRect.x,                       draftRect.y + draftRect.h / 3,
+                  draftRect.x + draftRect.w / 3,     draftRect.y + draftRect.h / 3,
                 ]}
                 closed
                 stroke={boardDefaults.selectionColor}

@@ -97,6 +97,7 @@ describe('stylePresetStore', () => {
   it('maps shape tools to the shared shape preset type', () => {
     expect(getStylePresetTypeForTool('rectangle')).toBe('shape');
     expect(getStylePresetTypeForTool('triangle')).toBe('shape');
+    expect(getStylePresetTypeForTool('cylinder')).toBe('shape');
     expect(getStylePresetTypeForTool('select')).toBeNull();
   });
 

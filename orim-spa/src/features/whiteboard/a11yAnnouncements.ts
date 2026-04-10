@@ -1,5 +1,6 @@
-import { ShapeType, type BoardElement, type BoardSyncStatus } from '../../types/models';
+import type { BoardElement, BoardSyncStatus } from '../../types/models';
 import type { ToolType } from './store/boardStore';
+import { getShapeToolLabelKey, getShapeTypeForTool, isShapeTool } from './shapeTools';
 
 type Translate = (key: string, options?: Record<string, unknown>) => string;
 
@@ -12,32 +13,14 @@ function trimLabel(value: string | null | undefined) {
   return normalized.length > 48 ? `${normalized.slice(0, 45)}...` : normalized;
 }
 
-function getShapeToolKey(shapeType: ShapeType) {
-  switch (shapeType) {
-    case ShapeType.Ellipse:
-      return 'tools.ellipse';
-    case ShapeType.Triangle:
-      return 'tools.triangle';
-    case ShapeType.Rhombus:
-      return 'tools.rhombus';
-    case ShapeType.Rectangle:
-    default:
-      return 'tools.rectangle';
-  }
-}
-
 export function getToolLabel(tool: ToolType, t: Translate) {
+  if (isShapeTool(tool)) {
+    return t(getShapeToolLabelKey(getShapeTypeForTool(tool)));
+  }
+
   switch (tool) {
     case 'hand':
       return t('tools.hand');
-    case 'rectangle':
-      return t('tools.rectangle');
-    case 'ellipse':
-      return t('tools.ellipse');
-    case 'triangle':
-      return t('tools.triangle');
-    case 'rhombus':
-      return t('tools.rhombus');
     case 'text':
       return t('tools.text');
     case 'sticky':
@@ -58,7 +41,7 @@ export function describeBoardElement(element: BoardElement, t: Translate) {
   const typeLabel = (() => {
     switch (element.$type) {
       case 'shape':
-        return t(getShapeToolKey(element.shapeType));
+        return t(getShapeToolLabelKey(element.shapeType));
       case 'text':
         return t('tools.text');
       case 'sticky':

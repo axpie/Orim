@@ -26,6 +26,11 @@ export enum ShapeType {
   Ellipse = 'Ellipse',
   Triangle = 'Triangle',
   Rhombus = 'Rhombus',
+  Terminator = 'Terminator',
+  Parallelogram = 'Parallelogram',
+  Hexagon = 'Hexagon',
+  Cylinder = 'Cylinder',
+  Cross = 'Cross',
 }
 
 export enum BorderLineStyle {

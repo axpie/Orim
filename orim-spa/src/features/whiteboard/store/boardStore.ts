@@ -22,8 +22,9 @@ import {
   normalizeStylePresetState,
   resolveStylePresetPlacementStyle,
 } from '../presets/stylePresetUtils';
+import type { ShapeTool } from '../shapeTools';
 
-export type ToolType = 'select' | 'hand' | 'rectangle' | 'ellipse' | 'triangle' | 'rhombus' | 'text' | 'sticky' | 'frame' | 'icon' | 'arrow' | 'image' | 'drawing';
+export type ToolType = 'select' | 'hand' | ShapeTool | 'text' | 'sticky' | 'frame' | 'icon' | 'arrow' | 'image' | 'drawing';
 
 interface ViewportInsets {
   top: number;
