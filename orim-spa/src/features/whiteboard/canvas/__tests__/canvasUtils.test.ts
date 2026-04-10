@@ -11,8 +11,14 @@ import {
   type ArrowElement,
   type BoardElement,
   type ShapeElement,
+  type TextElement,
 } from '../../../../types/models';
-import { getDraftRectFromDrag, translateArrowElement, translateElementsBySelection } from '../canvasUtils';
+import {
+  appendInlineEditingText,
+  getDraftRectFromDrag,
+  translateArrowElement,
+  translateElementsBySelection,
+} from '../canvasUtils';
 
 function createShape(id: string, overrides: Partial<ShapeElement> = {}): ShapeElement {
   return {
@@ -68,6 +74,32 @@ function createArrow(overrides: Partial<ArrowElement> = {}): ArrowElement {
     orthogonalMiddleCoordinate: null,
     arcMidX: 60,
     arcMidY: -36,
+    ...overrides,
+  };
+}
+
+function createText(id: string, overrides: Partial<TextElement> = {}): TextElement {
+  return {
+    $type: 'text',
+    id,
+    x: 0,
+    y: 0,
+    width: 220,
+    height: 56,
+    zIndex: 0,
+    rotation: 0,
+    label: '',
+    labelHorizontalAlignment: HorizontalLabelAlignment.Left,
+    labelVerticalAlignment: VerticalLabelAlignment.Top,
+    text: '',
+    fontSize: 18,
+    autoFontSize: false,
+    fontFamily: null,
+    color: '#111111',
+    isBold: false,
+    isItalic: false,
+    isUnderline: false,
+    isStrikethrough: false,
     ...overrides,
   };
 }
@@ -153,6 +185,24 @@ describe('canvasUtils movement helpers', () => {
       y: 20,
       w: 60,
       h: 60,
+    });
+  });
+
+  it('appends typed characters to existing text elements for implicit editing', () => {
+    const updated = appendInlineEditingText(createText('text-1', { text: 'Hello' }), 'a');
+
+    expect(updated).toMatchObject({
+      $type: 'text',
+      text: 'Helloa',
+    });
+  });
+
+  it('appends typed characters to existing shape labels for implicit editing', () => {
+    const updated = appendInlineEditingText(createShape('shape-1', { label: 'Title' }), '!');
+
+    expect(updated).toMatchObject({
+      $type: 'shape',
+      label: 'Title!',
     });
   });
 });

@@ -19,10 +19,28 @@ export interface UseCanvasShortcutsParams {
   groupSelectedElements: () => void;
   ungroupSelectedElements: () => void;
   beginInlineEditingSelection: () => void;
+  beginInlineEditingSelectionFromKeyboard: (initialText: string) => boolean;
   deleteSelectedElements: () => void;
   moveSelectedElementsBy: (dx: number, dy: number) => void;
   toggleLockSelectedElements: () => void;
   onOpenSearch?: () => void;
+}
+
+function isInlineEditingTextEntryKey(event: KeyboardEvent): boolean {
+  if (event.key.length !== 1) {
+    return false;
+  }
+
+  if (event.metaKey) {
+    return false;
+  }
+
+  const usesAltGraph = event.getModifierState?.('AltGraph') ?? false;
+  if (event.ctrlKey && !usesAltGraph) {
+    return false;
+  }
+
+  return true;
 }
 
 export function useCanvasShortcuts({
@@ -41,6 +59,7 @@ export function useCanvasShortcuts({
   groupSelectedElements,
   ungroupSelectedElements,
   beginInlineEditingSelection,
+  beginInlineEditingSelectionFromKeyboard,
   deleteSelectedElements,
   moveSelectedElementsBy,
   toggleLockSelectedElements,
@@ -65,31 +84,31 @@ export function useCanvasShortcuts({
       const hasModifier = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
 
-        if (hasModifier) {
-          const zOrderAction = getZOrderActionFromKeyboardEvent(e);
-          if (zOrderAction) {
-            if (!editable) {
-              return;
-            }
-
-            e.preventDefault();
-            reorderSelectedElements(zOrderAction);
+      if (hasModifier) {
+        const zOrderAction = getZOrderActionFromKeyboardEvent(e);
+        if (zOrderAction) {
+          if (!editable) {
             return;
           }
 
-          switch (key) {
-            case 'z':
-              e.preventDefault();
-              if (e.shiftKey) {
-                handleRedo();
-              } else {
-                handleUndo();
-              }
-              return;
-            case 'y':
-              e.preventDefault();
+          e.preventDefault();
+          reorderSelectedElements(zOrderAction);
+          return;
+        }
+
+        switch (key) {
+          case 'z':
+            e.preventDefault();
+            if (e.shiftKey) {
               handleRedo();
-              return;
+            } else {
+              handleUndo();
+            }
+            return;
+          case 'y':
+            e.preventDefault();
+            handleRedo();
+            return;
           case 'a':
             if (!editable) {
               return;
@@ -150,6 +169,11 @@ export function useCanvasShortcuts({
           setSelectedElementIds([]);
           setActiveTool('select');
         }
+        return;
+      }
+
+      if (isInlineEditingTextEntryKey(e) && beginInlineEditingSelectionFromKeyboard(e.key)) {
+        e.preventDefault();
         return;
       }
 
@@ -241,6 +265,7 @@ export function useCanvasShortcuts({
     };
   }, [
     beginInlineEditingSelection,
+    beginInlineEditingSelectionFromKeyboard,
     copySelectedElementsToClipboard,
     deleteSelectedElements,
     duplicateSelectedElements,

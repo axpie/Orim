@@ -1,4 +1,12 @@
-import { DockPoint, type ArrowElement, type BoardElement } from '../../../types/models';
+import {
+  DockPoint,
+  type ArrowElement,
+  type BoardElement,
+  type FrameElement,
+  type ShapeElement,
+  type StickyNoteElement,
+  type TextElement,
+} from '../../../types/models';
 import type { ResizeHandle } from '../shapes/SelectionOverlay';
 import { v4 as uuidv4 } from 'uuid';
 import { translateDrawingElement } from './drawingGeometry';
@@ -44,6 +52,8 @@ export const EMPTY_ELEMENTS: BoardElement[] = [];
 
 // ── Types ──
 
+export type InlineEditableElement = TextElement | StickyNoteElement | ShapeElement | FrameElement;
+
 export type DockTargetState = {
   elementId: string;
   dock: DockPoint;
@@ -87,6 +97,30 @@ export function isInteractiveTextTarget(target: EventTarget | null): boolean {
   }
 
   return false;
+}
+
+export function isInlineEditableElement(
+  element: BoardElement | undefined | null,
+): element is InlineEditableElement {
+  return !!element
+    && (element.$type === 'text'
+      || element.$type === 'sticky'
+      || element.$type === 'shape'
+      || element.$type === 'frame');
+}
+
+export function appendInlineEditingText(
+  element: InlineEditableElement,
+  appendedText: string,
+): InlineEditableElement {
+  switch (element.$type) {
+    case 'text':
+    case 'sticky':
+      return { ...element, text: `${element.text ?? ''}${appendedText}` };
+    case 'shape':
+    case 'frame':
+      return { ...element, label: `${element.label ?? ''}${appendedText}` };
+  }
 }
 
 export function areComparedValuesEqual(left: unknown, right: unknown): boolean {

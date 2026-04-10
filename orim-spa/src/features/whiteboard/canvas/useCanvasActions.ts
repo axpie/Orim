@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { useBoardStore, type ApplyLocalCommandResult, type ToolType } from '../store/boardStore';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
@@ -30,19 +30,15 @@ import {
   readStoredClipboardElements,
   serializeClipboardElements,
 } from '../clipboard/clipboardService';
-import type {
-  BoardElement,
-  FrameElement,
-  ShapeElement,
-  StickyNoteElement,
-  TextElement,
-} from '../../../types/models';
+import type { BoardElement } from '../../../types/models';
 import type { WhiteboardContextMenuAction } from './WhiteboardContextMenu';
 import {
   KEYBOARD_DUPLICATE_OFFSET,
   MOVE_TRACKED_ELEMENT_CHANGED_KEYS,
   cloneElementsForInsertion,
+  isInlineEditableElement,
   translateElementsBySelection,
+  type InlineEditableElement,
 } from './canvasUtils';
 import { areAllSelectedElementsLocked, canDeleteSelection } from '../selectionLocking';
 
@@ -54,18 +50,10 @@ interface UseCanvasActionsOptions {
   onBoardLiveChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
   setElements: (elements: BoardElement[]) => void;
   setSelectedElementIds: (ids: string[]) => void;
-  setEditingElement: Dispatch<SetStateAction<BoardElement | null>>;
+  setEditingElement: (element: InlineEditableElement | null) => void;
   setActiveTool: (tool: ToolType) => void;
   applyLocalCommand: (execution: BoardCommandExecution) => ApplyLocalCommandResult;
   pushCommand: (command: LocalBoardCommand) => void;
-}
-
-function isInlineEditableElement(element: BoardElement | undefined | null): element is TextElement | StickyNoteElement | ShapeElement | FrameElement {
-  return !!element
-    && (element.$type === 'text'
-      || element.$type === 'sticky'
-      || element.$type === 'shape'
-      || element.$type === 'frame');
 }
 
 export function useCanvasActions({

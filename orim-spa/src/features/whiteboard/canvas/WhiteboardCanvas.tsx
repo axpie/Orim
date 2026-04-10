@@ -22,6 +22,7 @@ import { useCanvasActions } from './useCanvasActions';
 import { useCanvasPasteAndDrop } from './useCanvasPasteAndDrop';
 import { useCanvasStartInteractions, type RotationState } from './useCanvasStartInteractions';
 import {
+  appendInlineEditingText,
   areComparedValuesEqual,
   FALLBACK_BOARD_DEFAULTS,
   EMPTY_ELEMENTS,
@@ -31,11 +32,13 @@ import {
   DOCK_SNAP_RADIUS,
   getMoveAffectedElementIds,
   isPointInsideElementBounds,
+  isInlineEditableElement,
   getResizeCursor,
   getDraftRectFromDrag,
   haveTrackedElementChanges,
   MOVE_TRACKED_ELEMENT_CHANGED_KEYS,
   translateElementsBySelection,
+  type InlineEditableElement,
   type DockTargetState,
   type TouchGestureState,
 } from './canvasUtils';
@@ -233,7 +236,8 @@ export function WhiteboardCanvas({
   const [marquee, setMarquee] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
 
   // Inline text editing
-  const [editingElement, setEditingElement] = useState<BoardElement | null>(null);
+  const [editingElement, setEditingElementState] = useState<InlineEditableElement | null>(null);
+  const [selectAllOnInlineEditFocus, setSelectAllOnInlineEditFocus] = useState(true);
 
   // Panning
   const [isPanning, setIsPanning] = useState(false);
@@ -257,6 +261,10 @@ export function WhiteboardCanvas({
     },
     [clearFollowOnInteraction, handleWheelBase],
   );
+  const setEditingElement = useCallback((element: InlineEditableElement | null) => {
+    setSelectAllOnInlineEditFocus(true);
+    setEditingElementState(element);
+  }, []);
   const {
     canGroup,
     canUngroup,
@@ -297,6 +305,20 @@ export function WhiteboardCanvas({
     applyLocalCommand,
     pushCommand,
   });
+  const beginInlineEditingSelectionFromKeyboard = useCallback((initialText: string) => {
+    if (!editable || selectedIds.length !== 1) {
+      return false;
+    }
+
+    const selected = elements.find((element) => element.id === selectedIds[0]);
+    if (!isInlineEditableElement(selected)) {
+      return false;
+    }
+
+    setSelectAllOnInlineEditFocus(false);
+    setEditingElementState(appendInlineEditingText(selected, initialText));
+    return true;
+  }, [editable, elements, selectedIds]);
 
   const findTopmostFrameAtPoint = useCallback((point: { x: number; y: number }): FrameElement | null => (
     elements
@@ -437,6 +459,7 @@ export function WhiteboardCanvas({
     groupSelectedElements,
     ungroupSelectedElements,
     beginInlineEditingSelection,
+    beginInlineEditingSelectionFromKeyboard,
     deleteSelectedElements,
     moveSelectedElementsBy,
     toggleLockSelectedElements,
@@ -1207,7 +1230,7 @@ export function WhiteboardCanvas({
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, arrowRouteHandleDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, boardDefaults, defaultFrameColors, emitUpdatedOperations, selectedIds, onBoardChanged, rotationState, pendingArrowRouteStyle, finalizeRotation, finalizeResize],
+    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, arrowRouteHandleDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, setEditingElement, boardDefaults, defaultFrameColors, emitUpdatedOperations, selectedIds, onBoardChanged, rotationState, pendingArrowRouteStyle, finalizeRotation, finalizeResize],
   );
 
   const handleTouchStart = useCallback(
@@ -1339,12 +1362,12 @@ export function WhiteboardCanvas({
       setEditingElement(null);
       onBoardChanged('edit', createElementUpdatedOperation(nextElement));
     },
-    [elements, updateElement, pushCommand, onBoardChanged],
+    [elements, updateElement, pushCommand, onBoardChanged, setEditingElement],
   );
 
   const handleTextCancel = useCallback(() => {
     setEditingElement(null);
-  }, []);
+  }, [setEditingElement]);
 
   const resizeCursor = getResizeCursor(resizeState?.handle ?? hoveredResizeHandle);
   const draftArrowPreview = draftArrowStart && draftArrowEnd
@@ -1672,6 +1695,7 @@ export function WhiteboardCanvas({
           cameraX={cameraX}
           cameraY={cameraY}
           boardDefaults={boardDefaults}
+          selectAllOnFocus={selectAllOnInlineEditFocus}
           onCommit={handleTextCommit}
           onCancel={handleTextCancel}
         />

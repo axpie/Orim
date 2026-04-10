@@ -23,6 +23,7 @@ interface InlineTextEditorProps {
   cameraX: number;
   cameraY: number;
   boardDefaults: ThemeBoardDefaultsDefinition;
+  selectAllOnFocus?: boolean;
   onCommit: (id: string, value: string) => void;
   onCancel: () => void;
 }
@@ -33,6 +34,7 @@ export function InlineTextEditor({
   cameraX,
   cameraY,
   boardDefaults,
+  selectAllOnFocus = true,
   onCommit,
   onCancel,
 }: InlineTextEditorProps) {
@@ -101,7 +103,12 @@ export function InlineTextEditor({
       const el = ref.current;
       if (el) {
         el.focus();
-        el.select();
+        if (selectAllOnFocus) {
+          el.select();
+        } else {
+          const caretPosition = el.value.length;
+          el.setSelectionRange(caretPosition, caretPosition);
+        }
         if (element.$type === 'frame') {
           el.style.height = 'auto';
           el.style.height = `${Math.min(
@@ -115,7 +122,7 @@ export function InlineTextEditor({
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [element, initialValue, zoom]);
+  }, [element, initialValue, selectAllOnFocus, zoom]);
 
   // Position in screen space
   const left = element.x * zoom + cameraX;

@@ -14,7 +14,9 @@ import {
 import {
   DEFAULT_TEXT_HEIGHT,
   DEFAULT_TEXT_WIDTH,
+  isInlineEditableElement,
   isPointInsideElementBounds,
+  type InlineEditableElement,
   type ArrowEndpointHandleKind,
   type ArrowRouteHandleKind,
   type DockTargetState,
@@ -33,7 +35,6 @@ import type {
   DrawingElement,
   FrameElement,
   IconElement,
-  ShapeElement,
   StickyNoteElement,
   TextElement,
   ThemeBoardDefaultsDefinition,
@@ -116,7 +117,7 @@ interface UseCanvasStartInteractionsOptions {
   setMarquee: Dispatch<SetStateAction<MarqueeState>>;
   setSelectedElementIds: (ids: string[]) => void;
   setActiveTool: (tool: ToolType) => void;
-  setEditingElement: Dispatch<SetStateAction<BoardElement | null>>;
+  setEditingElement: (element: InlineEditableElement | null) => void;
   setHoveredResizeHandle: Dispatch<SetStateAction<ResizeHandle | null>>;
   setResizeState: Dispatch<SetStateAction<ResizeState>>;
   setArrowEndpointDrag: Dispatch<SetStateAction<ArrowEndpointDragState>>;
@@ -127,14 +128,6 @@ interface UseCanvasStartInteractionsOptions {
   rotationSnapshotRef: MutableRefObject<BoardElement[] | null>;
   setRotationState: Dispatch<SetStateAction<RotationState>>;
   setHoveredRotationHandle: Dispatch<SetStateAction<boolean>>;
-}
-
-function isInlineEditableElement(element: BoardElement | undefined | null): element is TextElement | StickyNoteElement | ShapeElement | FrameElement {
-  return !!element
-    && (element.$type === 'text'
-      || element.$type === 'sticky'
-      || element.$type === 'shape'
-      || element.$type === 'frame');
 }
 
 export function useCanvasStartInteractions({
