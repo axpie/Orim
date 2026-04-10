@@ -98,6 +98,10 @@ public class OrimDbContext : DbContext
                 .HasConversion(CreateStickyNotePresetsConverter(), CreateStickyNotePresetsComparer())
                 .HasColumnType("text");
 
+            entity.Property(b => b.StylePresetState)
+                .HasConversion(CreateBoardStylePresetStateConverter(), CreateBoardStylePresetStateComparer())
+                .HasColumnType("text");
+
             entity.Property(b => b.Visibility)
                 .HasConversion<string>()
                 .IsRequired();
@@ -167,6 +171,19 @@ public class OrimDbContext : DbContext
             (a, b) => JsonSerializer.Serialize(a, OrimJsonOptions.Default) == JsonSerializer.Serialize(b, OrimJsonOptions.Default),
             v => JsonSerializer.Serialize(v, OrimJsonOptions.Default).GetHashCode(),
             v => JsonSerializer.Deserialize<List<StickyNotePreset>>(JsonSerializer.Serialize(v, OrimJsonOptions.Default), OrimJsonOptions.Default) ?? new List<StickyNotePreset>());
+
+    private static ValueConverter<BoardStylePresetState, string> CreateBoardStylePresetStateConverter() =>
+        new(
+            v => JsonSerializer.Serialize(BoardStylePresetState.Normalize(v), OrimJsonOptions.Default),
+            v => string.IsNullOrEmpty(v)
+                ? BoardStylePresetState.CreateDefault()
+                : BoardStylePresetState.Normalize(JsonSerializer.Deserialize<BoardStylePresetState>(v, OrimJsonOptions.Default)));
+
+    private static ValueComparer<BoardStylePresetState> CreateBoardStylePresetStateComparer() =>
+        new(
+            (a, b) => JsonSerializer.Serialize(BoardStylePresetState.Normalize(a), OrimJsonOptions.Default) == JsonSerializer.Serialize(BoardStylePresetState.Normalize(b), OrimJsonOptions.Default),
+            v => JsonSerializer.Serialize(BoardStylePresetState.Normalize(v), OrimJsonOptions.Default).GetHashCode(),
+            v => BoardStylePresetState.Normalize(JsonSerializer.Deserialize<BoardStylePresetState>(JsonSerializer.Serialize(v, OrimJsonOptions.Default), OrimJsonOptions.Default)));
 
     private static void ConfigureBoardMember(ModelBuilder modelBuilder)
     {

@@ -39,6 +39,7 @@ import type {
   ThemeBoardDefaultsDefinition,
 } from '../../../types/models';
 import type { ToolType } from '../store/boardStore';
+import { useStylePresetStore } from '../presets/stylePresetStore';
 
 type Point = { x: number; y: number };
 type PanStartState = { x: number; y: number; cx: number; cy: number } | null;
@@ -353,6 +354,7 @@ export function useCanvasStartInteractions({
     }
 
     if (editable && activeTool === 'drawing') {
+      const drawingStyle = useStylePresetStore.getState().resolvePlacementStyle('drawing');
       const newDrawing: DrawingElement = {
         $type: 'drawing',
         id: uuidv4(),
@@ -366,8 +368,8 @@ export function useCanvasStartInteractions({
         labelHorizontalAlignment: HorizontalLabelAlignment.Center,
         labelVerticalAlignment: VerticalLabelAlignment.Middle,
         points: [worldPos.x, worldPos.y],
-        strokeColor: boardDefaults.strokeColor,
-        strokeWidth: 2,
+        strokeColor: drawingStyle?.strokeColor ?? boardDefaults.strokeColor,
+        strokeWidth: drawingStyle?.strokeWidth ?? 2,
       };
       addElement(newDrawing);
       setDrawingElementId(newDrawing.id);
@@ -387,6 +389,7 @@ export function useCanvasStartInteractions({
     }
 
     if (editable && activeTool === 'text') {
+      const textStyle = useStylePresetStore.getState().resolvePlacementStyle('text');
       const newText: TextElement = {
         $type: 'text',
         id: uuidv4(),
@@ -408,6 +411,7 @@ export function useCanvasStartInteractions({
         isItalic: false,
         isUnderline: false,
         isStrikethrough: false,
+        ...(textStyle ?? {}),
       };
       addElement(newText);
       pushCommand(createAddElementsCommand([newText]));
@@ -421,6 +425,7 @@ export function useCanvasStartInteractions({
     if (editable && activeTool === 'sticky') {
       const stickyPreset = getStickyNotePresetById(board, pendingStickyNotePresetId);
       const stickyFillColor = stickyPreset?.fillColor ?? DEFAULT_STICKY_NOTE_FILL_COLOR;
+      const stickyStyle = useStylePresetStore.getState().resolvePlacementStyle('sticky');
       const newSticky: StickyNoteElement = {
         $type: 'sticky',
         id: uuidv4(),
@@ -443,6 +448,7 @@ export function useCanvasStartInteractions({
         isItalic: false,
         isUnderline: false,
         isStrikethrough: false,
+        ...(stickyStyle ?? {}),
       };
       addElement(newSticky);
       pushCommand(createAddElementsCommand([newSticky]));

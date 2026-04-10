@@ -11,7 +11,15 @@ import {
   createElementsDeletedOperation,
   createBoardMetadataUpdatedOperation,
 } from '../boardOperations';
-import type { Board, BoardElement, BoardOperation } from '../../../../types/models';
+import {
+  BorderLineStyle,
+  HorizontalLabelAlignment,
+  VerticalLabelAlignment,
+  type Board,
+  type BoardElement,
+  type BoardOperation,
+} from '../../../../types/models';
+import { createDefaultStylePresetState } from '../../presets/stylePresetUtils';
 
 function createTestBoard(elements: BoardElement[] = []): Board {
   return {
@@ -29,6 +37,7 @@ function createTestBoard(elements: BoardElement[] = []): Board {
     customColors: [],
     recentColors: [],
     stickyNotePresets: [],
+    stylePresetState: createDefaultStylePresetState(),
     surfaceColor: null,
     themeKey: null,
     enabledIconGroups: ['hardware', 'business'],
@@ -126,6 +135,31 @@ describe('applyBoardOperation', () => {
       customColors: ['#aaa'],
       recentColors: ['#bbb'],
       stickyNotePresets: [{ id: 'p1', label: 'Note', fillColor: '#ccc' }],
+      stylePresetState: {
+        ...createDefaultStylePresetState(),
+        presets: [{
+          id: 'shape-preset-1',
+          type: 'shape',
+          name: 'Warnung',
+          style: {
+            fillColor: '#f59e0b',
+            strokeColor: '#7c2d12',
+            strokeWidth: 4,
+            borderLineStyle: BorderLineStyle.Solid,
+            labelFontSize: null,
+            labelColor: null,
+            fontFamily: null,
+            isBold: false,
+            isItalic: false,
+            isUnderline: false,
+            isStrikethrough: false,
+            labelHorizontalAlignment: HorizontalLabelAlignment.Center,
+            labelVerticalAlignment: VerticalLabelAlignment.Middle,
+          },
+          createdAt: '2026-04-10T00:00:00.000Z',
+          updatedAt: '2026-04-10T00:00:00.000Z',
+        }],
+      },
     });
     expect(result.title).toBe('New Title');
     expect(result.labelOutlineEnabled).toBe(false);
@@ -136,6 +170,7 @@ describe('applyBoardOperation', () => {
     expect(result.customColors).toEqual(['#aaa']);
     expect(result.recentColors).toEqual(['#bbb']);
     expect(result.stickyNotePresets).toEqual([{ id: 'p1', label: 'Note', fillColor: '#ccc' }]);
+    expect(result.stylePresetState?.presets[0]?.name).toBe('Warnung');
   });
 
   it('should preserve existing metadata fields when operation omits them', () => {
@@ -356,19 +391,49 @@ describe('operation creation helpers', () => {
   it('createBoardMetadataUpdatedOperation clones arrays', () => {
     const colors = ['#aaa'];
     const presets = [{ id: 'p1', label: 'Note', fillColor: '#ccc' }];
+    const stylePresetState = {
+      ...createDefaultStylePresetState(),
+      presets: [{
+        id: 'text-preset-1',
+        type: 'text' as const,
+        name: 'Titel',
+        style: {
+          fontSize: 24,
+          autoFontSize: false,
+          fontFamily: null,
+          color: '#111827',
+          isBold: true,
+          isItalic: false,
+          isUnderline: false,
+          isStrikethrough: false,
+          labelHorizontalAlignment: 'Left' as const,
+          labelVerticalAlignment: 'Top' as const,
+        },
+        createdAt: '2026-04-10T00:00:00.000Z',
+        updatedAt: '2026-04-10T00:00:00.000Z',
+      }],
+    };
     const op = createBoardMetadataUpdatedOperation({
       title: 'T',
       labelOutlineEnabled: true,
       arrowOutlineEnabled: true,
       surfaceColor: null,
       themeKey: null,
+      enabledIconGroups: ['hardware'],
       customColors: colors,
       recentColors: [],
       stickyNotePresets: presets,
+      stylePresetState,
     });
     expect(op.type).toBe('board.metadata.updated');
-    const meta = op as { customColors: string[]; stickyNotePresets: { id: string }[] };
+    const meta = op as {
+      customColors: string[];
+      stickyNotePresets: { id: string }[];
+      stylePresetState: { presets: { id: string }[] };
+    };
     expect(meta.customColors).not.toBe(colors);
     expect(meta.stickyNotePresets).not.toBe(presets);
+    expect(meta.stylePresetState).not.toBe(stylePresetState);
+    expect(meta.stylePresetState.presets).not.toBe(stylePresetState.presets);
   });
 });

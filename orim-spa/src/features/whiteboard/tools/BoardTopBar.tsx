@@ -216,6 +216,7 @@ export function BoardTopBar({
           customColors: board.customColors,
           recentColors: board.recentColors,
           stickyNotePresets: board.stickyNotePresets,
+          stylePresetState: board.stylePresetState,
         }));
       }
     }

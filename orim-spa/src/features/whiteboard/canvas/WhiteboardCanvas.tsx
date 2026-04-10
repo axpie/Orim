@@ -8,6 +8,7 @@ import { getThemes } from '../../../api/themes';
 import { useThemeStore } from '../../../stores/themeStore';
 import { useBoardStore } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
+import { useStylePresetStore } from '../presets/stylePresetStore';
 import { SelectionOverlay, type ResizeHandle } from '../shapes/SelectionOverlay';
 import { AlignmentGuides } from '../shapes/AlignmentGuides';
 import { InlineTextEditor } from '../shapes/InlineTextEditor';
@@ -145,6 +146,7 @@ export function WhiteboardCanvas({
   const pendingArrowRouteStyle = useBoardStore((s) => s.pendingArrowRouteStyle);
   const pendingStickyNotePresetId = useBoardStore((s) => s.pendingStickyNotePresetId);
   const setFollowingClientId = useBoardStore((s) => s.setFollowingClientId);
+  const iconPlacementStyle = useStylePresetStore((state) => state.resolvePlacementStyle('icon'));
   const userThemeKey = useThemeStore((s) => s.themeKey);
   const isCoarsePointer = useMediaQuery('(pointer: coarse)');
   const dockSnapRadius = isCoarsePointer ? DOCK_SNAP_RADIUS * 1.6 : DOCK_SNAP_RADIUS;
@@ -206,12 +208,12 @@ export function WhiteboardCanvas({
     return createIconPlacementElement({
       id: '__draft-icon__',
       iconName: pendingIconName,
-      color: boardDefaults.iconColor,
+      color: iconPlacementStyle?.color ?? boardDefaults.iconColor,
       zIndex: elements.length,
       origin: drawStart,
       draftRect,
     });
-  }, [activeTool, boardDefaults.iconColor, drawStart, draftRect, elements.length, pendingIconName]);
+  }, [activeTool, boardDefaults.iconColor, drawStart, draftRect, elements.length, iconPlacementStyle?.color, pendingIconName]);
 
   // Arrow drawing state
   const [draftArrowStart, setDraftArrowStart] = useState<{ x: number; y: number; elementId?: string; dock?: DockPoint } | null>(null);
@@ -1033,7 +1035,7 @@ export function WhiteboardCanvas({
         const newIcon: IconElement = createIconPlacementElement({
           id: uuidv4(),
           iconName: pendingIconName,
-          color: boardDefaults.iconColor,
+          color: useStylePresetStore.getState().resolvePlacementStyle('icon')?.color ?? boardDefaults.iconColor,
           zIndex: elements.length,
           origin: drawStart,
           draftRect,
@@ -1051,6 +1053,7 @@ export function WhiteboardCanvas({
       // Commit drawn shape
       if (drawStart && draftRect && draftRect.w >= 12 && draftRect.h >= 12) {
         if (activeTool === 'frame') {
+          const frameStyle = useStylePresetStore.getState().resolvePlacementStyle('frame');
           const newFrame: FrameElement = {
             $type: 'frame',
             id: uuidv4(),
@@ -1073,6 +1076,7 @@ export function WhiteboardCanvas({
             fillColor: defaultFrameColors.fillColor,
             strokeColor: defaultFrameColors.strokeColor,
             strokeWidth: 2,
+            ...(frameStyle ?? {}),
           };
           addElement(newFrame);
           pushCommand(createAddElementsCommand([newFrame]));
@@ -1081,6 +1085,7 @@ export function WhiteboardCanvas({
           setEditingElement(newFrame);
           onBoardChanged('add', createElementAddedOperation(newFrame));
         } else {
+          const shapeStyle = useStylePresetStore.getState().resolvePlacementStyle('shape');
           const shapeType =
             activeTool === 'ellipse' ? ShapeType.Ellipse :
             activeTool === 'triangle' ? ShapeType.Triangle :
@@ -1111,6 +1116,7 @@ export function WhiteboardCanvas({
             strokeColor: boardDefaults.strokeColor,
             strokeWidth: 2,
             borderLineStyle: BorderLineStyle.Solid,
+            ...(shapeStyle ?? {}),
           };
           addElement(newShape);
           pushCommand(createAddElementsCommand([newShape]));
@@ -1126,6 +1132,7 @@ export function WhiteboardCanvas({
       if (draftArrowStart && draftArrowEnd) {
         const dist = Math.hypot(draftArrowEnd.x - draftArrowStart.x, draftArrowEnd.y - draftArrowStart.y);
         if (dist > 10) {
+          const arrowStyle = useStylePresetStore.getState().resolvePlacementStyle('arrow');
           const targetEl = draftArrowHover
             ? elements.find((el: BoardElement) => el.id === draftArrowHover.elementId && el.$type !== 'arrow' && el.$type !== 'frame')
             : null;
@@ -1160,6 +1167,7 @@ export function WhiteboardCanvas({
             sourceHeadStyle: ArrowHeadStyle.None,
             targetHeadStyle: ArrowHeadStyle.FilledTriangle,
             routeStyle: pendingArrowRouteStyle,
+            ...(arrowStyle ?? {}),
           };
           addElement(newArrow);
           pushCommand(createAddElementsCommand([newArrow]));

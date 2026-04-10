@@ -79,6 +79,7 @@ internal static class BoardEndpoints
                 CustomColors = request.CustomColors?.ToList() ?? [],
                 RecentColors = request.RecentColors?.ToList() ?? [],
                 StickyNotePresets = request.StickyNotePresets?.ToList() ?? [],
+                StylePresetState = BoardStylePresetState.Clone(request.StylePresetState ?? board.StylePresetState),
                 Elements = request.Elements?.ToList() ?? []
             };
 

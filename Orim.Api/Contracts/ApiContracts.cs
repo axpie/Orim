@@ -28,6 +28,7 @@ public sealed record SaveBoardStateRequest(
     IReadOnlyList<string>? CustomColors,
     IReadOnlyList<string>? RecentColors,
     IReadOnlyList<StickyNotePreset>? StickyNotePresets,
+    BoardStylePresetState? StylePresetState,
     IReadOnlyList<BoardElement>? Elements,
     string? SourceClientId = null,
     BoardChangeKind ChangeKind = BoardChangeKind.Content);
@@ -55,7 +56,8 @@ public sealed record BoardMetadataUpdatedOperationDto(
     IReadOnlyList<string>? EnabledIconGroups = null,
     IReadOnlyList<string>? CustomColors = null,
     IReadOnlyList<string>? RecentColors = null,
-    IReadOnlyList<StickyNotePreset>? StickyNotePresets = null) : BoardOperationDto;
+    IReadOnlyList<StickyNotePreset>? StickyNotePresets = null,
+    BoardStylePresetState? StylePresetState = null) : BoardOperationDto;
 public sealed record BoardOperationNotification(Guid BoardId, string? SourceClientId, DateTime ChangedAtUtc, long SequenceNumber, BoardOperationDto Operation);
 public sealed record BoardOperationHistoryEntryDto(long SequenceNumber, DateTime ChangedAtUtc, string? ClientId, Guid? UserId, BoardOperationDto Operation);
 public sealed record BoardOperationHistoryResponse(long LatestSequenceNumber, bool HasMore, IReadOnlyList<BoardOperationHistoryEntryDto> Operations);

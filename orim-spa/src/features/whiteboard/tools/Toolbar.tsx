@@ -45,6 +45,7 @@ import MapIcon from '@mui/icons-material/Map';
 import KeyboardArrowUpIcon from '@mui/icons-material/KeyboardArrowUp';
 import KeyboardArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import ConstructionIcon from '@mui/icons-material/Construction';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import {
   filterIconDefinitions,
   ICON_GROUP_DEFINITIONS,
@@ -58,6 +59,7 @@ import type { BoardOperationPayload } from '../realtime/boardOperations';
 import {
   asOperationPayload,
   createElementAddedOperation,
+  createBoardMetadataUpdatedOperation,
   createElementsDeletedOperation,
   createElementUpdatedOperation,
 } from '../realtime/boardOperations';
@@ -76,6 +78,9 @@ import type { BoardFileInfo } from '../../../types/models';
 import { getEffectiveStickyNotePresets } from '../stickyNotePresets';
 import { canDeleteSelection } from '../selectionLocking';
 import { ZOrderMenuItems } from '../ZOrderMenuItems';
+import { StylePresetDialog } from '../presets/StylePresetDialog';
+import { useStylePresetStore } from '../presets/stylePresetStore';
+import { getStylePresetTypeForTool } from '../presets/stylePresetUtils';
 import {
   applyZOrderAction,
   getZOrderAvailability,
@@ -312,6 +317,10 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const setPendingStickyNotePresetId = useBoardStore((s) => s.setPendingStickyNotePresetId);
   const cameraX = useBoardStore((s) => s.cameraX);
   const cameraY = useBoardStore((s) => s.cameraY);
+  const stylePresets = useStylePresetStore((state) => state.presets);
+  const stylePresetPlacementPreferences = useStylePresetStore((state) => state.placementPreferences);
+  const setPlacementMode = useStylePresetStore((state) => state.setPlacementMode);
+  const setDefaultPreset = useStylePresetStore((state) => state.setDefaultPreset);
   const { activeTheme } = useWhiteboardColorPalette();
   const rawBoardDefaults = activeTheme?.boardDefaults ?? FALLBACK_BOARD_DEFAULTS;
   const boardSurfaceColor = board?.surfaceColor ?? null;
@@ -334,9 +343,11 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const [arrowAnchorEl, setArrowAnchorEl] = useState<HTMLElement | null>(null);
   const [iconGroupAnchorEl, setIconGroupAnchorEl] = useState<HTMLElement | null>(null);
   const [stickyPresetAnchorEl, setStickyPresetAnchorEl] = useState<HTMLElement | null>(null);
+  const [stylePresetAnchorEl, setStylePresetAnchorEl] = useState<HTMLElement | null>(null);
   const [iconSearch, setIconSearch] = useState('');
   const [requestedIconGroupKey, setRequestedIconGroupKey] = useState<'all' | IconGroupKey>('all');
   const [compactCollapsed, setCompactCollapsed] = useState(isCompactLayout);
+  const [stylePresetDialogOpen, setStylePresetDialogOpen] = useState(false);
 
   // Refs for ResizeObserver-based two-column detection
   const paperRef = useRef<HTMLDivElement | null>(null);
@@ -481,11 +492,33 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
   const activeToolLabel = activeTool === 'arrow'
     ? activeArrowDescriptor.label
     : toolById.get(activeTool)?.label ?? t('tools.select');
+  const activePresetType = getStylePresetTypeForTool(activeTool);
+  const activePlacementPreference = activePresetType ? stylePresetPlacementPreferences[activePresetType] : null;
+  const activeDefaultPreset = activePresetType && activePlacementPreference?.presetId
+    ? stylePresets.find((preset) => preset.id === activePlacementPreference.presetId && preset.type === activePresetType) ?? null
+    : null;
+  const activePresetChoices = activePresetType
+    ? stylePresets.filter((preset) => preset.type === activePresetType)
+    : [];
+  const activeStylePresetSummary = !activePresetType || !activePlacementPreference
+    ? null
+    : activePlacementPreference.mode === 'preset' && activeDefaultPreset
+      ? activeDefaultPreset.name
+      : t('stylePresets.themeDefault', 'Theme-Standard');
 
   const collapseCompactToolbarAfterAction = () => {
     if (isCompactLayout) {
       setCompactCollapsed(true);
     }
+  };
+
+  const emitPresetMetadataChange = () => {
+    const currentBoard = useBoardStore.getState().board;
+    if (!currentBoard) {
+      return;
+    }
+
+    onBoardChanged?.('Metadata', createBoardMetadataUpdatedOperation(currentBoard));
   };
 
   const openIconPicker = (groupKey: 'all' | IconGroupKey) => {
@@ -545,6 +578,28 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
     setPendingArrowRouteStyle(routeStyle);
     setActiveTool('arrow');
     setArrowAnchorEl(null);
+    collapseCompactToolbarAfterAction();
+  };
+
+  const handlePlacementModeSelected = (mode: 'theme-default') => {
+    if (!activePresetType) {
+      return;
+    }
+
+    setPlacementMode(activePresetType, mode);
+    emitPresetMetadataChange();
+    setStylePresetAnchorEl(null);
+    collapseCompactToolbarAfterAction();
+  };
+
+  const handleDefaultPresetSelected = (presetId: string) => {
+    if (!activePresetType) {
+      return;
+    }
+
+    setDefaultPreset(activePresetType, presetId);
+    emitPresetMetadataChange();
+    setStylePresetAnchorEl(null);
     collapseCompactToolbarAfterAction();
   };
 
@@ -757,6 +812,7 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
       fillColor: defaultFrameColors.fillColor,
       strokeColor: defaultFrameColors.strokeColor,
       strokeWidth: 2,
+      ...(useStylePresetStore.getState().resolvePlacementStyle('frame') ?? {}),
     };
 
     addElement(nextFrame);
@@ -959,6 +1015,40 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
 
   const extraButtons = (
     <>
+      {activePresetType && (
+        <>
+          {renderGroupDivider('toolbar-style-presets-divider')}
+          <Tooltip
+            title={t('stylePresets.manageTooltip', {
+              current: activeStylePresetSummary ?? t('stylePresets.themeDefault', 'Theme-Standard'),
+              defaultValue: 'Formatvorlagen (aktuell: {{current}})',
+            })}
+            placement={isCompactLayout ? 'top' : 'right'}
+          >
+            <IconButton
+              size={isCompactLayout ? 'medium' : 'small'}
+              onClick={(event) => setStylePresetAnchorEl(event.currentTarget)}
+              color={activePlacementPreference?.mode === 'theme-default' ? 'default' : 'primary'}
+              sx={{ flexShrink: 0, position: 'relative' }}
+              aria-label={t('stylePresets.manageButton', 'Formatvorlagen')}
+              aria-haspopup="menu"
+              aria-expanded={Boolean(stylePresetAnchorEl)}
+            >
+              <AutoFixHighIcon />
+              <KeyboardArrowDownIcon
+                sx={{
+                  position: 'absolute',
+                  right: -4,
+                  bottom: -3,
+                  fontSize: 14,
+                  bgcolor: 'background.paper',
+                  borderRadius: '999px',
+                }}
+              />
+            </IconButton>
+          </Tooltip>
+        </>
+      )}
       {renderGroupDivider('toolbar-actions-divider')}
 
       <Tooltip title={t('tools.undo')} placement={isCompactLayout ? 'top' : 'right'}>
@@ -1336,6 +1426,42 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
         ))}
       </Menu>
 
+      <Menu
+        anchorEl={stylePresetAnchorEl}
+        open={Boolean(stylePresetAnchorEl)}
+        onClose={() => setStylePresetAnchorEl(null)}
+      >
+        <MenuItem
+          selected={activePlacementPreference?.mode === 'theme-default'}
+          onClick={() => handlePlacementModeSelected('theme-default')}
+        >
+          <ListItemText primary={t('stylePresets.themeDefault', 'Theme-Standard')} />
+        </MenuItem>
+        <Divider />
+        {activePresetChoices.length === 0 ? (
+          <MenuItem disabled>
+            <ListItemText primary={t('stylePresets.noPresetsForType', 'Für diesen Elementtyp wurden noch keine Presets gespeichert.')} />
+          </MenuItem>
+        ) : activePresetChoices.map((preset) => (
+          <MenuItem
+            key={preset.id}
+            selected={activePlacementPreference?.mode === 'preset' && activePlacementPreference.presetId === preset.id}
+            onClick={() => handleDefaultPresetSelected(preset.id)}
+          >
+            <ListItemText primary={preset.name} />
+          </MenuItem>
+        ))}
+        <Divider />
+        <MenuItem
+          onClick={() => {
+            setStylePresetAnchorEl(null);
+            setStylePresetDialogOpen(true);
+          }}
+        >
+          <ListItemText primary={t('stylePresets.manageButton', 'Formatvorlagen ...')} />
+        </MenuItem>
+      </Menu>
+
       <FileLibraryDialog
         open={imageLibraryOpen}
         boardId={board?.id ?? ''}
@@ -1343,6 +1469,12 @@ export const Toolbar = React.memo(function Toolbar({ onBoardChanged, canvasConta
         onInsertFile={handleInsertFile}
         shareToken={shareToken}
         sharePassword={sharePassword}
+      />
+      <StylePresetDialog
+        open={stylePresetDialogOpen}
+        onClose={() => setStylePresetDialogOpen(false)}
+        elementType={activePresetType}
+        onBoardChanged={onBoardChanged}
       />
     </Paper>
   );

@@ -1,4 +1,5 @@
-import type { Board, BoardElement, BoardOperation, StickyNotePreset } from '../../../types/models';
+import type { Board, BoardElement, BoardOperation, BoardStylePresetState, StickyNotePreset } from '../../../types/models';
+import { cloneStylePresetState } from '../presets/stylePresetUtils';
 
 export type BoardOperationPayload = BoardOperation | BoardOperation[];
 
@@ -18,6 +19,10 @@ function areArraysEqual(left: readonly unknown[], right: readonly unknown[]): bo
 
 function cloneStickyNotePresets(presets: readonly StickyNotePreset[]): StickyNotePreset[] {
   return presets.map((preset) => ({ ...preset }));
+}
+
+function areStylePresetStatesEqual(left: BoardStylePresetState | null | undefined, right: BoardStylePresetState | null | undefined): boolean {
+  return JSON.stringify(cloneStylePresetState(left)) === JSON.stringify(cloneStylePresetState(right));
 }
 
 function areStickyNotePresetsEqual(left: readonly StickyNotePreset[], right: readonly StickyNotePreset[]): boolean {
@@ -97,7 +102,7 @@ export function createElementsDeletedOperation(elementIds: string[]): BoardOpera
 }
 
 export function createBoardMetadataUpdatedOperation(
-  board: Pick<Board, 'title' | 'labelOutlineEnabled' | 'arrowOutlineEnabled' | 'surfaceColor' | 'themeKey' | 'enabledIconGroups' | 'customColors' | 'recentColors' | 'stickyNotePresets'>,
+  board: Pick<Board, 'title' | 'labelOutlineEnabled' | 'arrowOutlineEnabled' | 'surfaceColor' | 'themeKey' | 'enabledIconGroups' | 'customColors' | 'recentColors' | 'stickyNotePresets' | 'stylePresetState'>,
 ): BoardOperation {
   return {
     type: 'board.metadata.updated',
@@ -110,6 +115,7 @@ export function createBoardMetadataUpdatedOperation(
     customColors: [...board.customColors],
     recentColors: [...board.recentColors],
     stickyNotePresets: cloneStickyNotePresets(board.stickyNotePresets),
+    stylePresetState: cloneStylePresetState(board.stylePresetState),
   };
 }
 
@@ -205,6 +211,9 @@ export function applyBoardOperation(board: Board, operation: BoardOperation): Bo
         stickyNotePresets: operation.stickyNotePresets
           ? cloneStickyNotePresets(operation.stickyNotePresets)
           : board.stickyNotePresets,
+        stylePresetState: operation.stylePresetState
+          ? cloneStylePresetState(operation.stylePresetState)
+          : board.stylePresetState,
       };
     default:
       return board;
@@ -235,7 +244,8 @@ function doesBoardMatchOperation(board: Board, operation: BoardOperation): boole
         && (operation.enabledIconGroups === undefined || areArraysEqual(board.enabledIconGroups ?? [], operation.enabledIconGroups))
         && (operation.customColors === undefined || areArraysEqual(board.customColors, operation.customColors))
         && (operation.recentColors === undefined || areArraysEqual(board.recentColors, operation.recentColors))
-        && (operation.stickyNotePresets === undefined || areStickyNotePresetsEqual(board.stickyNotePresets, operation.stickyNotePresets));
+        && (operation.stickyNotePresets === undefined || areStickyNotePresetsEqual(board.stickyNotePresets, operation.stickyNotePresets))
+        && (operation.stylePresetState === undefined || areStylePresetStatesEqual(board.stylePresetState, operation.stylePresetState));
     default:
       return true;
   }

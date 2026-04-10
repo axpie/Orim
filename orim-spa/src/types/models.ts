@@ -190,6 +190,107 @@ export interface DrawingElement extends BoardElementBase {
 
 export type BoardElement = ShapeElement | TextElement | StickyNoteElement | FrameElement | ArrowElement | IconElement | FileElement | DrawingElement;
 
+export type StylePresetType = 'shape' | 'text' | 'sticky' | 'frame' | 'icon' | 'arrow' | 'drawing';
+export type StylePresetMode = 'theme-default' | 'last-used' | 'preset';
+
+export type ShapeStylePreset = Pick<
+  ShapeElement,
+  | 'fillColor'
+  | 'strokeColor'
+  | 'strokeWidth'
+  | 'borderLineStyle'
+  | 'labelFontSize'
+  | 'labelColor'
+  | 'fontFamily'
+  | 'isBold'
+  | 'isItalic'
+  | 'isUnderline'
+  | 'isStrikethrough'
+  | 'labelHorizontalAlignment'
+  | 'labelVerticalAlignment'
+>;
+
+export type TextStylePreset = Pick<
+  TextElement,
+  | 'fontSize'
+  | 'autoFontSize'
+  | 'fontFamily'
+  | 'color'
+  | 'isBold'
+  | 'isItalic'
+  | 'isUnderline'
+  | 'isStrikethrough'
+  | 'labelHorizontalAlignment'
+  | 'labelVerticalAlignment'
+>;
+
+export type StickyStylePreset = Pick<
+  StickyNoteElement,
+  | 'fontSize'
+  | 'autoFontSize'
+  | 'fontFamily'
+  | 'fillColor'
+  | 'color'
+  | 'isBold'
+  | 'isItalic'
+  | 'isUnderline'
+  | 'isStrikethrough'
+  | 'labelHorizontalAlignment'
+  | 'labelVerticalAlignment'
+>;
+
+export type FrameStylePreset = Pick<
+  FrameElement,
+  | 'fillColor'
+  | 'strokeColor'
+  | 'strokeWidth'
+  | 'labelFontSize'
+  | 'labelColor'
+  | 'fontFamily'
+  | 'isBold'
+  | 'isItalic'
+  | 'isUnderline'
+  | 'isStrikethrough'
+  | 'labelHorizontalAlignment'
+  | 'labelVerticalAlignment'
+>;
+
+export type IconStylePreset = Pick<IconElement, 'color'>;
+export type ArrowStylePreset = Pick<ArrowElement, 'strokeColor' | 'strokeWidth' | 'labelFontSize' | 'labelColor' | 'fontFamily'>;
+export type DrawingStylePreset = Pick<DrawingElement, 'strokeColor' | 'strokeWidth'>;
+
+export interface StylePresetStyleByType {
+  shape: ShapeStylePreset;
+  text: TextStylePreset;
+  sticky: StickyStylePreset;
+  frame: FrameStylePreset;
+  icon: IconStylePreset;
+  arrow: ArrowStylePreset;
+  drawing: DrawingStylePreset;
+}
+
+export type StylePresetStyle = StylePresetStyleByType[StylePresetType];
+
+export interface NamedStylePreset<T extends StylePresetType = StylePresetType> {
+  id: string;
+  type: T;
+  name: string;
+  style: StylePresetStyleByType[T];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StylePresetPlacementPreference {
+  mode: StylePresetMode;
+  presetId: string | null;
+}
+
+export interface BoardStylePresetState {
+  presets: NamedStylePreset[];
+  placementPreferences: Record<StylePresetType, StylePresetPlacementPreference>;
+  lastUsedStyles: Partial<Record<StylePresetType, StylePresetStyle>>;
+}
+
 // --- Board ---
 
 export interface BoardMember {
@@ -274,6 +375,7 @@ export interface Board {
   customColors: string[];
   recentColors: string[];
   stickyNotePresets: StickyNotePreset[];
+  stylePresetState?: BoardStylePresetState;
   ownerId: string;
   folderId?: string | null;
   tags?: string[];
@@ -538,6 +640,7 @@ export interface BoardMetadataUpdatedOperation {
   customColors?: string[];
   recentColors?: string[];
   stickyNotePresets?: StickyNotePreset[];
+  stylePresetState?: BoardStylePresetState;
 }
 
 export type BoardOperation =

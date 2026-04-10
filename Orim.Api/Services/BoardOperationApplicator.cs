@@ -57,10 +57,12 @@ internal static class BoardOperationApplicator
         if (existingIndex >= 0)
         {
             board.Elements[existingIndex] = operation.Element;
+            BoardStylePresetState.RememberStyle(board, operation.Element);
             return;
         }
 
         board.Elements.Add(operation.Element);
+        BoardStylePresetState.RememberStyle(board, operation.Element);
     }
 
     private static void ApplyElementUpdated(Board board, BoardElementUpdatedOperationDto operation)
@@ -69,6 +71,7 @@ internal static class BoardOperationApplicator
         if (existingIndex >= 0)
         {
             board.Elements[existingIndex] = operation.Element;
+            BoardStylePresetState.RememberStyle(board, operation.Element);
         }
     }
 
@@ -109,6 +112,11 @@ internal static class BoardOperationApplicator
         if (operation.StickyNotePresets is not null)
         {
             board.StickyNotePresets = operation.StickyNotePresets.ToList();
+        }
+
+        if (operation.StylePresetState is not null)
+        {
+            board.StylePresetState = BoardStylePresetState.Clone(operation.StylePresetState);
         }
     }
 }

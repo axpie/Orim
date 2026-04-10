@@ -3,14 +3,24 @@ import {
   ArrowRouteStyle,
   type Board,
   type BoardElement,
+  type NamedStylePreset,
   type BoardOperation,
   type CursorPresence,
+  type StylePresetStyleByType,
+  type StylePresetType,
 } from '../../../types/models';
 import type {
   BoardCommandConflict,
   BoardCommandExecution,
 } from '../realtime/localBoardCommands';
 import { applyBoardOperation, createElementUpdatedOperation } from '../realtime/boardOperations';
+import {
+  areStylePresetStylesEqual,
+  createStylePresetId,
+  extractStylePresetSourceFromElement,
+  normalizeStylePresetState,
+  resolveStylePresetPlacementStyle,
+} from '../presets/stylePresetUtils';
 
 export type ToolType = 'select' | 'hand' | 'rectangle' | 'ellipse' | 'triangle' | 'rhombus' | 'text' | 'sticky' | 'frame' | 'icon' | 'arrow' | 'image' | 'drawing';
 
@@ -75,6 +85,15 @@ interface BoardState {
   setPendingArrowRouteStyle: (routeStyle: ArrowRouteStyle) => void;
   setPendingStickyNotePresetId: (presetId: string | null) => void;
   setFollowingClientId: (clientId: string | null) => void;
+  createPresetFromElement: (element: BoardElement, name: string) => NamedStylePreset | null;
+  updatePresetFromElement: (presetId: string, element: BoardElement) => boolean;
+  renamePreset: (presetId: string, name: string) => void;
+  deletePreset: (presetId: string) => void;
+  setPlacementMode: (type: StylePresetType, mode: 'theme-default') => void;
+  setDefaultPreset: (type: StylePresetType, presetId: string) => void;
+  rememberStyleFromElement: (element: BoardElement) => void;
+  rememberStyleSnapshot: <T extends StylePresetType>(type: T, style: StylePresetStyleByType[T]) => void;
+  resolvePlacementStyle: <T extends StylePresetType>(type: T) => StylePresetStyleByType[T] | null;
 }
 
 function areValuesEqual(left: unknown, right: unknown): boolean {
@@ -180,6 +199,45 @@ function buildElementsMap(elements: BoardElement[]): Map<string, BoardElement> {
   return new Map(elements.map((element) => [element.id, element]));
 }
 
+function normalizeBoard(board: Board): Board {
+  return {
+    ...board,
+    stylePresetState: normalizeStylePresetState(board.stylePresetState),
+  };
+}
+
+function withUpdatedStylePresetState(
+  board: Board,
+  updater: (stylePresetState: ReturnType<typeof normalizeStylePresetState>) => ReturnType<typeof normalizeStylePresetState>,
+): Board {
+  return {
+    ...board,
+    stylePresetState: updater(normalizeStylePresetState(board.stylePresetState)),
+  };
+}
+
+function withRememberedStyle(board: Board, element: BoardElement): Board {
+  const source = extractStylePresetSourceFromElement(element);
+  if (!source) {
+    return normalizeBoard(board);
+  }
+
+  return withUpdatedStylePresetState(board, (stylePresetState) => {
+    const current = stylePresetState.lastUsedStyles[source.type];
+    if (areStylePresetStylesEqual(current, source.style)) {
+      return stylePresetState;
+    }
+
+    return {
+      ...stylePresetState,
+      lastUsedStyles: {
+        ...stylePresetState.lastUsedStyles,
+        [source.type]: { ...source.style },
+      },
+    };
+  });
+}
+
 function validateLocalCommand(elementsById: Map<string, BoardElement>, execution: BoardCommandExecution): BoardCommandConflict | null {
 
   for (const operation of execution.operations) {
@@ -281,11 +339,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         };
       }
 
-      const elementsMap = buildElementsMap(board.elements);
-      const preserveSelection = options?.preserveSelection ?? state.board?.id === board.id;
+      const normalizedBoard = normalizeBoard(board);
+      const elementsMap = buildElementsMap(normalizedBoard.elements);
+      const preserveSelection = options?.preserveSelection ?? state.board?.id === normalizedBoard.id;
 
       return {
-        board,
+        board: normalizedBoard,
         _elementsMap: elementsMap,
         isDirty: false,
         selectedElementIds: preserveSelection
@@ -317,11 +376,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       const nextBoard = typeof updater === 'function'
         ? updater(state.board)
         : { ...state.board, ...updater };
+      const normalizedBoard = normalizeBoard(nextBoard);
 
       return {
-        board: nextBoard,
-        _elementsMap: nextBoard.elements !== state.board.elements
-          ? buildElementsMap(nextBoard.elements)
+        board: normalizedBoard,
+        _elementsMap: normalizedBoard.elements !== state.board.elements
+          ? buildElementsMap(normalizedBoard.elements)
           : state._elementsMap,
         isDirty: true,
       };
@@ -337,41 +397,60 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       };
     }),
 
-  addElement: (element) =>
-    set((state) => {
-      if (!state.board) return state;
-      const newMap = new Map(state._elementsMap);
+  addElement: (element) => {
+    const state = get();
+    if (!state.board) {
+      return;
+    }
+
+    set((current) => {
+      const nextBoard = withRememberedStyle(
+        { ...current.board!, elements: [...current.board!.elements, element] },
+        element,
+      );
+      const newMap = new Map(current._elementsMap);
       newMap.set(element.id, element);
       return {
-        board: { ...state.board, elements: [...state.board.elements, element] },
+        board: nextBoard,
         _elementsMap: newMap,
         isDirty: true,
       };
-    }),
+    });
+  },
 
-  updateElement: (id, updater) =>
-    set((state) => {
-      if (!state.board) return state;
-      const existing = state._elementsMap.get(id);
-      if (!existing) return state;
+  updateElement: (id, updater) => {
+    const state = get();
+    if (!state.board) {
+      return;
+    }
 
-      const updated = (typeof updater === 'function'
-        ? updater(existing)
-        : { ...existing, ...updater }) as BoardElement;
+    const existing = state._elementsMap.get(id);
+    if (!existing) {
+      return;
+    }
 
-      if (updated === existing) return state;
+    const updated = (typeof updater === 'function'
+      ? updater(existing)
+      : { ...existing, ...updater }) as BoardElement;
 
-      const newMap = new Map(state._elementsMap);
+    if (updated === existing) {
+      return;
+    }
+
+    set((current) => {
+      const nextBoard = withRememberedStyle({
+        ...current.board!,
+        elements: current.board!.elements.map((el) => el.id === id ? updated : el),
+      }, updated);
+      const newMap = new Map(current._elementsMap);
       newMap.set(id, updated);
       return {
-        board: {
-          ...state.board,
-          elements: state.board.elements.map((el) => el.id === id ? updated : el),
-        },
+        board: nextBoard,
         _elementsMap: newMap,
         isDirty: true,
       };
-    }),
+    });
+  },
 
   removeElements: (ids) =>
     set((state) => {
@@ -403,7 +482,7 @@ export const useBoardStore = create<BoardState>((set, get) => ({
       return { success: false, operations: [], conflict };
     }
 
-    let nextBoard = currentBoard;
+    let nextBoard = normalizeBoard(currentBoard);
     const appliedOperations: BoardOperation[] = [];
 
     for (const operation of execution.operations) {
@@ -440,6 +519,12 @@ export const useBoardStore = create<BoardState>((set, get) => ({
     }
 
     if (appliedOperations.length > 0) {
+      for (const operation of appliedOperations) {
+        if (operation.type === 'element.added' || operation.type === 'element.updated') {
+          nextBoard = withRememberedStyle(nextBoard, operation.element);
+        }
+      }
+
       const nextMap = buildElementsMap(nextBoard.elements);
       set((state) => ({
         board: nextBoard,
@@ -464,7 +549,10 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         return state;
       }
 
-      const nextBoard = applyBoardOperation(state.board, operation);
+      let nextBoard = normalizeBoard(applyBoardOperation(state.board, operation));
+      if (operation.type === 'element.added' || operation.type === 'element.updated') {
+        nextBoard = withRememberedStyle(nextBoard, operation.element);
+      }
       const nextMap = buildElementsMap(nextBoard.elements);
 
       return {
@@ -473,6 +561,225 @@ export const useBoardStore = create<BoardState>((set, get) => ({
         selectedElementIds: state.selectedElementIds.filter((id) => nextMap.has(id)),
       };
     }),
+
+  createPresetFromElement: (element, name) => {
+    const source = extractStylePresetSourceFromElement(element);
+    const trimmedName = name.trim();
+    if (!source || trimmedName.length === 0 || !get().board) {
+      return null;
+    }
+
+    const preset: NamedStylePreset = {
+      id: createStylePresetId(),
+      type: source.type,
+      name: trimmedName,
+      style: source.style as never,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    set((state) => {
+      if (!state.board) {
+        return state;
+      }
+
+      return {
+        board: withUpdatedStylePresetState(state.board, (stylePresetState) => ({
+          ...stylePresetState,
+          presets: [...stylePresetState.presets, preset],
+        })),
+        isDirty: true,
+      };
+    });
+
+    return preset;
+  },
+
+  updatePresetFromElement: (presetId, element) => {
+    const source = extractStylePresetSourceFromElement(element);
+    if (!source || !get().board) {
+      return false;
+    }
+
+    let updated = false;
+    set((state) => {
+      if (!state.board) {
+        return state;
+      }
+
+      return {
+        board: withUpdatedStylePresetState(state.board, (stylePresetState) => ({
+          ...stylePresetState,
+          presets: stylePresetState.presets.map((preset) => {
+            if (preset.id !== presetId || preset.type !== source.type) {
+              return preset;
+            }
+
+            updated = true;
+            return {
+              ...preset,
+              style: source.style as never,
+              updatedAt: new Date().toISOString(),
+            };
+          }),
+        })),
+        isDirty: updated ? true : state.isDirty,
+      };
+    });
+
+    return updated;
+  },
+
+  renamePreset: (presetId, name) => {
+    const trimmedName = name.trim();
+    if (trimmedName.length === 0) {
+      return;
+    }
+
+    set((state) => {
+      if (!state.board) {
+        return state;
+      }
+
+      let renamed = false;
+      const nextBoard = withUpdatedStylePresetState(state.board, (stylePresetState) => ({
+        ...stylePresetState,
+        presets: stylePresetState.presets.map((preset) => (
+          preset.id === presetId && preset.name !== trimmedName
+            ? (() => {
+                renamed = true;
+                return { ...preset, name: trimmedName, updatedAt: new Date().toISOString() };
+              })()
+            : preset
+        )),
+      }));
+
+      return renamed
+        ? { board: nextBoard, isDirty: true }
+        : state;
+    });
+  },
+
+  deletePreset: (presetId) =>
+    set((state) => {
+      if (!state.board) {
+        return state;
+      }
+
+      const currentState = normalizeStylePresetState(state.board.stylePresetState);
+      const preset = currentState.presets.find((entry) => entry.id === presetId);
+      if (!preset) {
+        return state;
+      }
+
+      return {
+        board: {
+          ...state.board,
+          stylePresetState: {
+            ...currentState,
+            presets: currentState.presets.filter((entry) => entry.id !== presetId),
+            placementPreferences: {
+              ...currentState.placementPreferences,
+              [preset.type]: currentState.placementPreferences[preset.type].presetId === presetId
+                ? { mode: 'theme-default', presetId: null }
+                : currentState.placementPreferences[preset.type],
+            },
+          },
+        },
+        isDirty: true,
+      };
+    }),
+
+  setPlacementMode: (type, mode) =>
+    set((state) => {
+      if (!state.board) {
+        return state;
+      }
+
+      return {
+        board: withUpdatedStylePresetState(state.board, (stylePresetState) => ({
+          ...stylePresetState,
+          placementPreferences: {
+            ...stylePresetState.placementPreferences,
+            [type]: {
+              mode,
+              presetId: null,
+            },
+          },
+        })),
+        isDirty: true,
+      };
+    }),
+
+  setDefaultPreset: (type, presetId) =>
+    set((state) => {
+      if (!state.board) {
+        return state;
+      }
+
+      const currentState = normalizeStylePresetState(state.board.stylePresetState);
+      const preset = currentState.presets.find((entry) => entry.id === presetId && entry.type === type);
+      if (!preset) {
+        return state;
+      }
+
+      return {
+        board: {
+          ...state.board,
+          stylePresetState: {
+            ...currentState,
+            placementPreferences: {
+              ...currentState.placementPreferences,
+              [type]: {
+                mode: 'preset',
+                presetId,
+              },
+            },
+          },
+        },
+        isDirty: true,
+      };
+    }),
+
+  rememberStyleFromElement: (element) => {
+    const source = extractStylePresetSourceFromElement(element);
+    if (!source) {
+      return;
+    }
+
+    get().rememberStyleSnapshot(source.type, source.style as never);
+  },
+
+  rememberStyleSnapshot: (type, style) =>
+    set((state) => {
+      if (!state.board) {
+        return state;
+      }
+
+      const currentState = normalizeStylePresetState(state.board.stylePresetState);
+      if (areStylePresetStylesEqual(currentState.lastUsedStyles[type], style)) {
+        return state;
+      }
+
+      return {
+        board: {
+          ...state.board,
+          stylePresetState: {
+            ...currentState,
+            lastUsedStyles: {
+              ...currentState.lastUsedStyles,
+              [type]: { ...style },
+            },
+          },
+        },
+        isDirty: true,
+      };
+    }),
+
+  resolvePlacementStyle: (type) => {
+    const board = get().board;
+    return board ? resolveStylePresetPlacementStyle(board.stylePresetState, type) : null;
+  },
 
   clearCommandConflict: () => set({ commandConflict: null }),
   setSelectedElementIds: (ids) =>

@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Box,
   IconButton,
+  Menu,
+  MenuItem,
   Paper,
   Popover,
   TextField,
@@ -20,16 +22,29 @@ import LineWeightIcon from '@mui/icons-material/LineWeight';
 import LockIcon from '@mui/icons-material/Lock';
 import LockOpenIcon from '@mui/icons-material/LockOpen';
 import DownloadIcon from '@mui/icons-material/Download';
+import AutoFixHighIcon from '@mui/icons-material/AutoFixHigh';
 import { useTranslation } from 'react-i18next';
 import { useBoardStore } from '../store/boardStore';
 import { useCommandStack } from '../store/commandStack';
 import { createElementUpdateCommand, createChangedKeysByElementId, createDeleteElementsCommand } from '../realtime/localBoardCommands';
-import { createElementUpdatedOperation, createElementsDeletedOperation } from '../realtime/boardOperations';
+import {
+  asOperationPayload,
+  createElementUpdatedOperation,
+  createElementsDeletedOperation,
+} from '../realtime/boardOperations';
 import type { BoardOperationPayload } from '../realtime/boardOperations';
-import type { BoardElement, FileElement } from '../../../types/models';
+import type { BoardElement, FileElement, StylePresetStyle } from '../../../types/models';
 import { getBoundsForElements, projectWorldToViewport } from '../cameraUtils';
 import { useWhiteboardColorPalette } from '../controls/useWhiteboardColorPalette';
 import { areAllSelectedElementsLocked, canDeleteSelection } from '../selectionLocking';
+import { StylePresetDialog } from '../presets/StylePresetDialog';
+import { useStylePresetStore } from '../presets/stylePresetStore';
+import {
+  applyStylePresetToElement,
+  getStylePresetTypeForElement,
+  getThemeDefaultStyleForPresetType,
+} from '../presets/stylePresetUtils';
+import { FALLBACK_BOARD_DEFAULTS } from './canvasUtils';
 
 const TOOLBAR_GAP = 8;
 const ROTATION_HANDLE_CLEARANCE = 36;
@@ -206,7 +221,7 @@ function FontSizeStepper({ value, disabled = false, onChange }: FontSizeStepperP
         disabled={disabled}
         onClick={() => onChange(Math.min(200, value + 2))}
         sx={{ width: 24, height: 24 }}
-        aria-label={t('floatingToolbar.increaseFontSize', 'Schrift vergroessern')}
+        aria-label={t('floatingToolbar.increaseFontSize', 'Schrift vergrößern')}
       >
         <AddIcon sx={{ fontSize: 14 }} />
       </IconButton>
@@ -272,15 +287,20 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   onOpenPropertiesPanel,
 }: FloatingToolbarProps) {
   const { t } = useTranslation();
+  const board = useBoardStore((s) => s.board);
   const updateElement = useBoardStore((s) => s.updateElement);
   const setElements = useBoardStore((s) => s.setElements);
   const setSelectedElementIds = useBoardStore((s) => s.setSelectedElementIds);
   const setDirty = useBoardStore((s) => s.setDirty);
+  const pendingStickyNotePresetId = useBoardStore((s) => s.pendingStickyNotePresetId);
   const pushCommand = useCommandStack((s) => s.push);
+  const { activeTheme } = useWhiteboardColorPalette();
 
   const [fillAnchorEl, setFillAnchorEl] = useState<HTMLElement | null>(null);
   const [strokeAnchorEl, setStrokeAnchorEl] = useState<HTMLElement | null>(null);
   const [strokeWidthAnchorEl, setStrokeWidthAnchorEl] = useState<HTMLElement | null>(null);
+  const [stylePresetAnchorEl, setStylePresetAnchorEl] = useState<HTMLElement | null>(null);
+  const [stylePresetDialogOpen, setStylePresetDialogOpen] = useState(false);
   const toolbarRef = useRef<HTMLDivElement>(null);
   const [toolbarSize, setToolbarSize] = useState<{ width: number; height: number }>({ width: 280, height: 44 });
 
@@ -312,6 +332,7 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
     },
     [elements, selectedIds],
   );
+  const stylePresets = useStylePresetStore((state) => state.presets);
 
   const bbox = useMemo(
     () => getSelectedBoundingBox(elements, selectedIds),
@@ -404,8 +425,84 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
   const areAllLocked = areAllSelectedElementsLocked(selected);
   const canDeleteCurrentSelection = canDeleteSelection(selected);
   const showDownload = selected.length === 1 && selected[0].$type === 'file';
+  const presetSelectionType = useMemo(() => {
+    if (selected.length === 0) {
+      return null;
+    }
+
+    const firstType = getStylePresetTypeForElement(selected[0]);
+    if (!firstType) {
+      return null;
+    }
+
+    return selected.every((element) => getStylePresetTypeForElement(element) === firstType) ? firstType : null;
+  }, [selected]);
+  const presetSourceElement = selected.length === 1 && presetSelectionType ? selected[0] : null;
+  const presetPresets = presetSelectionType
+    ? stylePresets.filter((preset) => preset.type === presetSelectionType)
+    : [];
+  const rawBoardDefaults = activeTheme?.boardDefaults ?? FALLBACK_BOARD_DEFAULTS;
+  const boardSurfaceColor = board?.surfaceColor ?? null;
+  const boardDefaults = useMemo(
+    () => (boardSurfaceColor ? { ...rawBoardDefaults, surfaceColor: boardSurfaceColor } : rawBoardDefaults),
+    [boardSurfaceColor, rawBoardDefaults],
+  );
+  const themeDefaultPresetStyle = useMemo(
+    () => presetSelectionType
+      ? getThemeDefaultStyleForPresetType(presetSelectionType, {
+        boardDefaults,
+        board,
+        pendingStickyNotePresetId,
+      })
+      : null,
+    [board, boardDefaults, pendingStickyNotePresetId, presetSelectionType],
+  );
 
   if (!bbox || selected.length === 0) return null;
+
+  const handleApplyPresetStyle = (style: StylePresetStyle) => {
+    if (!presetSelectionType) {
+      return;
+    }
+
+    const styleKeys = Object.keys(style);
+    if (styleKeys.length === 0) {
+      return;
+    }
+
+    const updates = selected
+      .filter((element) => getStylePresetTypeForElement(element) === presetSelectionType && element.isLocked !== true)
+      .map((element) => {
+        const updatedElement = applyStylePresetToElement(element, style);
+        const changedKeys = styleKeys.filter((key) => {
+          const currentValue = (element as unknown as Record<string, unknown>)[key];
+          const nextValue = (updatedElement as unknown as Record<string, unknown>)[key];
+          return !Object.is(currentValue, nextValue);
+        });
+
+        return changedKeys.length > 0 ? { before: element, after: updatedElement, changedKeys } : null;
+      })
+      .filter((entry): entry is { before: BoardElement; after: BoardElement; changedKeys: string[] } => entry !== null);
+
+    if (updates.length === 0) {
+      setStylePresetAnchorEl(null);
+      return;
+    }
+
+    const updateMap = new Map(updates.map((entry) => [entry.after.id, entry.after]));
+    setElements(elements.map((element) => updateMap.get(element.id) ?? element));
+    pushCommand(createElementUpdateCommand(
+      updates.map((entry) => entry.before),
+      updates.map((entry) => entry.after),
+      Object.fromEntries(updates.map((entry) => [entry.after.id, entry.changedKeys])),
+    ));
+    useBoardStore.getState().rememberStyleSnapshot(presetSelectionType, style as never);
+    setDirty(true);
+    onBoardChanged('edit', asOperationPayload(
+      updates.map((entry) => createElementUpdatedOperation(entry.after)),
+    ));
+    setStylePresetAnchorEl(null);
+  };
 
   // --- screen positioning ---
   const screenCenterX = projectWorldToViewport((bbox.minX + bbox.maxX) / 2, bbox.minY, zoom, cameraX, cameraY).x;
@@ -617,6 +714,19 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
       {/* Separator before actions */}
       <Box sx={{ width: '1px', height: 24, bgcolor: 'divider', mx: 0.25 }} />
 
+      {presetSelectionType && (
+        <Tooltip title={t('stylePresets.applyPreset', 'Formatvorlage anwenden')} arrow>
+          <IconButton
+            size="small"
+            onClick={(event) => setStylePresetAnchorEl(event.currentTarget)}
+            sx={{ width: 32, height: 32 }}
+            aria-label={t('stylePresets.applyPreset', 'Formatvorlage anwenden')}
+          >
+            <AutoFixHighIcon sx={{ fontSize: 18 }} />
+          </IconButton>
+        </Tooltip>
+      )}
+
       {/* Download — only for a single selected FileElement (images + other files) */}
       {showDownload && (
         <Tooltip title={t('files.download', 'Herunterladen')} arrow>
@@ -643,13 +753,13 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
       </Tooltip>
 
       {/* Delete */}
-      <Tooltip title={t('toolbar.delete', 'Loeschen')} arrow>
+      <Tooltip title={t('toolbar.delete', 'Löschen')} arrow>
         <IconButton
           size="small"
           onClick={handleDelete}
           disabled={!canDeleteCurrentSelection}
           sx={{ width: 32, height: 32 }}
-          aria-label={t('toolbar.delete', 'Loeschen')}
+          aria-label={t('toolbar.delete', 'Löschen')}
         >
           <DeleteIcon sx={{ fontSize: 18 }} />
         </IconButton>
@@ -666,6 +776,45 @@ export const FloatingToolbar = React.memo(function FloatingToolbar({
           <MoreHorizIcon sx={{ fontSize: 18 }} />
         </IconButton>
       </Tooltip>
+      <Menu
+        anchorEl={stylePresetAnchorEl}
+        open={Boolean(stylePresetAnchorEl)}
+        onClose={() => setStylePresetAnchorEl(null)}
+      >
+        {themeDefaultPresetStyle && (
+          <MenuItem onClick={() => handleApplyPresetStyle(themeDefaultPresetStyle)}>
+            {t('stylePresets.themeDefault', 'Theme-Standard')}
+          </MenuItem>
+        )}
+        {presetPresets.map((preset) => (
+          <MenuItem key={preset.id} onClick={() => handleApplyPresetStyle(preset.style)}>
+            {preset.name}
+          </MenuItem>
+        ))}
+        {!themeDefaultPresetStyle && presetPresets.length === 0 && (
+          <MenuItem disabled>
+            {t('stylePresets.noPresetsForType', 'Für diesen Elementtyp wurden noch keine Presets gespeichert.')}
+          </MenuItem>
+        )}
+        <MenuItem
+          onClick={() => {
+            setStylePresetAnchorEl(null);
+            setStylePresetDialogOpen(true);
+          }}
+        >
+          {presetSourceElement
+            ? t('stylePresets.manageButton', 'Formatvorlagen ...')
+            : t('stylePresets.manageWithoutSource', 'Formatvorlagen ...')}
+        </MenuItem>
+      </Menu>
+      <StylePresetDialog
+        open={stylePresetDialogOpen}
+        onClose={() => setStylePresetDialogOpen(false)}
+        elementType={presetSelectionType}
+        sourceElement={presetSourceElement}
+        onBoardChanged={onBoardChanged}
+        onApplyPresetToSource={handleApplyPresetStyle}
+      />
     </Paper>
   );
 });

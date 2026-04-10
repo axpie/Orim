@@ -82,6 +82,7 @@ public class EfBoardRepository : IBoardRepository
             existing.CustomColors = entity.CustomColors.ToList();
             existing.RecentColors = entity.RecentColors.ToList();
             existing.StickyNotePresets = entity.StickyNotePresets.ToList();
+            existing.StylePresetState = BoardStylePresetState.Clone(entity.StylePresetState);
             existing.Tags = entity.Tags.ToList();
             existing.Elements = entity.Elements.ToList();
             existing.CreatedAt = entity.CreatedAt;
@@ -187,6 +188,7 @@ public class EfBoardRepository : IBoardRepository
         existing.CustomColors = entity.CustomColors.ToList();
         existing.RecentColors = entity.RecentColors.ToList();
         existing.StickyNotePresets = entity.StickyNotePresets.ToList();
+        existing.StylePresetState = BoardStylePresetState.Clone(entity.StylePresetState);
         existing.Elements = entity.Elements.ToList();
         existing.UpdatedAt = entity.UpdatedAt;
 

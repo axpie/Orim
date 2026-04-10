@@ -1,8 +1,14 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Board } from '../../../../types/models';
+import {
+  BorderLineStyle,
+  HorizontalLabelAlignment,
+  VerticalLabelAlignment,
+  type Board,
+} from '../../../../types/models';
 import { Toolbar } from '../Toolbar';
+import { createDefaultStylePresetState } from '../../presets/stylePresetUtils';
 import { useBoardStore } from '../../store/boardStore';
 
 vi.mock('react-i18next', () => ({
@@ -66,6 +72,7 @@ function createBoard(enabledIconGroups: string[]): Board {
     customColors: [],
     recentColors: [],
     stickyNotePresets: [],
+    stylePresetState: createDefaultStylePresetState(),
     members: [],
     elements: [],
     comments: [],
@@ -123,5 +130,61 @@ describe('Toolbar icon dialog', () => {
     });
 
     expect(await screen.findByText('Apple Safari')).toBeInTheDocument();
+  });
+
+  it('shows preset choices for the active tool in the toolbar menu', async () => {
+    useBoardStore.setState({
+      board: {
+        ...createBoard([]),
+        stylePresetState: {
+          ...createDefaultStylePresetState(),
+          presets: [{
+            id: 'shape-preset-1',
+            type: 'shape',
+            name: 'Warnung',
+            style: {
+              fillColor: '#f59e0b',
+              strokeColor: '#7c2d12',
+              strokeWidth: 4,
+              borderLineStyle: BorderLineStyle.Solid,
+              labelFontSize: null,
+              labelColor: null,
+              fontFamily: null,
+              isBold: false,
+              isItalic: false,
+              isUnderline: false,
+              isStrikethrough: false,
+              labelHorizontalAlignment: HorizontalLabelAlignment.Center,
+              labelVerticalAlignment: VerticalLabelAlignment.Middle,
+            },
+            createdAt: '2026-04-10T00:00:00.000Z',
+            updatedAt: '2026-04-10T00:00:00.000Z',
+          }],
+          placementPreferences: {
+            ...createDefaultStylePresetState().placementPreferences,
+            shape: { mode: 'preset', presetId: 'shape-preset-1' },
+          },
+        },
+      },
+      activeTool: 'rectangle',
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false },
+        mutations: { retry: false },
+      },
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <Toolbar />
+      </QueryClientProvider>,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Formatvorlagen' }));
+
+    expect(await screen.findByText('Theme-Standard')).toBeInTheDocument();
+    expect(screen.getByText('Warnung')).toBeInTheDocument();
   });
 });

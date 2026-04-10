@@ -142,6 +142,7 @@ function OpenBoardSettingsDialog({ board, onClose, onBoardChanged }: OpenBoardSe
       customColors: board.customColors,
       recentColors: board.recentColors,
       stickyNotePresets,
+      stylePresetState: board.stylePresetState,
     }));
     onClose();
   };

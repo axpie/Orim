@@ -51,7 +51,7 @@ export async function createBoard(request: CreateBoardRequest): Promise<Board> {
 
 export async function saveBoard(
   id: string,
-  board: Pick<Board, 'title' | 'labelOutlineEnabled' | 'arrowOutlineEnabled' | 'surfaceColor' | 'themeKey' | 'enabledIconGroups' | 'customColors' | 'recentColors' | 'stickyNotePresets' | 'elements'>,
+  board: Pick<Board, 'title' | 'labelOutlineEnabled' | 'arrowOutlineEnabled' | 'surfaceColor' | 'themeKey' | 'enabledIconGroups' | 'customColors' | 'recentColors' | 'stickyNotePresets' | 'stylePresetState' | 'elements'>,
   sourceClientId?: string | null,
   changeKind: 'Content' | 'Metadata' = 'Content',
 ): Promise<Board> {
@@ -65,6 +65,7 @@ export async function saveBoard(
     customColors: board.customColors,
     recentColors: board.recentColors,
     stickyNotePresets: board.stickyNotePresets,
+    stylePresetState: board.stylePresetState ?? null,
     elements: board.elements,
     sourceClientId: sourceClientId ?? null,
     changeKind,

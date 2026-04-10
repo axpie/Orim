@@ -59,6 +59,7 @@ public class BoardService
             CustomColors = importedBoard.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             RecentColors = importedBoard.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList(),
             StickyNotePresets = CloneStickyNotePresets(importedBoard.StickyNotePresets),
+            StylePresetState = BoardStylePresetState.Clone(importedBoard.StylePresetState),
             Elements = CloneElements(importedBoard.Elements),
             Members =
             [
@@ -291,6 +292,7 @@ public class BoardService
         board.CustomColors = content.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         board.RecentColors = content.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         board.StickyNotePresets = CloneStickyNotePresets(content.StickyNotePresets);
+        board.StylePresetState = BoardStylePresetState.Clone(content.StylePresetState);
         board.Elements = CloneElements(content.Elements);
         NormalizeZIndexes(board.Elements);
     }
@@ -308,6 +310,7 @@ public class BoardService
         targetBoard.CustomColors = importedBoard.CustomColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         targetBoard.RecentColors = importedBoard.RecentColors.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
         targetBoard.StickyNotePresets = CloneStickyNotePresets(importedBoard.StickyNotePresets);
+        targetBoard.StylePresetState = BoardStylePresetState.Clone(importedBoard.StylePresetState);
         targetBoard.Elements = CloneElements(importedBoard.Elements);
         NormalizeZIndexes(targetBoard.Elements);
     }
@@ -351,6 +354,7 @@ public class BoardService
         CustomColors = board.CustomColors.ToList(),
         RecentColors = board.RecentColors.ToList(),
         StickyNotePresets = CloneStickyNotePresets(board.StickyNotePresets),
+        StylePresetState = BoardStylePresetState.Clone(board.StylePresetState),
         Elements = CloneElements(board.Elements)
     };
 
@@ -406,6 +410,7 @@ public class BoardService
     {
         EnsureOwnerMembership(board);
         board.EnabledIconGroups = Board.NormalizeEnabledIconGroups(board.EnabledIconGroups);
+        board.StylePresetState = BoardStylePresetState.Normalize(board.StylePresetState);
         board.UpdatedAt = DateTime.UtcNow;
     }
 

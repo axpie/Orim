@@ -68,7 +68,8 @@ describe('boardStore', () => {
       useBoardStore.getState().setBoard(board);
 
       const state = useBoardStore.getState();
-      expect(state.board).toBe(board);
+      expect(state.board).toMatchObject(board);
+      expect(state.board?.stylePresetState).toBeDefined();
       expect(state._elementsMap.get('e1')).toBe(el);
       expect(state.isDirty).toBe(false);
     });
@@ -219,8 +220,9 @@ describe('boardStore', () => {
     it('should no-op when title is same', () => {
       const board = createTestBoard();
       useBoardStore.getState().setBoard(board);
+      const normalizedBoard = useBoardStore.getState().board;
       useBoardStore.getState().setBoardTitle('Test Board');
-      expect(useBoardStore.getState().board).toBe(board);
+      expect(useBoardStore.getState().board).toBe(normalizedBoard);
     });
   });
 
