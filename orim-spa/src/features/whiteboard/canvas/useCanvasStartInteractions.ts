@@ -34,7 +34,6 @@ import type {
   DockPoint,
   DrawingElement,
   FrameElement,
-  IconElement,
   StickyNoteElement,
   TextElement,
   ThemeBoardDefaultsDefinition,
@@ -381,6 +380,12 @@ export function useCanvasStartInteractions({
       return;
     }
 
+    if (editable && activeTool === 'icon' && pendingIconName) {
+      setDrawStart(worldPos);
+      setDraftRect({ x: worldPos.x, y: worldPos.y, w: 0, h: 0 });
+      return;
+    }
+
     if (editable && activeTool === 'text') {
       const newText: TextElement = {
         $type: 'text',
@@ -445,30 +450,6 @@ export function useCanvasStartInteractions({
       setActiveTool('select');
       setEditingElement(newSticky);
       onBoardChanged('add', createElementAddedOperation(newSticky));
-      return;
-    }
-
-    if (editable && activeTool === 'icon' && pendingIconName) {
-      const newIcon: IconElement = {
-        $type: 'icon',
-        id: uuidv4(),
-        x: worldPos.x - 28,
-        y: worldPos.y - 28,
-        width: 56,
-        height: 56,
-        zIndex: elements.length,
-        rotation: 0,
-        label: '',
-        labelHorizontalAlignment: HorizontalLabelAlignment.Center,
-        labelVerticalAlignment: VerticalLabelAlignment.Middle,
-        iconName: pendingIconName,
-        color: boardDefaults.iconColor,
-      };
-      addElement(newIcon);
-      pushCommand(createAddElementsCommand([newIcon]));
-      setSelectedElementIds([newIcon.id]);
-      setActiveTool('select');
-      onBoardChanged('add', createElementAddedOperation(newIcon));
       return;
     }
 

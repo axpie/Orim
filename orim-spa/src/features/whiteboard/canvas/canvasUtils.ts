@@ -1,8 +1,11 @@
 import {
   DockPoint,
+  HorizontalLabelAlignment,
+  VerticalLabelAlignment,
   type ArrowElement,
   type BoardElement,
   type FrameElement,
+  type IconElement,
   type ShapeElement,
   type StickyNoteElement,
   type TextElement,
@@ -22,6 +25,7 @@ export const KEYBOARD_DUPLICATE_OFFSET = 32;
 export const TRACKPAD_DELTA_THRESHOLD = 24;
 export const DEFAULT_TEXT_WIDTH = 220;
 export const DEFAULT_TEXT_HEIGHT = 56;
+export const DEFAULT_ICON_SIZE = 56;
 export const MOVE_TRACKED_ELEMENT_CHANGED_KEYS = [
   'x',
   'y',
@@ -121,6 +125,54 @@ export function appendInlineEditingText(
     case 'frame':
       return { ...element, label: `${element.label ?? ''}${appendedText}` };
   }
+}
+
+export function getIconPlacementBounds(
+  origin: { x: number; y: number },
+  draftRect: { x: number; y: number; w: number; h: number } | null,
+): { x: number; y: number; width: number; height: number } {
+  if (draftRect && draftRect.w >= 12 && draftRect.h >= 12) {
+    return {
+      x: draftRect.x,
+      y: draftRect.y,
+      width: draftRect.w,
+      height: draftRect.h,
+    };
+  }
+
+  return {
+    x: origin.x - DEFAULT_ICON_SIZE / 2,
+    y: origin.y - DEFAULT_ICON_SIZE / 2,
+    width: DEFAULT_ICON_SIZE,
+    height: DEFAULT_ICON_SIZE,
+  };
+}
+
+export function createIconPlacementElement(options: {
+  id: string;
+  iconName: string;
+  color: string;
+  zIndex: number;
+  origin: { x: number; y: number };
+  draftRect: { x: number; y: number; w: number; h: number } | null;
+}): IconElement {
+  const bounds = getIconPlacementBounds(options.origin, options.draftRect);
+
+  return {
+    $type: 'icon',
+    id: options.id,
+    x: bounds.x,
+    y: bounds.y,
+    width: bounds.width,
+    height: bounds.height,
+    zIndex: options.zIndex,
+    rotation: 0,
+    label: '',
+    labelHorizontalAlignment: HorizontalLabelAlignment.Center,
+    labelVerticalAlignment: VerticalLabelAlignment.Middle,
+    iconName: options.iconName,
+    color: options.color,
+  };
 }
 
 export function areComparedValuesEqual(left: unknown, right: unknown): boolean {

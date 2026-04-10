@@ -15,6 +15,8 @@ import {
 } from '../../../../types/models';
 import {
   appendInlineEditingText,
+  createIconPlacementElement,
+  getIconPlacementBounds,
   getDraftRectFromDrag,
   translateArrowElement,
   translateElementsBySelection,
@@ -185,6 +187,51 @@ describe('canvasUtils movement helpers', () => {
       y: 20,
       w: 60,
       h: 60,
+    });
+  });
+
+  it('uses the drag bounds for icon placement when the drag is large enough', () => {
+    expect(getIconPlacementBounds(
+      { x: 80, y: 60 },
+      { x: 20, y: 30, w: 90, h: 70 },
+    )).toEqual({
+      x: 20,
+      y: 30,
+      width: 90,
+      height: 70,
+    });
+  });
+
+  it('falls back to the default centered icon size on simple click placement', () => {
+    expect(getIconPlacementBounds(
+      { x: 80, y: 60 },
+      { x: 80, y: 60, w: 0, h: 0 },
+    )).toEqual({
+      x: 52,
+      y: 32,
+      width: 56,
+      height: 56,
+    });
+  });
+
+  it('creates a preview/final icon element from placement bounds', () => {
+    expect(createIconPlacementElement({
+      id: 'icon-1',
+      iconName: 'material-home',
+      color: '#123456',
+      zIndex: 7,
+      origin: { x: 80, y: 60 },
+      draftRect: { x: 20, y: 30, w: 90, h: 70 },
+    })).toMatchObject({
+      $type: 'icon',
+      id: 'icon-1',
+      x: 20,
+      y: 30,
+      width: 90,
+      height: 70,
+      iconName: 'material-home',
+      color: '#123456',
+      zIndex: 7,
     });
   });
 

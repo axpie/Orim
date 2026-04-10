@@ -11,6 +11,7 @@ import { useCommandStack } from '../store/commandStack';
 import { SelectionOverlay, type ResizeHandle } from '../shapes/SelectionOverlay';
 import { AlignmentGuides } from '../shapes/AlignmentGuides';
 import { InlineTextEditor } from '../shapes/InlineTextEditor';
+import { IconRenderer } from '../shapes/IconRenderer';
 import { CanvasAccessibilityLayer } from './CanvasAccessibilityLayer';
 import { CanvasGridLayer } from './CanvasGridLayer';
 import { CanvasElementLayer } from './CanvasElementLayer';
@@ -24,6 +25,7 @@ import { useCanvasStartInteractions, type RotationState } from './useCanvasStart
 import {
   appendInlineEditingText,
   areComparedValuesEqual,
+  createIconPlacementElement,
   FALLBACK_BOARD_DEFAULTS,
   EMPTY_ELEMENTS,
   MIN_ZOOM,
@@ -56,6 +58,7 @@ import {
   type FrameElement,
   type ArrowElement,
   type DrawingElement,
+  type IconElement,
 } from '../../../types/models';
 import { snapResizeRectToAlignmentGuides, snapToAlignmentGuides, type AlignmentGuide } from '../../../utils/geometry';
 import {
@@ -195,6 +198,20 @@ export function WhiteboardCanvas({
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [draftRect, setDraftRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [drawingElementId, setDrawingElementId] = useState<string | null>(null);
+  const draftIconPreview = useMemo(() => {
+    if (!drawStart || !draftRect || activeTool !== 'icon' || !pendingIconName) {
+      return null;
+    }
+
+    return createIconPlacementElement({
+      id: '__draft-icon__',
+      iconName: pendingIconName,
+      color: boardDefaults.iconColor,
+      zIndex: elements.length,
+      origin: drawStart,
+      draftRect,
+    });
+  }, [activeTool, boardDefaults.iconColor, drawStart, draftRect, elements.length, pendingIconName]);
 
   // Arrow drawing state
   const [draftArrowStart, setDraftArrowStart] = useState<{ x: number; y: number; elementId?: string; dock?: DockPoint } | null>(null);
@@ -1012,6 +1029,25 @@ export function WhiteboardCanvas({
         return;
       }
 
+      if (drawStart && activeTool === 'icon' && pendingIconName) {
+        const newIcon: IconElement = createIconPlacementElement({
+          id: uuidv4(),
+          iconName: pendingIconName,
+          color: boardDefaults.iconColor,
+          zIndex: elements.length,
+          origin: drawStart,
+          draftRect,
+        });
+        addElement(newIcon);
+        pushCommand(createAddElementsCommand([newIcon]));
+        setSelectedElementIds([newIcon.id]);
+        setActiveTool('select');
+        onBoardChanged('add', createElementAddedOperation(newIcon));
+        setDrawStart(null);
+        setDraftRect(null);
+        return;
+      }
+
       // Commit drawn shape
       if (drawStart && draftRect && draftRect.w >= 12 && draftRect.h >= 12) {
         if (activeTool === 'frame') {
@@ -1230,7 +1266,7 @@ export function WhiteboardCanvas({
         dragSnapshotRef.current = null;
       }
     },
-    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, arrowRouteHandleDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, setEditingElement, boardDefaults, defaultFrameColors, emitUpdatedOperations, selectedIds, onBoardChanged, rotationState, pendingArrowRouteStyle, finalizeRotation, finalizeResize],
+    [isPanning, drawingElementId, drawStart, draftRect, draftArrowStart, draftArrowEnd, draftArrowHover, arrowEndpointDrag, arrowRouteHandleDrag, resizeState, marquee, isDragging, elements, editable, activeTool, getResizeHandleFromTarget, getRotationHandleFromTarget, addElement, pushCommand, expandSelectionWithGroups, setSelectedElementIds, setActiveTool, setEditingElement, boardDefaults, defaultFrameColors, emitUpdatedOperations, selectedIds, onBoardChanged, pendingIconName, rotationState, pendingArrowRouteStyle, finalizeRotation, finalizeResize],
   );
 
   const handleTouchStart = useCallback(
@@ -1493,7 +1529,22 @@ export function WhiteboardCanvas({
         <Layer name="whiteboard-export-hidden">
           {/* Draft shape */}
           {draftRect && (
-            activeTool === 'ellipse' ? (
+            activeTool === 'icon' && draftIconPreview ? (
+              <>
+                <IconRenderer element={draftIconPreview} listening={false} />
+                <Rect
+                  x={draftIconPreview.x}
+                  y={draftIconPreview.y}
+                  width={draftIconPreview.width}
+                  height={draftIconPreview.height}
+                  stroke={boardDefaults.selectionColor}
+                  strokeWidth={2 / zoom}
+                  dash={[6 / zoom, 4 / zoom]}
+                  fill={`rgba(${boardDefaults.selectionTintRgb},0.1)`}
+                  listening={false}
+                />
+              </>
+            ) : activeTool === 'ellipse' ? (
               <Ellipse
                 x={draftRect.x + draftRect.w / 2}
                 y={draftRect.y + draftRect.h / 2}

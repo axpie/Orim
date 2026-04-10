@@ -5,9 +5,10 @@ import type { IconElement } from '../../../types/models';
 
 interface IconRendererProps {
   element: IconElement;
+  listening?: boolean;
 }
 
-function IconRendererInner({ element: el }: IconRendererProps) {
+function IconRendererInner({ element: el, listening = true }: IconRendererProps) {
   const definition = getIconDefinition(el.iconName);
   const iconScale = Math.min(el.width, el.height) / 24;
   const scaledSize = 24 * iconScale;
@@ -15,7 +16,7 @@ function IconRendererInner({ element: el }: IconRendererProps) {
   const iconY = el.y + (el.height - scaledSize) / 2;
 
   return (
-    <Group data-element-id={el.id}>
+    <Group data-element-id={el.id} listening={listening}>
       <Rect
         x={el.x}
         y={el.y}
@@ -23,6 +24,7 @@ function IconRendererInner({ element: el }: IconRendererProps) {
         height={el.height}
         fill="transparent"
         data-element-id={el.id}
+        listening={listening}
       />
       {definition ? (
         <Group x={iconX} y={iconY} scaleX={iconScale} scaleY={iconScale} listening={false}>
