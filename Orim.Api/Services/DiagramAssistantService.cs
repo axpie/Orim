@@ -1,4 +1,5 @@
 using System.ClientModel;
+using System.Net;
 using System.Text.Json;
 using OpenAI;
 using OpenAI.Chat;
@@ -162,7 +163,7 @@ public sealed class DiagramAssistantService
             ```
             
             ## Available Tools
-            You can create shapes (rectangles, ellipses, triangles), arrows between elements, icon elements, and text-based elements.
+            You can create shapes (rectangles, ellipses, triangles), arrows between elements, icon elements, and text elements (plain text, rich text, markdown).
             You can also update or remove existing elements.
             Use these tools to build, interpret, and modify the board that the user describes.
             
@@ -187,10 +188,12 @@ public sealed class DiagramAssistantService
     [
         ChatTool.CreateFunctionTool("add_shape", "Add a shape element to the whiteboard.",
             BinaryData.FromString("""{"type":"object","properties":{"shapeType":{"type":"string","enum":["Rectangle","Ellipse","Triangle","Rhombus"]},"x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number"},"height":{"type":"number"},"label":{"type":"string"},"fillColor":{"type":"string"},"strokeColor":{"type":"string"},"strokeWidth":{"type":"number"}},"required":["shapeType","x","y","width","height","label"]}""")),
+        ChatTool.CreateFunctionTool("add_text", "Add a plain text, rich text, or markdown element to the whiteboard.",
+            BinaryData.FromString("""{"type":"object","properties":{"textType":{"type":"string","enum":["text","richtext","markdown"]},"x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number"},"height":{"type":"number"},"label":{"type":"string"},"text":{"type":"string"},"html":{"type":"string"},"markdown":{"type":"string"},"fontSize":{"type":"number"},"autoFontSize":{"type":"boolean"},"color":{"type":"string"},"fontFamily":{"type":"string"},"isBold":{"type":"boolean"},"isItalic":{"type":"boolean"},"isUnderline":{"type":"boolean"},"isStrikethrough":{"type":"boolean"}},"required":["textType","x","y"]}""")),
         ChatTool.CreateFunctionTool("add_arrow", "Add an arrow connecting two elements.",
             BinaryData.FromString("""{"type":"object","properties":{"sourceElementId":{"type":"string"},"targetElementId":{"type":"string"},"sourceDock":{"type":"string","enum":["Top","Bottom","Left","Right","Center"]},"targetDock":{"type":"string","enum":["Top","Bottom","Left","Right","Center"]},"strokeColor":{"type":"string"},"strokeWidth":{"type":"number"},"label":{"type":"string"},"routeStyle":{"type":"string","enum":["Straight","Orthogonal"]},"lineStyle":{"type":"string","enum":["Solid","Dashed","Dotted"]},"targetHeadStyle":{"type":"string","enum":["None","FilledTriangle","OpenTriangle","FilledCircle","OpenCircle"]},"sourceHeadStyle":{"type":"string","enum":["None","FilledTriangle","OpenTriangle","FilledCircle","OpenCircle"]}},"required":["sourceElementId","targetElementId"]}""")),
         ChatTool.CreateFunctionTool("update_element", "Update an existing element on the board.",
-            BinaryData.FromString("""{"type":"object","properties":{"elementId":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number"},"height":{"type":"number"},"label":{"type":"string"},"fillColor":{"type":"string"},"strokeColor":{"type":"string"},"strokeWidth":{"type":"number"},"text":{"type":"string"},"fontSize":{"type":"number"},"color":{"type":"string"},"isBold":{"type":"boolean"},"isItalic":{"type":"boolean"},"iconName":{"type":"string"}},"required":["elementId"]}""")),
+            BinaryData.FromString("""{"type":"object","properties":{"elementId":{"type":"string"},"x":{"type":"number"},"y":{"type":"number"},"width":{"type":"number"},"height":{"type":"number"},"label":{"type":"string"},"fillColor":{"type":"string"},"strokeColor":{"type":"string"},"strokeWidth":{"type":"number"},"text":{"type":"string"},"html":{"type":"string"},"markdown":{"type":"string"},"fontSize":{"type":"number"},"autoFontSize":{"type":"boolean"},"color":{"type":"string"},"fontFamily":{"type":"string"},"isBold":{"type":"boolean"},"isItalic":{"type":"boolean"},"isUnderline":{"type":"boolean"},"isStrikethrough":{"type":"boolean"},"iconName":{"type":"string"}},"required":["elementId"]}""")),
         ChatTool.CreateFunctionTool("remove_element", "Remove an element from the board.",
             BinaryData.FromString("""{"type":"object","properties":{"elementId":{"type":"string"},"removeConnectedArrows":{"type":"boolean"}},"required":["elementId"]}""")),
         ChatTool.CreateFunctionTool("add_icon", "Add an icon element to the whiteboard.",
@@ -207,6 +210,7 @@ public sealed class DiagramAssistantService
             return functionName switch
             {
                 "add_shape" => ExecuteAddShape(argumentsJson, board, events),
+                "add_text" => ExecuteAddText(argumentsJson, board, events),
                 "add_arrow" => ExecuteAddArrow(argumentsJson, board, events),
                 "update_element" => ExecuteUpdateElement(argumentsJson, board, events),
                 "remove_element" => ExecuteRemoveElement(argumentsJson, board, events),
@@ -243,6 +247,123 @@ public sealed class DiagramAssistantService
         board.Elements.Add(element);
         events.Add(new DiagramAssistantEvent { Type = EventType.ElementAdded, Content = JsonSerializer.Serialize(element, OrimJsonOptions.Default) });
         return ($"Shape created with ID: {element.Id}", events);
+    }
+
+    private static string NormalizeTextElementType(string? rawTextType) =>
+        rawTextType?.Trim().ToLowerInvariant() switch
+        {
+            "richtext" or "rich-text" or "rich_text" or "rich" => "richtext",
+            "markdown" or "md" => "markdown",
+            _ => "text"
+        };
+
+    private static void ApplyTextBaseProperties(
+        TextStyleElementBase element,
+        int zIndex,
+        double x,
+        double y,
+        double width,
+        double height,
+        string label,
+        double fontSize,
+        bool autoFontSize,
+        string color,
+        string? fontFamily,
+        bool isBold,
+        bool isItalic,
+        bool isUnderline,
+        bool isStrikethrough)
+    {
+        element.X = x;
+        element.Y = y;
+        element.Width = width;
+        element.Height = height;
+        element.ZIndex = zIndex;
+        element.Label = label;
+        element.LabelHorizontalAlignment = HorizontalLabelAlignment.Left;
+        element.LabelVerticalAlignment = VerticalLabelAlignment.Top;
+        element.FontSize = fontSize;
+        element.AutoFontSize = autoFontSize;
+        element.Color = color;
+        element.FontFamily = fontFamily;
+        element.IsBold = isBold;
+        element.IsItalic = isItalic;
+        element.IsUnderline = isUnderline;
+        element.IsStrikethrough = isStrikethrough;
+    }
+
+    private static (string, List<DiagramAssistantEvent>) ExecuteAddText(string argsJson, Board board, List<DiagramAssistantEvent> events)
+    {
+        using var doc = JsonDocument.Parse(argsJson);
+        var root = doc.RootElement;
+        var textType = NormalizeTextElementType(root.TryGetProperty("textType", out var textTypeProperty) ? textTypeProperty.GetString() : null);
+        var x = root.GetProperty("x").GetDouble();
+        var y = root.GetProperty("y").GetDouble();
+        var width = root.TryGetProperty("width", out var widthProperty) ? widthProperty.GetDouble() : 220;
+        var height = root.TryGetProperty("height", out var heightProperty) ? heightProperty.GetDouble() : 56;
+        var label = root.TryGetProperty("label", out var labelProperty) ? labelProperty.GetString() ?? "" : "";
+        var fontSize = root.TryGetProperty("fontSize", out var fontSizeProperty) ? fontSizeProperty.GetDouble() : 18;
+        var autoFontSize = root.TryGetProperty("autoFontSize", out var autoFontSizeProperty) && autoFontSizeProperty.GetBoolean();
+        var color = root.TryGetProperty("color", out var colorProperty) ? colorProperty.GetString() ?? "#000000" : "#000000";
+        var fontFamily = root.TryGetProperty("fontFamily", out var fontFamilyProperty) ? fontFamilyProperty.GetString() : null;
+        var isBold = root.TryGetProperty("isBold", out var isBoldProperty) && isBoldProperty.GetBoolean();
+        var isItalic = root.TryGetProperty("isItalic", out var isItalicProperty) && isItalicProperty.GetBoolean();
+        var isUnderline = root.TryGetProperty("isUnderline", out var isUnderlineProperty) && isUnderlineProperty.GetBoolean();
+        var isStrikethrough = root.TryGetProperty("isStrikethrough", out var isStrikethroughProperty) && isStrikethroughProperty.GetBoolean();
+
+        var plainText = root.TryGetProperty("text", out var textProperty) ? textProperty.GetString() ?? "" : "";
+        var html = root.TryGetProperty("html", out var htmlProperty)
+            ? htmlProperty.GetString() ?? ""
+            : $"<p>{WebUtility.HtmlEncode(plainText)}</p>";
+        if (string.IsNullOrWhiteSpace(html))
+        {
+            html = "<p></p>";
+        }
+
+        var markdown = root.TryGetProperty("markdown", out var markdownProperty)
+            ? markdownProperty.GetString() ?? ""
+            : plainText;
+
+        TextStyleElementBase element = textType switch
+        {
+            "richtext" => new RichTextElement
+            {
+                Html = html,
+                ScrollLeft = 0,
+                ScrollTop = 0,
+            },
+            "markdown" => new MarkdownElement
+            {
+                Markdown = markdown,
+                ScrollLeft = 0,
+                ScrollTop = 0,
+            },
+            _ => new TextElement
+            {
+                Text = plainText,
+            },
+        };
+
+        ApplyTextBaseProperties(
+            element,
+            board.Elements.Count,
+            x,
+            y,
+            width,
+            height,
+            label,
+            fontSize,
+            autoFontSize,
+            color,
+            fontFamily,
+            isBold,
+            isItalic,
+            isUnderline,
+            isStrikethrough);
+
+        board.Elements.Add(element);
+        events.Add(new DiagramAssistantEvent { Type = EventType.ElementAdded, Content = JsonSerializer.Serialize(element, OrimJsonOptions.Default) });
+        return ($"Text element created with ID: {element.Id}", events);
     }
 
     private static (string, List<DiagramAssistantEvent>) ExecuteAddArrow(string argsJson, Board board, List<DiagramAssistantEvent> events)
@@ -297,7 +418,9 @@ public sealed class DiagramAssistantService
         else if (element is TextStyleElementBase text)
         {
             if (root.TryGetProperty("fontSize", out var fs)) text.FontSize = fs.GetDouble();
+            if (root.TryGetProperty("autoFontSize", out var afs)) text.AutoFontSize = afs.GetBoolean();
             if (root.TryGetProperty("color", out var cp)) text.Color = cp.GetString() ?? text.Color;
+            if (root.TryGetProperty("fontFamily", out var ff)) text.FontFamily = ff.GetString();
             if (root.TryGetProperty("isBold", out var bp)) text.IsBold = bp.GetBoolean();
             if (root.TryGetProperty("isItalic", out var ip)) text.IsItalic = ip.GetBoolean();
             if (root.TryGetProperty("isUnderline", out var up)) text.IsUnderline = up.GetBoolean();
@@ -311,8 +434,14 @@ public sealed class DiagramAssistantService
                 case RichTextElement richText when root.TryGetProperty("html", out var htmlProperty):
                     richText.Html = htmlProperty.GetString() ?? "";
                     break;
+                case RichTextElement richText when root.TryGetProperty("text", out var richTextProperty):
+                    richText.Html = $"<p>{WebUtility.HtmlEncode(richTextProperty.GetString() ?? "")}</p>";
+                    break;
                 case MarkdownElement markdown when root.TryGetProperty("markdown", out var mp):
                     markdown.Markdown = mp.GetString() ?? "";
+                    break;
+                case MarkdownElement markdown when root.TryGetProperty("text", out var markdownTextProperty):
+                    markdown.Markdown = markdownTextProperty.GetString() ?? "";
                     break;
             }
         }

@@ -3,8 +3,9 @@ import type Konva from 'konva';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import { Alert, Box, Button, IconButton, Snackbar, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Alert, Box, Button, IconButton, Snackbar, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
+import MapIcon from '@mui/icons-material/Map';
 import { getAssistantAvailability } from '../../api/assistantSettings';
 import { createSnapshot, getBoard, restoreSnapshot, saveBoard } from '../../api/boards';
 import { useBoardStore } from './store/boardStore';
@@ -541,6 +542,10 @@ export function WhiteboardEditor() {
   if (!board) return null;
 
   const hasFrames = board.elements.some((el) => el.$type === 'frame');
+  const minimapOverlayZIndex = 1350;
+  const minimapRightOffset = !isNarrowPanelMode && activePanel != null
+    ? getAuxiliaryPanelWidth(activePanel) + 16
+    : 16;
 
   return (
     <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', pb: 'env(safe-area-inset-bottom)' }}>
@@ -645,7 +650,10 @@ export function WhiteboardEditor() {
           {searchOpen && !presentationMode && <CanvasSearch onClose={() => setSearchOpen(false)} />}
 
           {minimapVisible && !presentationMode && (
-            <Box data-whiteboard-export-hidden="true" sx={{ position: 'absolute', bottom: 80, right: 16, zIndex: 10 }}>
+            <Box
+              data-whiteboard-export-hidden="true"
+              sx={{ position: 'absolute', bottom: 'calc(72px + env(safe-area-inset-bottom))', right: minimapRightOffset, zIndex: minimapOverlayZIndex }}
+            >
               <Minimap
                 elements={board.elements}
                 cameraX={cameraX}
@@ -656,6 +664,29 @@ export function WhiteboardEditor() {
                 onNavigate={handleMinimapNavigate}
                 onClose={toggleMinimap}
               />
+            </Box>
+          )}
+          {!presentationMode && (
+            <Box
+              data-whiteboard-export-hidden="true"
+              sx={{ position: 'absolute', bottom: 'calc(16px + env(safe-area-inset-bottom))', right: minimapRightOffset, zIndex: minimapOverlayZIndex }}
+            >
+              <Tooltip title={t('tools.minimap')} placement="left">
+                <IconButton
+                  aria-label={t('tools.minimap')}
+                  onClick={toggleMinimap}
+                  color={minimapVisible ? 'primary' : 'default'}
+                  sx={{
+                    bgcolor: 'background.paper',
+                    border: '1px solid',
+                    borderColor: 'divider',
+                    boxShadow: 2,
+                    '&:hover': { bgcolor: 'background.paper' },
+                  }}
+                >
+                  <MapIcon />
+                </IconButton>
+              </Tooltip>
             </Box>
           )}
 

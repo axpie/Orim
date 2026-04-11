@@ -10,6 +10,7 @@ import {
   CardContent,
   IconButton,
   Snackbar,
+  Tooltip,
   TextField,
   Button,
   Typography,
@@ -19,11 +20,13 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
+import MapIcon from '@mui/icons-material/Map';
 import { exportSharedBoardJson, getSharedBoard, getSharedBoardHistory, replaceSharedBoardContent, validateSharePassword } from '../../api/boards';
 import { useBoardStore } from '../whiteboard/store/boardStore';
 import { useCommandStack } from '../whiteboard/store/commandStack';
 import { WhiteboardCanvas } from '../whiteboard/canvas/WhiteboardCanvas';
 import { FloatingToolbar } from '../whiteboard/canvas/FloatingToolbar';
+import { Minimap } from '../whiteboard/canvas/Minimap';
 import { RemoteCursorEdgeIndicators } from '../whiteboard/canvas/RemoteCursorEdgeIndicators';
 import { Toolbar } from '../whiteboard/tools/Toolbar';
 import { BoardTopBar } from '../whiteboard/tools/BoardTopBar';
@@ -99,6 +102,7 @@ export function SharedBoardView() {
   const [guestNameDraft, setGuestNameDraft] = useState(guestDisplayName);
   const [guestNameSaved, setGuestNameSaved] = useState(false);
   const [inlineEditingActive, setInlineEditingActive] = useState(false);
+  const [minimapVisible, setMinimapVisible] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
   const liveAnnouncementIdRef = useRef(0);
@@ -485,6 +489,19 @@ export function SharedBoardView() {
     }
   }, [sendOperationThrottled]);
 
+  const toggleMinimap = useCallback(() => setMinimapVisible((value) => !value), []);
+
+  const handleMinimapNavigate = useCallback((worldX: number, worldY: number) => {
+    const { cameraX: nextCameraX, cameraY: nextCameraY } = getCenteredCameraPosition(
+      worldX,
+      worldY,
+      zoom,
+      viewportWidth,
+      viewportHeight,
+    );
+    setCamera(nextCameraX, nextCameraY);
+  }, [setCamera, viewportHeight, viewportWidth, zoom]);
+
   const handleToggleProperties = useCallback(() => {
     setActivePanel((current) => toggleAuxiliaryPanel(current, 'properties'));
   }, []);
@@ -580,6 +597,11 @@ export function SharedBoardView() {
     );
   }
 
+  const minimapOverlayZIndex = 1350;
+  const minimapRightOffset = !isNarrowPanelMode && activePanel != null
+    ? getAuxiliaryPanelWidth(activePanel) + 16
+    : 16;
+
   return (
     <Box sx={{ height: '100dvh', display: 'flex', flexDirection: 'column', overflow: 'hidden', pb: 'env(safe-area-inset-bottom)' }}>
       <BoardTopBar
@@ -637,7 +659,16 @@ export function SharedBoardView() {
         </Box>
       )}
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
-        {board.sharedAllowAnonymousEditing && !compactOverlayOpen && <Toolbar onBoardChanged={onBoardChanged} canvasContainerRef={canvasBoxRef} shareToken={token} sharePassword={validatedPassword} />}
+        {board.sharedAllowAnonymousEditing && !compactOverlayOpen && (
+          <Toolbar
+            onBoardChanged={onBoardChanged}
+            canvasContainerRef={canvasBoxRef}
+            minimapVisible={minimapVisible}
+            onToggleMinimap={toggleMinimap}
+            shareToken={token}
+            sharePassword={validatedPassword}
+          />
+        )}
         <Box ref={canvasBoxRef} sx={{ flex: 1, position: 'relative', minWidth: 0, minHeight: 0 }}>
             <WhiteboardCanvas
               editable={board.sharedAllowAnonymousEditing}
@@ -711,6 +742,46 @@ export function SharedBoardView() {
               onOpenPropertiesPanel={handleToggleProperties}
             />
           )}
+
+          {minimapVisible && (
+            <Box
+              data-whiteboard-export-hidden="true"
+              sx={{ position: 'absolute', bottom: 'calc(72px + env(safe-area-inset-bottom))', right: minimapRightOffset, zIndex: minimapOverlayZIndex }}
+            >
+              <Minimap
+                elements={board.elements}
+                cameraX={cameraX}
+                cameraY={cameraY}
+                zoom={zoom}
+                viewportWidth={viewportWidth}
+                viewportHeight={viewportHeight}
+                onNavigate={handleMinimapNavigate}
+                onClose={toggleMinimap}
+              />
+            </Box>
+          )}
+
+          <Box
+            data-whiteboard-export-hidden="true"
+            sx={{ position: 'absolute', bottom: 'calc(16px + env(safe-area-inset-bottom))', right: minimapRightOffset, zIndex: minimapOverlayZIndex }}
+          >
+            <Tooltip title={t('tools.minimap')} placement="left">
+              <IconButton
+                aria-label={t('tools.minimap')}
+                onClick={toggleMinimap}
+                color={minimapVisible ? 'primary' : 'default'}
+                sx={{
+                  bgcolor: 'background.paper',
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  boxShadow: 2,
+                  '&:hover': { bgcolor: 'background.paper' },
+                }}
+              >
+                <MapIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
 
           <Box data-whiteboard-export-hidden="true">
             <AuxiliaryPanelHost
