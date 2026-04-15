@@ -20,7 +20,6 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
-import MapIcon from '@mui/icons-material/Map';
 import { exportSharedBoardJson, getSharedBoard, getSharedBoardHistory, replaceSharedBoardContent, validateSharePassword } from '../../api/boards';
 import { useBoardStore } from '../whiteboard/store/boardStore';
 import { useCommandStack } from '../whiteboard/store/commandStack';
@@ -849,28 +848,6 @@ export function SharedBoardView() {
               />
             </Box>
           )}
-
-          <Box
-            data-whiteboard-export-hidden="true"
-            sx={{ position: 'absolute', bottom: 'calc(16px + env(safe-area-inset-bottom))', right: minimapRightOffset, zIndex: minimapOverlayZIndex }}
-          >
-            <Tooltip title={t('tools.minimap')} placement="left">
-              <IconButton
-                aria-label={t('tools.minimap')}
-                onClick={toggleMinimap}
-                color={minimapVisible ? 'primary' : 'default'}
-                sx={{
-                  bgcolor: 'background.paper',
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  boxShadow: 2,
-                  '&:hover': { bgcolor: 'background.paper' },
-                }}
-              >
-                <MapIcon />
-              </IconButton>
-            </Tooltip>
-          </Box>
 
           <Box data-whiteboard-export-hidden="true">
             <AuxiliaryPanelHost

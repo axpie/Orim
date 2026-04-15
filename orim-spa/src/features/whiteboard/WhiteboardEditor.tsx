@@ -5,7 +5,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { Alert, Box, Button, IconButton, Snackbar, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
-import MapIcon from '@mui/icons-material/Map';
 import { getAssistantAvailability } from '../../api/assistantSettings';
 import { createSnapshot, getBoard, restoreSnapshot, saveBoard } from '../../api/boards';
 import { useBoardStore } from './store/boardStore';
@@ -749,29 +748,7 @@ export function WhiteboardEditor() {
               />
             </Box>
           )}
-          {!presentationMode && (
-            <Box
-              data-whiteboard-export-hidden="true"
-              sx={{ position: 'absolute', bottom: 'calc(16px + env(safe-area-inset-bottom))', right: minimapRightOffset, zIndex: minimapOverlayZIndex }}
-            >
-              <Tooltip title={t('tools.minimap')} placement="left">
-                <IconButton
-                  aria-label={t('tools.minimap')}
-                  onClick={toggleMinimap}
-                  color={minimapVisible ? 'primary' : 'default'}
-                  sx={{
-                    bgcolor: 'background.paper',
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    boxShadow: 2,
-                    '&:hover': { bgcolor: 'background.paper' },
-                  }}
-                >
-                  <MapIcon />
-                </IconButton>
-              </Tooltip>
-            </Box>
-          )}
+
 
           {!presentationMode && (
             <Box data-whiteboard-export-hidden="true">
