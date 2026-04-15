@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import type {
   BoardElement,
   NamedStylePreset,
@@ -54,7 +55,55 @@ interface StylePresetHook {
 
 export const useStylePresetStore: StylePresetHook = Object.assign(
   function useStylePresetStore<T>(selector: StylePresetSelector<T>): T {
-    return useBoardStore((state) => selector(selectStylePresetState(state)));
+    const presets = useBoardStore((state) => state.board?.stylePresetState?.presets ?? EMPTY_STYLE_PRESET_STATE.presets);
+    const placementPreferences = useBoardStore(
+      (state) => state.board?.stylePresetState?.placementPreferences ?? EMPTY_STYLE_PRESET_STATE.placementPreferences,
+    );
+    const lastUsedStyles = useBoardStore(
+      (state) => state.board?.stylePresetState?.lastUsedStyles ?? EMPTY_STYLE_PRESET_STATE.lastUsedStyles,
+    );
+    const createPresetFromElement = useBoardStore((state) => state.createPresetFromElement);
+    const updatePresetFromElement = useBoardStore((state) => state.updatePresetFromElement);
+    const renamePreset = useBoardStore((state) => state.renamePreset);
+    const deletePreset = useBoardStore((state) => state.deletePreset);
+    const setPlacementMode = useBoardStore((state) => state.setPlacementMode);
+    const setDefaultPreset = useBoardStore((state) => state.setDefaultPreset);
+    const rememberStyleFromElement = useBoardStore((state) => state.rememberStyleFromElement);
+    const rememberStyleSnapshot = useBoardStore((state) => state.rememberStyleSnapshot);
+    const resolvePlacementStyle = useBoardStore((state) => state.resolvePlacementStyle);
+
+    const stylePresetState = useMemo(
+      () => ({
+        presets,
+        placementPreferences,
+        lastUsedStyles,
+        createPresetFromElement,
+        updatePresetFromElement,
+        renamePreset,
+        deletePreset,
+        setPlacementMode,
+        setDefaultPreset,
+        rememberStyleFromElement,
+        rememberStyleSnapshot,
+        resolvePlacementStyle,
+      }),
+      [
+        presets,
+        placementPreferences,
+        lastUsedStyles,
+        createPresetFromElement,
+        updatePresetFromElement,
+        renamePreset,
+        deletePreset,
+        setPlacementMode,
+        setDefaultPreset,
+        rememberStyleFromElement,
+        rememberStyleSnapshot,
+        resolvePlacementStyle,
+      ],
+    );
+
+    return selector(stylePresetState);
   },
   {
     getState: () => selectStylePresetState(useBoardStore.getState()),

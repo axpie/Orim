@@ -1,3 +1,4 @@
+import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import {
   BorderLineStyle,
@@ -6,6 +7,7 @@ import {
   ShapeType,
   VerticalLabelAlignment,
   type Board,
+  type IconElement,
   type ShapeElement,
 } from '../../../../types/models';
 import { useBoardStore } from '../../store/boardStore';
@@ -79,6 +81,25 @@ function createBoard(): Board {
     snapshots: [],
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+  };
+}
+
+function createIcon(overrides: Partial<IconElement> = {}): IconElement {
+  return {
+    $type: 'icon',
+    id: 'icon-1',
+    x: 0,
+    y: 0,
+    width: 48,
+    height: 48,
+    zIndex: 0,
+    rotation: 0,
+    label: '',
+    labelHorizontalAlignment: HorizontalLabelAlignment.Center,
+    labelVerticalAlignment: VerticalLabelAlignment.Middle,
+    iconName: 'mdi:star',
+    color: '#2563eb',
+    ...overrides,
   };
 }
 
@@ -166,5 +187,16 @@ describe('stylePresetStore', () => {
       presetId: null,
     });
     expect(useStylePresetStore.getState().resolvePlacementStyle('shape')).toBeNull();
+  });
+
+  it('can subscribe to icon placement styles without triggering render loops', () => {
+    const preset = useStylePresetStore.getState().createPresetFromElement(
+      createIcon({ color: '#7c3aed' }),
+      'Lila Symbol',
+    );
+
+    useStylePresetStore.getState().setDefaultPreset('icon', preset!.id);
+
+    expect(() => renderHook(() => useStylePresetStore((state) => state.resolvePlacementStyle('icon')))).not.toThrow();
   });
 });
