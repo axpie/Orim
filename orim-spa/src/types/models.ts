@@ -617,6 +617,23 @@ export interface CursorPresence {
   worldY?: number | null;
   selectedElementIds?: string[];
   updatedAtUtc: string;
+  isPresenting?: boolean;
+  viewportCameraX?: number | null;
+  viewportCameraY?: number | null;
+  viewportZoom?: number | null;
+}
+
+export interface FollowMeSessionStartedNotification {
+  clientId: string;
+  displayName: string;
+}
+
+export interface BringToViewportNotification {
+  clientId: string;
+  displayName: string;
+  cameraX: number;
+  cameraY: number;
+  zoom: number;
 }
 
 // --- Board Change Notification ---

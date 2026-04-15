@@ -65,6 +65,8 @@ interface BoardState {
   resumeDrawingElementId: string | null;
   commandConflict: BoardCommandConflict | null;
   followingClientId: string | null;
+  isPresenting: boolean;
+  presentingClientId: string | null;
 
   getElementById: (id: string) => BoardElement | undefined;
   setBoard: (board: Board | null, options?: SetBoardOptions) => void;
@@ -90,6 +92,8 @@ interface BoardState {
   setPendingStickyNotePresetId: (presetId: string | null) => void;
   setResumeDrawingElementId: (id: string | null) => void;
   setFollowingClientId: (clientId: string | null) => void;
+  setIsPresenting: (val: boolean) => void;
+  setPresentingClientId: (clientId: string | null) => void;
   createPresetFromElement: (element: BoardElement, name: string) => NamedStylePreset | null;
   updatePresetFromElement: (presetId: string, element: BoardElement) => boolean;
   renamePreset: (presetId: string, name: string) => void;
@@ -340,6 +344,8 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   resumeDrawingElementId: null,
   commandConflict: null,
   followingClientId: null,
+  isPresenting: false,
+  presentingClientId: null,
 
   getElementById: (id) => get()._elementsMap.get(id),
 
@@ -817,4 +823,6 @@ export const useBoardStore = create<BoardState>((set, get) => ({
   setPendingStickyNotePresetId: (presetId) => set({ pendingStickyNotePresetId: presetId }),
   setResumeDrawingElementId: (id) => set({ resumeDrawingElementId: id }),
   setFollowingClientId: (clientId) => set({ followingClientId: clientId }),
+  setIsPresenting: (val) => set({ isPresenting: val }),
+  setPresentingClientId: (clientId) => set({ presentingClientId: clientId }),
 }));

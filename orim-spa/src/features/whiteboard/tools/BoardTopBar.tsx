@@ -38,6 +38,9 @@ import VisibilityIcon from '@mui/icons-material/Visibility';
 import SlideshowIcon from '@mui/icons-material/Slideshow';
 import NearMeIcon from '@mui/icons-material/NearMe';
 import PeopleAltIcon from '@mui/icons-material/PeopleAlt';
+import CastIcon from '@mui/icons-material/Cast';
+import CastConnectedIcon from '@mui/icons-material/CastConnected';
+import GroupAddIcon from '@mui/icons-material/GroupAdd';
 import { useBoardStore } from '../store/boardStore';
 import { AppSettingsDialog, type AppSettingsDialogScope } from '../../../components/dialogs/AppSettingsDialog';
 import { exportBoardZip } from '../../../api/boards';
@@ -74,6 +77,9 @@ interface BoardTopBarProps {
   collaborators?: CursorPresence[];
   localConnectionId?: string | null;
   appSettingsScope?: AppSettingsDialogScope;
+  onStartFollowMe?: () => void;
+  onStopFollowMe?: () => void;
+  onBringEveryoneToMe?: () => void;
 }
 
 export function BoardTopBar({
@@ -100,6 +106,9 @@ export function BoardTopBar({
   collaborators = [],
   localConnectionId = null,
   appSettingsScope = 'full',
+  onStartFollowMe,
+  onStopFollowMe,
+  onBringEveryoneToMe,
 }: BoardTopBarProps) {
   const { t } = useTranslation();
   const theme = useTheme();
@@ -111,8 +120,10 @@ export function BoardTopBar({
   const setCamera = useBoardStore((s) => s.setCamera);
   const followingClientId = useBoardStore((s) => s.followingClientId);
   const setFollowingClientId = useBoardStore((s) => s.setFollowingClientId);
+  const isPresenting = useBoardStore((s) => s.isPresenting);
 
   const [editing, setEditing] = useState(false);
+  const [followMeMenuAnchor, setFollowMeMenuAnchor] = useState<null | HTMLElement>(null);
   const [title, setTitle] = useState('');
   const [exportAnchor, setExportAnchor] = useState<null | HTMLElement>(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -470,6 +481,23 @@ export function BoardTopBar({
                 </Tooltip>
               )}
 
+              {(onStartFollowMe || onStopFollowMe || onBringEveryoneToMe) && (
+                <Tooltip title={isPresenting
+                  ? t('board.followMe.presenting', 'Präsentation läuft')
+                  : t('board.followMe.start', 'Follow Me')
+                }>
+                  <IconButton
+                    onClick={(e) => setFollowMeMenuAnchor(e.currentTarget)}
+                    sx={{
+                      color: isPresenting ? 'primary.main' : 'inherit',
+                      bgcolor: isPresenting ? 'rgba(255,255,255,0.12)' : undefined,
+                    }}
+                  >
+                    {isPresenting ? <CastConnectedIcon /> : <CastIcon />}
+                  </IconButton>
+                </Tooltip>
+              )}
+
               <Tooltip title={t('shortcuts.open')}>
                 <IconButton onClick={() => setShortcutsOpen(true)} sx={{ color: 'inherit' }}>
                   <KeyboardIcon />
@@ -582,6 +610,24 @@ export function BoardTopBar({
             <ListItemText>{t('board.present', 'Präsentieren')}</ListItemText>
           </MenuItem>
         )}
+        {!isPresenting && onStartFollowMe && (
+          <MenuItem onClick={() => { closeMobileActions(); onStartFollowMe(); }}>
+            <ListItemIcon><CastIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('board.followMe.startSession', 'Follow Me starten')}</ListItemText>
+          </MenuItem>
+        )}
+        {isPresenting && onStopFollowMe && (
+          <MenuItem onClick={() => { closeMobileActions(); onStopFollowMe(); }}>
+            <ListItemIcon><CastConnectedIcon fontSize="small" color="primary" /></ListItemIcon>
+            <ListItemText>{t('board.followMe.stopSession', 'Follow Me beenden')}</ListItemText>
+          </MenuItem>
+        )}
+        {onBringEveryoneToMe && (
+          <MenuItem onClick={() => { closeMobileActions(); onBringEveryoneToMe?.(); }}>
+            <ListItemIcon><GroupAddIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('board.followMe.bringEveryone', 'Alle zu mir')}</ListItemText>
+          </MenuItem>
+        )}
         <MenuItem onClick={() => { closeMobileActions(); setShortcutsOpen(true); }}>
           <ListItemIcon><KeyboardIcon fontSize="small" /></ListItemIcon>
           <ListItemText>{t('shortcuts.open')}</ListItemText>
@@ -623,6 +669,31 @@ export function BoardTopBar({
       />
 
       <AppSettingsDialog open={appSettingsOpen} onClose={() => setAppSettingsOpen(false)} scope={appSettingsScope} />
+
+      <Menu
+        anchorEl={followMeMenuAnchor}
+        open={Boolean(followMeMenuAnchor)}
+        onClose={() => setFollowMeMenuAnchor(null)}
+      >
+        {!isPresenting && onStartFollowMe && (
+          <MenuItem onClick={() => { setFollowMeMenuAnchor(null); onStartFollowMe(); }}>
+            <ListItemIcon><CastIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('board.followMe.startSession', 'Follow Me starten')}</ListItemText>
+          </MenuItem>
+        )}
+        {isPresenting && onStopFollowMe && (
+          <MenuItem onClick={() => { setFollowMeMenuAnchor(null); onStopFollowMe(); }}>
+            <ListItemIcon><CastConnectedIcon fontSize="small" color="primary" /></ListItemIcon>
+            <ListItemText>{t('board.followMe.stopSession', 'Follow Me beenden')}</ListItemText>
+          </MenuItem>
+        )}
+        {onBringEveryoneToMe && (
+          <MenuItem onClick={() => { setFollowMeMenuAnchor(null); onBringEveryoneToMe(); }}>
+            <ListItemIcon><GroupAddIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>{t('board.followMe.bringEveryone', 'Alle zu mir')}</ListItemText>
+          </MenuItem>
+        )}
+      </Menu>
 
       <Menu
         anchorEl={followMenuAnchor}

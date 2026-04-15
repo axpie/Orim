@@ -40,6 +40,7 @@ import { mergeCursorPresence } from '../whiteboard/realtime/mergeCursorPresence'
 import { useOperationOutboxStore } from '../whiteboard/store/outboxStore';
 import { useFollowCamera } from '../whiteboard/useFollowCamera';
 import { useSignalR } from '../../hooks/useSignalR';
+import { FollowMeInvitation } from '../whiteboard/tools/FollowMeInvitation';
 import { useAuthStore } from '../../stores/authStore';
 import type { Board, CursorPresence } from '../../types/models';
 import { resolveInitialGuestDisplayName } from './guestDisplayNames';
@@ -75,6 +76,9 @@ export function SharedBoardView() {
   const clearCommandConflict = useBoardStore((s) => s.clearCommandConflict);
   const followingClientId = useBoardStore((s) => s.followingClientId);
   const setFollowingClientId = useBoardStore((s) => s.setFollowingClientId);
+  const isPresenting = useBoardStore((s) => s.isPresenting);
+  const setIsPresenting = useBoardStore((s) => s.setIsPresenting);
+  const setPresentingClientId = useBoardStore((s) => s.setPresentingClientId);
   const setCamera = useBoardStore((s) => s.setCamera);
   const setZoom = useBoardStore((s) => s.setZoom);
   const cameraX = useBoardStore((s) => s.cameraX);
@@ -103,6 +107,8 @@ export function SharedBoardView() {
   const [guestNameSaved, setGuestNameSaved] = useState(false);
   const [inlineEditingActive, setInlineEditingActive] = useState(false);
   const [minimapVisible, setMinimapVisible] = useState(false);
+  const [followMeInvitation, setFollowMeInvitation] = useState<{ clientId: string; displayName: string; colorHex?: string } | null>(null);
+  const [followMeEndedSnackbar, setFollowMeEndedSnackbar] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const activeSavePromiseRef = useRef<Promise<Board | null> | null>(null);
   const liveAnnouncementIdRef = useRef(0);
@@ -149,6 +155,9 @@ export function SharedBoardView() {
     sendOperationThrottled,
     sendCursorUpdate,
     updateDisplayName,
+    startFollowMeSession,
+    stopFollowMeSession,
+    bringEveryoneToMe,
     connectionId,
     connectionState,
     lastError,
@@ -245,6 +254,34 @@ export function SharedBoardView() {
       const current = useBoardStore.getState().remoteCursors;
       const others = current.filter((entry) => entry.clientId !== cursor.clientId);
       setRemoteCursors(mergeCursorPresence(current, [...others, cursor]));
+    },
+    onFollowMeSessionStarted: (notification) => {
+      if (notification.clientId === useBoardStore.getState().presentingClientId) {
+        return;
+      }
+
+      const color = useBoardStore.getState().remoteCursors.find(
+        (c) => c.clientId === notification.clientId,
+      )?.colorHex;
+
+      setFollowMeInvitation({
+        clientId: notification.clientId,
+        displayName: notification.displayName,
+        colorHex: color,
+      });
+    },
+    onFollowMeSessionEnded: (clientId) => {
+      setFollowMeInvitation(null);
+      useBoardStore.setState({ presentingClientId: null });
+      if (useBoardStore.getState().followingClientId === clientId) {
+        useBoardStore.getState().setFollowingClientId(null);
+        setFollowMeEndedSnackbar(true);
+      }
+    },
+    onBringToViewport: (notification) => {
+      const { cameraX: nextCameraX, cameraY: nextCameraY } = notification;
+      setZoom(notification.zoom);
+      setCamera(nextCameraX, nextCameraY);
     },
     onOutboxDiscarded: async () => {
       if (!token) {
@@ -428,15 +465,39 @@ export function SharedBoardView() {
   // Broadcast selected element IDs to remote collaborators (including anonymous users)
   useEffect(() => {
     if (connectionState === 'connected') {
-      sendCursorUpdate(null, null, selectedElementIds.length > 0 ? selectedElementIds : undefined);
+      const state = useBoardStore.getState();
+      if (state.isPresenting) {
+        sendCursorUpdate(
+          null,
+          null,
+          selectedElementIds.length > 0 ? selectedElementIds : undefined,
+          state.cameraX,
+          state.cameraY,
+          state.zoom,
+        );
+      } else {
+        sendCursorUpdate(null, null, selectedElementIds.length > 0 ? selectedElementIds : undefined);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedElementIds, connectionState]);
 
   const handlePointerPresenceChanged = useCallback(
     (worldX: number | null, worldY: number | null) => {
-      const currentSelection = useBoardStore.getState().selectedElementIds;
-      sendCursorUpdate(worldX, worldY, currentSelection.length > 0 ? currentSelection : undefined);
+      const state = useBoardStore.getState();
+      const currentSelection = state.selectedElementIds;
+      if (state.isPresenting) {
+        sendCursorUpdate(
+          worldX,
+          worldY,
+          currentSelection.length > 0 ? currentSelection : undefined,
+          state.cameraX,
+          state.cameraY,
+          state.zoom,
+        );
+      } else {
+        sendCursorUpdate(worldX, worldY, currentSelection.length > 0 ? currentSelection : undefined);
+      }
     },
     [sendCursorUpdate],
   );
@@ -490,6 +551,31 @@ export function SharedBoardView() {
   }, [sendOperationThrottled]);
 
   const toggleMinimap = useCallback(() => setMinimapVisible((value) => !value), []);
+
+  const handleStartFollowMe = useCallback(async () => {
+    const sent = await startFollowMeSession();
+    if (sent) {
+      setIsPresenting(true);
+    }
+  }, [startFollowMeSession, setIsPresenting]);
+
+  const handleStopFollowMe = useCallback(async () => {
+    const sent = await stopFollowMeSession();
+    if (sent) {
+      setIsPresenting(false);
+    }
+  }, [stopFollowMeSession, setIsPresenting]);
+
+  const handleBringEveryoneToMe = useCallback(() => {
+    const state = useBoardStore.getState();
+    void bringEveryoneToMe(state.cameraX, state.cameraY, state.zoom);
+  }, [bringEveryoneToMe]);
+
+  const handleFollowMeAccept = useCallback((clientId: string) => {
+    setFollowMeInvitation(null);
+    setFollowingClientId(clientId);
+    setPresentingClientId(clientId);
+  }, [setFollowingClientId, setPresentingClientId]);
 
   const handleMinimapNavigate = useCallback((worldX: number, worldY: number) => {
     const { cameraX: nextCameraX, cameraY: nextCameraY } = getCenteredCameraPosition(
@@ -622,6 +708,9 @@ export function SharedBoardView() {
         collaborators={remoteCursors}
         localConnectionId={connectionId}
         appSettingsScope={isAuthenticated ? 'full' : 'appearance-only'}
+        onStartFollowMe={remoteCursors.filter((c) => c.clientId !== connectionId).length > 0 ? handleStartFollowMe : undefined}
+        onStopFollowMe={isPresenting ? handleStopFollowMe : undefined}
+        onBringEveryoneToMe={remoteCursors.filter((c) => c.clientId !== connectionId).length > 0 ? handleBringEveryoneToMe : undefined}
       />
       {!isAuthenticated && (
         <Box sx={{ px: 2, py: 1.5, borderBottom: 1, borderColor: 'divider', backgroundColor: 'background.paper' }}>
@@ -817,6 +906,22 @@ export function SharedBoardView() {
           {commandConflict ? formatBoardCommandConflict(commandConflict) : ''}
         </Alert>
       </Snackbar>
+
+      <FollowMeInvitation
+        presenterClientId={followMeInvitation?.clientId ?? null}
+        presenterDisplayName={followMeInvitation?.displayName ?? null}
+        presenterColorHex={followMeInvitation?.colorHex}
+        onAccept={handleFollowMeAccept}
+        onDismiss={() => setFollowMeInvitation(null)}
+      />
+
+      <Snackbar
+        open={followMeEndedSnackbar}
+        autoHideDuration={3000}
+        onClose={() => setFollowMeEndedSnackbar(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        message={t('board.followMe.sessionEnded', 'Präsentation beendet')}
+      />
     </Box>
   );
 }

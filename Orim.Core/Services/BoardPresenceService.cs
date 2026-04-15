@@ -13,7 +13,11 @@ public sealed record BoardCursorPresence(
     double? WorldX,
     double? WorldY,
     DateTime UpdatedAtUtc,
-    IReadOnlyList<string>? SelectedElementIds = null);
+    IReadOnlyList<string>? SelectedElementIds = null,
+    bool IsPresenting = false,
+    double? ViewportCameraX = null,
+    double? ViewportCameraY = null,
+    double? ViewportZoom = null);
 
 public sealed class BoardPresenceService : IBoardPresenceService
 {

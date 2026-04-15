@@ -24,6 +24,7 @@ import { SnapshotDialog } from './panels/SnapshotDialog';
 import { AuxiliaryPanelHost } from './panels/AuxiliaryPanelHost';
 import { getAuxiliaryPanelWidth, toggleAuxiliaryPanel, type AuxiliaryPanelKind } from './panels/auxiliaryPanels';
 import { BoardTopBar } from './tools/BoardTopBar';
+import { FollowMeInvitation } from './tools/FollowMeInvitation';
 import { PresentationMode } from './PresentationMode';
 import { useWhiteboardRealtime } from './useWhiteboardRealtime';
 import { useFollowCamera } from './useFollowCamera';
@@ -68,6 +69,9 @@ export function WhiteboardEditor() {
   const setDirty = useBoardStore((s) => s.setDirty);
   const followingClientId = useBoardStore((s) => s.followingClientId);
   const setFollowingClientId = useBoardStore((s) => s.setFollowingClientId);
+  const isPresenting = useBoardStore((s) => s.isPresenting);
+  const setIsPresenting = useBoardStore((s) => s.setIsPresenting);
+  const setPresentingClientId = useBoardStore((s) => s.setPresentingClientId);
   const setCamera = useBoardStore((s) => s.setCamera);
   const setZoom = useBoardStore((s) => s.setZoom);
   const commandConflict = useBoardStore((s) => s.commandConflict);
@@ -86,6 +90,8 @@ export function WhiteboardEditor() {
   const [activePanel, setActivePanel] = useState<AuxiliaryPanelKind | null>(null);
   const [snapshotsOpen, setSnapshotsOpen] = useState(false);
   const [minimapVisible, setMinimapVisible] = useState(false);
+  const [followMeInvitation, setFollowMeInvitation] = useState<{ clientId: string; displayName: string; colorHex?: string } | null>(null);
+  const [followMeEndedSnackbar, setFollowMeEndedSnackbar] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [presentationMode, setPresentationMode] = useState(false);
   const [inlineEditingActive, setInlineEditingActive] = useState(false);
@@ -349,6 +355,9 @@ export function WhiteboardEditor() {
     sendOperation,
     sendOperationThrottled,
     sendCursorUpdate,
+    startFollowMeSession,
+    stopFollowMeSession,
+    bringEveryoneToMe,
     connectionId,
     connectionState,
     boardSyncStatus,
@@ -369,6 +378,28 @@ export function WhiteboardEditor() {
     announceLive,
     t,
     scheduleSave,
+    onFollowMeSessionStarted: (notification) => {
+      const color = useBoardStore.getState().remoteCursors.find(
+        (c) => c.clientId === notification.clientId,
+      )?.colorHex;
+      setFollowMeInvitation({
+        clientId: notification.clientId,
+        displayName: notification.displayName,
+        colorHex: color,
+      });
+    },
+    onFollowMeSessionEnded: (clientId) => {
+      setFollowMeInvitation(null);
+      useBoardStore.setState({ presentingClientId: null });
+      if (useBoardStore.getState().followingClientId === clientId) {
+        useBoardStore.getState().setFollowingClientId(null);
+        setFollowMeEndedSnackbar(true);
+      }
+    },
+    onBringToViewport: (notification) => {
+      setZoom(notification.zoom);
+      setCamera(notification.cameraX, notification.cameraY);
+    },
   });
   useEffect(() => {
     connectionIdRef.current = connectionId;
@@ -383,7 +414,19 @@ export function WhiteboardEditor() {
   // Broadcast selected element IDs to remote collaborators
   useEffect(() => {
     if (connectionState === 'connected') {
-      sendCursorUpdate(null, null, selectedElementIds.length > 0 ? selectedElementIds : undefined);
+      const state = useBoardStore.getState();
+      if (state.isPresenting) {
+        sendCursorUpdate(
+          null,
+          null,
+          selectedElementIds.length > 0 ? selectedElementIds : undefined,
+          state.cameraX,
+          state.cameraY,
+          state.zoom,
+        );
+      } else {
+        sendCursorUpdate(null, null, selectedElementIds.length > 0 ? selectedElementIds : undefined);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedElementIds, connectionState]);
@@ -392,8 +435,20 @@ export function WhiteboardEditor() {
 
   const handlePointerPresenceChanged = useCallback(
     (worldX: number | null, worldY: number | null) => {
-      const currentSelection = useBoardStore.getState().selectedElementIds;
-      sendCursorUpdate(worldX, worldY, currentSelection.length > 0 ? currentSelection : undefined);
+      const state = useBoardStore.getState();
+      const currentSelection = state.selectedElementIds;
+      if (state.isPresenting) {
+        sendCursorUpdate(
+          worldX,
+          worldY,
+          currentSelection.length > 0 ? currentSelection : undefined,
+          state.cameraX,
+          state.cameraY,
+          state.zoom,
+        );
+      } else {
+        sendCursorUpdate(worldX, worldY, currentSelection.length > 0 ? currentSelection : undefined);
+      }
     },
     [sendCursorUpdate],
   );
@@ -401,6 +456,31 @@ export function WhiteboardEditor() {
   const handleStageReady = useCallback((stage: Konva.Stage | null) => {
     stageRef.current = stage;
   }, []);
+
+  const handleStartFollowMe = useCallback(async () => {
+    const sent = await startFollowMeSession();
+    if (sent) {
+      setIsPresenting(true);
+    }
+  }, [startFollowMeSession, setIsPresenting]);
+
+  const handleStopFollowMe = useCallback(async () => {
+    const sent = await stopFollowMeSession();
+    if (sent) {
+      setIsPresenting(false);
+    }
+  }, [stopFollowMeSession, setIsPresenting]);
+
+  const handleBringEveryoneToMe = useCallback(() => {
+    const state = useBoardStore.getState();
+    void bringEveryoneToMe(state.cameraX, state.cameraY, state.zoom);
+  }, [bringEveryoneToMe]);
+
+  const handleFollowMeAccept = useCallback((clientId: string) => {
+    setFollowMeInvitation(null);
+    setFollowingClientId(clientId);
+    setPresentingClientId(clientId);
+  }, [setFollowingClientId, setPresentingClientId]);
 
   const handleExportPng = useCallback(async () => {
     const stage = stageRef.current;
@@ -569,6 +649,9 @@ export function WhiteboardEditor() {
           hasFrames={hasFrames}
           collaborators={remoteCursors}
           localConnectionId={connectionId}
+          onStartFollowMe={remoteCursors.filter((c) => c.clientId !== connectionId).length > 0 ? handleStartFollowMe : undefined}
+          onStopFollowMe={isPresenting ? handleStopFollowMe : undefined}
+          onBringEveryoneToMe={remoteCursors.filter((c) => c.clientId !== connectionId).length > 0 ? handleBringEveryoneToMe : undefined}
         />
       )}
       <Box sx={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden', minWidth: 0, minHeight: 0 }}>
@@ -762,6 +845,22 @@ export function WhiteboardEditor() {
           {commandConflict ? formatBoardCommandConflict(commandConflict) : ''}
         </Alert>
       </Snackbar>
+
+      <FollowMeInvitation
+        presenterClientId={followMeInvitation?.clientId ?? null}
+        presenterDisplayName={followMeInvitation?.displayName ?? null}
+        presenterColorHex={followMeInvitation?.colorHex}
+        onAccept={handleFollowMeAccept}
+        onDismiss={() => setFollowMeInvitation(null)}
+      />
+
+      <Snackbar
+        open={followMeEndedSnackbar}
+        autoHideDuration={3000}
+        onClose={() => setFollowMeEndedSnackbar(false)}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+        message={t('board.followMe.sessionEnded', 'Präsentation beendet')}
+      />
     </Box>
   );
 }

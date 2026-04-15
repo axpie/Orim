@@ -9,6 +9,8 @@ import type {
   BoardOperationNotification,
   BoardStateUpdateNotification,
   RealtimeConnectionState,
+  FollowMeSessionStartedNotification,
+  BringToViewportNotification,
 } from '../types/models';
 import type { BoardOperationPayload } from '../features/whiteboard/realtime/boardOperations';
 import {
@@ -37,6 +39,9 @@ interface UseSignalROptions {
   onBoardStateUpdated?: (notification: BoardStateUpdateNotification) => void;
   onCursorUpdated?: (cursor: CursorPresence) => void;
   onPresenceUpdated?: (cursors: CursorPresence[]) => void;
+  onFollowMeSessionStarted?: (notification: FollowMeSessionStartedNotification) => void;
+  onFollowMeSessionEnded?: (clientId: string) => void;
+  onBringToViewport?: (notification: BringToViewportNotification) => void;
   onOutboxDiscarded?: (context: {
     boardId: string;
     discardedEntriesCount: number;
@@ -100,6 +105,9 @@ export function useSignalR({
   onBoardStateUpdated,
   onCursorUpdated,
   onPresenceUpdated,
+  onFollowMeSessionStarted,
+  onFollowMeSessionEnded,
+  onBringToViewport,
   onOutboxDiscarded,
 }: UseSignalROptions) {
   const connectionRef = useRef<signalR.HubConnection | null>(null);
@@ -123,6 +131,9 @@ export function useSignalR({
   const onBoardStateUpdatedRef = useRef(onBoardStateUpdated);
   const onCursorUpdatedRef = useRef(onCursorUpdated);
   const onPresenceUpdatedRef = useRef(onPresenceUpdated);
+  const onFollowMeSessionStartedRef = useRef(onFollowMeSessionStarted);
+  const onFollowMeSessionEndedRef = useRef(onFollowMeSessionEnded);
+  const onBringToViewportRef = useRef(onBringToViewport);
   const onOutboxDiscardedRef = useRef(onOutboxDiscarded);
   const repeatedServerCloseFailureRef = useRef(createRepeatedServerCloseFailureState());
   const [connectionId, setConnectionId] = useState<string | null>(null);
@@ -138,6 +149,9 @@ export function useSignalR({
   onBoardStateUpdatedRef.current = onBoardStateUpdated;
   onCursorUpdatedRef.current = onCursorUpdated;
   onPresenceUpdatedRef.current = onPresenceUpdated;
+  onFollowMeSessionStartedRef.current = onFollowMeSessionStarted;
+  onFollowMeSessionEndedRef.current = onFollowMeSessionEnded;
+  onBringToViewportRef.current = onBringToViewport;
   onOutboxDiscardedRef.current = onOutboxDiscarded;
 
   const handleInvokeError = useCallback((error: unknown) => {
@@ -397,6 +411,18 @@ export function useSignalR({
       onPresenceUpdatedRef.current?.(cursors);
     });
 
+    connection.on('FollowMeSessionStarted', (notification: FollowMeSessionStartedNotification) => {
+      onFollowMeSessionStartedRef.current?.(notification);
+    });
+
+    connection.on('FollowMeSessionEnded', (data: { clientId: string }) => {
+      onFollowMeSessionEndedRef.current?.(data.clientId);
+    });
+
+    connection.on('BringToViewport', (notification: BringToViewportNotification) => {
+      onBringToViewportRef.current?.(notification);
+    });
+
     if (syncProfileDisplayNameChanges) {
       connection.on('ProfileDisplayNameChanged', (nextDisplayName: string) => {
         const normalizedDisplayName = nextDisplayName.trim();
@@ -556,14 +582,30 @@ export function useSignalR({
   );
 
   const sendCursorUpdate = useCallback(
-    (worldX: number | null, worldY: number | null, selectedElementIds?: string[]) => {
+    (
+      worldX: number | null,
+      worldY: number | null,
+      selectedElementIds?: string[],
+      viewportCameraX?: number | null,
+      viewportCameraY?: number | null,
+      viewportZoom?: number | null,
+    ) => {
       latestCursorRef.current = { x: worldX, y: worldY };
       const flushPendingCursor = () => {
         const pending = latestCursorRef.current;
         latestCursorRef.current = null;
         if (pending && boardIdRef.current) {
           lastCursorSentAtRef.current = performance.now();
-          void invokeIfConnected('UpdateCursor', boardIdRef.current, pending.x, pending.y, selectedElementIds ?? null);
+          void invokeIfConnected(
+            'UpdateCursor',
+            boardIdRef.current,
+            pending.x,
+            pending.y,
+            selectedElementIds ?? null,
+            viewportCameraX ?? null,
+            viewportCameraY ?? null,
+            viewportZoom ?? null,
+          );
         }
       };
 
@@ -683,6 +725,36 @@ export function useSignalR({
     [syncDisplayName],
   );
 
+  const startFollowMeSession = useCallback(async () => {
+    const currentBoardId = boardIdRef.current;
+    if (!currentBoardId) {
+      return false;
+    }
+
+    return invokeIfConnected('StartFollowMeSession', currentBoardId);
+  }, [invokeIfConnected]);
+
+  const stopFollowMeSession = useCallback(async () => {
+    const currentBoardId = boardIdRef.current;
+    if (!currentBoardId) {
+      return false;
+    }
+
+    return invokeIfConnected('StopFollowMeSession', currentBoardId);
+  }, [invokeIfConnected]);
+
+  const bringEveryoneToMe = useCallback(
+    async (cameraX: number, cameraY: number, zoom: number) => {
+      const currentBoardId = boardIdRef.current;
+      if (!currentBoardId) {
+        return false;
+      }
+
+      return invokeIfConnected('BringEveryoneToMe', currentBoardId, cameraX, cameraY, zoom);
+    },
+    [invokeIfConnected],
+  );
+
   return {
     sendBoardUpdated,
     sendCursorUpdate,
@@ -691,6 +763,9 @@ export function useSignalR({
     sendOperation,
     sendOperationThrottled,
     updateDisplayName,
+    startFollowMeSession,
+    stopFollowMeSession,
+    bringEveryoneToMe,
     connectionId,
     connectionState,
     lastError,

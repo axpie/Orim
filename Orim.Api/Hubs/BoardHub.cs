@@ -16,6 +16,7 @@ public sealed class BoardHub : Hub
     private const string JoinedBoardIdKey = "joined-board-id";
     private const string JoinedCanEditKey = "joined-can-edit";
     private const string DisplayNameKey = "display-name";
+    private const string IsPresentingKey = "is-presenting";
     private readonly IBoardPresenceService _presenceService;
     private readonly BoardService _boardService;
     private readonly UserService _userService;
@@ -103,7 +104,12 @@ public sealed class BoardHub : Hub
             color,
             existingPresence?.WorldX,
             existingPresence?.WorldY,
-            DateTime.UtcNow);
+            DateTime.UtcNow,
+            existingPresence?.SelectedElementIds,
+            existingPresence?.IsPresenting ?? false,
+            existingPresence?.ViewportCameraX,
+            existingPresence?.ViewportCameraY,
+            existingPresence?.ViewportZoom);
 
         await _presenceService.UpsertCursorAsync(boardId, presence);
 
@@ -254,7 +260,14 @@ public sealed class BoardHub : Hub
         }
     }
 
-    public async Task UpdateCursor(Guid boardId, double? worldX, double? worldY, IReadOnlyList<string>? selectedElementIds = null)
+    public async Task UpdateCursor(
+        Guid boardId,
+        double? worldX,
+        double? worldY,
+        IReadOnlyList<string>? selectedElementIds = null,
+        double? viewportCameraX = null,
+        double? viewportCameraY = null,
+        double? viewportZoom = null)
     {
         if (!IsJoinedBoard(boardId))
         {
@@ -265,8 +278,14 @@ public sealed class BoardHub : Hub
         Context.Items[DisplayNameKey] = displayName;
         var clientId = Context.ConnectionId;
         var color = BoardPresenceIdentity.ResolveColor(clientId);
+        var isPresenting = IsCurrentlyPresenting();
 
-        var presence = new BoardCursorPresence(clientId, ResolveUserId(), displayName, color, worldX, worldY, DateTime.UtcNow, selectedElementIds);
+        var presence = new BoardCursorPresence(
+            clientId, ResolveUserId(), displayName, color, worldX, worldY, DateTime.UtcNow,
+            selectedElementIds, isPresenting,
+            isPresenting ? viewportCameraX : null,
+            isPresenting ? viewportCameraY : null,
+            isPresenting ? viewportZoom : null);
         await _presenceService.UpsertCursorAsync(boardId, presence);
 
         var groupName = BoardGroup(boardId);
@@ -278,7 +297,82 @@ public sealed class BoardHub : Hub
             worldX,
             worldY,
             selectedElementIds,
+            isPresenting,
+            viewportCameraX = isPresenting ? viewportCameraX : null,
+            viewportCameraY = isPresenting ? viewportCameraY : null,
+            viewportZoom = isPresenting ? viewportZoom : null,
             updatedAtUtc = DateTime.UtcNow
+        });
+    }
+
+    public async Task StartFollowMeSession(Guid boardId)
+    {
+        if (!IsJoinedBoard(boardId))
+        {
+            return;
+        }
+
+        Context.Items[IsPresentingKey] = true;
+
+        var displayName = await ResolveDisplayNameAsync(null, preferCachedDisplayName: true);
+        var clientId = Context.ConnectionId;
+        var groupName = BoardGroup(boardId);
+
+        await Clients.OthersInGroup(groupName).SendAsync("FollowMeSessionStarted", new
+        {
+            clientId,
+            displayName
+        });
+    }
+
+    public async Task StopFollowMeSession(Guid boardId)
+    {
+        if (!IsJoinedBoard(boardId))
+        {
+            return;
+        }
+
+        Context.Items[IsPresentingKey] = false;
+
+        var clientId = Context.ConnectionId;
+        var groupName = BoardGroup(boardId);
+
+        // Clear viewport fields from presence
+        var existingPresence = await _presenceService.GetCursorAsync(boardId, clientId);
+        if (existingPresence is not null)
+        {
+            var updated = existingPresence with
+            {
+                IsPresenting = false,
+                ViewportCameraX = null,
+                ViewportCameraY = null,
+                ViewportZoom = null,
+                UpdatedAtUtc = DateTime.UtcNow
+            };
+            await _presenceService.UpsertCursorAsync(boardId, updated);
+        }
+
+        await Clients.OthersInGroup(groupName).SendAsync("FollowMeSessionEnded", new { clientId });
+    }
+
+    public async Task BringEveryoneToMe(Guid boardId, double cameraX, double cameraY, double zoom)
+    {
+        if (!IsJoinedBoard(boardId))
+        {
+            return;
+        }
+
+        var displayName = await ResolveDisplayNameAsync(null, preferCachedDisplayName: true);
+        var clientId = Context.ConnectionId;
+        var groupName = BoardGroup(boardId);
+
+        await Clients.OthersInGroup(groupName).SendAsync("BringToViewport", new
+        {
+            clientId,
+            displayName,
+            cameraX,
+            cameraY,
+            zoom
         });
     }
 
@@ -287,6 +381,15 @@ public sealed class BoardHub : Hub
         if (TryGetJoinedBoardId(out var boardId))
         {
             var groupName = BoardGroup(boardId);
+
+            if (IsCurrentlyPresenting())
+            {
+                await Clients.OthersInGroup(groupName).SendAsync("FollowMeSessionEnded", new
+                {
+                    clientId = Context.ConnectionId
+                });
+            }
+
             await _presenceService.RemoveCursorAsync(boardId, Context.ConnectionId);
             await Groups.RemoveFromGroupAsync(Context.ConnectionId, groupName);
 
@@ -393,6 +496,8 @@ public sealed class BoardHub : Hub
     private bool IsJoinedBoard(Guid boardId) => TryGetJoinedBoardId(out var joinedBoardId) && joinedBoardId == boardId;
 
     private bool CanEditJoinedBoard() => Context.Items.TryGetValue(JoinedCanEditKey, out var rawValue) && rawValue is true;
+
+    private bool IsCurrentlyPresenting() => Context.Items.TryGetValue(IsPresentingKey, out var rawValue) && rawValue is true;
 
     private bool CanEditBoard(Board board, string? shareToken, string? sharePassword)
     {

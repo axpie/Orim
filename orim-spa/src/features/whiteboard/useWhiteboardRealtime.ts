@@ -6,6 +6,8 @@ import type {
   Board,
   BoardOperation,
   CursorPresence,
+  FollowMeSessionStartedNotification,
+  BringToViewportNotification,
 } from '../../types/models';
 import { getBoardSyncAnnouncement } from './a11yAnnouncements';
 import { deriveBoardSyncStatus } from './boardSyncStatus';
@@ -32,6 +34,9 @@ interface UseWhiteboardRealtimeOptions {
   announceLive: (message: string) => void;
   t: (key: string, options?: Record<string, unknown>) => string;
   scheduleSave: () => void;
+  onFollowMeSessionStarted?: (notification: FollowMeSessionStartedNotification) => void;
+  onFollowMeSessionEnded?: (clientId: string) => void;
+  onBringToViewport?: (notification: BringToViewportNotification) => void;
 }
 
 export function useWhiteboardRealtime({
@@ -51,15 +56,28 @@ export function useWhiteboardRealtime({
   announceLive,
   t,
   scheduleSave,
+  onFollowMeSessionStarted,
+  onFollowMeSessionEnded,
+  onBringToViewport,
 }: UseWhiteboardRealtimeOptions) {
   const connectionIdRef = useRef<string | null>(null);
   const lastSyncAnnouncementRef = useRef<string | null>(null);
+
+  const onFollowMeSessionStartedRef = useRef(onFollowMeSessionStarted);
+  const onFollowMeSessionEndedRef = useRef(onFollowMeSessionEnded);
+  const onBringToViewportRef = useRef(onBringToViewport);
+  onFollowMeSessionStartedRef.current = onFollowMeSessionStarted;
+  onFollowMeSessionEndedRef.current = onFollowMeSessionEnded;
+  onBringToViewportRef.current = onBringToViewport;
 
   const {
     sendBoardState,
     sendOperation,
     sendOperationThrottled,
     sendCursorUpdate,
+    startFollowMeSession,
+    stopFollowMeSession,
+    bringEveryoneToMe,
     connectionId,
     connectionState,
     lastError,
@@ -147,6 +165,15 @@ export function useWhiteboardRealtime({
       const others = current.filter((entry) => entry.clientId !== cursor.clientId);
       setRemoteCursors(mergeCursorPresence(current, [...others, cursor]));
     },
+    onFollowMeSessionStarted: (notification) => {
+      onFollowMeSessionStartedRef.current?.(notification);
+    },
+    onFollowMeSessionEnded: (clientId) => {
+      onFollowMeSessionEndedRef.current?.(clientId);
+    },
+    onBringToViewport: (notification) => {
+      onBringToViewportRef.current?.(notification);
+    },
     onOutboxDiscarded: async ({ boardId: discardedBoardId }) => {
       const latestBoard = await getBoard(discardedBoardId);
       setBoard(latestBoard, { preserveSelection: true });
@@ -192,6 +219,9 @@ export function useWhiteboardRealtime({
     sendOperation,
     sendOperationThrottled,
     sendCursorUpdate,
+    startFollowMeSession,
+    stopFollowMeSession,
+    bringEveryoneToMe,
     connectionId,
     connectionState,
     boardSyncStatus,
