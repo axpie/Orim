@@ -677,7 +677,7 @@ function TextAreaInlineEditor({
         background,
         resize: 'none',
         outline: 'none',
-        zIndex: 100,
+        zIndex: INLINE_EDITOR_Z_INDEX,
         overflow: 'hidden',
         boxSizing: 'border-box',
       }}

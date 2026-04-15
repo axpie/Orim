@@ -38,6 +38,14 @@ describe('InlineTextEditor', () => {
       expect(editor.selectionEnd).toBe(1);
     });
   });
+
+  it('renders the textarea editor above per-element canvas layers', () => {
+    renderEditor();
+
+    const editor = screen.getByRole('textbox');
+
+    expect(editor).toHaveStyle({ zIndex: '1300' });
+  });
 });
 
 function renderEditor(options?: {
