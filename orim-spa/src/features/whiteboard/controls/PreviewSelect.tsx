@@ -1,5 +1,6 @@
 import { useId, type ReactNode } from 'react';
 import { Box, FormControl, InputLabel, MenuItem, Select } from '@mui/material';
+import { auxiliaryPanelMenuProps } from './auxiliaryPanelMenuProps';
 
 export interface PreviewSelectOption {
   value: string;
@@ -25,6 +26,7 @@ export function PreviewSelect({ label, value, options, onChange }: PreviewSelect
         labelId={labelId}
         value={value}
         label={label}
+        MenuProps={auxiliaryPanelMenuProps}
         onChange={(event) => onChange(event.target.value)}
         renderValue={() => (
           <Box sx={{ display: 'flex', alignItems: 'center', minHeight: 22, color: 'text.primary' }}>

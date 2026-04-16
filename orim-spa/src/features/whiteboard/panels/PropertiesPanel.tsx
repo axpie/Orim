@@ -42,6 +42,7 @@ import { useCommandStack } from '../store/commandStack';
 import { ColorInputField } from '../controls/ColorInputField';
 import { NumberInputField } from '../controls/NumberInputField';
 import { PreviewSelect, type PreviewSelectOption } from '../controls/PreviewSelect';
+import { auxiliaryPanelMenuProps } from '../controls/auxiliaryPanelMenuProps';
 import { useWhiteboardColorPalette } from '../controls/useWhiteboardColorPalette';
 import { getIconDisplayName } from '../icons/iconCatalog';
 import { resolveFrameTitleFontSize } from '../shapes/frameLayout';
@@ -93,6 +94,12 @@ const FONT_FAMILY_OPTIONS = [
   { value: 'Times New Roman, serif', label: 'Times New Roman', previewFamily: 'Times New Roman, serif' },
   { value: 'Courier New, monospace', label: 'Courier New', previewFamily: 'Courier New, monospace' },
 ];
+
+const auxiliaryPanelSelectSlotProps = {
+  select: {
+    MenuProps: auxiliaryPanelMenuProps,
+  },
+};
 
 function renderLineStylePreview(style: BorderLineStyle | string): ReactNode {
   const dash = getLineDashArray(style, 2.4);
@@ -788,6 +795,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
                         label={t('properties.fontFamily')}
                         size="small"
                         value={shape.fontFamily ?? FONT_FAMILY_DEFAULT}
+                        slotProps={auxiliaryPanelSelectSlotProps}
                         onChange={(e) => update(el.id, { fontFamily: e.target.value === FONT_FAMILY_DEFAULT ? null : e.target.value })}
                       >
                         {FONT_FAMILY_OPTIONS.map((option) => (
@@ -905,6 +913,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
                       label={t('properties.fontFamily')}
                       size="small"
                       value={text.fontFamily ?? FONT_FAMILY_DEFAULT}
+                      slotProps={auxiliaryPanelSelectSlotProps}
                       onChange={(e) => update(el.id, { fontFamily: e.target.value === FONT_FAMILY_DEFAULT ? null : e.target.value })}
                     >
                       {FONT_FAMILY_OPTIONS.map((option) => (
@@ -975,6 +984,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
                         label={t('properties.fontFamily')}
                         size="small"
                         value={sticky.fontFamily ?? FONT_FAMILY_DEFAULT}
+                        slotProps={auxiliaryPanelSelectSlotProps}
                         onChange={(e) => update(el.id, { fontFamily: e.target.value === FONT_FAMILY_DEFAULT ? null : e.target.value })}
                       >
                         {FONT_FAMILY_OPTIONS.map((option) => (
@@ -1062,6 +1072,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
                         label={t('properties.fontFamily')}
                         size="small"
                         value={frame.fontFamily ?? FONT_FAMILY_DEFAULT}
+                        slotProps={auxiliaryPanelSelectSlotProps}
                         onChange={(e) => update(el.id, { fontFamily: e.target.value === FONT_FAMILY_DEFAULT ? null : e.target.value })}
                       >
                         {FONT_FAMILY_OPTIONS.map((option) => (
@@ -1146,14 +1157,15 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
                       max={100}
                       onChange={(value) => update(el.id, { opacity: value / 100 })}
                     />
-                    <TextField
-                      select
-                      size="small"
-                      label={t('properties.imageFit')}
-                      value={file.imageFit ?? ImageFit.Uniform}
-                      onChange={(e) => { void handleImageFitChange(el.id, e.target.value as ImageFit); }}
-                      fullWidth
-                    >
+                     <TextField
+                       select
+                       size="small"
+                       label={t('properties.imageFit')}
+                       value={file.imageFit ?? ImageFit.Uniform}
+                       slotProps={auxiliaryPanelSelectSlotProps}
+                       onChange={(e) => { void handleImageFitChange(el.id, e.target.value as ImageFit); }}
+                       fullWidth
+                     >
                       <MenuItem value={ImageFit.Uniform}>{t('properties.imageFit_Uniform')}</MenuItem>
                       <MenuItem value={ImageFit.UniformToFill}>{t('properties.imageFit_UniformToFill')}</MenuItem>
                       <MenuItem value={ImageFit.Fill}>{t('properties.imageFit_Fill')}</MenuItem>
@@ -1213,6 +1225,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
                         label={t('properties.sourceDock')}
                         size="small"
                         value={arrow.sourceDock ?? DockPoint.Center}
+                        slotProps={auxiliaryPanelSelectSlotProps}
                         onChange={(e) => update(el.id, { sourceDock: e.target.value as DockPoint })}
                       >
                         {dockOptions.map((dock) => (
@@ -1224,6 +1237,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
                         label={t('properties.targetDock')}
                         size="small"
                         value={arrow.targetDock ?? DockPoint.Center}
+                        slotProps={auxiliaryPanelSelectSlotProps}
                         onChange={(e) => update(el.id, { targetDock: e.target.value as DockPoint })}
                       >
                         {dockOptions.map((dock) => (
@@ -1247,6 +1261,7 @@ export const PropertiesPanel = React.memo(function PropertiesPanel({
                         label={t('properties.routeStyle')}
                         size="small"
                         value={arrow.routeStyle ?? ArrowRouteStyle.Orthogonal}
+                        slotProps={auxiliaryPanelSelectSlotProps}
                         onChange={(e) => update(el.id, { routeStyle: e.target.value as ArrowElement['routeStyle'] })}
                       >
                         <MenuItem value={ArrowRouteStyle.Straight}>{t('properties.straight')}</MenuItem>
