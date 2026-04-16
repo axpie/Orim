@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
+import { Fragment, memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react';
 import { Group, Layer } from 'react-konva';
 import type Konva from 'konva';
 import { ShapeRenderer } from '../shapes/ShapeRenderer';
@@ -95,168 +95,197 @@ export const CanvasElementLayer = memo(function CanvasElementLayer({
   );
   const minZIndex = sorted.length > 0 ? (sorted[0].zIndex ?? 0) : 0;
 
+  type RenderedElement = { key: string; domZIndex: number; isHtmlPortal: boolean; content: ReactNode };
+  const rendered: RenderedElement[] = [];
+
+  for (const el of sorted) {
+    const smooth = smoothEntries[el.id];
+    const elX = smooth ? smooth.renderedX : el.x;
+    const elY = smooth ? smooth.renderedY : el.y;
+    const effectiveEl = smooth ? { ...el, x: elX, y: elY } : el;
+    const centerX = elX + el.width / 2;
+    const centerY = elY + el.height / 2;
+    // Keep element layers above the grid and below UI overlays while preserving
+    // relative Z-order among all whiteboard elements, including Html-backed text.
+    const domZIndex = ((el.zIndex ?? 0) - minZIndex) + 100;
+
+    let content: ReactNode = null;
+    let isHtmlPortal = false;
+    switch (el.$type) {
+      case 'shape':
+        content = (
+          <Group
+            x={centerX}
+            y={centerY}
+            offsetX={centerX}
+            offsetY={centerY}
+            rotation={el.rotation ?? 0}
+            data-element-id={el.id}
+          >
+            <ShapeRenderer element={effectiveEl as typeof el} />
+          </Group>
+        );
+        break;
+      case 'text':
+        content = (
+          <Group
+            x={centerX}
+            y={centerY}
+            offsetX={centerX}
+            offsetY={centerY}
+            rotation={el.rotation ?? 0}
+            data-element-id={el.id}
+          >
+            <TextRenderer element={effectiveEl as typeof el} />
+          </Group>
+        );
+        break;
+      case 'richtext':
+        isHtmlPortal = true;
+        content = (
+          <Group
+            x={centerX}
+            y={centerY}
+            offsetX={centerX}
+            offsetY={centerY}
+            rotation={el.rotation ?? 0}
+            data-element-id={el.id}
+          >
+            <RichTextRenderer
+              element={effectiveEl as typeof el}
+              domZIndex={domZIndex}
+              onViewportMount={onFormattedTextViewportMount}
+              interactable={formattedTextInteractable}
+              onNativeScroll={onFormattedTextNativeScroll}
+              onHeightRequired={onFormattedTextHeightRequired}
+            />
+          </Group>
+        );
+        break;
+      case 'markdown':
+        isHtmlPortal = true;
+        content = (
+          <Group
+            x={centerX}
+            y={centerY}
+            offsetX={centerX}
+            offsetY={centerY}
+            rotation={el.rotation ?? 0}
+            data-element-id={el.id}
+          >
+            <MarkdownRenderer
+              element={effectiveEl as typeof el}
+              domZIndex={domZIndex}
+              onViewportMount={onFormattedTextViewportMount}
+              interactable={formattedTextInteractable}
+              onNativeScroll={onFormattedTextNativeScroll}
+              onHeightRequired={onFormattedTextHeightRequired}
+            />
+          </Group>
+        );
+        break;
+      case 'sticky':
+        content = (
+          <Group
+            x={centerX}
+            y={centerY}
+            offsetX={centerX}
+            offsetY={centerY}
+            rotation={el.rotation ?? 0}
+            data-element-id={el.id}
+          >
+            <StickyNoteRenderer element={effectiveEl as typeof el} />
+          </Group>
+        );
+        break;
+      case 'frame':
+        content = (
+          <Group
+            x={centerX}
+            y={centerY}
+            offsetX={centerX}
+            offsetY={centerY}
+            rotation={el.rotation ?? 0}
+            data-element-id={el.id}
+          >
+            <FrameRenderer element={effectiveEl as typeof el} boardDefaults={boardDefaults} />
+          </Group>
+        );
+        break;
+      case 'arrow':
+        content = <ArrowRenderer element={el} elements={elements} />;
+        break;
+      case 'icon':
+        content = (
+          <Group
+            x={centerX}
+            y={centerY}
+            offsetX={centerX}
+            offsetY={centerY}
+            rotation={el.rotation ?? 0}
+            data-element-id={el.id}
+          >
+            <IconRenderer element={effectiveEl as typeof el} />
+          </Group>
+        );
+        break;
+      case 'file':
+        content = <FileRenderer element={effectiveEl as FileElement} />;
+        break;
+      case 'drawing':
+        content = (
+          <Group
+            x={centerX}
+            y={centerY}
+            offsetX={centerX}
+            offsetY={centerY}
+            rotation={el.rotation ?? 0}
+            data-element-id={el.id}
+          >
+            <DrawingRenderer element={effectiveEl as typeof el} />
+          </Group>
+        );
+        break;
+      default:
+        content = null;
+        break;
+    }
+
+    if (!content) {
+      continue;
+    }
+
+    rendered.push({ key: el.id, domZIndex, isHtmlPortal, content });
+  }
+
+  // Coalesce consecutive pure-Konva elements into shared layers to avoid the
+  // "too many layers" warning on large boards. HTML-portal elements keep their
+  // own layer so the portal DIV remains above its own canvas (preserving
+  // pointer-event semantics for interactive text), and so their DOM z-index
+  // can interleave with surrounding Konva canvases.
+  type LayerRun = { key: string; domZIndex: number; children: ReactNode[] };
+  const runs: LayerRun[] = [];
+  let activeKonvaRun: LayerRun | null = null;
+  for (const item of rendered) {
+    if (item.isHtmlPortal) {
+      runs.push({ key: item.key, domZIndex: item.domZIndex, children: [item.content] });
+      activeKonvaRun = null;
+    } else if (activeKonvaRun) {
+      activeKonvaRun.children.push(<Fragment key={item.key}>{item.content}</Fragment>);
+      activeKonvaRun.domZIndex = item.domZIndex;
+    } else {
+      activeKonvaRun = { key: item.key, domZIndex: item.domZIndex, children: [<Fragment key={item.key}>{item.content}</Fragment>] };
+      runs.push(activeKonvaRun);
+    }
+  }
+
   return (
     <>
-      {sorted.map((el) => {
-        const smooth = smoothEntries[el.id];
-        const elX = smooth ? smooth.renderedX : el.x;
-        const elY = smooth ? smooth.renderedY : el.y;
-        const effectiveEl = smooth ? { ...el, x: elX, y: elY } : el;
-        const centerX = elX + el.width / 2;
-        const centerY = elY + el.height / 2;
-        // Keep element layers above the grid and below UI overlays while preserving
-        // relative Z-order among all whiteboard elements, including Html-backed text.
-        const domZIndex = ((el.zIndex ?? 0) - minZIndex) + 100;
-
-        let content: ReactNode = null;
-        switch (el.$type) {
-          case 'shape':
-            content = (
-              <Group
-                x={centerX}
-                y={centerY}
-                offsetX={centerX}
-                offsetY={centerY}
-                rotation={el.rotation ?? 0}
-                data-element-id={el.id}
-              >
-                <ShapeRenderer element={effectiveEl as typeof el} />
-              </Group>
-            );
-            break;
-          case 'text':
-            content = (
-              <Group
-                x={centerX}
-                y={centerY}
-                offsetX={centerX}
-                offsetY={centerY}
-                rotation={el.rotation ?? 0}
-                data-element-id={el.id}
-              >
-                <TextRenderer element={effectiveEl as typeof el} />
-              </Group>
-            );
-            break;
-          case 'richtext':
-            content = (
-              <Group
-                x={centerX}
-                y={centerY}
-                offsetX={centerX}
-                offsetY={centerY}
-                rotation={el.rotation ?? 0}
-                data-element-id={el.id}
-              >
-                <RichTextRenderer
-                  element={effectiveEl as typeof el}
-                  domZIndex={domZIndex}
-                  onViewportMount={onFormattedTextViewportMount}
-                  interactable={formattedTextInteractable}
-                  onNativeScroll={onFormattedTextNativeScroll}
-                  onHeightRequired={onFormattedTextHeightRequired}
-                />
-              </Group>
-            );
-            break;
-          case 'markdown':
-            content = (
-              <Group
-                x={centerX}
-                y={centerY}
-                offsetX={centerX}
-                offsetY={centerY}
-                rotation={el.rotation ?? 0}
-                data-element-id={el.id}
-              >
-                <MarkdownRenderer
-                  element={effectiveEl as typeof el}
-                  domZIndex={domZIndex}
-                  onViewportMount={onFormattedTextViewportMount}
-                  interactable={formattedTextInteractable}
-                  onNativeScroll={onFormattedTextNativeScroll}
-                  onHeightRequired={onFormattedTextHeightRequired}
-                />
-              </Group>
-            );
-            break;
-          case 'sticky':
-            content = (
-              <Group
-                x={centerX}
-                y={centerY}
-                offsetX={centerX}
-                offsetY={centerY}
-                rotation={el.rotation ?? 0}
-                data-element-id={el.id}
-              >
-                <StickyNoteRenderer element={effectiveEl as typeof el} />
-              </Group>
-            );
-            break;
-          case 'frame':
-            content = (
-              <Group
-                x={centerX}
-                y={centerY}
-                offsetX={centerX}
-                offsetY={centerY}
-                rotation={el.rotation ?? 0}
-                data-element-id={el.id}
-              >
-                <FrameRenderer element={effectiveEl as typeof el} boardDefaults={boardDefaults} />
-              </Group>
-            );
-            break;
-          case 'arrow':
-            content = <ArrowRenderer element={el} elements={elements} />;
-            break;
-          case 'icon':
-            content = (
-              <Group
-                x={centerX}
-                y={centerY}
-                offsetX={centerX}
-                offsetY={centerY}
-                rotation={el.rotation ?? 0}
-                data-element-id={el.id}
-              >
-                <IconRenderer element={effectiveEl as typeof el} />
-              </Group>
-            );
-            break;
-          case 'file':
-            content = <FileRenderer element={effectiveEl as FileElement} />;
-            break;
-          case 'drawing':
-            content = (
-              <Group
-                x={centerX}
-                y={centerY}
-                offsetX={centerX}
-                offsetY={centerY}
-                rotation={el.rotation ?? 0}
-                data-element-id={el.id}
-              >
-                <DrawingRenderer element={effectiveEl as typeof el} />
-              </Group>
-            );
-            break;
-          default:
-            content = null;
-            break;
-        }
-
-        if (!content) {
-          return null;
-        }
-
-        return (
-          <ZIndexedLayer key={el.id} domZIndex={domZIndex}>
-            {content}
-          </ZIndexedLayer>
-        );
-      })}
+      {runs.map((run) => (
+        <ZIndexedLayer key={run.key} domZIndex={run.domZIndex}>
+          {run.children}
+        </ZIndexedLayer>
+      ))}
     </>
   );
 });
