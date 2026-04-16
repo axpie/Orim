@@ -126,6 +126,10 @@ export interface TextStyleElementBase extends BoardElementBase {
 export interface TextElement extends TextStyleElementBase {
   $type: 'text';
   text: string;
+  /** Id of an arrow this text is docked to, or null/undefined if free. */
+  dockedArrowId?: string | null;
+  /** Position along the docked arrow's polyline, in [0, 1]. */
+  dockedArrowProgress?: number | null;
 }
 
 export interface RichTextElement extends TextStyleElementBase {

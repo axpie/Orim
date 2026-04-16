@@ -54,7 +54,7 @@ export function computeArrowPolyline(
   }
 
   const obstacles = elements
-    .filter((element) => element.$type !== 'arrow' && element.$type !== 'frame')
+    .filter((element) => element.$type !== 'arrow' && element.$type !== 'frame' && element.$type !== 'text')
     .map((element) => ({ x: element.x, y: element.y, width: element.width, height: element.height }));
 
   return computeOrthogonalRoute(
@@ -287,6 +287,125 @@ export function getMagneticArrowPoint(
   }
 
   return snapPointToMagneticAngle(origin, point, 45, 5);
+}
+
+export const ARROW_TEXT_DOCK_STEP_UNITS = 24;
+export const ARROW_TEXT_DOCK_SNAP_RADIUS = 16;
+
+export type ArrowDockCandidate = {
+  arrowId: string;
+  progress: number;
+  point: Point;
+};
+
+function polylineTotalLength(points: Point[]): number {
+  let total = 0;
+  for (let i = 1; i < points.length; i++) {
+    total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y);
+  }
+  return total;
+}
+
+function getArrowDockStepCount(totalLength: number, stepUnits: number): number {
+  return Math.max(1, Math.round(totalLength / Math.max(1, stepUnits)));
+}
+
+/** Interpolate a point along a polyline by progress in [0, 1] (arc-length parameterized). */
+export function getPointAtPolylineProgress(points: Point[], progress: number): Point {
+  if (points.length === 0) {
+    return { x: 0, y: 0 };
+  }
+  if (points.length === 1) {
+    return { ...points[0] };
+  }
+  const clamped = Math.max(0, Math.min(1, progress));
+  const total = polylineTotalLength(points);
+  if (total < 0.001) {
+    return { ...points[0] };
+  }
+  const target = clamped * total;
+  let travelled = 0;
+  for (let i = 1; i < points.length; i++) {
+    const a = points[i - 1];
+    const b = points[i];
+    const segLen = Math.hypot(b.x - a.x, b.y - a.y);
+    if (travelled + segLen >= target) {
+      const t = segLen < 0.001 ? 0 : (target - travelled) / segLen;
+      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+    }
+    travelled += segLen;
+  }
+  return { ...points[points.length - 1] };
+}
+
+export function sampleArrowDockCandidates(
+  arrows: ArrowElement[],
+  elements: BoardElement[],
+  stepUnits: number = ARROW_TEXT_DOCK_STEP_UNITS,
+): ArrowDockCandidate[] {
+  const candidates: ArrowDockCandidate[] = [];
+
+  for (const arrow of arrows) {
+    const polyline = computeArrowPolyline(arrow, elements);
+    if (polyline.length < 2) {
+      continue;
+    }
+
+    const total = polylineTotalLength(polyline);
+    if (total < 0.001) {
+      continue;
+    }
+
+    const stepCount = getArrowDockStepCount(total, stepUnits);
+    for (let i = 0; i <= stepCount; i++) {
+      const progress = i / stepCount;
+      candidates.push({
+        arrowId: arrow.id,
+        progress,
+        point: getPointAtPolylineProgress(polyline, progress),
+      });
+    }
+  }
+
+  return candidates;
+}
+
+export function findNearestArrowDockCandidateForPosition(
+  candidates: ArrowDockCandidate[],
+  pos: Point,
+  snapRadius: number = ARROW_TEXT_DOCK_SNAP_RADIUS,
+): ArrowDockCandidate | null {
+  let nearest: ArrowDockCandidate | null = null;
+  let nearestDistance = snapRadius;
+
+  for (const candidate of candidates) {
+    const distance = Math.hypot(pos.x - candidate.point.x, pos.y - candidate.point.y);
+    if (distance <= nearestDistance) {
+      nearestDistance = distance;
+      nearest = candidate;
+    }
+  }
+
+  return nearest;
+}
+
+/**
+ * Find the nearest arrow dock candidate (in world units) to a given position.
+ * Samples dock points along each arrow's polyline every `stepUnits`.
+ * Returns the match within `snapRadius`, or null.
+ */
+export function findNearestArrowDockForPosition(
+  arrows: ArrowElement[],
+  elements: BoardElement[],
+  pos: Point,
+  stepUnits: number = ARROW_TEXT_DOCK_STEP_UNITS,
+  snapRadius: number = ARROW_TEXT_DOCK_SNAP_RADIUS,
+): ArrowDockCandidate | null {
+  return findNearestArrowDockCandidateForPosition(
+    sampleArrowDockCandidates(arrows, elements, stepUnits),
+    pos,
+    snapRadius,
+  );
 }
 
 /** Flatten polyline points to number[] for Konva Line. */

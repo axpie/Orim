@@ -15,6 +15,7 @@ import type { ResizeHandle } from '../shapes/SelectionOverlay';
 import { v4 as uuidv4 } from 'uuid';
 import { translateDrawingElement } from './drawingGeometry';
 import { getTextContent, isTextContentElement, withTextContent } from '../textElements';
+import { computeArrowPolyline, getPointAtPolylineProgress } from '../../../utils/arrowRouting';
 
 // ── Constants ──
 
@@ -336,6 +337,50 @@ export function getMoveAffectedElementIds(
   }
 
   return [...affectedIds];
+}
+
+/**
+ * Recomputes the x/y of any simple text element docked to an arrow so that it
+ * stays on its stored polyline progress. Clears the dock if the arrow is gone.
+ * Returns both the updated element list and the ids that changed.
+ */
+export function resyncTextElementsDockedToArrows(
+  elements: BoardElement[],
+): { elements: BoardElement[]; changedIds: string[] } {
+  const arrowsById = new Map<string, ArrowElement>();
+  for (const el of elements) {
+    if (el.$type === 'arrow') {
+      arrowsById.set(el.id, el);
+    }
+  }
+
+  const changedIds: string[] = [];
+  const next = elements.map((el) => {
+    if (el.$type !== 'text' || !el.dockedArrowId || el.dockedArrowProgress == null) {
+      return el;
+    }
+
+    const arrow = arrowsById.get(el.dockedArrowId);
+    if (!arrow) {
+      changedIds.push(el.id);
+      return { ...el, dockedArrowId: null, dockedArrowProgress: null };
+    }
+
+    const polyline = computeArrowPolyline(arrow, elements);
+    if (polyline.length < 2) {
+      return el;
+    }
+    const point = getPointAtPolylineProgress(polyline, el.dockedArrowProgress);
+    const nextX = point.x - el.width / 2;
+    const nextY = point.y - el.height / 2;
+    if (Math.abs(nextX - el.x) < 0.01 && Math.abs(nextY - el.y) < 0.01) {
+      return el;
+    }
+    changedIds.push(el.id);
+    return { ...el, x: nextX, y: nextY };
+  });
+
+  return { elements: next, changedIds };
 }
 
 export function translateElementsBySelection(

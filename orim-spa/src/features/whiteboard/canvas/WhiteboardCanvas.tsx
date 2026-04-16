@@ -42,6 +42,7 @@ import {
   getDraftRectFromDrag,
   haveTrackedElementChanges,
   MOVE_TRACKED_ELEMENT_CHANGED_KEYS,
+  resyncTextElementsDockedToArrows,
   translateElementsBySelection,
   type InlineEditableElement,
   type DockTargetState,
@@ -65,11 +66,13 @@ import {
 import { snapResizeRectToAlignmentGuides, snapToAlignmentGuides, type AlignmentGuide } from '../../../utils/geometry';
 import {
   computeArrowPolyline,
+  findNearestArrowDockCandidateForPosition,
   findNearestDockTarget,
   flattenPoints,
   getDockPosition,
   getMagneticArrowPoint,
   resolveFreeDock,
+  sampleArrowDockCandidates,
 } from '../../../utils/arrowRouting';
 import { getBoundsForElements, getElementBounds } from '../cameraUtils';
 import { v4 as uuidv4 } from 'uuid';
@@ -94,6 +97,10 @@ import { constrainAxisAlignedBoundsToAspectRatio, resizeRotatedBounds } from './
 import { getDefaultFrameColors } from '../shapes/frameStyle';
 
 const ROTATION_TRACKED_ELEMENT_CHANGED_KEYS = ['rotation', 'x', 'y', 'points'] as const;
+
+function getArrowTextDockCandidateKey(arrowId: string, progress: number) {
+  return `${arrowId}:${progress.toFixed(6)}`;
+}
 
 interface WhiteboardCanvasProps {
   editable?: boolean;
@@ -867,7 +874,21 @@ export function WhiteboardCanvas({
         setArrowEndpointDrag(nextDrag);
         const nextArrow = applyDraggedArrowEndpoint(arrow, arrowEndpointDrag.isSource, nextDrag);
         updateElement(arrowEndpointDrag.arrowId, nextArrow);
-        onBoardLiveChanged?.('edit', createElementUpdatedOperation(nextArrow));
+
+        const nextListEp = elements.map((candidate) => (candidate.id === nextArrow.id ? nextArrow : candidate));
+        const { elements: resyncedEp, changedIds: resyncChangedEp } = resyncTextElementsDockedToArrows(nextListEp);
+        const opsEp = [createElementUpdatedOperation(nextArrow)];
+        for (const id of resyncChangedEp) {
+          const updated = resyncedEp.find((candidate) => candidate.id === id);
+          if (updated) {
+            updateElement(updated.id, updated);
+            opsEp.push(createElementUpdatedOperation(updated));
+          }
+        }
+        const payloadEp = asOperationPayload(opsEp);
+        if (payloadEp) {
+          onBoardLiveChanged?.('edit', payloadEp);
+        }
         return;
       }
 
@@ -885,7 +906,21 @@ export function WhiteboardCanvas({
           arcMidY: worldPos.y,
         };
         updateElement(arrowRouteHandleDrag.arrowId, nextArrow);
-        onBoardLiveChanged?.('edit', createElementUpdatedOperation(nextArrow));
+
+        const nextListArc = elements.map((candidate) => (candidate.id === nextArrow.id ? nextArrow : candidate));
+        const { elements: resyncedArc, changedIds: resyncChangedArc } = resyncTextElementsDockedToArrows(nextListArc);
+        const opsArc = [createElementUpdatedOperation(nextArrow)];
+        for (const id of resyncChangedArc) {
+          const updated = resyncedArc.find((candidate) => candidate.id === id);
+          if (updated) {
+            updateElement(updated.id, updated);
+            opsArc.push(createElementUpdatedOperation(updated));
+          }
+        }
+        const payloadArc = asOperationPayload(opsArc);
+        if (payloadArc) {
+          onBoardLiveChanged?.('edit', payloadArc);
+        }
         return;
       }
 
@@ -1157,7 +1192,46 @@ export function WhiteboardCanvas({
             dy + snapDy,
           );
           const changedIdSet = new Set(changedIds);
-          const changedElements = nextElements.filter((element) => changedIdSet.has(element.id));
+
+          // Text-to-arrow docking: undock any dragged text, then try to re-snap
+          // against the nearest arrow dock candidate.
+          const selectedSet = new Set(selectedIds);
+          const arrowsAfterTranslate = nextElements.filter((el): el is ArrowElement => el.$type === 'arrow');
+          const arrowDockCandidates = sampleArrowDockCandidates(arrowsAfterTranslate, nextElements);
+          const afterDockSnap = nextElements.map((el) => {
+            if (!selectedSet.has(el.id) || el.$type !== 'text') {
+              return el;
+            }
+            const center = { x: el.x + el.width / 2, y: el.y + el.height / 2 };
+            const match = findNearestArrowDockCandidateForPosition(arrowDockCandidates, center);
+            if (match) {
+              const nextX = match.point.x - el.width / 2;
+              const nextY = match.point.y - el.height / 2;
+              if (
+                el.dockedArrowId === match.arrowId
+                && el.dockedArrowProgress === match.progress
+                && Math.abs(nextX - el.x) < 0.01
+                && Math.abs(nextY - el.y) < 0.01
+              ) {
+                return el;
+              }
+              changedIdSet.add(el.id);
+              return { ...el, x: nextX, y: nextY, dockedArrowId: match.arrowId, dockedArrowProgress: match.progress };
+            }
+            if (el.dockedArrowId == null && el.dockedArrowProgress == null) {
+              return el;
+            }
+            changedIdSet.add(el.id);
+            return { ...el, dockedArrowId: null, dockedArrowProgress: null };
+          });
+
+          // Propagate arrow movement to any non-dragged texts docked to them.
+          const { elements: finalElements, changedIds: resyncChangedIds } = resyncTextElementsDockedToArrows(afterDockSnap);
+          for (const id of resyncChangedIds) {
+            changedIdSet.add(id);
+          }
+
+          const changedElements = finalElements.filter((element) => changedIdSet.has(element.id));
           const payload = asOperationPayload(changedElements.map((element) => {
             updateElement(element.id, element);
             return createElementUpdatedOperation(element);
@@ -1627,6 +1701,29 @@ export function WhiteboardCanvas({
       )
     : null;
   const showDockHandles = activeTool === 'arrow' || arrowEndpointDrag !== null;
+  const isDraggingSimpleText = isDragging
+    && selectedIds.some((id) => elements.some((element) => element.id === id && element.$type === 'text'));
+  const arrowTextDockCandidates = useMemo(
+    () => isDraggingSimpleText
+      ? sampleArrowDockCandidates(
+          elements.filter((element): element is ArrowElement => element.$type === 'arrow'),
+          elements,
+        )
+      : [],
+    [elements, isDraggingSimpleText],
+  );
+  const activeArrowTextDockKeys = useMemo(() => new Set(
+    isDraggingSimpleText
+      ? elements
+          .filter((element): element is Extract<BoardElement, { $type: 'text' }> => (
+            selectedIds.includes(element.id)
+            && element.$type === 'text'
+            && !!element.dockedArrowId
+            && element.dockedArrowProgress != null
+          ))
+          .map((element) => getArrowTextDockCandidateKey(element.dockedArrowId!, element.dockedArrowProgress!))
+      : [],
+  ), [elements, isDraggingSimpleText, selectedIds]);
   const activeDraftDockKey = draftArrowStart?.elementId && draftArrowStart.dock
     ? `${draftArrowStart.elementId}:${draftArrowStart.dock}`
     : null;
@@ -1883,6 +1980,25 @@ export function WhiteboardCanvas({
               listening={false}
             />
           )}
+
+          {isDraggingSimpleText && arrowTextDockCandidates.map((candidate) => {
+            const key = getArrowTextDockCandidateKey(candidate.arrowId, candidate.progress);
+            const isActive = activeArrowTextDockKeys.has(key);
+
+            return (
+              <Circle
+                key={key}
+                x={candidate.point.x}
+                y={candidate.point.y}
+                radius={(isActive ? (isCoarsePointer ? 8 : 5) : (isCoarsePointer ? 5 : 3)) / zoom}
+                fill={isActive ? boardDefaults.dockTargetColor : boardDefaults.handleSurfaceColor}
+                stroke={isActive ? boardDefaults.selectionColor : boardDefaults.dockTargetColor}
+                strokeWidth={(isActive ? 2 : 1.25) / zoom}
+                opacity={isActive ? 0.95 : 0.42}
+                listening={false}
+              />
+            );
+          })}
 
           {showDockHandles && elements.filter((element) => element.$type !== 'arrow' && element.$type !== 'frame').flatMap((element) => [
             DockPoint.Top,

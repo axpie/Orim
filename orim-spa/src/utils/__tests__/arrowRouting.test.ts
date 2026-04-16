@@ -11,7 +11,14 @@ import {
   type ArrowElement,
   type ShapeElement,
 } from '../../types/models';
-import { computeArrowPolyline, getArrowArcMidpoint, getDockPosition, nearestDock } from '../arrowRouting';
+import {
+  computeArrowPolyline,
+  findNearestArrowDockCandidateForPosition,
+  getArrowArcMidpoint,
+  getDockPosition,
+  nearestDock,
+  sampleArrowDockCandidates,
+} from '../arrowRouting';
 
 function createArrow(overrides: Partial<ArrowElement> = {}): ArrowElement {
   return {
@@ -133,5 +140,34 @@ describe('arrowRouting', () => {
     expect(points[0].y).toBeCloseTo(50);
     expect(points[1].x).toBeCloseTo(30);
     expect(points[1].y).toBeCloseTo(90);
+  });
+
+  it('samples arrow text dock candidates including both endpoints', () => {
+    const candidates = sampleArrowDockCandidates([createArrow({ routeStyle: ArrowRouteStyle.Straight })], []);
+
+    expect(candidates).toHaveLength(6);
+    expect(candidates[0]).toMatchObject({
+      arrowId: 'arrow-1',
+      progress: 0,
+      point: { x: 0, y: 0 },
+    });
+    expect(candidates[1].point.x).toBeCloseTo(24);
+    expect(candidates[1].point.y).toBeCloseTo(0);
+    expect(candidates[5]).toMatchObject({
+      arrowId: 'arrow-1',
+      progress: 1,
+      point: { x: 120, y: 0 },
+    });
+  });
+
+  it('finds the nearest sampled arrow text dock candidate within snap radius', () => {
+    const candidates = sampleArrowDockCandidates([createArrow({ routeStyle: ArrowRouteStyle.Straight })], []);
+    const match = findNearestArrowDockCandidateForPosition(candidates, { x: 50, y: 6 }, 12);
+
+    expect(match).toMatchObject({
+      arrowId: 'arrow-1',
+      progress: 0.4,
+      point: { x: 48, y: 0 },
+    });
   });
 });

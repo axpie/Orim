@@ -79,6 +79,8 @@ public abstract class TextStyleElementBase : BoardElement
 public class TextElement : TextStyleElementBase
 {
     public string Text { get; set; } = string.Empty;
+    public Guid? DockedArrowId { get; set; }
+    public double? DockedArrowProgress { get; set; }
 }
 
 public class RichTextElement : TextStyleElementBase
