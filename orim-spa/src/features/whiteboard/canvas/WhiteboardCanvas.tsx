@@ -106,6 +106,7 @@ interface WhiteboardCanvasProps {
   editable?: boolean;
   onBoardChanged: (changeKind: string, operation?: BoardOperationPayload) => void;
   onBoardLiveChanged?: (changeKind: string, operation?: BoardOperationPayload) => void;
+  onElementDragChange?: (dragging: boolean) => void;
   onPointerPresenceChanged?: (worldX: number | null, worldY: number | null) => void;
   localPresenceClientId?: string | null;
   onStageReady?: (stage: Konva.Stage | null) => void;
@@ -120,6 +121,7 @@ export function WhiteboardCanvas({
   editable = true,
   onBoardChanged,
   onBoardLiveChanged,
+  onElementDragChange,
   onPointerPresenceChanged,
   localPresenceClientId = null,
   onStageReady,
@@ -207,6 +209,14 @@ export function WhiteboardCanvas({
   const resizeSnapshotRef = useRef<BoardElement[] | null>(null);
   const touchGestureRef = useRef<TouchGestureState | null>(null);
   const marqueeOriginRef = useRef<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    onElementDragChange?.(isDragging);
+  }, [isDragging, onElementDragChange]);
+
+  useEffect(() => () => {
+    onElementDragChange?.(false);
+  }, [onElementDragChange]);
 
   // Drawing state
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);

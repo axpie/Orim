@@ -104,6 +104,7 @@ export function SharedBoardView() {
   const [guestNameDraft, setGuestNameDraft] = useState(guestDisplayName);
   const [guestNameSaved, setGuestNameSaved] = useState(false);
   const [inlineEditingActive, setInlineEditingActive] = useState(false);
+  const [elementDragActive, setElementDragActive] = useState(false);
   const [minimapVisible, setMinimapVisible] = useState(false);
   const [followMeInvitation, setFollowMeInvitation] = useState<{ clientId: string; displayName: string; colorHex?: string } | null>(null);
   const [followMeEndedSnackbar, setFollowMeEndedSnackbar] = useState(false);
@@ -762,6 +763,7 @@ export function SharedBoardView() {
               localPresenceClientId={connectionId}
               onBoardChanged={onBoardChanged}
               onBoardLiveChanged={onBoardLiveChanged}
+              onElementDragChange={setElementDragActive}
               onPointerPresenceChanged={handlePointerPresenceChanged}
               onStageReady={handleStageReady}
               liveAnnouncement={liveAnnouncement}
@@ -816,7 +818,7 @@ export function SharedBoardView() {
             onJumpToCursor={handleJumpToCursor}
           />
 
-          {board.sharedAllowAnonymousEditing && !inlineEditingActive && selectedElementIds.length > 0 && activeTool === 'select' && (
+          {board.sharedAllowAnonymousEditing && !inlineEditingActive && !elementDragActive && selectedElementIds.length > 0 && activeTool === 'select' && (
             <FloatingToolbar
               elements={board.elements}
               selectedIds={selectedElementIds}

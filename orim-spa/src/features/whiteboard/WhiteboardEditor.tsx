@@ -94,6 +94,7 @@ export function WhiteboardEditor() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [presentationMode, setPresentationMode] = useState(false);
   const [inlineEditingActive, setInlineEditingActive] = useState(false);
+  const [elementDragActive, setElementDragActive] = useState(false);
   const [liveAnnouncement, setLiveAnnouncement] = useState<{ id: number; text: string } | null>(null);
   const [propertiesPanelSelectionScope, setPropertiesPanelSelectionScope] = useState<string[] | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -662,6 +663,7 @@ export function WhiteboardEditor() {
               localPresenceClientId={connectionId}
               onBoardChanged={onBoardChanged}
               onBoardLiveChanged={onBoardLiveChanged}
+              onElementDragChange={setElementDragActive}
               onPointerPresenceChanged={handlePointerPresenceChanged}
               onStageReady={handleStageReady}
               liveAnnouncement={liveAnnouncement}
@@ -715,7 +717,7 @@ export function WhiteboardEditor() {
             />
           )}
 
-          {canEdit && !presentationMode && !inlineEditingActive && selectedElementIds.length > 0 && activeTool === 'select' && (
+          {canEdit && !presentationMode && !inlineEditingActive && !elementDragActive && selectedElementIds.length > 0 && activeTool === 'select' && (
             <FloatingToolbar
               elements={board.elements}
               selectedIds={selectedElementIds}
