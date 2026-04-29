@@ -16,6 +16,7 @@ import { useQuery } from '@tanstack/react-query';
 import { mdiMicrosoft } from '@mdi/js';
 import { GoogleOAuthProvider, GoogleLogin, type CredentialResponse } from '@react-oauth/google';
 import { OrimLogoAnimation } from '../../components/Brand/OrimLogoAnimation';
+import { LanguageSwitcher } from '../../components/LanguageSwitcher';
 import { useAuthStore } from '../../stores/authStore';
 import { getAuthProviders } from '../../api/auth';
 import { signInWithMicrosoft } from './microsoftAuth';
@@ -103,8 +104,11 @@ export function LoginPage() {
     >
       <Card sx={{ width: 400, maxWidth: '90vw' }}>
         <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
             <OrimLogoAnimation subtitle={t('auth.welcome')} />
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+            <LanguageSwitcher />
           </Box>
 
           {error && (
