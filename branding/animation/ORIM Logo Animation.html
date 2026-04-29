@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ORIM Logo Animation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #f8f8f6;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  }
+
+  .logo-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 28px;
+  }
+
+  .logo-row {
+    display: flex;
+    align-items: center;
+    gap: 32px;
+  }
+
+  /* ── ICON ── */
+  .icon-container {
+    position: relative;
+    width: 110px;
+    height: 110px;
+  }
+
+  /* gradient border via SVG rect stroke */
+  .icon-border-svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .border-rect {
+    fill: none;
+    stroke: url(#borderGrad);
+    stroke-width: 5;
+    rx: 26;
+    ry: 26;
+    stroke-dasharray: 408;
+    stroke-dashoffset: 408;
+    animation: drawBorder 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.1s forwards;
+  }
+
+  @keyframes drawBorder {
+    to { stroke-dashoffset: 0; }
+  }
+
+  .squares-grid {
+    position: absolute;
+    inset: 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .sq {
+    border-radius: 8px;
+    transform: scale(0);
+    transform-origin: center;
+  }
+
+  .sq-orange {
+    background: #FF6B2B;
+    animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) 0.75s forwards;
+  }
+  .sq-pink {
+    background: #E8336D;
+    animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) 0.92s forwards;
+  }
+  .sq-purple {
+    background: #7B35D4;
+    animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) 1.09s forwards;
+  }
+
+  .sq-cursor {
+    background: rgba(255,255,255,0);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    transform: scale(1);
+    animation: fadeIn 0.4s ease 1.3s forwards;
+  }
+
+  @keyframes popIn {
+    from { transform: scale(0); }
+    to   { transform: scale(1); }
+  }
+
+  @keyframes fadeIn {
+    to { opacity: 1; }
+  }
+
+  /* ── CURSOR SVG ── */
+  .cursor-svg {
+    width: 34px;
+    height: 34px;
+  }
+
+  /* ── WORDMARK ── */
+  .wordmark {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .orim-letters {
+    display: flex;
+    gap: 0;
+    line-height: 1;
+  }
+
+  .orim-letters span {
+    display: inline-block;
+    font-size: 80px;
+    font-weight: 800;
+    color: #1a1a1a;
+    letter-spacing: -2px;
+    opacity: 0;
+    transform: translateY(18px);
+  }
+
+  .orim-letters span:nth-child(1) { animation: letterUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) 1.4s forwards; }
+  .orim-letters span:nth-child(2) { animation: letterUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) 1.52s forwards; }
+  .orim-letters span:nth-child(3) { animation: letterUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) 1.64s forwards; }
+  .orim-letters span:nth-child(4) { animation: letterUp 0.4s cubic-bezier(0.22, 1, 0.36, 1) 1.76s forwards; }
+
+  @keyframes letterUp {
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ── UNDERLINE ── */
+  .underline-wrap {
+    height: 5px;
+    overflow: hidden;
+  }
+
+  .underline-bar {
+    height: 5px;
+    width: 80px;
+    border-radius: 3px;
+    background: linear-gradient(90deg, #FF6B2B 0%, #E8336D 60%, #7B35D4 100%);
+    transform: scaleX(0);
+    transform-origin: left;
+    animation: drawLine 0.5s cubic-bezier(0.22, 1, 0.36, 1) 2.1s forwards;
+  }
+
+  @keyframes drawLine {
+    to { transform: scaleX(1); }
+  }
+
+  /* ── SUBTITLE ── */
+  .subtitle {
+    font-size: 22px;
+    font-weight: 400;
+    color: #888;
+    letter-spacing: 0.01em;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 2.35s forwards;
+  }
+
+  /* ── SHEEN ── */
+  .sheen-wrapper {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    overflow: hidden;
+    pointer-events: none;
+    border-radius: 25px;
+  }
+
+  .sheen {
+    position: absolute;
+    top: -60%;
+    left: -80%;
+    width: 55%;
+    height: 220%;
+    background: linear-gradient(
+      105deg,
+      transparent 0%,
+      rgba(255,255,255,0.0) 35%,
+      rgba(255,255,255,0.55) 50%,
+      rgba(255,255,255,0.0) 65%,
+      transparent 100%
+    );
+    transform: skewX(-15deg);
+    opacity: 0;
+    animation: sheenSlide 0.7s cubic-bezier(0.4, 0, 0.2, 1) 2.5s forwards;
+  }
+
+  @keyframes sheenSlide {
+    0%   { left: -80%; opacity: 1; }
+    100% { left: 130%; opacity: 1; }
+  }
+
+  /* Sheen over wordmark */
+  .wordmark {
+    position: relative;
+    overflow: hidden;
+  }
+
+  .wordmark-sheen {
+    position: absolute;
+    top: -10%;
+    left: -60%;
+    width: 40%;
+    height: 120%;
+    background: linear-gradient(
+      105deg,
+      transparent 0%,
+      rgba(255,255,255,0.0) 30%,
+      rgba(255,255,255,0.45) 50%,
+      rgba(255,255,255,0.0) 70%,
+      transparent 100%
+    );
+    transform: skewX(-15deg);
+    opacity: 0;
+    animation: sheenSlide 0.65s cubic-bezier(0.4, 0, 0.2, 1) 2.62s forwards;
+  }
+
+  /* ── REPLAY ── */
+  .replay-btn {
+    position: fixed;
+    bottom: 32px;
+    right: 32px;
+    background: white;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 100px;
+    padding: 10px 22px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #555;
+    cursor: pointer;
+    opacity: 0;
+    animation: fadeIn 0.4s ease 2.8s forwards;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .replay-btn:hover {
+    background: #f0f0f0;
+    border-color: #ccc;
+  }
+</style>
+</head>
+<body>
+
+<div class="logo-wrap" id="logoWrap">
+
+  <div class="logo-row">
+
+    <!-- ICON -->
+    <div class="icon-container">
+      <!-- Gradient border drawn via SVG -->
+      <svg class="icon-border-svg" viewBox="0 0 110 110" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="borderGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%"   stop-color="#FF6B2B"/>
+            <stop offset="50%"  stop-color="#E8336D"/>
+            <stop offset="100%" stop-color="#7B35D4"/>
+          </linearGradient>
+        </defs>
+        <rect class="border-rect" x="3" y="3" width="104" height="104" rx="25" ry="25"/>
+      </svg>
+
+      <!-- Sheen overlay -->
+      <div class="sheen-wrapper"><div class="sheen"></div></div>
+
+      <!-- 4 squares -->
+      <div class="squares-grid">
+        <div class="sq sq-orange"></div>
+        <div class="sq sq-pink"></div>
+        <div class="sq sq-purple"></div>
+        <div class="sq sq-cursor">
+          <!-- cursor arrow -->
+          <svg class="cursor-svg" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+            <polygon points="4,2 4,20 8,15 11,22 14,21 11,14 17,14" fill="#1c1c1e" stroke="white" stroke-width="1.5" stroke-linejoin="round"/>
+          </svg>
+        </div>
+      </div>
+    </div>
+
+    <!-- WORDMARK -->
+    <div class="wordmark">
+      <div class="orim-letters">
+        <span>O</span><span>R</span><span>I</span><span>M</span>
+      </div>
+      <div class="underline-wrap">
+        <div class="underline-bar"></div>
+      </div>
+      <div class="wordmark-sheen"></div>
+    </div>
+
+  </div>
+
+  <div class="subtitle">Willkommen bei ORIM</div>
+
+</div>
+
+<button class="replay-btn" onclick="replay()">↺ Nochmal abspielen</button>
+
+<script>
+  function replay() {
+    const wrap = document.getElementById('logoWrap');
+    // Clone and replace to restart all animations
+    const clone = wrap.cloneNode(true);
+    wrap.parentNode.replaceChild(clone, wrap);
+    // Also reset replay button animation
+    const btn = document.querySelector('.replay-btn');
+    btn.style.animation = 'none';
+    btn.style.opacity = '1';
+  }
+</script>
+
+</body>
+</html>

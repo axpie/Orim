@@ -7,7 +7,6 @@ import {
   CardContent,
   TextField,
   Button,
-  Typography,
   Alert,
   CircularProgress,
   Divider,
@@ -16,7 +15,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { mdiMicrosoft } from '@mdi/js';
 import { GoogleOAuthProvider, GoogleLogin, type CredentialResponse } from '@react-oauth/google';
-import { OrimLogo } from '../../components/Brand/OrimLogo';
+import { OrimLogoAnimation } from '../../components/Brand/OrimLogoAnimation';
 import { useAuthStore } from '../../stores/authStore';
 import { getAuthProviders } from '../../api/auth';
 import { signInWithMicrosoft } from './microsoftAuth';
@@ -104,12 +103,9 @@ export function LoginPage() {
     >
       <Card sx={{ width: 400, maxWidth: '90vw' }}>
         <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 2 }}>
-            <OrimLogo textColor="inherit" />
+          <Box sx={{ display: 'flex', justifyContent: 'center', mb: 3 }}>
+            <OrimLogoAnimation subtitle={t('auth.welcome')} />
           </Box>
-          <Typography variant="body2" align="center" color="text.secondary" sx={{ mb: 3 }}>
-            {t('auth.welcome')}
-          </Typography>
 
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
